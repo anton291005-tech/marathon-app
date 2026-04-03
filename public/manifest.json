@@ -1,13 +1,12 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Marathon",
+  "name": "Marathon App Trainer",
   "icons": [
-  {
-    "src": "icon.png",
-    "sizes": "512x512",
-    "type": "image/png"
-  }
-]
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
     {
       "src": "logo192.png",
       "type": "image/png",
@@ -21,6 +20,7 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#0b0b15",
+  "background_color": "#0b0b15",
+  "description": "Kompakte Marathon-App fuer Training, Logs und Formgefuehl."
 }

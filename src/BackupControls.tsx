@@ -1,8 +1,19 @@
 import React from "react";
+import { safeParseJSON } from "./appSmartFeatures";
+import { writeRemoteStorage } from "./storage";
+
+type LogEntry = {
+  feeling?: number;
+  actualKm?: string;
+  notes?: string;
+  done?: boolean;
+  skipped?: boolean;
+  at?: string;
+};
 
 type Props = {
-  logs: Record<string, any>;
-  onImportSuccess?: (data: Record<string, any>) => void;
+  logs: Record<string, LogEntry>;
+  onImportSuccess?: (data: Record<string, LogEntry>) => void;
 };
 
 export default function BackupControls({ logs, onImportSuccess }: Props) {
@@ -48,7 +59,7 @@ export default function BackupControls({ logs, onImportSuccess }: Props) {
           throw new Error("Datei konnte nicht gelesen werden.");
         }
 
-        const parsed = JSON.parse(text);
+        const parsed = safeParseJSON(text, null);
 
         if (!parsed || typeof parsed !== "object") {
           throw new Error("Ungültiges Backup-Format.");
@@ -59,20 +70,10 @@ export default function BackupControls({ logs, onImportSuccess }: Props) {
         }
 
         localStorage.setItem("marathonLogs", JSON.stringify(parsed.data));
-
-        try {
-          // optional für deine Deployment-Storage-Lösung
-          // @ts-ignore
-          if (window.storage?.set) {
-            // @ts-ignore
-            await window.storage.set("mwaw26-logs", JSON.stringify(parsed.data));
-          }
-        } catch (storageError) {
-          console.warn("window.storage konnte nicht aktualisiert werden:", storageError);
-        }
+        await writeRemoteStorage("mwaw26-logs", JSON.stringify(parsed.data));
 
         if (onImportSuccess) {
-          onImportSuccess(parsed.data);
+          onImportSuccess(parsed.data as Record<string, LogEntry>);
         }
 
         alert("Backup erfolgreich importiert.");

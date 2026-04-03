@@ -1,6 +1,16 @@
 // @ts-nocheck
 import { useState, useEffect } from "react";
 import BackupControls from "./BackupControls";
+import {
+  getConsistencyStats,
+  getJumpTargets,
+  getPredictionReadiness,
+  getShareSummary,
+  getTodayNextSession,
+  parseTargetTimeToSeconds,
+  safeParseJSON,
+} from "./appSmartFeatures";
+import { readRemoteStorage, writeRemoteStorage } from "./storage";
 
 const PI = {
   MINI:  { label:"Mini-Prep",         emoji:"🔄", col:"#6366f1", bg:"rgba(99,102,241,0.12)" },
@@ -307,88 +317,700 @@ const PLAN=[
   ]},
 ];
 
+const ALL_SESSIONS = PLAN.flatMap((week) => week.s);
+const ACTIVE_SESSIONS = ALL_SESSIONS.filter((session) => session.type !== "rest");
+const LONG_RUN_SESSIONS = ACTIVE_SESSIONS.filter((session) => session.type === "long" && session.km > 0);
+const LONGEST_LONG_RUN_KM = LONG_RUN_SESSIONS.reduce((max, session) => Math.max(max, session.km || 0), 0);
+const FIRST_30K_ID = LONG_RUN_SESSIONS.find((session) => session.km >= 30)?.id;
+
+const PHASE_ORDER = Object.keys(PI);
+
+function clampPct(value){
+  return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+}
+
+function getLoggedKm(session, log){
+  if(!log?.done)return 0;
+  return parseFloat(log.actualKm) || session.km || 0;
+}
+
+function getSessionTypeLabel(type){
+  return TI[type]?.label || "Einheit";
+}
+
+function getSessionMilestones(session, week){
+  const milestones = [];
+
+  if(session.type === "long" && session.km > 28){
+    milestones.push({ label: "Long Run 28+", emoji: "🏔️", color: "#38bdf8" });
+  }
+  if(session.id === FIRST_30K_ID){
+    milestones.push({ label: "Erste 30 km", emoji: "🚀", color: "#f97316" });
+  }
+  if(session.type === "long" && session.km === LONGEST_LONG_RUN_KM && session.km > 0){
+    milestones.push({ label: "Längster Lauf", emoji: "👑", color: "#f59e0b" });
+  }
+  if(session.type === "race" && session.km >= 42){
+    milestones.push({ label: "Marathon", emoji: "🏁", color: "#ef4444" });
+  }else if(session.type === "race" && session.km >= 21){
+    milestones.push({ label: "Halbmarathon", emoji: "🎯", color: "#a855f7" });
+  }
+  if(week.km >= 90){
+    milestones.push({ label: "Peak Woche", emoji: "🔥", color: "#10b981" });
+  }
+
+  return milestones;
+}
+
+function getSessionWhy(session, week){
+  if(session.type === "long"){
+    return "Diese Einheit baut die marathonrelevante Ausdauer auf, trainiert Energie-Management und macht dich mental belastbarer.";
+  }
+  if(session.type === "interval"){
+    return "Diese Einheit schärft VO2max, Laufökonomie und Tempohärte, damit sich Marathonpace später kontrollierter anfühlt.";
+  }
+  if(session.type === "tempo"){
+    return "Diese Einheit verschiebt deine Schwelle und macht längere schnelle Abschnitte effizienter und ruhiger.";
+  }
+  if(session.type === "race"){
+    return session.km >= 42
+      ? "Das ist dein Hauptziel. Hier soll die gesamte Vorbereitung zusammenlaufen."
+      : "Diese Einheit ist ein Formtest unter Rennbedingungen und gibt dir Feedback für die finale Marathonphase.";
+  }
+  if(session.type === "strength"){
+    return "Diese Einheit stabilisiert deinen Bewegungsapparat, verbessert Kraftübertragung und reduziert Verletzungsrisiko.";
+  }
+  if(session.type === "bike"){
+    return "Diese Einheit liefert aeroben Reiz ohne zusätzliche Laufbelastung und unterstützt aktive Regeneration.";
+  }
+  if(week.phase === "TAPER"){
+    return "Diese Einheit hält Spannung und Rhythmus hoch, ohne unnötige Müdigkeit aufzubauen.";
+  }
+  return "Diese Einheit sammelt saubere, kontrollierte Trainingsarbeit und unterstützt die Gesamtbelastung deiner Woche.";
+}
+
+function getCoachHint(session, week){
+  if(session.type === "long"){
+    return "Starte bewusst kontrolliert, achte auf Fueling und bewerte die Qualität erst in der zweiten Hälfte.";
+  }
+  if(session.type === "interval"){
+    return "Treffe die Zielpace sauber statt aggressiv zu eröffnen. Gute Wiederholungen schlagen heroische erste Intervalle.";
+  }
+  if(session.type === "tempo"){
+    return "Bleib rhythmisch und technisch locker. Das Ziel ist Kontrolle, nicht maximaler Kampf.";
+  }
+  if(session.type === "race"){
+    return session.km >= 42
+      ? "Die ersten Kilometer dürfen sich fast zu leicht anfühlen. Geduld ist hier Performance."
+      : "Nutze das Rennen als Standortbestimmung und laufe mit Fokus statt mit Ego.";
+  }
+  if(session.type === "strength"){
+    return "Saubere Ausführung vor Last. Du sollst dich danach stabiler fühlen, nicht zerstört.";
+  }
+  if(session.type === "bike"){
+    return "Halte die Intensität wirklich locker. Ziel ist Durchblutung und Zusatzvolumen, nicht Ermüdung.";
+  }
+  if(week.phase === "TAPER"){
+    return "Weniger machen ist jetzt oft klüger. Frische ist ein Trainingsreiz.";
+  }
+  return "Laufe die Einheit so, dass du morgen noch qualitativ trainieren kannst.";
+}
+
+function parseWorkoutStructure(session){
+  const rawParts = (session.desc || "")
+    .split("·")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  let warmup = "Locker einrollen und mobilisieren.";
+  let mainSet = session.desc || "Nach Plan locker und kontrolliert absolvieren.";
+  let cooldown = "Ruhig auslaufen oder aktiv regenerieren.";
+
+  if(rawParts.length >= 3){
+    warmup = rawParts[0];
+    cooldown = rawParts[rawParts.length - 1];
+    mainSet = rawParts.slice(1, -1).join(" · ");
+  }else if(rawParts.length === 2){
+    warmup = rawParts[0];
+    mainSet = rawParts[1];
+    cooldown = "Locker auslaufen und kurz runterfahren.";
+  }else if(session.type === "interval" || session.type === "tempo"){
+    warmup = "10-20 Minuten locker + Mobilität.";
+    mainSet = session.desc;
+    cooldown = "10-15 Minuten locker auslaufen.";
+  }else if(session.type === "long"){
+    warmup = "Sehr ruhig anlaufen und Puls niedrig halten.";
+    mainSet = session.desc;
+    cooldown = "Kurz auslaufen, trinken und Fueling direkt starten.";
+  }else if(session.type === "strength"){
+    warmup = "Allgemeines Warm-up + Aktivierung.";
+    mainSet = session.desc;
+    cooldown = "Leicht mobilisieren und Spannung lösen.";
+  }else if(session.type === "bike"){
+    warmup = "10 Minuten locker einrollen.";
+    mainSet = session.desc;
+    cooldown = "5-10 Minuten sehr locker ausfahren.";
+  }
+
+  return { warmup, mainSet, cooldown };
+}
+
+function formatLogTimestamp(value){
+  if(!value)return "Noch kein Zeitstempel";
+  const date = new Date(value);
+  if(Number.isNaN(date.getTime()))return "Zeitpunkt unbekannt";
+  return date.toLocaleString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatSecondsToRaceTime(totalSeconds){
+  const safeSeconds = Math.max(0, Math.round(totalSeconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+  return `${hours}:${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")}`;
+}
+
+function getTrendLabel(predictedSeconds, targetSeconds){
+  const diff = predictedSeconds - targetSeconds;
+  if(diff <= 0)return "Richtung Sub 2:50";
+  if(diff <= 120)return "Knapp an Sub 2:50 dran";
+  if(diff <= 300)return "Stabil auf gutem Marathonkurs";
+  return "Noch Aufbau, aber klar auf dem Weg";
+}
+
+function getRecoveryState(recentSessions, completionRatio){
+  const avgFeeling = recentSessions.length
+    ? recentSessions.reduce((sum, item) => sum + (item.log.feeling || 3), 0) / recentSessions.length
+    : 3;
+  const hardLoad = recentSessions.filter((item) => ["interval","tempo","race"].includes(item.session.type)).length;
+  const longLoad = recentSessions.some((item) => item.session.type === "long" && item.session.km >= 28) ? 1 : 0;
+  const missedPenalty = completionRatio < 0.65 ? 1.2 : completionRatio < 0.8 ? 0.5 : 0;
+  const fatigueScore = hardLoad * 1.1 + longLoad * 1.3 + missedPenalty - avgFeeling * 0.75;
+
+  if(fatigueScore >= 1.9){
+    return {
+      label: "🔴 Fatigue",
+      tone: "#f87171",
+      detail: "Zuletzt viel Belastung oder zu wenig gute Rückmeldungen. Eher konservativ steuern.",
+    };
+  }
+  if(fatigueScore >= 0.7){
+    return {
+      label: "🟡 Normal",
+      tone: "#fbbf24",
+      detail: "Solider Trainingszustand mit normaler Ermüdung. Fokus auf Rhythmus und Schlaf.",
+    };
+  }
+  return {
+    label: "🟢 Fresh",
+    tone: "#34d399",
+    detail: "Die jüngsten Logs wirken stabil. Gute Basis für Qualität oder kontrolliertes Volumen.",
+  };
+}
+
+function getWeeklyFatigue(week){
+  const hardCount = week.s.filter((session) => ["interval","tempo","race"].includes(session.type)).length;
+  const longestRun = week.s.reduce((max, session) => Math.max(max, session.type === "long" ? session.km || 0 : 0), 0);
+  let score = 0;
+  if(week.km >= 80)score += 2;
+  else if(week.km >= 60)score += 1;
+  if(hardCount >= 2)score += 1.5;
+  else if(hardCount === 1)score += 0.75;
+  if(longestRun >= 30)score += 1.5;
+  else if(longestRun >= 24)score += 1;
+
+  if(score >= 4){
+    return { label: "hoch", icon: "🔴", color: "#f87171", note: "Viele Reize, Belastung aktiv managen." };
+  }
+  if(score >= 2.25){
+    return { label: "mittel", icon: "🟡", color: "#fbbf24", note: "Solide Trainingswoche mit spürbarer Beanspruchung." };
+  }
+  return { label: "niedrig", icon: "🟢", color: "#34d399", note: "Kontrollierte Woche, gut für Konstanz und Erholung." };
+}
+
+function getPerformancePrediction({
+  doneLongRuns,
+  longRuns,
+  doneHardSessions,
+  hardSessions,
+  avgFeeling,
+  progressRatio,
+  qualityLongRunScore,
+  halfMarathonSignal,
+  targetSeconds,
+}){
+  const safeTargetSeconds = targetSeconds || (2 * 3600 + 49 * 60 + 50);
+  const longRunScore = longRuns > 0 ? doneLongRuns / longRuns : 0;
+  const hardScore = hardSessions > 0 ? doneHardSessions / hardSessions : 0;
+  const feelingScore = Math.max(0, Math.min(1, (avgFeeling - 2) / 3));
+  const readiness = (longRunScore * 0.28) + (hardScore * 0.24) + (feelingScore * 0.14) + (progressRatio * 0.16) + (qualityLongRunScore * 0.1) + (halfMarathonSignal * 0.08);
+  const penalty = (1 - readiness) * 360;
+  const predictedSeconds = safeTargetSeconds + penalty;
+
+  return {
+    predictedSeconds,
+    predictedTime: formatSecondsToRaceTime(predictedSeconds),
+    trend: getTrendLabel(predictedSeconds, safeTargetSeconds),
+    confidence: readiness >= 0.8 ? "hoch" : readiness >= 0.6 ? "mittel" : "früh im Block",
+  };
+}
+
+function getFuelingHints(session){
+  if(session.type === "long" && session.km >= 28){
+    return [
+      "Vorher 2-3 Stunden vorher kohlenhydratreich essen und 500-700 ml trinken.",
+      "Im Lauf ab ca. Minute 30 starten und dann alle 25-30 Minuten ein Gel oder Carbs zuführen.",
+      "Nachher in den ersten 30 Minuten Carbs plus Protein einplanen und zügig rehydrieren.",
+    ];
+  }
+  if(session.type === "long"){
+    return [
+      "Vorher leicht verdauliche Carbs einbauen, besonders wenn die Einheit morgens startet.",
+      "Bei Läufen ab 90 Minuten Wasser mitnehmen und Carbs früh testen.",
+      "Nachher trinken und eine Recovery-Mahlzeit innerhalb von 60 Minuten anpeilen.",
+    ];
+  }
+  if(session.type === "race" && session.km >= 42){
+    return [
+      "Carb-Loading am Vortag ruhig und verteilt halten, nicht experimentieren.",
+      "Im Rennen idealerweise alle 25-30 Minuten Kohlenhydrate zuführen und an jeder Station kurz trinken.",
+      "Koffein nur so einsetzen, wie du es im Training getestet hast.",
+    ];
+  }
+  if(session.type === "race" && session.km >= 21){
+    return [
+      "Vor dem Start Frühstück 2-3 Stunden vorher und kurz vor dem Rennen optional ein Gel.",
+      "Während des Halbmarathons je nach Dauer 1-2 Gels plus regelmäßige kleine Schlucke trinken.",
+      "Nach dem Rennen direkt Carbs, Flüssigkeit und etwas Protein nachlegen.",
+    ];
+  }
+  return [];
+}
+
+function getSessionStatus(log){
+  if(log?.done)return "done";
+  if(log?.skipped)return "skipped";
+  return "open";
+}
+
+function getSessionStatusLabel(log){
+  const status = getSessionStatus(log);
+  if(status === "done")return "Erledigt";
+  if(status === "skipped")return "Ausgelassen";
+  return "Offen";
+}
+
+function getSessionStatusTone(log, typeColor){
+  const status = getSessionStatus(log);
+  if(status === "done"){
+    return { background: "rgba(16,185,129,0.16)", color: "#86efac", border: "rgba(16,185,129,0.28)" };
+  }
+  if(status === "skipped"){
+    return { background: "rgba(248,113,113,0.14)", color: "#fca5a5", border: "rgba(248,113,113,0.24)" };
+  }
+  return { background: `${typeColor}22`, color: typeColor, border: `${typeColor}33` };
+}
+
+function getRecoveryHistory(plan, logs){
+  return plan.map((week) => {
+    const activeSessions = week.s.filter((session) => session.type !== "rest");
+    const doneCount = activeSessions.filter((session) => logs[session.id]?.done).length;
+    const skippedCount = activeSessions.filter((session) => logs[session.id]?.skipped).length;
+    const avgFeeling = activeSessions
+      .filter((session) => logs[session.id]?.done && logs[session.id]?.feeling)
+      .reduce((sum, session, _, arr) => sum + (logs[session.id]?.feeling || 0) / arr.length, 0);
+    const load = activeSessions.filter((session) => ["interval","tempo","race"].includes(session.type)).length
+      + (activeSessions.some((session) => session.type === "long" && session.km >= 28) ? 1 : 0);
+    const score = Math.max(0, Math.min(100, 58 + avgFeeling * 8 + doneCount * 4 - skippedCount * 8 - load * 6));
+    return {
+      label: `W${week.wn}`,
+      score: Math.round(score),
+      complete: doneCount === activeSessions.length && activeSessions.length > 0,
+    };
+  });
+}
+
+function matchesWeekFilter(session, log, filter){
+  if(filter === "all")return true;
+  if(filter === "open")return getSessionStatus(log) === "open";
+  if(filter === "hard")return ["interval","tempo","race"].includes(session.type);
+  if(filter === "milestones")return session.type === "race" || (session.type === "long" && session.km >= 28);
+  return true;
+}
+
+function getAdaptiveCoachingHint({ recoveryState, weeklyFatigue, performancePrediction, nextKeySession, phaseStatus }){
+  if(recoveryState.label.includes("Fatigue") && weeklyFatigue.label === "hoch"){
+    return {
+      title: "Belastung aktiv deckeln",
+      body: "Diese Woche lieber Qualität präzise statt heroisch laufen. Schlaf, Fueling und lockere Tage haben jetzt Priorität.",
+      color: "#f87171",
+    };
+  }
+  if(recoveryState.label.includes("Fresh") && nextKeySession){
+    return {
+      title: "Gutes Fenster für Qualität",
+      body: `Du wirkst gerade stabil. Die nächste Schlüsseleinheit "${nextKeySession.title}" kannst du kontrolliert selbstbewusst angehen.`,
+      color: "#34d399",
+    };
+  }
+  if(phaseStatus === "Aufholen"){
+    return {
+      title: "Nicht hektisch aufholen",
+      body: "Fehlende Einheiten nicht stapeln. Lieber den aktuellen Rhythmus sauber treffen als verlorenes Volumen erzwingen.",
+      color: "#fbbf24",
+    };
+  }
+  return {
+    title: "Konstanz schlägt Drama",
+    body: performancePrediction?.predictedTime
+      ? `Deine Prognose liegt aktuell bei ${performancePrediction.predictedTime}. Saubere Wochen und stabile Energie bringen jetzt am meisten.`
+      : "Sammle erst ein paar saubere Logs. Danach werden die Hinweise spürbar belastbarer.",
+    color: "#60a5fa",
+  };
+}
+
+function getTrendMeta(recoveryState, weeklyFatigue, performancePrediction, phaseStatus){
+  const recoveryTrend = recoveryState.label.includes("Fresh")
+    ? { icon: "↑", label: "positiv", color: "#34d399" }
+    : recoveryState.label.includes("Fatigue")
+      ? { icon: "↓", label: "vorsichtig", color: "#f87171" }
+      : { icon: "→", label: "stabil", color: "#fbbf24" };
+
+  const formTrend = !performancePrediction?.predictedSeconds
+    ? { icon: "•", label: "wartet auf Daten", color: "#94a3b8" }
+    : performancePrediction.predictedSeconds <= (2 * 3600 + 52 * 60)
+      ? { icon: "↑", label: "zieht an", color: "#34d399" }
+      : performancePrediction.predictedSeconds <= (2 * 3600 + 55 * 60)
+        ? { icon: "→", label: "solide", color: "#fbbf24" }
+        : { icon: "↓", label: "noch Aufbau", color: "#f87171" };
+
+  const phaseTrend = phaseStatus === "Voraus"
+    ? { icon: "↑", label: "vor dem Plan", color: "#34d399" }
+    : phaseStatus === "Aufholen"
+      ? { icon: "↓", label: "sanft nachziehen", color: "#f87171" }
+      : { icon: "→", label: "im Plan", color: "#60a5fa" };
+
+  const loadTrend = weeklyFatigue.label === "hoch"
+    ? { icon: "↓", label: "Belastung hoch", color: "#f87171" }
+    : weeklyFatigue.label === "mittel"
+      ? { icon: "→", label: "Belastung okay", color: "#fbbf24" }
+      : { icon: "↑", label: "gutes Fenster", color: "#34d399" };
+
+  return { recoveryTrend, formTrend, phaseTrend, loadTrend };
+}
+
+function getRecommendedAction({ recoveryState, weeklyFatigue, nextKeySession, phaseStatus }){
+  if(recoveryState.label.includes("Fatigue") || weeklyFatigue.label === "hoch"){
+    return "Halte die nächste Einheit bewusst kontrolliert, priorisiere Schlaf, Trinken und Carbs statt Zusatzvolumen.";
+  }
+  if(phaseStatus === "Aufholen"){
+    return "Nicht doppeln oder hektisch nachholen. Laufe die nächste geplante Einheit sauber und stabil, dann normal weiter.";
+  }
+  if(nextKeySession){
+    return `Fokussiere dich als Nächstes auf "${nextKeySession.title}" und plane dafür genug Frische am Vortag ein.`;
+  }
+  return "Block halten, Rhythmus konservieren und die Form nicht mit Extra-Arbeit stören.";
+}
+
+function MetricCard({ label, value, sublabel, accent }){
+  return (
+    <div style={{background:"rgba(13,16,33,0.86)",border:"1px solid rgba(148,163,184,0.12)",borderRadius:18,padding:14,minWidth:0,boxShadow:"0 14px 34px rgba(2,6,23,0.22)"}}>
+      <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",marginBottom:8,fontWeight:700}}>{label}</div>
+      <div style={{fontSize:24,fontWeight:800,color:accent || "#fff",lineHeight:1}}>{value}</div>
+      {sublabel && <div style={{fontSize:12,color:"#94a3b8",marginTop:8,lineHeight:1.4}}>{sublabel}</div>}
+    </div>
+  );
+}
+
+function SurfaceCard({ children, style }){
+  return (
+    <div
+      style={{
+        background:"linear-gradient(160deg,rgba(18,18,36,0.98),rgba(11,16,28,0.94))",
+        borderRadius:20,
+        padding:16,
+        border:"1px solid rgba(148,163,184,0.1)",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function CompactStatusCard({ label, title, subtitle, accent, trend }){
+  return (
+    <div style={{background:"rgba(9,14,28,0.88)",border:"1px solid rgba(148,163,184,0.12)",borderRadius:18,padding:14}}>
+      <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>{label}</div>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <div style={{fontSize:22,fontWeight:800,color:accent || "#fff"}}>{title}</div>
+        {trend && <div style={{fontSize:13,fontWeight:800,color:trend.color}}>{trend.icon} {trend.label}</div>}
+      </div>
+      {subtitle && <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.5,marginTop:8}}>{subtitle}</div>}
+    </div>
+  );
+}
+
+function FilterChip({ active, children, onClick }){
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background:active?"rgba(56,189,248,0.18)":"rgba(15,23,42,0.82)",
+        color:active?"#bae6fd":"#94a3b8",
+        border:`1px solid ${active?"rgba(56,189,248,0.35)":"rgba(148,163,184,0.12)"}`,
+        borderRadius:999,
+        padding:"8px 12px",
+        cursor:"pointer",
+        fontSize:12,
+        fontWeight:700,
+        transition:"background .18s ease, border-color .18s ease, color .18s ease",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DetailBlock({ title, children }){
+  return (
+    <div style={{background:"rgba(9,11,26,0.92)",border:"1px solid rgba(148,163,184,0.12)",borderRadius:18,padding:16}}>
+      <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:12}}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
 export default function App(){
   const [wIdx,setWIdx]=useState(0);
-  const [logs, setLogs] = useState(() => {
-  const saved = localStorage.getItem("marathonLogs");
-  return saved ? JSON.parse(saved) : {};
-});
+  const [logs, setLogs] = useState(() => safeParseJSON(localStorage.getItem("marathonLogs"), {}));
   const [modal,setModal]=useState(null);
-  const [form,setForm]=useState({feeling:0,actualKm:"",notes:"",done:false});
+  const [form,setForm]=useState({feeling:0,actualKm:"",notes:"",done:false,skipped:false});
   const [view,setView]=useState("week");
+  const [weekFilter,setWeekFilter]=useState("all");
+  const [overviewPhaseFilter,setOverviewPhaseFilter]=useState("all");
+  const [preferences,setPreferences]=useState(() => safeParseJSON(localStorage.getItem("marathonPreferences"), {
+    targetTime: "2:49:50",
+  }));
+  const [shareFeedback,setShareFeedback]=useState("");
   const [loaded,setLoaded]=useState(false);
-useEffect(() => {
-  localStorage.setItem("marathonLogs", JSON.stringify(logs));
-}, [logs]);
+
+  useEffect(() => {
+    localStorage.setItem("marathonLogs", JSON.stringify(logs));
+  }, [logs]);
+
+  useEffect(() => {
+    localStorage.setItem("marathonPreferences", JSON.stringify(preferences));
+  }, [preferences]);
 
   useEffect(()=>{
     (async()=>{
-      try{const r=await window.storage.get("mwaw26-logs");if(r)setLogs(JSON.parse(r.value));}catch(e){}
+      const r=await readRemoteStorage("mwaw26-logs");
+      if(r)setLogs(safeParseJSON(r.value, {}));
       setLoaded(true);
     })();
   },[]);
 
   const save=async(newLogs)=>{
     setLogs(newLogs);
-    try{await window.storage.set("mwaw26-logs",JSON.stringify(newLogs));}catch(e){}
+    await writeRemoteStorage("mwaw26-logs", JSON.stringify(newLogs));
   };
 
-  const openModal=(ss)=>{
-    const ex=logs[ss.id]||{};
-    setForm({feeling:ex.feeling||0,actualKm:ex.actualKm||"",notes:ex.notes||"",done:ex.done||false});
-    setModal(ss);
+  const quickCompleteSession=async(session)=>{
+    const existing = logs[session.id] || {};
+    await save({
+      ...logs,
+      [session.id]: {
+        ...existing,
+        done: !existing.done,
+        skipped: false,
+        at: new Date().toISOString(),
+      }
+    });
   };
+
+  const copyShareSummary=async()=>{
+    try{
+      await navigator.clipboard?.writeText?.(shareSummary);
+      setShareFeedback("Zusammenfassung kopiert");
+      setTimeout(()=>setShareFeedback(""), 1800);
+    }catch{
+      setShareFeedback("Kopieren nicht verfügbar");
+      setTimeout(()=>setShareFeedback(""), 1800);
+    }
+  };
+
+  const openModal=(session)=>{
+    const ex=logs[session.id]||{};
+    setForm({feeling:ex.feeling||0,actualKm:ex.actualKm||"",notes:ex.notes||"",done:ex.done||false,skipped:ex.skipped||false});
+    setModal(session);
+  };
+
+  const closeModal=()=>setModal(null);
 
   const saveModal=async()=>{
+    if(!modal)return;
     await save({...logs,[modal.id]:{...form,at:new Date().toISOString()}});
     setModal(null);
   };
 
   const w=PLAN[wIdx];
   const ph=PI[w.phase];
-  const allAct=PLAN.flatMap(x=>x.s).filter(x=>x.type!=="rest");
-  const totalSess=allAct.length;
-  const doneSess=Object.values(logs).filter(l=>l.done).length;
-  const totalTargetKm=PLAN.reduce((a,x)=>a+x.km,0);
-  const loggedKm=Object.entries(logs).reduce((a,[id,l])=>{
-    if(!l.done)return a;
-    const ss=PLAN.flatMap(x=>x.s).find(x=>x.id===id);
-    return a+(parseFloat(l.actualKm)||ss?.km||0);
-  },0);
-  const wLoggedKm=w.s.reduce((a,ss)=>{
-    const l=logs[ss.id];
-    if(!l||!l.done)return a;
-    return a+(parseFloat(l.actualKm)||ss.km||0);
-  },0);
+  const totalSess=ACTIVE_SESSIONS.length;
+  const totalTargetKm=PLAN.reduce((sum, week) => sum + week.km, 0);
+  const doneSessions = ACTIVE_SESSIONS.filter((session) => logs[session.id]?.done);
+  const doneSess=doneSessions.length;
+  const loggedKm=ACTIVE_SESSIONS.reduce((sum, session) => sum + getLoggedKm(session, logs[session.id]), 0);
+  const wLoggedKm=w.s.reduce((sum, session) => sum + getLoggedKm(session, logs[session.id]), 0);
   const pct=totalSess>0?Math.round((doneSess/totalSess)*100):0;
+  const kmPct=totalTargetKm>0?Math.round((loggedKm/totalTargetKm)*100):0;
+  const longRuns = LONG_RUN_SESSIONS.length;
+  const doneLongRuns = LONG_RUN_SESSIONS.filter((session) => logs[session.id]?.done).length;
+  const skippedSess = ACTIVE_SESSIONS.filter((session) => logs[session.id]?.skipped).length;
+  const hardSessions = ACTIVE_SESSIONS.filter((session) => ["interval","tempo","race"].includes(session.type)).length;
+  const doneHardSessions = ACTIVE_SESSIONS.filter((session) => ["interval","tempo","race"].includes(session.type) && logs[session.id]?.done).length;
+  const completedSessionRatio = totalSess > 0 ? doneSess / totalSess : 0;
+  const avgFeeling = doneSessions.length
+    ? doneSessions.reduce((sum, session) => sum + (logs[session.id]?.feeling || 3), 0) / doneSessions.length
+    : 3;
+  const recentRecoverySessions = ACTIVE_SESSIONS
+    .filter((session) => logs[session.id]?.done)
+    .slice(-5)
+    .map((session) => ({ session, log: logs[session.id] }));
+  const recoveryState = getRecoveryState(recentRecoverySessions, completedSessionRatio);
+  const weeklyFatigue = getWeeklyFatigue(w);
+  const qualityLongRunScore = LONG_RUN_SESSIONS.filter((session) => logs[session.id]?.done).length
+    ? LONG_RUN_SESSIONS.filter((session) => logs[session.id]?.done).reduce((sum, session, _, arr) => {
+      const log = logs[session.id];
+      const actualKm = parseFloat(log?.actualKm) || session.km || 0;
+      const distanceScore = session.km >= 28 ? Math.min(1, actualKm / session.km) : 0.75;
+      const feelingScore = log?.feeling ? Math.max(0.45, log.feeling / 5) : 0.65;
+      return sum + ((distanceScore * 0.65) + (feelingScore * 0.35)) / arr.length;
+    }, 0)
+    : 0.4;
+  const halfMarathonRace = ACTIVE_SESSIONS.find((session) => session.type === "race" && session.km >= 21 && session.km < 42 && logs[session.id]?.done);
+  const halfMarathonSignal = halfMarathonRace
+    ? Math.min(1, ((logs[halfMarathonRace.id]?.feeling || 3) / 5) * 0.55 + ((parseFloat(logs[halfMarathonRace.id]?.actualKm) || halfMarathonRace.km) >= 21 ? 0.45 : 0.2))
+    : 0.45;
+  const parsedTargetTime = parseTargetTimeToSeconds(preferences.targetTime);
+  const targetSeconds = parsedTargetTime || (2 * 3600 + 49 * 60 + 50);
+  const targetTimeDisplay = parsedTargetTime ? preferences.targetTime : "2:49:50";
+  const targetPaceSeconds = Math.round(targetSeconds / 42.195);
+  const targetPaceDisplay = `${Math.floor(targetPaceSeconds / 60)}:${String(targetPaceSeconds % 60).padStart(2,"0")}/km`;
+  const predictionReadiness = getPredictionReadiness({
+    doneSessionsCount: doneSess,
+    loggedKm,
+    doneLongRuns,
+    doneHardSessions,
+  });
+  const rawPerformancePrediction = getPerformancePrediction({
+    doneLongRuns,
+    longRuns,
+    doneHardSessions,
+    hardSessions,
+    avgFeeling,
+    progressRatio: completedSessionRatio,
+    qualityLongRunScore,
+    halfMarathonSignal,
+    targetSeconds,
+  });
+  const performancePrediction = predictionReadiness.ready
+    ? rawPerformancePrediction
+    : {
+      predictedSeconds: null,
+      predictedTime: predictionReadiness.title,
+      trend: predictionReadiness.detail,
+      confidence: "wartet auf Daten",
+    };
+  const recoveryHistory = getRecoveryHistory(PLAN, logs);
+  const consistencyStats = getConsistencyStats(PLAN, logs);
+  const nextKeySession = ACTIVE_SESSIONS.find((session) => getSessionStatus(logs[session.id]) === "open" && getSessionMilestones(session, PLAN.find((week) => week.s.some((item) => item.id === session.id)) || w).length > 0)
+    || ACTIVE_SESSIONS.find((session) => getSessionStatus(logs[session.id]) === "open");
+  const nextKeyWeek = nextKeySession ? PLAN.find((week) => week.s.some((session) => session.id === nextKeySession.id)) : null;
+  const currentPhaseIndex = PHASE_ORDER.indexOf(w.phase);
+  const currentPhaseProgress = Math.round(((currentPhaseIndex + 1) / PHASE_ORDER.length) * 100);
+  const phaseStatus = pct >= currentPhaseProgress + 10 ? "Voraus" : pct >= currentPhaseProgress - 10 ? "Im Plan" : "Aufholen";
+  const modalLog = modal ? logs[modal.id] : null;
+  const modalWeek = modal ? PLAN.find((week) => week.s.some((session) => session.id === modal.id)) : null;
+  const modalMilestones = modal && modalWeek ? getSessionMilestones(modal, modalWeek) : [];
+  const modalWorkout = modal ? parseWorkoutStructure(modal) : null;
+  const modalFuelingHints = modal ? getFuelingHints(modal) : [];
+  const coachingHint = getAdaptiveCoachingHint({
+    recoveryState,
+    weeklyFatigue,
+    performancePrediction,
+    nextKeySession,
+    phaseStatus,
+  });
+  const trendMeta = getTrendMeta(recoveryState, weeklyFatigue, performancePrediction, phaseStatus);
+  const recommendedAction = getRecommendedAction({ recoveryState, weeklyFatigue, nextKeySession, phaseStatus });
+  const visibleWeekSessions = w.s.filter((session) => matchesWeekFilter(session, logs[session.id], weekFilter));
+  const visibleOverviewPhases = overviewPhaseFilter === "all" ? Object.keys(PI) : [overviewPhaseFilter];
+  const todayNextSession = getTodayNextSession(ACTIVE_SESSIONS, logs);
+  const jumpTargets = getJumpTargets(PLAN);
+  const shareSummary = getShareSummary({ pct, week: w, nextKeySession, recoveryState, consistencyStats });
 
   if(!loaded)return <div style={{minHeight:"100vh",background:"#0b0b15",display:"flex",alignItems:"center",justifyContent:"center",color:"#aaa",fontFamily:"system-ui"}}>Lade Plan…</div>;
 
   return(
-    <div style={{minHeight:"100vh",background:"#0b0b15",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui,sans-serif",fontSize:14}}>
-      {/* HEADER */}
-      <div style={{background:"linear-gradient(135deg,#0f0f23,#1a1040)",padding:"14px 16px",borderBottom:"1px solid #1e1e3a"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-          <div>
-            <div style={{fontSize:17,fontWeight:700,color:"#fff"}}>🏃 Sub-2:50 Marathonplan</div>
-            <div style={{fontSize:11,color:"#64748b",marginTop:2}}>Warschau · 27.09.2026 · Zieltempo 4:01/km</div>
+    <div style={{minHeight:"100vh",background:"radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui,sans-serif",fontSize:14,WebkitTapHighlightColor:"transparent"}}>
+      <div style={{background:"linear-gradient(145deg,rgba(15,15,35,0.98),rgba(19,23,50,0.96))",padding:"16px 16px 18px",borderBottom:"1px solid rgba(59,130,246,0.12)",boxShadow:"0 14px 40px rgba(2,6,23,0.28)"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
+            <div style={{maxWidth:520}}>
+              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.14em",color:"#60a5fa",fontWeight:700,marginBottom:8}}>Marathon Block 2026</div>
+              <div style={{fontSize:24,fontWeight:800,color:"#fff",lineHeight:1.1}}>🏃 Sub-2:50 Marathonplan</div>
+              <div style={{fontSize:12,color:"#94a3b8",marginTop:6,lineHeight:1.5}}>Warschau · 27.09.2026 · Zieltempo 4:01/km · Mobile Tracking, Logbook und Backup bleiben vollständig kompatibel.</div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(120px,1fr))",gap:10,width:"100%",maxWidth:360}}>
+              <MetricCard label="Fortschritt" value={`${pct}%`} sublabel={`${doneSess}/${totalSess} Einheiten`} accent="#10b981" />
+              <MetricCard label="Kilometer" value={Math.round(loggedKm)} sublabel={`${kmPct}% von ${totalTargetKm} km`} accent="#38bdf8" />
+              <MetricCard label="Long Runs" value={`${doneLongRuns}/${longRuns}`} sublabel="Lange Läufe erledigt" accent="#f59e0b" />
+              <MetricCard label="Harte Einheiten" value={`${doneHardSessions}/${hardSessions}`} sublabel="Intervalle, Tempo, Rennen" accent="#fb7185" />
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+            <CompactStatusCard label="Recovery Status" title={recoveryState.label} subtitle={recoveryState.detail} accent={recoveryState.tone} trend={trendMeta.recoveryTrend} />
+            <CompactStatusCard label="Aktuelle Form" title={performancePrediction.predictedTime} subtitle={`${performancePrediction.trend} · Confidence ${performancePrediction.confidence}`} accent="#f8fafc" trend={trendMeta.formTrend} />
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+            <CompactStatusCard
+              label={todayNextSession?.mode === "today" ? "Heute geplant" : "Nächste Einheit"}
+              title={todayNextSession ? todayNextSession.session.title : "Heute steht nichts Offenes an"}
+              subtitle={todayNextSession ? `${todayNextSession.session.date} · ${getSessionTypeLabel(todayNextSession.session.type)}` : "Starker Stand. Du kannst bewusst regenerieren."}
+              accent="#fff"
+            />
+            <CompactStatusCard
+              label="Consistency"
+              title={`${consistencyStats.sessionStreak} Sessions · ${consistencyStats.weeklyStreak} Wochen`}
+              subtitle="Folge aus erledigten Sessions bzw. vollständig geloggten Wochen."
+              accent="#fff"
+            />
+          </div>
+          <div style={{marginTop:2}}>
             <BackupControls logs={logs} onImportSuccess={setLogs} />
           </div>
-          <div style={{display:"flex",gap:14,textAlign:"center"}}>
-            <div><div style={{fontSize:20,fontWeight:800,color:"#10b981"}}>{pct}%</div><div style={{fontSize:10,color:"#64748b"}}>erledigt</div></div>
-            <div><div style={{fontSize:20,fontWeight:800,color:"#3b82f6"}}>{Math.round(loggedKm)}</div><div style={{fontSize:10,color:"#64748b"}}>km ✓</div></div>
-            <div><div style={{fontSize:20,fontWeight:800,color:"#a855f7"}}>{doneSess}</div><div style={{fontSize:10,color:"#64748b"}}>Einh. ✓</div></div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#7c8aa5"}}>
+              <span>Gesamtfortschritt</span>
+              <span>{pct}% erledigt</span>
+            </div>
+            <div style={{height:7,background:"rgba(15,23,42,0.85)",borderRadius:999,overflow:"hidden"}}>
+              <div style={{height:"100%",background:"linear-gradient(90deg,#10b981,#38bdf8,#a855f7)",borderRadius:999,width:`${clampPct(pct)}%`,transition:"width .4s"}}/>
+            </div>
           </div>
-        </div>
-        <div style={{marginTop:10,height:4,background:"#1e1e3a",borderRadius:2}}>
-          <div style={{height:"100%",background:"linear-gradient(90deg,#10b981,#3b82f6,#a855f7)",borderRadius:2,width:`${pct}%`,transition:"width .4s"}}/>
         </div>
       </div>
 
-      {/* TABS */}
-      <div style={{display:"flex",background:"#0b0b15",borderBottom:"1px solid #1a1a2e",padding:"0 16px"}}>
+      <div style={{display:"flex",background:"rgba(5,8,18,0.72)",backdropFilter:"blur(10px)",borderBottom:"1px solid rgba(30,41,59,0.8)",padding:"0 16px",position:"sticky",top:0,zIndex:10}}>
         {["week","overview"].map(v=>(
-          <button key={v} onClick={()=>setView(v)} style={{background:"none",border:"none",color:view===v?"#10b981":"#4b5563",padding:"10px 14px",cursor:"pointer",fontSize:13,borderBottom:view===v?"2px solid #10b981":"2px solid transparent",fontWeight:view===v?600:400}}>
+          <button key={v} onClick={()=>setView(v)} style={{background:"none",border:"none",color:view===v?"#fff":"#64748b",padding:"13px 14px",cursor:"pointer",fontSize:13,borderBottom:view===v?"2px solid #38bdf8":"2px solid transparent",fontWeight:view===v?700:500}}>
             {v==="week"?"📅 Wochenplan":"📊 Übersicht"}
           </button>
         ))}
@@ -396,164 +1018,509 @@ useEffect(() => {
 
       {view==="week"?(
         <>
-          {/* WEEK NAV */}
-          <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",background:"#0f0f1e"}}>
-            <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"#111":"#1e1e3a",border:"none",color:"#94a3b8",width:34,height:34,borderRadius:8,cursor:wIdx===0?"not-allowed":"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
-            <div style={{flex:1,textAlign:"center"}}>
-              <span style={{display:"inline-block",padding:"2px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:ph.bg,color:ph.col,marginBottom:4}}>{ph.emoji} {ph.label}</span>
-              <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>{w.label}</div>
-              <div style={{fontSize:11,color:"#475569"}}>{w.dates} · Ziel: {w.km} km</div>
-              <div style={{fontSize:11,color:"#64748b",fontStyle:"italic",marginTop:2}}>{w.focus}</div>
-            </div>
-            <button onClick={()=>setWIdx(i=>Math.min(PLAN.length-1,i+1))} disabled={wIdx===PLAN.length-1} style={{background:wIdx===PLAN.length-1?"#111":"#1e1e3a",border:"none",color:"#94a3b8",width:34,height:34,borderRadius:8,cursor:wIdx===PLAN.length-1?"not-allowed":"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
-          </div>
-
-          {/* KM BAR */}
-          <div style={{padding:"8px 16px",background:"#0f0f1e",borderBottom:"1px solid #1a1a2e"}}>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#4b5563",marginBottom:4}}>
-              <span>Wochenziel: {w.km} km</span>
-              <span style={{color:"#10b981"}}>Gelaufen: {wLoggedKm.toFixed(1)} km</span>
-            </div>
-            <div style={{height:5,background:"#1a1a2e",borderRadius:3,overflow:"hidden"}}>
-              <div style={{height:"100%",background:"linear-gradient(90deg,#10b981,#3b82f6)",borderRadius:3,width:`${Math.min(100,w.km>0?(wLoggedKm/w.km)*100:0)}%`,transition:"width .3s"}}/>
-            </div>
-          </div>
-
-          {/* SESSIONS */}
-          <div style={{padding:"10px 14px",display:"flex",flexDirection:"column",gap:7}}>
-            {w.s.map(ss=>{
-              const ti=TI[ss.type];
-              const lg=logs[ss.id];
-              const isDone=lg?.done;
-              return(
-                <div key={ss.id} onClick={()=>ss.type!=="rest"&&openModal(ss)}
-                  style={{background:isDone?"rgba(16,185,129,0.05)":"#121224",borderRadius:10,padding:"10px 12px",display:"flex",gap:10,alignItems:"flex-start",borderLeft:`3px solid ${isDone?"#10b981":ti.col}`,cursor:ss.type==="rest"?"default":"pointer",opacity:ss.type==="rest"?0.6:1,border:`1px solid ${isDone?"rgba(16,185,129,0.2)":"#1e1e3a"}`,borderLeft:`3px solid ${isDone?"#10b981":ti.col}`}}>
-                  <div style={{fontSize:10,fontWeight:700,color:"#475569",width:22,flexShrink:0,paddingTop:2,textTransform:"uppercase"}}>{ss.day}</div>
-                  <div style={{flex:1}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
-                      <span style={{fontSize:10,padding:"1px 7px",borderRadius:10,background:`${ti.col}22`,color:ti.col,fontWeight:600}}>{ti.emoji} {ti.label}</span>
-                      {isDone&&<span style={{color:"#10b981",fontSize:12,fontWeight:700}}>✓</span>}
-                    </div>
-                    <div style={{fontSize:13,fontWeight:600,color:"#e2e8f0",marginBottom:2}}>{ss.title}</div>
-                    {ss.km>0&&<div style={{fontSize:11,color:"#3b82f6",fontWeight:500,marginBottom:3}}>{ss.km} km{ss.pace?` · ${ss.pace}`:""}</div>}
-                    <div style={{fontSize:11,color:"#475569",lineHeight:1.4}}>{ss.desc}</div>
-                    {lg?.feeling > 0 && (
-  <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>
-    {"★".repeat(lg.feeling)}
-    {lg.actualKm ? ` · ${lg.actualKm} km` : ""}
-    {lg.notes ? ` · ${lg.notes.substring(0, 45)}${lg.notes.length > 45 ? "…" : ""}` : ""}
-  </div>
-)}
-                  </div>
-                  {ss.type!=="rest"&&<div style={{color:isDone?"#10b981":"#374151",fontSize:16,flexShrink:0}}>{isDone?"📝":"＋"}</div>}
+          <div style={{padding:"16px",display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:22,padding:16,boxShadow:"0 20px 40px rgba(2,6,23,0.22)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:38,height:38,borderRadius:12,cursor:wIdx===0?"not-allowed":"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
+                <div style={{flex:1,textAlign:"center",minWidth:0}}>
+                  <span style={{display:"inline-block",padding:"5px 12px",borderRadius:999,fontSize:11,fontWeight:700,background:ph.bg,color:ph.col,marginBottom:8}}>{ph.emoji} {ph.label}</span>
+                  <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{w.label}</div>
+                  <div style={{fontSize:12,color:"#7c8aa5",marginTop:4}}>{w.dates} · Ziel: {w.km} km</div>
+                  <div style={{fontSize:12,color:"#cbd5e1",marginTop:8,lineHeight:1.5}}>{w.focus}</div>
                 </div>
-              );
-            })}
-          </div>
+                <button onClick={()=>setWIdx(i=>Math.min(PLAN.length-1,i+1))} disabled={wIdx===PLAN.length-1} style={{background:wIdx===PLAN.length-1?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:38,height:38,borderRadius:12,cursor:wIdx===PLAN.length-1?"not-allowed":"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
+              </div>
 
-          {/* WEEK NAV BOTTOM */}
-          <div style={{display:"flex",justifyContent:"center",gap:8,padding:"8px 16px 20px"}}>
-            {PLAN.map((_,i)=>{
-              const wDone=PLAN[i].s.filter(ss=>logs[ss.id]?.done).length;
-              const wTot=PLAN[i].s.filter(ss=>ss.type!=="rest").length;
-              const full=wTot>0&&wDone===wTot;
-              return(
-                <div key={i} onClick={()=>setWIdx(i)} style={{width:9,height:9,borderRadius:"50%",cursor:"pointer",background:i===wIdx?"#fff":full?"#10b981":wDone>0?"#3b82f6":"#1e1e3a",transition:"background .2s"}}/>
-              );
-            })}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:16}}>
+                <MetricCard label="Wochenziel" value={`${w.km}`} sublabel="geplante Kilometer" accent="#38bdf8" />
+                <MetricCard label="Ist-Stand" value={wLoggedKm.toFixed(1)} sublabel={`${Math.round(clampPct(w.km > 0 ? (wLoggedKm / w.km) * 100 : 0))}% der Woche`} accent="#10b981" />
+              </div>
+
+              <div style={{marginTop:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#7c8aa5",marginBottom:6}}>
+                  <span>Wochenfortschritt</span>
+                  <span>{wLoggedKm.toFixed(1)} / {w.km} km</span>
+                </div>
+                <div style={{height:7,background:"rgba(15,23,42,0.85)",borderRadius:999,overflow:"hidden"}}>
+                  <div style={{height:"100%",background:"linear-gradient(90deg,#10b981,#38bdf8)",borderRadius:999,width:`${clampPct(w.km > 0 ? (wLoggedKm / w.km) * 100 : 0)}%`,transition:"width .3s"}}/>
+                </div>
+              </div>
+
+              <div style={{marginTop:14,padding:"12px 14px",borderRadius:16,background:"rgba(10,14,26,0.72)",border:`1px solid ${weeklyFatigue.color}33`}}>
+                <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+                  <div>
+                    <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Weekly Fatigue</div>
+                    <div style={{fontSize:18,fontWeight:800,color:weeklyFatigue.color}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
+                  </div>
+                  <div style={{fontSize:12,color:"#94a3b8",maxWidth:260,lineHeight:1.5}}>{weeklyFatigue.note}</div>
+                </div>
+              </div>
+
+              <div style={{marginTop:12,padding:"12px 14px",borderRadius:16,background:"rgba(10,14,26,0.72)",border:`1px solid ${coachingHint.color}33`}}>
+                <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Coach Signal</div>
+                <div style={{fontSize:17,fontWeight:800,color:coachingHint.color,marginBottom:6}}>{coachingHint.title}</div>
+                <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.6}}>{coachingHint.body}</div>
+              </div>
+            </div>
+
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {jumpTargets.map((target)=>(
+                <button
+                  key={target.label}
+                  onClick={()=>setWIdx(Math.max(0, PLAN.findIndex((week)=>week.wn === target.weekNumber)))}
+                  style={{background:"rgba(15,23,42,0.82)",color:"#cbd5e1",border:"1px solid rgba(148,163,184,0.12)",borderRadius:999,padding:"8px 12px",cursor:"pointer",fontSize:12,fontWeight:700,transition:"transform .18s ease, border-color .18s ease"}}
+                >
+                  {target.label}
+                </button>
+              ))}
+              <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(15,23,42,0.82)",border:"1px solid rgba(148,163,184,0.12)",borderRadius:999,padding:"8px 12px"}}>
+                <span style={{fontSize:12,color:"#94a3b8",fontWeight:700}}>Woche</span>
+                <input
+                  type="number"
+                  min="1"
+                  max={PLAN.length}
+                  value={w.wn}
+                  onChange={(e)=>{
+                    const nextWeek = Number(e.target.value);
+                    const idx = PLAN.findIndex((week)=>week.wn === nextWeek);
+                    if(idx >= 0)setWIdx(idx);
+                  }}
+                  style={{width:44,background:"transparent",border:"none",color:"#fff",fontSize:12,fontWeight:700}}
+                />
+              </div>
+            </div>
+
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {[
+                { key: "all", label: "Alle" },
+                { key: "open", label: "Nur offen" },
+                { key: "hard", label: "Harte Einheiten" },
+                { key: "milestones", label: "Milestones" },
+              ].map((item)=>(
+                <FilterChip key={item.key} active={weekFilter===item.key} onClick={()=>setWeekFilter(item.key)}>
+                  {item.label}
+                </FilterChip>
+              ))}
+            </div>
+
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {visibleWeekSessions.length === 0 && (
+                <div style={{background:"rgba(11,16,28,0.94)",border:"1px solid rgba(148,163,184,0.1)",borderRadius:18,padding:18,fontSize:13,color:"#94a3b8",lineHeight:1.6}}>
+                  Für diesen Filter gibt es in der aktuellen Woche gerade keine passenden Einheiten.
+                </div>
+              )}
+              {visibleWeekSessions.map(session=>{
+                const ti=TI[session.type];
+                const log=logs[session.id];
+                const status = getSessionStatus(log);
+                const isDone=status==="done";
+                const isSkipped=status==="skipped";
+                const statusTone = getSessionStatusTone(log, ti.col);
+                const milestones = getSessionMilestones(session, w);
+                const hasHint = session.type !== "rest";
+                return(
+                  <div
+                    key={session.id}
+                    onClick={()=>hasHint&&openModal(session)}
+                    style={{
+                      background:isDone
+                        ?"linear-gradient(160deg,rgba(7,36,31,0.94),rgba(13,19,32,0.96))"
+                        : isSkipped
+                          ?"linear-gradient(160deg,rgba(40,14,14,0.9),rgba(18,18,30,0.96))"
+                          :"linear-gradient(160deg,rgba(18,18,36,0.98),rgba(11,16,28,0.94))",
+                      borderRadius:18,
+                      padding:"14px 14px 15px",
+                      display:"flex",
+                      gap:12,
+                      alignItems:"flex-start",
+                      cursor:hasHint?"pointer":"default",
+                      opacity:session.type==="rest"?0.78:1,
+                      border:`1px solid ${isDone?"rgba(16,185,129,0.26)":isSkipped?"rgba(248,113,113,0.2)":"rgba(148,163,184,0.1)"}`,
+                      boxShadow:isDone?"0 12px 30px rgba(16,185,129,0.08)":isSkipped?"0 12px 28px rgba(248,113,113,0.08)":"0 14px 32px rgba(2,6,23,0.16)"
+                    }}
+                  >
+                    <div style={{width:42,flexShrink:0,textAlign:"center"}}>
+                      <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
+                      <div style={{marginTop:8,width:42,height:42,borderRadius:14,background:`${ti.col}1a`,border:`1px solid ${ti.col}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{ti.emoji}</div>
+                    </div>
+
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start",flexWrap:"wrap"}}>
+                        <div style={{display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                            <span style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:`${ti.col}22`,color:ti.col,fontWeight:700}}>{getSessionTypeLabel(session.type)}</span>
+                            <span style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:statusTone.background,color:statusTone.color,fontWeight:700,border:`1px solid ${statusTone.border}`}}>
+                              {getSessionStatusLabel(log)}
+                            </span>
+                            {milestones.map((milestone)=>(
+                              <span key={milestone.label} style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:`${milestone.color}1f`,color:milestone.color,fontWeight:700}}>
+                                {milestone.emoji} {milestone.label}
+                              </span>
+                            ))}
+                          </div>
+                          <div>
+                            <div style={{fontSize:15,fontWeight:700,color:"#fff",lineHeight:1.35}}>{session.title}</div>
+                            <div style={{fontSize:12,color:"#7c8aa5",marginTop:5}}>{session.date}</div>
+                          </div>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          {hasHint && <div style={{fontSize:11,color:isDone?"#86efac":isSkipped?"#fca5a5":"#7c8aa5",fontWeight:700,whiteSpace:"nowrap"}}>{isDone||isSkipped?"Status bearbeiten":"Tippen für Details"}</div>}
+                          {hasHint && (
+                            <button
+                              onClick={(e)=>{e.stopPropagation(); quickCompleteSession(session);}}
+                              style={{
+                                width:34,
+                                height:34,
+                                borderRadius:12,
+                                border:`1px solid ${isDone?"rgba(16,185,129,0.28)":"rgba(148,163,184,0.14)"}`,
+                                background:isDone?"rgba(16,185,129,0.18)":"rgba(15,23,42,0.82)",
+                                color:isDone?"#86efac":"#cbd5e1",
+                                cursor:"pointer",
+                                fontSize:16,
+                                fontWeight:800,
+                                transition:"transform .18s ease, background .18s ease"
+                              }}
+                              aria-label={`${session.title} schnell als erledigt markieren`}
+                            >
+                              ✓
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
+                        {session.km > 0 && <div style={{fontSize:12,color:"#38bdf8",fontWeight:700}}>{session.km} km Ziel</div>}
+                        {session.pace && <div style={{fontSize:12,color:"#c084fc",fontWeight:700}}>⏱ {session.pace}</div>}
+                      </div>
+
+                      <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.6,marginTop:10}}>{session.desc}</div>
+
+                      {log ? (
+                        <div style={{marginTop:12,padding:"10px 12px",borderRadius:14,background:"rgba(15,23,42,0.55)",border:"1px solid rgba(148,163,184,0.1)"}}>
+                          <div style={{fontSize:11,color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Letzter Log</div>
+                          <div style={{fontSize:12,color:"#f8fafc",lineHeight:1.6}}>
+                            Status: {getSessionStatusLabel(log)}
+                            {" · "}
+                            Gefühl: {log.feeling > 0 ? `${"★".repeat(log.feeling)} (${log.feeling}/5)` : "nicht bewertet"}
+                            {log.actualKm ? ` · ${log.actualKm} km` : ""}
+                            {log.notes ? ` · ${log.notes.substring(0, 70)}${log.notes.length > 70 ? "…" : ""}` : ""}
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{marginTop:12,padding:"10px 12px",borderRadius:14,background:"rgba(15,23,42,0.42)",border:"1px dashed rgba(148,163,184,0.12)",fontSize:12,color:"#7c8aa5",lineHeight:1.6}}>
+                          Noch kein Log. Du kannst die Einheit direkt mit ✓ abhaken oder Details öffnen.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{display:"flex",justifyContent:"center",gap:8,padding:"4px 2px 6px",flexWrap:"wrap"}}>
+              {PLAN.map((week,i)=>{
+                const weekDone=week.s.filter(session=>logs[session.id]?.done).length;
+                const weekSkipped=week.s.filter(session=>logs[session.id]?.skipped).length;
+                const weekTotal=week.s.filter(session=>session.type!=="rest").length;
+                const full=weekTotal>0&&weekDone===weekTotal;
+                return(
+                  <button key={week.wn} onClick={()=>setWIdx(i)} style={{width:i===wIdx?28:10,height:10,borderRadius:999,cursor:"pointer",background:i===wIdx?"#f8fafc":full?"#10b981":weekSkipped>0?"#f87171":weekDone>0?"#38bdf8":"#1e293b",border:"none",transition:"all .2s"}} aria-label={`Woche ${week.wn} öffnen`} />
+                );
+              })}
+            </div>
           </div>
         </>
       ):(
-        /* OVERVIEW */
-        <div style={{padding:"14px 14px 40px",display:"flex",flexDirection:"column",gap:14}}>
-          <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>Trainingsplan-Übersicht</div>
-          <div style={{background:"#121224",borderRadius:10,padding:14,border:"1px solid #1e1e3a"}}>
-            <div style={{fontSize:12,fontWeight:600,color:"#64748b",marginBottom:8}}>WISSENSCHAFTLICHE GRUNDLAGE</div>
-            <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.6}}>
-              📊 <b>Pyramidal→Polarized</b>: Base-Phase pyramidal (~80% easy, 15% Schwelle, 5% HIT) → Build-Phase polarisiert (80% easy, 15-20% HIT). Laut PMC-Studie beste Leistungsgewinne.<br/>
-              🚴 <b>Rennrad</b> eingeplant: Jede Crosstraining-Einheit verbessert laut Daten von 119k Läufern die Zeit um ~6min.<br/>
-              📈 <b>Peak</b> Woche 4-5 vor dem Rennen (90km), dann 3-Wochen-Taper mit 41-60% Volumenreduktion (Intensität bleibt!).<br/>
-              🏔️ <b>Längster Lauf</b>: 34km (Woche 18) – optimal laut Springer-Analyse (30-32km Spanne).
-            </div>
-          </div>
-          {Object.keys(PI).map(pk=>{
-            const pWeeks=PLAN.filter(x=>x.phase===pk);
-            const p=PI[pk];
-            return(
-              <div key={pk} style={{borderLeft:`3px solid ${p.col}`,paddingLeft:12}}>
-                <div style={{fontSize:12,fontWeight:700,color:p.col,marginBottom:8}}>{p.emoji} {p.label}</div>
-                {pWeeks.map(pw=>{
-                  const idx=PLAN.indexOf(pw);
-                  const wd=pw.s.filter(ss=>logs[ss.id]?.done).length;
-                  const wt=pw.s.filter(ss=>ss.type!=="rest").length;
-                  return(
-                    <div key={pw.wn} onClick={()=>{setWIdx(idx);setView("week");}} style={{background:"#121224",borderRadius:8,padding:"9px 12px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",border:"1px solid #1a1a2e"}}>
-                      <div>
-                        <div style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>{pw.label}</div>
-                        <div style={{fontSize:10,color:"#475569"}}>{pw.dates} · {pw.km} km Ziel</div>
-                      </div>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{width:50,height:4,background:"#0b0b15",borderRadius:2,overflow:"hidden"}}>
-                          <div style={{height:"100%",background:p.col,borderRadius:2,width:wt>0?`${Math.round((wd/wt)*100)}%`:"0%"}}/>
-                        </div>
-                        <div style={{fontSize:11,fontWeight:600,color:p.col,minWidth:28,textAlign:"right"}}>{wd}/{wt}</div>
-                      </div>
-                    </div>
-                  );
-                })}
+        <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14}}>
+          {doneSess === 0 && (
+            <div style={{background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:20,padding:16}}>
+              <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:6}}>Dein Log startet hier</div>
+              <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.7}}>
+                Sobald du ein paar Einheiten speicherst, werden Fortschritt, Formprognose und Recovery deutlich belastbarer. Für den Einstieg reicht schon ein schneller Haken in der Wochenansicht.
               </div>
-            );
-          })}
+            </div>
+          )}
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+            <MetricCard label="Fortschritt" value={`${pct}%`} sublabel={`${doneSess} von ${totalSess} Einheiten`} accent="#10b981" />
+            <MetricCard label="Kilometer" value={loggedKm.toFixed(1)} sublabel={`${kmPct}% von ${totalTargetKm} km`} accent="#38bdf8" />
+            <MetricCard label="Aktuelle Phase" value={ph.label} sublabel={`${phaseStatus} · ${currentPhaseProgress}% durch die Phasenfolge`} accent={ph.col} />
+            <MetricCard label="Nächste wichtige Einheit" value={nextKeySession ? nextKeySession.title : "Alles erledigt"} sublabel={nextKeySession && nextKeyWeek ? `${nextKeyWeek.label} · ${nextKeySession.date}` : "Starker Job."} accent="#f59e0b" />
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+            <MetricCard label="Recovery Status" value={recoveryState.label} sublabel={recoveryState.detail} accent={recoveryState.tone} />
+            <MetricCard label="Aktuelle Form" value={performancePrediction.predictedTime} sublabel={performancePrediction.trend} accent={predictionReadiness.ready ? "#f8fafc" : "#94a3b8"} />
+          </div>
+
+          <SurfaceCard>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Adaptive Hinweise</div>
+            <div style={{fontSize:15,fontWeight:800,color:coachingHint.color,marginBottom:6}}>{coachingHint.title}</div>
+            <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.7}}>{coachingHint.body}</div>
+          </SurfaceCard>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+            <SurfaceCard>
+              <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Share Card</div>
+              <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.7,whiteSpace:"pre-line"}}>{shareSummary}</div>
+              <button onClick={copyShareSummary} style={{marginTop:12,background:"rgba(56,189,248,0.18)",color:"#dbeafe",border:"1px solid rgba(56,189,248,0.28)",borderRadius:12,padding:"10px 12px",cursor:"pointer",fontSize:12,fontWeight:700}}>
+                Zusammenfassung kopieren
+              </button>
+              {shareFeedback && <div style={{fontSize:11,color:"#94a3b8",marginTop:8}}>{shareFeedback}</div>}
+            </SurfaceCard>
+            <SurfaceCard>
+              <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Preferences</div>
+              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Zielzeit</div>
+              <input
+                type="text"
+                value={preferences.targetTime}
+                onChange={(e)=>setPreferences((prev)=>({...prev,targetTime:e.target.value}))}
+                placeholder="2:49:50"
+                style={{width:"100%",background:"#070b16",border:"1px solid rgba(148,163,184,0.14)",borderRadius:12,padding:"11px 12px",color:"#e2e8f0",fontSize:14,boxSizing:"border-box",marginBottom:12}}
+              />
+              <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6}}>
+                Passe hier nur dein Ziel an. Alles andere bleibt bewusst reduziert.
+              </div>
+            </SurfaceCard>
+          </div>
+
+          <SurfaceCard>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Empfohlene Nächste Aktion</div>
+            <div style={{fontSize:13,color:"#e2e8f0",lineHeight:1.7}}>{recommendedAction}</div>
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:12}}>Progress Tracking</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+              <MetricCard label="Long Runs" value={`${doneLongRuns}/${longRuns}`} sublabel="Lange Läufe abgeschlossen" accent="#f59e0b" />
+              <MetricCard label="Harte Einheiten" value={`${doneHardSessions}/${hardSessions}`} sublabel="Intervall, Tempo, Rennen" accent="#fb7185" />
+              <MetricCard label="Phase Status" value={phaseStatus} sublabel={`${ph.label} · ${pct}% Gesamtfortschritt`} accent={ph.col} />
+              <MetricCard label="Weekly Fatigue" value={`${weeklyFatigue.icon} ${weeklyFatigue.label}`} sublabel={`${weeklyFatigue.note} · ${trendMeta.loadTrend.icon} ${trendMeta.loadTrend.label}`} accent={weeklyFatigue.color} />
+              <MetricCard label="Ausgelassen" value={`${skippedSess}`} sublabel="Bewusst markierte Sessions" accent="#f87171" />
+            </div>
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:12}}>Race Strategy</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginBottom:12}}>
+              <MetricCard label="Marathon Zielzeit" value={targetTimeDisplay} sublabel="Aggressiv, aber kontrollierbar" accent="#10b981" />
+              <MetricCard label="Marathon Pace" value={targetPaceDisplay} sublabel="Ruhig anlaufen, dann stabilisieren" accent="#38bdf8" />
+            </div>
+            <div style={{fontSize:13,color:"#e2e8f0",lineHeight:1.7}}>
+              <div><b>Erste Hälfte:</b> 1:25 low bis 1:25:30, bewusst entspannt und ohne unnötige Peaks.</div>
+              <div><b>Zweite Hälfte:</b> Ab km 25 Rhythmus halten, ab km 32 in kleine Abschnitte denken und kontrolliert nachschärfen.</div>
+              <div><b>Mental:</b> Früh geduldig bleiben, Mitte effizient arbeiten, Ende in Aid-Station zu Aid-Station denken.</div>
+            </div>
+            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6,marginTop:12}}>
+              Optionaler Halbmarathon-Check: 3:56-3:59/km anlaufen, erste 5 km konservativ, danach auf sauberen Druck gehen.
+            </div>
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:12}}>Recovery Verlauf</div>
+            <div style={{display:"flex",alignItems:"end",gap:8,overflowX:"auto",paddingBottom:4}}>
+              {recoveryHistory.map((item)=>(
+                <div key={item.label} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,minWidth:32}}>
+                  <div style={{height:92,width:18,borderRadius:999,background:"rgba(15,23,42,0.9)",display:"flex",alignItems:"end",padding:2}}>
+                    <div style={{width:"100%",height:`${Math.max(10, item.score)}%`,borderRadius:999,background:item.complete?"linear-gradient(180deg,#10b981,#38bdf8)":"linear-gradient(180deg,#f59e0b,#f87171)"}} />
+                  </div>
+                  <div style={{fontSize:10,color:"#94a3b8",fontWeight:700}}>{item.label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6,marginTop:12}}>
+              Der Verlauf kombiniert Gefühl, erledigte Einheiten, ausgelassene Sessions und harte Reize zu einem leichten Wochenindikator.
+            </div>
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:10}}>Trainingsplan-Übersicht</div>
+            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.7,marginBottom:16}}>
+              📊 <b>Pyramidal→Polarized</b>: Base-Phase pyramidal (~80% easy, 15% Schwelle, 5% HIT) → Build-Phase polarisiert (80% easy, 15-20% HIT).<br/>
+              🚴 <b>Rennrad</b> als gelenkschonendes Volumen und aktive Regeneration.<br/>
+              📈 <b>Peak</b> vor dem Rennen mit anschließender Taper-Entlastung.<br/>
+              🏔️ <b>Längster Lauf</b>: {LONGEST_LONG_RUN_KM} km als Schlüsseleinheit der Vorbereitung.
+            </div>
+
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+              {[{ key: "all", label: "Alle Phasen" }, ...PHASE_ORDER.map((phaseKey) => ({ key: phaseKey, label: PI[phaseKey].label }))].map((item)=>(
+                <FilterChip key={item.key} active={overviewPhaseFilter===item.key} onClick={()=>setOverviewPhaseFilter(item.key)}>
+                  {item.label}
+                </FilterChip>
+              ))}
+            </div>
+
+            {visibleOverviewPhases.map(phaseKey=>{
+              const phaseWeeks=PLAN.filter(week=>week.phase===phaseKey);
+              const phase=PI[phaseKey];
+              return(
+                <div key={phaseKey} style={{marginBottom:14}}>
+                  <div style={{fontSize:13,fontWeight:800,color:phase.col,marginBottom:10}}>{phase.emoji} {phase.label}</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {phaseWeeks.map(week=>{
+                      const idx=PLAN.indexOf(week);
+                      const weekDone=week.s.filter(session=>logs[session.id]?.done).length;
+                      const weekSkipped=week.s.filter(session=>logs[session.id]?.skipped).length;
+                      const weekTotal=week.s.filter(session=>session.type!=="rest").length;
+                      const weekPct=weekTotal > 0 ? Math.round((weekDone / weekTotal) * 100) : 0;
+                      const phaseHasPeak = week.km >= 90;
+                      return(
+                        <button
+                          key={week.wn}
+                          onClick={()=>{setWIdx(idx);setView("week");}}
+                          style={{background:"rgba(11,15,28,0.9)",borderRadius:16,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",border:"1px solid rgba(148,163,184,0.1)",textAlign:"left"}}
+                        >
+                          <div style={{minWidth:0}}>
+                            <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>{week.label}</div>
+                            <div style={{fontSize:11,color:"#7c8aa5",marginTop:4}}>{week.dates} · {week.km} km Ziel</div>
+                            {phaseHasPeak && <div style={{fontSize:11,color:"#10b981",marginTop:6,fontWeight:700}}>🔥 Peak Woche</div>}
+                            {weekSkipped > 0 && <div style={{fontSize:11,color:"#fca5a5",marginTop:6,fontWeight:700}}>⏭ {weekSkipped} ausgelassen</div>}
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",gap:10,marginLeft:10}}>
+                            <div style={{width:64,height:6,background:"#0b0f1c",borderRadius:999,overflow:"hidden"}}>
+                              <div style={{height:"100%",background:phase.col,borderRadius:999,width:`${weekPct}%`}}/>
+                            </div>
+                            <div style={{fontSize:12,fontWeight:700,color:phase.col,minWidth:38,textAlign:"right"}}>{weekDone}/{weekTotal}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </SurfaceCard>
         </div>
       )}
 
-      {/* MODAL */}
-      {modal&&(
-        <div onClick={()=>setModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,zIndex:1000}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"#141428",borderRadius:16,padding:20,width:"100%",maxWidth:420,border:"1px solid #1e1e3a",maxHeight:"90vh",overflowY:"auto"}}>
-            <div style={{marginBottom:14}}>
-              <div style={{fontSize:16,fontWeight:700,color:"#fff"}}>{modal.title}</div>
-              <div style={{fontSize:11,color:"#475569"}}>{modal.day}, {modal.date} · {modal.km>0?`${modal.km} km Ziel`:""}</div>
-              {modal.pace&&<div style={{fontSize:11,color:"#3b82f6",marginTop:2}}>⏱ {modal.pace}</div>}
-              <div style={{fontSize:11,color:"#64748b",marginTop:6,lineHeight:1.4}}>{modal.desc}</div>
-            </div>
-
-            {modal.km>0&&(
-              <div style={{marginBottom:14}}>
-                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".05em",marginBottom:5}}>Tatsächliche km</label>
-                <input type="number" step="0.1" placeholder={`Ziel: ${modal.km} km`} value={form.actualKm} onChange={e=>setForm(f=>({...f,actualKm:e.target.value}))}
-                  style={{width:"100%",background:"#0b0b15",border:"1px solid #1e1e3a",borderRadius:8,padding:"9px 12px",color:"#e2e8f0",fontSize:13,boxSizing:"border-box"}}/>
+      {modal&&modalWeek&&modalWorkout&&(
+        <div onClick={closeModal} style={{position:"fixed",inset:0,background:"rgba(2,6,23,0.82)",display:"flex",alignItems:"stretch",justifyContent:"center",padding:0,zIndex:1000}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(180deg,#0c1020 0%, #090d18 100%)",width:"100%",maxWidth:720,height:"100%",overflowY:"auto",borderLeft:"1px solid rgba(148,163,184,0.12)",borderRight:"1px solid rgba(148,163,184,0.12)"}}>
+            <div style={{padding:"18px 16px 140px",display:"flex",flexDirection:"column",gap:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+                <div>
+                  <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.12em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Session Details</div>
+                  <div style={{fontSize:24,fontWeight:800,color:"#fff",lineHeight:1.15}}>{modal.title}</div>
+                  <div style={{fontSize:12,color:"#94a3b8",marginTop:6}}>{modal.day}, {modal.date} · {modalWeek.label}</div>
+                </div>
+                <button onClick={closeModal} style={{background:"rgba(15,23,42,0.8)",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",borderRadius:12,padding:"10px 12px",cursor:"pointer",fontSize:13}}>Schließen</button>
               </div>
-            )}
 
-            <div style={{marginBottom:14}}>
-              <label style={{display:"block",fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".05em",marginBottom:6}}>Wie war's?</label>
-              <div style={{display:"flex",gap:6,marginBottom:4}}>
-                {[1,2,3,4,5].map(n=>(
-                  <button key={n} onClick={()=>setForm(f=>({...f,feeling:n}))} style={{flex:1,background:form.feeling>=n?"#f59e0b22":"#0b0b15",border:`1px solid ${form.feeling>=n?"#f59e0b":"#1e1e3a"}`,borderRadius:8,padding:"8px 0",cursor:"pointer",fontSize:16}}>⭐</button>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:`${TI[modal.type].col}22`,color:TI[modal.type].col,fontWeight:700}}>{TI[modal.type].emoji} {getSessionTypeLabel(modal.type)}</span>
+                <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:form.done?"rgba(16,185,129,0.16)":form.skipped?"rgba(248,113,113,0.14)":"rgba(148,163,184,0.12)",color:form.done?"#86efac":form.skipped?"#fca5a5":"#94a3b8",fontWeight:700}}>
+                  {form.done ? "Erledigt" : form.skipped ? "Ausgelassen" : "Offen"}
+                </span>
+                {modal.km > 0 && <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:"rgba(56,189,248,0.14)",color:"#38bdf8",fontWeight:700}}>Ziel: {modal.km} km</span>}
+                {modal.pace && <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:"rgba(168,85,247,0.14)",color:"#c084fc",fontWeight:700}}>Pace: {modal.pace}</span>}
+                {modalMilestones.map((milestone)=>(
+                  <span key={milestone.label} style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:`${milestone.color}1f`,color:milestone.color,fontWeight:700}}>
+                    {milestone.emoji} {milestone.label}
+                  </span>
                 ))}
               </div>
-              <div style={{fontSize:11,color:"#64748b",textAlign:"center"}}>
-                {["","😓 Sehr schwer","😕 Schlecht","😐 Okay","😊 Gut","🔥 Fantastisch!"][form.feeling]}
+
+              <DetailBlock title="Warum diese Einheit?">
+                <div style={{fontSize:14,color:"#e2e8f0",lineHeight:1.7}}>{getSessionWhy(modal, modalWeek)}</div>
+              </DetailBlock>
+
+              <DetailBlock title="Workout-Struktur">
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:"#38bdf8",marginBottom:4}}>Warm-up</div>
+                    <div style={{fontSize:13,color:"#e2e8f0",lineHeight:1.6}}>{modalWorkout.warmup}</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:"#f59e0b",marginBottom:4}}>Main Set</div>
+                    <div style={{fontSize:13,color:"#e2e8f0",lineHeight:1.6}}>{modalWorkout.mainSet}</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:"#10b981",marginBottom:4}}>Cool-down</div>
+                    <div style={{fontSize:13,color:"#e2e8f0",lineHeight:1.6}}>{modalWorkout.cooldown}</div>
+                  </div>
+                </div>
+              </DetailBlock>
+
+              <DetailBlock title="Coach-Hinweis">
+                <div style={{fontSize:14,color:"#e2e8f0",lineHeight:1.7}}>{getCoachHint(modal, modalWeek)}</div>
+              </DetailBlock>
+
+              {modalFuelingHints.length > 0 && (
+                <DetailBlock title="Fueling-Hinweise">
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {modalFuelingHints.map((hint) => (
+                      <div key={hint} style={{fontSize:13,color:"#e2e8f0",lineHeight:1.7}}>
+                        {hint}
+                      </div>
+                    ))}
+                  </div>
+                </DetailBlock>
+              )}
+
+              <DetailBlock title="Letzter gespeicherter Eintrag">
+                <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+                  <MetricCard label="Status" value={getSessionStatusLabel(modalLog)} sublabel={modalLog?.at ? formatLogTimestamp(modalLog.at) : "Noch nicht gespeichert"} accent={modalLog?.done ? "#10b981" : modalLog?.skipped ? "#f87171" : "#94a3b8"} />
+                  <MetricCard label="Gefühl" value={modalLog?.feeling ? `${"★".repeat(modalLog.feeling)}` : "Keine"} sublabel={modalLog?.feeling ? `${modalLog.feeling}/5` : "Noch kein Rating"} accent="#f59e0b" />
+                  <MetricCard label="Gelaufene km" value={modalLog?.actualKm || "—"} sublabel={modal.km > 0 ? `Ziel: ${modal.km} km` : "Keine Distanz geplant"} accent="#38bdf8" />
+                  <MetricCard label="Notizen" value={modalLog?.notes ? "Vorhanden" : "Keine"} sublabel={modalLog?.notes || "Noch keine Notiz gespeichert"} accent="#c084fc" />
+                </div>
+              </DetailBlock>
+
+              <DetailBlock title="Dein Eintrag">
+                {modal.km>0&&(
+                  <div style={{marginBottom:14}}>
+                    <label style={{display:"block",fontSize:11,fontWeight:700,color:"#7c8aa5",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>Tatsächliche km</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder={`Ziel: ${modal.km} km`}
+                      value={form.actualKm}
+                      onChange={e=>setForm(f=>({...f,actualKm:e.target.value}))}
+                      style={{width:"100%",background:"#070b16",border:"1px solid rgba(148,163,184,0.14)",borderRadius:12,padding:"12px 14px",color:"#e2e8f0",fontSize:14,boxSizing:"border-box"}}
+                    />
+                  </div>
+                )}
+
+                <div style={{marginBottom:14}}>
+                  <label style={{display:"block",fontSize:11,fontWeight:700,color:"#7c8aa5",textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>Gefühl</label>
+                  <div style={{display:"flex",gap:8}}>
+                    {[1,2,3,4,5].map(n=>(
+                      <button key={n} onClick={()=>setForm(f=>({...f,feeling:n}))} style={{flex:1,background:form.feeling>=n?"rgba(245,158,11,0.2)":"#070b16",border:`1px solid ${form.feeling>=n?"#f59e0b":"rgba(148,163,184,0.14)"}`,borderRadius:12,padding:"10px 0",cursor:"pointer",fontSize:18}}>
+                        ⭐
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{fontSize:12,color:"#94a3b8",textAlign:"center",marginTop:8}}>
+                    {["","😓 Sehr schwer","😕 Schlecht","😐 Okay","😊 Gut","🔥 Fantastisch!"][form.feeling]}
+                  </div>
+                </div>
+
+                <div style={{marginBottom:14}}>
+                  <label style={{display:"block",fontSize:11,fontWeight:700,color:"#7c8aa5",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>Notizen</label>
+                  <textarea
+                    placeholder="Wie lief's? Besonderheiten? Stimmung?"
+                    value={form.notes}
+                    onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
+                    style={{width:"100%",background:"#070b16",border:"1px solid rgba(148,163,184,0.14)",borderRadius:12,padding:"12px 14px",color:"#e2e8f0",fontSize:13,boxSizing:"border-box",minHeight:92,resize:"vertical"}}
+                  />
+                </div>
+
+                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:14,color:"#e2e8f0",marginBottom:10}}>
+                  <input type="checkbox" checked={form.done} onChange={e=>setForm(f=>({...f,done:e.target.checked,skipped:e.target.checked?false:f.skipped}))} style={{width:18,height:18,accentColor:"#10b981"}}/>
+                  Als abgeschlossen markieren
+                </label>
+                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:14,color:"#e2e8f0"}}>
+                  <input type="checkbox" checked={form.skipped} onChange={e=>setForm(f=>({...f,skipped:e.target.checked,done:e.target.checked?false:f.done}))} style={{width:18,height:18,accentColor:"#f87171"}}/>
+                  Als ausgelassen markieren
+                </label>
+              </DetailBlock>
+            </div>
+
+            <div style={{position:"sticky",bottom:0,padding:16,background:"linear-gradient(180deg,rgba(9,13,24,0) 0%, rgba(9,13,24,0.94) 18%, rgba(9,13,24,1) 100%)",borderTop:"1px solid rgba(148,163,184,0.08)"}}>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={closeModal} style={{flex:1,background:"#0b1220",border:"1px solid rgba(148,163,184,0.12)",color:"#94a3b8",borderRadius:14,padding:"13px",cursor:"pointer",fontSize:14,fontWeight:600}}>Abbrechen</button>
+                <button onClick={saveModal} style={{flex:1.4,background:"linear-gradient(135deg,#10b981,#3b82f6)",border:"none",color:"#fff",borderRadius:14,padding:"13px",cursor:"pointer",fontSize:14,fontWeight:700}}>Speichern</button>
               </div>
-            </div>
-
-            <div style={{marginBottom:14}}>
-              <label style={{display:"block",fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:".05em",marginBottom:5}}>Notizen</label>
-              <textarea placeholder="Wie lief's? Besonderheiten? Stimmung?" value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
-                style={{width:"100%",background:"#0b0b15",border:"1px solid #1e1e3a",borderRadius:8,padding:"9px 12px",color:"#e2e8f0",fontSize:12,boxSizing:"border-box",minHeight:72,resize:"vertical"}}/>
-            </div>
-
-            <div style={{marginBottom:16}}>
-              <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"#e2e8f0"}}>
-                <input type="checkbox" checked={form.done} onChange={e=>setForm(f=>({...f,done:e.target.checked}))} style={{width:17,height:17,accentColor:"#10b981"}}/>
-                Als abgeschlossen markieren ✓
-              </label>
-            </div>
-
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setModal(null)} style={{flex:1,background:"#0b0b15",border:"1px solid #1e1e3a",color:"#64748b",borderRadius:10,padding:"11px",cursor:"pointer",fontSize:13}}>Abbrechen</button>
-              <button onClick={saveModal} style={{flex:2,background:"linear-gradient(135deg,#10b981,#3b82f6)",border:"none",color:"#fff",borderRadius:10,padding:"11px",cursor:"pointer",fontSize:13,fontWeight:600}}>Speichern 💾</button>
             </div>
           </div>
         </div>

@@ -1,4 +1,6 @@
 // @ts-nocheck
+// Legacy snapshot of an older app version.
+// The active application entrypoint is src/App.tsx.
 import { useState, useEffect } from "react";
 
 const PI = {
