@@ -308,11 +308,17 @@ const PLAN=[
 
 export default function App(){
   const [wIdx,setWIdx]=useState(0);
-  const [logs,setLogs]=useState({});
+  const [logs, setLogs] = useState(() => {
+  const saved = localStorage.getItem("marathonLogs");
+  return saved ? JSON.parse(saved) : {};
+});
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({feeling:0,actualKm:"",notes:"",done:false});
   const [view,setView]=useState("week");
   const [loaded,setLoaded]=useState(false);
+useEffect(() => {
+  localStorage.setItem("marathonLogs", JSON.stringify(logs));
+}, [logs]);
 
   useEffect(()=>{
     (async()=>{
