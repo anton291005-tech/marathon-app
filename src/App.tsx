@@ -1094,7 +1094,7 @@ export default function App(){
   const dashboardSession = todayNextSession?.session || null;
   const dashboardType = dashboardSession ? TI[dashboardSession.type] : { label: "Keine Einheit geplant", emoji: "😴", col: "#64748b" };
   const prepProgressPct = totalSess > 0 ? Math.round((doneSess / totalSess) * 100) : 0;
-  const ringRadius = 41;
+  const ringRadius = 44;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const ringDashOffset = ringCircumference * (1 - (prepProgressPct / 100));
   const homeTabLabel = getHomeTabLabel(dashboardSession, isPreStart);
@@ -1185,22 +1185,25 @@ export default function App(){
             </div>
 
             {/* progress ring */}
-            <div style={{position:"relative",marginTop:10,padding:"0 10px",display:"flex",flexDirection:"column",alignItems:"center"}}>
-              <div style={{position:"relative",width:218,height:218}}>
+            <div style={{position:"relative",marginTop:4,padding:"0 10px",display:"flex",flexDirection:"column",alignItems:"center"}}>
+              <div style={{position:"relative",width:236,height:236}}>
                 <svg viewBox="0 0 120 120" style={{width:"100%",height:"100%",display:"block"}}>
                   <defs>
                     <linearGradient id="prepRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#34d399" />
-                      <stop offset="100%" stopColor="#86efac" />
+                      <stop offset="0%" stopColor="#4ade80" />
+                      <stop offset="100%" stopColor="#ecfdf5" />
                     </linearGradient>
+                    <filter id="prepRingGlow" x="-30%" y="-30%" width="160%" height="160%">
+                      <feGaussianBlur stdDeviation="0.7" />
+                    </filter>
                   </defs>
                   <circle
                     cx="60"
                     cy="60"
                     r={ringRadius}
                     fill="none"
-                    stroke="rgba(148,163,184,0.22)"
-                    strokeWidth="10"
+                    stroke="rgba(148,163,184,0.14)"
+                    strokeWidth="8.5"
                   />
                   <circle
                     cx="60"
@@ -1208,20 +1211,21 @@ export default function App(){
                     r={ringRadius}
                     fill="none"
                     stroke="url(#prepRingGrad)"
-                    strokeWidth="10"
+                    strokeWidth="9.8"
                     strokeLinecap="round"
                     strokeDasharray={`${ringCircumference} ${ringCircumference}`}
                     strokeDashoffset={ringDashOffset}
                     transform="rotate(-90 60 60)"
-                    style={{transition:"stroke-dashoffset .45s ease"}}
+                    filter="url(#prepRingGlow)"
+                    style={{transition:"stroke-dashoffset .5s ease-out"}}
                   />
                 </svg>
                 <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-                  <div style={{fontSize:46,fontWeight:800,color:"#f8fafc",lineHeight:1,letterSpacing:"-0.03em"}}>{prepProgressPct}%</div>
-                  <div style={{fontSize:12,fontWeight:700,color:"rgba(226,232,240,0.64)",marginTop:5,letterSpacing:"0.04em",textTransform:"uppercase"}}>Vorbereitung</div>
+                  <div style={{fontSize:48,fontWeight:800,color:"#f8fafc",lineHeight:1,letterSpacing:"-0.03em"}}>{prepProgressPct}%</div>
+                  <div style={{fontSize:10.5,fontWeight:700,color:"rgba(226,232,240,0.5)",marginTop:7,letterSpacing:"0.07em",textTransform:"uppercase"}}>VORBEREITUNG</div>
                 </div>
               </div>
-              <div style={{marginTop:10,fontSize:13,fontWeight:600,color:"rgba(226,232,240,0.68)"}}>
+              <div style={{marginTop:8,fontSize:13,fontWeight:600,color:"rgba(226,232,240,0.62)"}}>
                 {doneSess} von {totalSess} Einheiten
               </div>
             </div>
