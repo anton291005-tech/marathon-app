@@ -8,7 +8,9 @@ export type DecisionStatus = "green" | "yellow" | "red";
 
 export type DailyDecision = {
   status: DecisionStatus;
-  /** Short main recommendation sentence */
+  /** 2–4 word label for compact Home display */
+  shortRecommendation: string;
+  /** Full recommendation sentence for detail views */
   recommendation: string;
   /** 1–3 brief reason strings shown below */
   reasons: string[];
@@ -70,6 +72,7 @@ export function getDailyDecision(input: DailyDecisionInput): DailyDecision {
   if (doneSessions < 4) {
     return {
       status: "green",
+      shortRecommendation: "Nach Plan laufen",
       recommendation: "Training startet gerade — heute einfach sauber nach Plan laufen.",
       reasons: ["Noch wenig Logs vorhanden. Sammle erste Einheiten für genauere Einschätzungen."],
       earlyStage: true,
@@ -145,7 +148,7 @@ export function getDailyDecision(input: DailyDecisionInput): DailyDecision {
     const rec = isHardType(todaySessionType)
       ? `Wie geplant trainieren — gutes Fenster für ${sessionLabel}.`
       : `Wie geplant trainieren — Bedingungen passen.`;
-    return { status: "green", recommendation: rec, reasons: trimmedReasons, earlyStage: false };
+    return { status: "green", shortRecommendation: "Wie geplant laufen", recommendation: rec, reasons: trimmedReasons, earlyStage: false };
   }
 
   if (riskScore <= 3) {
@@ -153,13 +156,15 @@ export function getDailyDecision(input: DailyDecisionInput): DailyDecision {
     const rec = isHardType(todaySessionType)
       ? `Locker angehen — Intensität ${sessionLabel} moderat halten.`
       : `Wie geplant, aber auf die eigenen Signale hören.`;
-    return { status: "yellow", recommendation: rec, reasons: trimmedReasons, earlyStage: false };
+    const short = isHardType(todaySessionType) ? "Locker angehen" : "Auf Signale hören";
+    return { status: "yellow", shortRecommendation: short, recommendation: rec, reasons: trimmedReasons, earlyStage: false };
   }
 
   // Red: clearly reduce or rest
   if (todaySessionType === "rest" || todaySessionType === "bike") {
     return {
       status: "red",
+      shortRecommendation: "Heute erholen",
       recommendation: "Heute wirklich erholen — der Ruhetag kommt gerade richtig.",
       reasons: trimmedReasons,
       earlyStage: false,
@@ -167,6 +172,7 @@ export function getDailyDecision(input: DailyDecisionInput): DailyDecision {
   }
   return {
     status: "red",
+    shortRecommendation: "Intensität reduzieren",
     recommendation: "Intensität heute deutlich reduzieren oder eine leichte Einheit wählen.",
     reasons: trimmedReasons,
     earlyStage: false,
