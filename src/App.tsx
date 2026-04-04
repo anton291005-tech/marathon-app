@@ -705,106 +705,6 @@ function getRecommendedAction({ recoveryState, weeklyFatigue, nextKeySession, ph
   return "Block halten, Rhythmus konservieren und die Form nicht mit Extra-Arbeit stören.";
 }
 
-function getSessionWeight(session){
-  const km = Number(session.km) || 0;
-
-  if(session.type === "rest")return 0;
-  if(session.type === "race")return 8 + (km * 0.14);
-  if(session.type === "long")return 5 + (km * 0.22);
-  if(session.type === "interval")return 4.7 + (km * 0.16);
-  if(session.type === "tempo")return 4.2 + (km * 0.15);
-  if(session.type === "easy")return 2 + (km * 0.11);
-  if(session.type === "bike" || session.type === "strength")return 1.4 + (km * 0.04);
-  return 1.8 + (km * 0.09);
-}
-
-function buildProgressGraph(plan, logs){
-  const sessions = plan.flatMap((week) => week.s);
-  if(!sessions.length){
-    return {
-      plannedPoints: [{ x: 0, y: 82 }, { x: 100, y: 18 }],
-      currentPoint: null,
-    };
-  }
-
-  const chartTop = 16;
-  const chartBottom = 82;
-  const chartRange = chartBottom - chartTop;
-  const totalSessions = sessions.length;
-
-  let plannedCumulative = 0;
-  let lastDoneIndex = -1;
-  const cumulativeRows = [];
-
-  sessions.forEach((session, index) => {
-    const weight = getSessionWeight(session);
-    plannedCumulative += weight;
-
-    const log = logs[session.id];
-    if(log?.done){
-      lastDoneIndex = index;
-    }
-
-    cumulativeRows.push({
-      index,
-      plannedCumulative,
-    });
-  });
-
-  const totalPlanned = Math.max(1, plannedCumulative);
-  const plannedPoints = [{ x: 0, y: chartBottom }];
-
-  cumulativeRows.forEach((row) => {
-    const x = ((row.index + 1) / totalSessions) * 100;
-    const progress = row.plannedCumulative / totalPlanned;
-    const y = chartBottom - (progress * chartRange);
-    plannedPoints.push({ x, y });
-  });
-
-  if(lastDoneIndex < 0){
-    return {
-      plannedPoints,
-      currentPoint: null,
-    };
-  }
-
-  const row = cumulativeRows[lastDoneIndex];
-  const x = ((lastDoneIndex + 1) / totalSessions) * 100;
-  const progress = row.plannedCumulative / totalPlanned;
-  const y = chartBottom - (progress * chartRange);
-
-  return {
-    plannedPoints,
-    currentPoint: { x, y },
-  };
-}
-
-function buildSmoothPath(points, key){
-  if(!points.length)return "";
-  if(points.length === 1)return `M ${points[0].x} ${points[0][key]}`;
-  if(points.length === 2)return `M ${points[0].x} ${points[0][key]} L ${points[1].x} ${points[1][key]}`;
-
-  // Catmull-Rom → cubic Bézier conversion: smooth curves through every point
-  const t = 0.35; // tension — lower = tighter, higher = smoother
-  let path = `M ${points[0].x} ${points[0][key]}`;
-
-  for(let i = 0; i < points.length - 1; i++){
-    const p0 = points[Math.max(i - 1, 0)];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[Math.min(i + 2, points.length - 1)];
-
-    const cp1x = p1.x + (p2.x - p0.x) * t;
-    const cp1y = p1[key] + (p2[key] - p0[key]) * t;
-    const cp2x = p2.x - (p3.x - p1.x) * t;
-    const cp2y = p2[key] - (p3[key] - p1[key]) * t;
-
-    path += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)} ${cp2x.toFixed(2)} ${cp2y.toFixed(2)} ${p2.x} ${p2[key]}`;
-  }
-
-  return path;
-}
-
 function getDashboardMetric(session){
   if(!session)return "Ruhetag";
   if(session.type === "bike"){
@@ -1193,8 +1093,10 @@ export default function App(){
     : "";
   const dashboardSession = todayNextSession?.session || null;
   const dashboardType = dashboardSession ? TI[dashboardSession.type] : { label: "Keine Einheit geplant", emoji: "😴", col: "#64748b" };
-  const prepProgressGraph = buildProgressGraph(PLAN, logs);
-  const plannedProgressPath = buildSmoothPath(prepProgressGraph.plannedPoints, "y");
+  const prepProgressPct = totalSess > 0 ? Math.round((doneSess / totalSess) * 100) : 0;
+  const ringRadius = 41;
+  const ringCircumference = 2 * Math.PI * ringRadius;
+  const ringDashOffset = ringCircumference * (1 - (prepProgressPct / 100));
   const homeTabLabel = getHomeTabLabel(dashboardSession, isPreStart);
   const jumpTargets = getJumpTargets(PLAN);
   const shareSummary = getShareSummary({ pct, week: w, nextKeySession, recoveryState, consistencyStats });
@@ -1239,7 +1141,7 @@ export default function App(){
       {activeView==="home"?(
         <div style={{display:"flex",flexDirection:"column",paddingBottom:24,...viewTransitionStyle}}>
 
-          {/* ── HERO + GRAPH — one seamless gradient section ───────────── */}
+          {/* ── HERO + PROGRESS RING — one seamless gradient section ───── */}
           <div style={{position:"relative",paddingTop:20,paddingBottom:6}}>
             {/* background: fades from hero dark → transparent, no hard bottom edge */}
             <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(11,15,31,0.995) 0%,rgba(9,12,22,0.98) 35%,rgba(8,10,19,0.72) 76%,transparent 100%)",pointerEvents:"none"}} />
@@ -1282,29 +1184,46 @@ export default function App(){
               </div>
             </div>
 
-            {/* graph — planned prep curve + current position marker */}
-            <div style={{position:"relative",marginTop:10,padding:"0 10px"}}>
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:212,display:"block"}}>
-                <path
-                  d={plannedProgressPath}
-                  fill="none"
-                  stroke="#f8fafc"
-                  strokeWidth="4.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{opacity:1}}
-                />
-                {prepProgressGraph.currentPoint && (
+            {/* progress ring */}
+            <div style={{position:"relative",marginTop:10,padding:"0 10px",display:"flex",flexDirection:"column",alignItems:"center"}}>
+              <div style={{position:"relative",width:218,height:218}}>
+                <svg viewBox="0 0 120 120" style={{width:"100%",height:"100%",display:"block"}}>
+                  <defs>
+                    <linearGradient id="prepRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#34d399" />
+                      <stop offset="100%" stopColor="#86efac" />
+                    </linearGradient>
+                  </defs>
                   <circle
-                    cx={prepProgressGraph.currentPoint.x}
-                    cy={prepProgressGraph.currentPoint.y}
-                    r="2.9"
-                    fill="#f8fafc"
-                    stroke="rgba(8,12,20,0.95)"
-                    strokeWidth="1.1"
+                    cx="60"
+                    cy="60"
+                    r={ringRadius}
+                    fill="none"
+                    stroke="rgba(148,163,184,0.22)"
+                    strokeWidth="10"
                   />
-                )}
-              </svg>
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r={ringRadius}
+                    fill="none"
+                    stroke="url(#prepRingGrad)"
+                    strokeWidth="10"
+                    strokeLinecap="round"
+                    strokeDasharray={`${ringCircumference} ${ringCircumference}`}
+                    strokeDashoffset={ringDashOffset}
+                    transform="rotate(-90 60 60)"
+                    style={{transition:"stroke-dashoffset .45s ease"}}
+                  />
+                </svg>
+                <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                  <div style={{fontSize:46,fontWeight:800,color:"#f8fafc",lineHeight:1,letterSpacing:"-0.03em"}}>{prepProgressPct}%</div>
+                  <div style={{fontSize:12,fontWeight:700,color:"rgba(226,232,240,0.64)",marginTop:5,letterSpacing:"0.04em",textTransform:"uppercase"}}>Vorbereitung</div>
+                </div>
+              </div>
+              <div style={{marginTop:10,fontSize:13,fontWeight:600,color:"rgba(226,232,240,0.68)"}}>
+                {doneSess} von {totalSess} Einheiten
+              </div>
             </div>
           </div>
 
