@@ -722,19 +722,18 @@ function buildProgressGraph(plan, logs){
   const sessions = plan.flatMap((week) => week.s);
   if(!sessions.length){
     return {
-      plannedPoints: [{ x: 0, y: 84 }, { x: 100, y: 20 }],
-      currentPoint: { x: 0, y: 84, ratio: 0 },
+      plannedPoints: [{ x: 0, y: 82 }, { x: 100, y: 18 }],
+      currentPoint: null,
     };
   }
 
-  const chartTop = 18;
-  const chartBottom = 84;
+  const chartTop = 16;
+  const chartBottom = 82;
   const chartRange = chartBottom - chartTop;
   const totalSessions = sessions.length;
 
   let plannedCumulative = 0;
-  let actualCumulative = 0;
-  let currentIndex = -1;
+  let lastDoneIndex = -1;
   const cumulativeRows = [];
 
   sessions.forEach((session, index) => {
@@ -743,22 +742,12 @@ function buildProgressGraph(plan, logs){
 
     const log = logs[session.id];
     if(log?.done){
-      let completionModifier = 1;
-      if(session.km > 0 && log.actualKm){
-        const ratio = Number(log.actualKm) / session.km;
-        completionModifier = Math.max(0.75, Math.min(1.2, ratio));
-      }
-      const feelModifier = log.feeling >= 4 ? 1.05 : log.feeling <= 2 && log.feeling > 0 ? 0.95 : 1;
-      actualCumulative += weight * completionModifier * feelModifier;
-      currentIndex = index;
-    }else if(log?.skipped){
-      currentIndex = index;
+      lastDoneIndex = index;
     }
 
     cumulativeRows.push({
       index,
       plannedCumulative,
-      actualCumulative,
     });
   });
 
@@ -772,22 +761,21 @@ function buildProgressGraph(plan, logs){
     plannedPoints.push({ x, y });
   });
 
-  if(currentIndex < 0){
+  if(lastDoneIndex < 0){
     return {
       plannedPoints,
-      currentPoint: { x: 0, y: chartBottom, ratio: 0 },
+      currentPoint: null,
     };
   }
 
-  const row = cumulativeRows[currentIndex];
-  const x = ((currentIndex + 1) / totalSessions) * 100;
-  const ratio = row.plannedCumulative > 0 ? (row.actualCumulative / row.plannedCumulative) : 0;
-  const yUnclamped = chartBottom - (ratio * chartRange);
-  const y = Math.max(chartTop - 5, Math.min(chartBottom + 5, yUnclamped));
+  const row = cumulativeRows[lastDoneIndex];
+  const x = ((lastDoneIndex + 1) / totalSessions) * 100;
+  const progress = row.plannedCumulative / totalPlanned;
+  const y = chartBottom - (progress * chartRange);
 
   return {
     plannedPoints,
-    currentPoint: { x, y, ratio },
+    currentPoint: { x, y },
   };
 }
 
@@ -1205,7 +1193,6 @@ export default function App(){
     : "";
   const dashboardSession = todayNextSession?.session || null;
   const dashboardType = dashboardSession ? TI[dashboardSession.type] : { label: "Keine Einheit geplant", emoji: "😴", col: "#64748b" };
-  const dashboardGlow = dashboardSession ? `${dashboardType.col}77` : "rgba(100,116,139,0.42)";
   const prepProgressGraph = buildProgressGraph(PLAN, logs);
   const plannedProgressPath = buildSmoothPath(prepProgressGraph.plannedPoints, "y");
   const homeTabLabel = getHomeTabLabel(dashboardSession, isPreStart);
@@ -1257,11 +1244,6 @@ export default function App(){
             {/* background: fades from hero dark → transparent, no hard bottom edge */}
             <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(11,15,31,0.995) 0%,rgba(9,12,22,0.98) 35%,rgba(8,10,19,0.72) 76%,transparent 100%)",pointerEvents:"none"}} />
 
-            {/* subtle hero tint to keep focus without hiding chart */}
-            <div style={{position:"absolute",inset:0,pointerEvents:"none"}}>
-              <div style={{position:"absolute",left:"50%",top:"20px",width:420,height:280,transform:"translateX(-50%)",background:`radial-gradient(circle at center, ${dashboardGlow} 0%, transparent 72%)`,opacity:0.24}} />
-            </div>
-
             {/* status chip */}
             <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:12}}>
               {isPreStart && !trainingEngagement ? (
@@ -1302,24 +1284,26 @@ export default function App(){
 
             {/* graph — planned prep curve + current position marker */}
             <div style={{position:"relative",marginTop:10,padding:"0 10px"}}>
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:204,display:"block"}}>
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:212,display:"block"}}>
                 <path
                   d={plannedProgressPath}
                   fill="none"
-                  stroke="rgba(226,232,240,0.62)"
-                  strokeWidth="3.4"
+                  stroke="#f8fafc"
+                  strokeWidth="4.8"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   style={{opacity:1}}
                 />
-                <circle
-                  cx={prepProgressGraph.currentPoint.x}
-                  cy={prepProgressGraph.currentPoint.y}
-                  r="3.9"
-                  fill={prepProgressGraph.currentPoint.ratio >= 0.98 ? "#34d399" : "#f8fafc"}
-                  stroke="rgba(8,12,20,0.95)"
-                  strokeWidth="1.4"
-                />
+                {prepProgressGraph.currentPoint && (
+                  <circle
+                    cx={prepProgressGraph.currentPoint.x}
+                    cy={prepProgressGraph.currentPoint.y}
+                    r="2.9"
+                    fill="#f8fafc"
+                    stroke="rgba(8,12,20,0.95)"
+                    strokeWidth="1.1"
+                  />
+                )}
               </svg>
             </div>
           </div>
