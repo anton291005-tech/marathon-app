@@ -11,6 +11,7 @@ import {
   parseTargetTimeToSeconds,
   safeParseJSON,
 } from "./appSmartFeatures";
+import { getMarathonPrediction } from "./marathonPrediction";
 import { readRemoteStorage, writeRemoteStorage } from "./storage";
 
 const PI = {
@@ -649,7 +650,7 @@ function matchesWeekFilter(session, log, filter){
   return true;
 }
 
-function getAdaptiveCoachingHint({ recoveryState, weeklyFatigue, performancePrediction, nextKeySession, phaseStatus }){
+function getAdaptiveCoachingHint({ recoveryState, weeklyFatigue, performancePrediction, marathonPredictedTime, nextKeySession, phaseStatus }){
   if(recoveryState.label.includes("Fatigue") && weeklyFatigue.label === "hoch"){
     return {
       title: "Belastung aktiv deckeln",
@@ -671,10 +672,11 @@ function getAdaptiveCoachingHint({ recoveryState, weeklyFatigue, performancePred
       color: "#fbbf24",
     };
   }
+  const headlineTime = marathonPredictedTime || performancePrediction?.predictedTime;
   return {
     title: "Konstanz schlägt Drama",
-    body: performancePrediction?.predictedTime
-      ? `Deine Prognose liegt aktuell bei ${performancePrediction.predictedTime}. Saubere Wochen und stabile Energie bringen jetzt am meisten.`
+    body: headlineTime
+      ? `Deine Prognose liegt aktuell bei ${headlineTime}. Saubere Wochen und stabile Energie bringen jetzt am meisten.`
       : "Sammle erst ein paar saubere Logs. Danach werden die Hinweise spürbar belastbarer.",
     color: "#60a5fa",
   };
@@ -1121,6 +1123,12 @@ export default function App(){
       trend: predictionReadiness.detail,
       confidence: "wartet auf Daten",
     };
+  const marathonPrediction = getMarathonPrediction({
+    plan: PLAN,
+    logs,
+    targetSeconds,
+    now: new Date(),
+  });
   const recoveryHistory = getRecoveryHistory(PLAN, logs);
   const consistencyStats = getConsistencyStats(PLAN, logs);
   const nextKeySession = ACTIVE_SESSIONS.find((session) => getSessionStatus(logs[session.id]) === "open" && getSessionMilestones(session, PLAN.find((week) => week.s.some((item) => item.id === session.id)) || w).length > 0)
@@ -1137,6 +1145,7 @@ export default function App(){
     recoveryState,
     weeklyFatigue,
     performancePrediction,
+    marathonPredictedTime: marathonPrediction.ready ? marathonPrediction.predictedTime : null,
     nextKeySession,
     phaseStatus,
   });
@@ -1378,6 +1387,36 @@ export default function App(){
               </div>
             ))}
           </div>
+
+          <SurfaceCard style={{ marginTop: 2 }}>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7c8aa5", fontWeight: 700, marginBottom: 10 }}>
+              Marathon-Prognose · letzte 42 Tage
+            </div>
+            {marathonPrediction.ready ? (
+              <>
+                <div style={{ fontSize: 30, fontWeight: 800, color: "#fff", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
+                  {marathonPrediction.predictedTime}
+                </div>
+                <div style={{ fontSize: 14, color: "#94a3b8", marginTop: 8, fontWeight: 600 }}>
+                  Spanne {marathonPrediction.rangeLabel}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", fontWeight: 700 }}>Consistency</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: "#38bdf8" }}>{marathonPrediction.consistencyScore}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", fontWeight: 700 }}>Sub-3</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: "#34d399" }}>{marathonPrediction.sub3ProbabilityPercent}%</div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.65 }}>
+                {marathonPrediction.message}
+              </div>
+            )}
+          </SurfaceCard>
           </>
           )}
         </div>
@@ -1597,6 +1636,51 @@ export default function App(){
         </>
       ):activeView==="performance"?(
         <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14,...viewTransitionStyle}}>
+          <SurfaceCard style={{ border: "1px solid rgba(56,189,248,0.22)", boxShadow: "0 24px 48px rgba(2,6,23,0.35)" }}>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.12em", color: "#7c8aa5", fontWeight: 700, marginBottom: 8 }}>
+              Marathon-Prognose (42-Tage-Fenster)
+            </div>
+            {marathonPrediction.ready ? (
+              <>
+                <div style={{ fontSize: 34, fontWeight: 800, color: "#fff", letterSpacing: "-0.04em", marginBottom: 6 }}>
+                  {marathonPrediction.predictedTime}
+                </div>
+                <div style={{ fontSize: 15, color: "#cbd5e1", marginBottom: 14, fontWeight: 600 }}>
+                  Realistische Spanne: <span style={{ color: "#e2e8f0" }}>{marathonPrediction.rangeLabel}</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 12 }}>
+                  <div style={{ background: "rgba(9,11,26,0.85)", borderRadius: 14, padding: "12px 10px", border: "1px solid rgba(148,163,184,0.12)" }}>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", fontWeight: 700 }}>Consistency</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: "#38bdf8", marginTop: 4 }}>{marathonPrediction.consistencyScore}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6, lineHeight: 1.4 }}>Erledigt, km-Treue, Wochen-Streak</div>
+                  </div>
+                  <div style={{ background: "rgba(9,11,26,0.85)", borderRadius: 14, padding: "12px 10px", border: "1px solid rgba(148,163,184,0.12)" }}>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", fontWeight: 700 }}>Sub-3</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: "#34d399", marginTop: 4 }}>{marathonPrediction.sub3ProbabilityPercent}%</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6, lineHeight: 1.4 }}>geschätzte Chance</div>
+                  </div>
+                  <div style={{ background: "rgba(9,11,26,0.85)", borderRadius: 14, padding: "12px 10px", border: "1px solid rgba(148,163,184,0.12)" }}>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", fontWeight: 700 }}>Sub-2:50</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: "#fbbf24", marginTop: 4 }}>{marathonPrediction.sub250ProbabilityPercent}%</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6, lineHeight: 1.4 }}>optional</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 14, lineHeight: 1.55 }}>
+                  Heuristik aus gewichteten Einheiten, Ist-km vs. Plan und ausgefallenen Sessions — kein Labortest.
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 14, color: "#cbd5e1", lineHeight: 1.7 }}>
+                {marathonPrediction.message}
+                {marathonPrediction.consistencyScore != null && (
+                  <div style={{ marginTop: 12, fontSize: 13, color: "#94a3b8" }}>
+                    Consistency (vorläufig): <span style={{ color: "#38bdf8", fontWeight: 800 }}>{marathonPrediction.consistencyScore}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </SurfaceCard>
+
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
             <SurfaceCard>
               <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Recovery</div>
@@ -1614,11 +1698,11 @@ export default function App(){
               <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.65}}>{consistencyStats.weeklyStreak} Wochen in Folge vollständig geloggt.</div>
             </SurfaceCard>
             <SurfaceCard>
-              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Formprognose</div>
+              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>{marathonPrediction.ready ? "Schnellprognose (Gesamtplan)" : "Formprognose"}</div>
               <div style={{fontSize:22,fontWeight:800,color:predictionReadiness.ready ? "#fff" : "#cbd5e1",marginBottom:8}}>{performancePrediction.predictedTime}</div>
               <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.65}}>
-                {performancePrediction.trend}
-                {predictionReadiness.ready ? ` · Sicherheit ${performancePrediction.confidence}` : ""}
+                {marathonPrediction.ready ? "Kurzmodell über alle Wochen — Detail siehe 42-Tage-Karte oben." : performancePrediction.trend}
+                {predictionReadiness.ready && !marathonPrediction.ready ? ` · Sicherheit ${performancePrediction.confidence}` : ""}
               </div>
             </SurfaceCard>
           </div>
