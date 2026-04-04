@@ -706,64 +706,89 @@ function getRecommendedAction({ recoveryState, weeklyFatigue, nextKeySession, ph
 }
 
 function getSessionWeight(session){
-  if(session.type === "race" && session.km >= 42)return 12;
-  if(session.type === "race" && session.km >= 21)return 9;
-  if(session.type === "long" && session.km >= 30)return 10;
-  if(session.type === "long" && session.km >= 24)return 8;
-  if(session.type === "interval")return 7;
-  if(session.type === "tempo")return 6;
-  if(session.type === "easy")return 3;
-  if(session.type === "bike" || session.type === "strength")return 2;
-  return 0;
-}
+  const km = Number(session.km) || 0;
 
-function getMomentumWeight(session, log){
-  const baseWeight = getSessionWeight(session);
-
-  if(log?.skipped){
-    return -(baseWeight * 0.4);
-  }
-
-  if(!log?.done){
-    return 0;
-  }
-
-  const feelingModifier = log.feeling === 5
-    ? 1.25
-    : log.feeling === 4
-      ? 1.15
-      : log.feeling === 2
-        ? 0.85
-        : log.feeling === 1
-          ? 0.75
-          : 1;
-
-  return baseWeight * feelingModifier;
+  if(session.type === "rest")return 0;
+  if(session.type === "race")return 8 + (km * 0.14);
+  if(session.type === "long")return 5 + (km * 0.22);
+  if(session.type === "interval")return 4.7 + (km * 0.16);
+  if(session.type === "tempo")return 4.2 + (km * 0.15);
+  if(session.type === "easy")return 2 + (km * 0.11);
+  if(session.type === "bike" || session.type === "strength")return 1.4 + (km * 0.04);
+  return 1.8 + (km * 0.09);
 }
 
 function buildProgressGraph(plan, logs){
   const sessions = plan.flatMap((week) => week.s);
-  let planned = 0;
-  let actual = 0;
+  if(!sessions.length){
+    return {
+      plannedPoints: [{ x: 0, y: 84 }, { x: 100, y: 20 }],
+      currentPoint: { x: 0, y: 84, ratio: 0 },
+    };
+  }
 
-  const cumulative = sessions.map((session, index) => {
-    planned += getSessionWeight(session);
-    actual += getMomentumWeight(session, logs[session.id]);
+  const chartTop = 18;
+  const chartBottom = 84;
+  const chartRange = chartBottom - chartTop;
+  const totalSessions = sessions.length;
 
-    return { index, planned, actual };
+  let plannedCumulative = 0;
+  let actualCumulative = 0;
+  let currentIndex = -1;
+  const cumulativeRows = [];
+
+  sessions.forEach((session, index) => {
+    const weight = getSessionWeight(session);
+    plannedCumulative += weight;
+
+    const log = logs[session.id];
+    if(log?.done){
+      let completionModifier = 1;
+      if(session.km > 0 && log.actualKm){
+        const ratio = Number(log.actualKm) / session.km;
+        completionModifier = Math.max(0.75, Math.min(1.2, ratio));
+      }
+      const feelModifier = log.feeling >= 4 ? 1.05 : log.feeling <= 2 && log.feeling > 0 ? 0.95 : 1;
+      actualCumulative += weight * completionModifier * feelModifier;
+      currentIndex = index;
+    }else if(log?.skipped){
+      currentIndex = index;
+    }
+
+    cumulativeRows.push({
+      index,
+      plannedCumulative,
+      actualCumulative,
+    });
   });
 
-  const values = cumulative.flatMap((item) => [item.planned, item.actual, 0]);
-  const maxValue = Math.max(1, ...values);
-  const minValue = Math.min(0, ...values);
-  const range = Math.max(1, maxValue - minValue);
-  const count = Math.max(1, cumulative.length - 1);
+  const totalPlanned = Math.max(1, plannedCumulative);
+  const plannedPoints = [{ x: 0, y: chartBottom }];
 
-  return cumulative.map((item) => ({
-    x: (item.index / count) * 100,
-    plannedY: 100 - (((item.planned - minValue) / range) * 100),
-    actualY: 100 - (((item.actual - minValue) / range) * 100),
-  }));
+  cumulativeRows.forEach((row) => {
+    const x = ((row.index + 1) / totalSessions) * 100;
+    const progress = row.plannedCumulative / totalPlanned;
+    const y = chartBottom - (progress * chartRange);
+    plannedPoints.push({ x, y });
+  });
+
+  if(currentIndex < 0){
+    return {
+      plannedPoints,
+      currentPoint: { x: 0, y: chartBottom, ratio: 0 },
+    };
+  }
+
+  const row = cumulativeRows[currentIndex];
+  const x = ((currentIndex + 1) / totalSessions) * 100;
+  const ratio = row.plannedCumulative > 0 ? (row.actualCumulative / row.plannedCumulative) : 0;
+  const yUnclamped = chartBottom - (ratio * chartRange);
+  const y = Math.max(chartTop - 5, Math.min(chartBottom + 5, yUnclamped));
+
+  return {
+    plannedPoints,
+    currentPoint: { x, y, ratio },
+  };
 }
 
 function buildSmoothPath(points, key){
@@ -1181,8 +1206,8 @@ export default function App(){
   const dashboardSession = todayNextSession?.session || null;
   const dashboardType = dashboardSession ? TI[dashboardSession.type] : { label: "Keine Einheit geplant", emoji: "😴", col: "#64748b" };
   const dashboardGlow = dashboardSession ? `${dashboardType.col}77` : "rgba(100,116,139,0.42)";
-  const dashboardProgressPoints = buildProgressGraph(PLAN, logs);
-  const actualProgressPath = buildSmoothPath(dashboardProgressPoints, "actualY");
+  const prepProgressGraph = buildProgressGraph(PLAN, logs);
+  const plannedProgressPath = buildSmoothPath(prepProgressGraph.plannedPoints, "y");
   const homeTabLabel = getHomeTabLabel(dashboardSession, isPreStart);
   const jumpTargets = getJumpTargets(PLAN);
   const shareSummary = getShareSummary({ pct, week: w, nextKeySession, recoveryState, consistencyStats });
@@ -1275,17 +1300,25 @@ export default function App(){
               </div>
             </div>
 
-            {/* graph — simple, always-visible line chart */}
+            {/* graph — planned prep curve + current position marker */}
             <div style={{position:"relative",marginTop:10,padding:"0 10px"}}>
               <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:204,display:"block"}}>
                 <path
-                  d={actualProgressPath}
+                  d={plannedProgressPath}
                   fill="none"
-                  stroke="#f8fafc"
-                  strokeWidth="4.6"
+                  stroke="rgba(226,232,240,0.62)"
+                  strokeWidth="3.4"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   style={{opacity:1}}
+                />
+                <circle
+                  cx={prepProgressGraph.currentPoint.x}
+                  cy={prepProgressGraph.currentPoint.y}
+                  r="3.9"
+                  fill={prepProgressGraph.currentPoint.ratio >= 0.98 ? "#34d399" : "#f8fafc"}
+                  stroke="rgba(8,12,20,0.95)"
+                  strokeWidth="1.4"
                 />
               </svg>
             </div>
@@ -1753,7 +1786,7 @@ export default function App(){
             { key: "week", label: "Woche", icon: "▤" },
             { key: "performance", label: "Leistung", icon: "◔" },
             { key: "overview", label: "Übersicht", icon: "◎" },
-            { key: "settings", label: "Einst.", icon: "⚙" },
+            { key: "settings", label: "Einstellungen", icon: "⚙" },
           ].map((item)=>{
             const active = activeView === item.key;
             return (
@@ -1777,7 +1810,9 @@ export default function App(){
                 aria-label={`${item.label} öffnen`}
               >
                 {item.icon && <span style={{fontSize:16,lineHeight:1,opacity:active ? 1 : 0.82}}>{item.icon}</span>}
-                <span style={{fontSize:item.key === "home" ? 11 : 10,fontWeight:800,opacity:active ? 1 : 0.7,letterSpacing:item.key === "home" ? "0.08em" : "0"}}>{item.label}</span>
+                <span style={{fontSize:item.key === "home" ? 11 : item.key === "settings" ? 8.8 : 10,fontWeight:800,opacity:active ? 1 : 0.7,letterSpacing:item.key === "home" ? "0.08em" : "0",whiteSpace:"nowrap"}}>
+                  {item.label}
+                </span>
                 <span style={{width:4,height:4,borderRadius:"50%",background:active ? "#fff" : "transparent",marginTop:2,boxShadow:active ? "0 0 10px rgba(255,255,255,0.5)" : "none"}} />
               </button>
             );
