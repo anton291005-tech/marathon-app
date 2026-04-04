@@ -811,19 +811,26 @@ function getFormScore(plan, logs){
 function buildSmoothPath(points, key){
   if(!points.length)return "";
   if(points.length === 1)return `M ${points[0].x} ${points[0][key]}`;
+  if(points.length === 2)return `M ${points[0].x} ${points[0][key]} L ${points[1].x} ${points[1][key]}`;
 
+  // Catmull-Rom → cubic Bézier conversion: smooth curves through every point
+  const t = 0.35; // tension — lower = tighter, higher = smoother
   let path = `M ${points[0].x} ${points[0][key]}`;
 
-  for(let index = 0; index < points.length - 1; index += 1){
-    const current = points[index];
-    const next = points[index + 1];
-    const midX = (current.x + next.x) / 2;
-    const midY = (current[key] + next[key]) / 2;
-    path += ` Q ${current.x} ${current[key]} ${midX} ${midY}`;
+  for(let i = 0; i < points.length - 1; i++){
+    const p0 = points[Math.max(i - 1, 0)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(i + 2, points.length - 1)];
+
+    const cp1x = p1.x + (p2.x - p0.x) * t;
+    const cp1y = p1[key] + (p2[key] - p0[key]) * t;
+    const cp2x = p2.x - (p3.x - p1.x) * t;
+    const cp2y = p2[key] - (p3[key] - p1[key]) * t;
+
+    path += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)} ${cp2x.toFixed(2)} ${cp2y.toFixed(2)} ${p2.x} ${p2[key]}`;
   }
 
-  const last = points[points.length - 1];
-  path += ` T ${last.x} ${last[key]}`;
   return path;
 }
 
@@ -1234,7 +1241,6 @@ export default function App(){
   const formScore = getFormScore(PLAN, logs);
   const plannedProgressPath = buildSmoothPath(dashboardProgressPoints, "plannedY");
   const actualProgressPath = buildSmoothPath(dashboardProgressPoints, "actualY");
-  const dashboardMetric = getDashboardMetric(dashboardSession);
   const homeTabLabel = getHomeTabLabel(dashboardSession, isPreStart);
   const jumpTargets = getJumpTargets(PLAN);
   const shareSummary = getShareSummary({ pct, week: w, nextKeySession, recoveryState, consistencyStats });
@@ -1277,166 +1283,207 @@ export default function App(){
         }
       `}</style>
       {activeView==="home"?(
-        <div style={{padding:"24px 16px 16px",display:"flex",flexDirection:"column",gap:18,position:"relative",overflow:"hidden",...viewTransitionStyle}}>
-          <div style={{position:"absolute",inset:"-40px 0 auto",height:620,pointerEvents:"none"}}>
-            <div style={{position:"absolute",left:"50%",top:0,width:360,height:360,transform:`translateX(-50%) scale(${graphReady ? 1 : 0.92})`,background:`radial-gradient(circle at center, ${dashboardGlow} 0%, rgba(11,11,21,0) 72%)`,filter:"blur(68px)",opacity:graphReady ? 0.95 : 0.42,transition:"transform 1.2s ease, opacity 1.2s ease"}} />
-            <div style={{position:"absolute",left:"50%",top:150,width:440,height:320,transform:`translateX(-50%) scale(${graphReady ? 1 : 0.9})`,background:`radial-gradient(circle at center, ${dashboardGlow} 0%, rgba(11,11,21,0) 76%)`,filter:"blur(82px)",opacity:graphReady ? 0.52 : 0.2,transition:"transform 1.25s ease, opacity 1.25s ease"}} />
-          </div>
+        <div style={{display:"flex",flexDirection:"column",paddingBottom:24,...viewTransitionStyle}}>
 
-          <div style={{position:"relative",paddingTop:10,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
-            <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.2em",color:"rgba(148,163,184,0.6)",fontWeight:700}}>MyRace</div>
-            {isCalendarBeforeFirstSession && trainingEngagement ? (
-              <div style={{fontSize:12,color:"rgba(125,211,252,0.92)",fontWeight:700,marginBottom:2,maxWidth:340,lineHeight:1.5}}>
-                Training läuft bereits — Plan offiziell ab {blockStartLabel}
-              </div>
-            ) : null}
-            {isPreStart ? (
-              <div style={{fontSize:13,color:"rgba(148,163,184,0.6)",fontWeight:600,maxWidth:300,lineHeight:1.6}}>
-                Erste Einheit{blockStartLabel ? ` ab ${blockStartLabel}` : ""} — logge dein Training für Prognose und Momentum.
-              </div>
-            ) : null}
-            <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.16em",color:"rgba(148,163,184,0.52)",fontWeight:700}}>
-              {todayNextSession?.mode === "today" ? "Heute" : dashboardSession ? "Nächste Einheit" : "Heute"}
+          {/* ── 1. HERO CARD — session info only, no buttons ───────────── */}
+          <div style={{position:"relative",overflow:"hidden",background:"linear-gradient(160deg,rgba(14,18,38,0.98),rgba(9,12,24,0.96))",borderRadius:"0 0 32px 32px",padding:"28px 18px 28px",boxShadow:"0 20px 48px rgba(2,6,23,0.32)"}}>
+            {/* ambient glow */}
+            <div style={{position:"absolute",inset:0,pointerEvents:"none"}}>
+              <div style={{position:"absolute",left:"50%",top:"-20px",width:340,height:300,transform:`translateX(-50%) scale(${graphReady ? 1 : 0.88})`,background:`radial-gradient(circle at center, ${dashboardGlow} 0%, transparent 70%)`,filter:"blur(64px)",opacity:graphReady ? 0.9 : 0.3,transition:"opacity 1.4s ease, transform 1.4s ease"}} />
             </div>
-            <div style={{fontSize:38,fontWeight:800,color:"#fff",lineHeight:1.02,letterSpacing:"-0.04em",maxWidth:320}}>
-              {getHeroTitle(dashboardSession)}
-            </div>
-            <div style={{fontSize:14,color:"rgba(226,232,240,0.54)",fontWeight:600}}>
-              {dashboardSession ? dashboardType.label : "Keine Einheit geplant"}
-            </div>
-          </div>
 
-          <>
-            <div style={{position:"relative",paddingTop:6}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:16}}>
-                <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.14em",color:"rgba(148,163,184,0.45)",fontWeight:700}}>Momentum</div>
-                <div style={{textAlign:"right"}}>
-                  {formScore.earlyStage ? (
-                    <div style={{fontSize:14,fontWeight:700,color:formScore.color,lineHeight:1.4,maxWidth:160}}>
-                      {formScore.label}
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{fontSize:28,fontWeight:800,color:formScore.color,letterSpacing:"-0.03em",lineHeight:1}}>
-                        {formScore.score > 0 ? "+" : ""}{formScore.score}%
-                      </div>
-                      <div style={{fontSize:12,color:"rgba(226,232,240,0.64)",fontWeight:700,marginTop:6}}>
-                        {formScore.arrow} {formScore.label}
-                      </div>
-                    </>
-                  )}
+            {/* status chip */}
+            <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:18}}>
+              {isPreStart && !trainingEngagement ? (
+                <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(148,163,184,0.07)",border:"1px solid rgba(148,163,184,0.12)",borderRadius:999,padding:"5px 12px"}}>
+                  <span style={{width:6,height:6,borderRadius:"50%",background:"#64748b",display:"inline-block"}}/>
+                  <span style={{fontSize:11,color:"#64748b",fontWeight:700}}>Plan startet{blockStartLabel ? ` ab ${blockStartLabel}` : ""}</span>
                 </div>
-              </div>
+              ) : isCalendarBeforeFirstSession && trainingEngagement ? (
+                <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(56,189,248,0.1)",border:"1px solid rgba(56,189,248,0.2)",borderRadius:999,padding:"5px 12px"}}>
+                  <span style={{width:6,height:6,borderRadius:"50%",background:"#38bdf8",boxShadow:"0 0 6px #38bdf8",display:"inline-block"}}/>
+                  <span style={{fontSize:11,color:"#7dd3fc",fontWeight:700}}>Training läuft</span>
+                </div>
+              ) : (
+                <div style={{display:"inline-flex",alignItems:"center",gap:6,background:`${dashboardType.col}18`,border:`1px solid ${dashboardType.col}30`,borderRadius:999,padding:"5px 12px"}}>
+                  <span style={{width:6,height:6,borderRadius:"50%",background:dashboardType.col,boxShadow:`0 0 7px ${dashboardType.col}`,display:"inline-block"}}/>
+                  <span style={{fontSize:11,color:dashboardType.col,fontWeight:700}}>
+                    {todayNextSession?.mode === "today" ? "Heute" : dashboardSession ? "Nächste Einheit" : "Ruhetag"}
+                  </span>
+                </div>
+              )}
+            </div>
 
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:160,display:"block",overflow:"visible"}}>
+            {/* session emoji + title */}
+            <div style={{position:"relative",textAlign:"center"}}>
+              <div style={{fontSize:34,marginBottom:10,lineHeight:1}}>{dashboardType.emoji}</div>
+              <div style={{fontSize:34,fontWeight:800,color:"#fff",lineHeight:1.05,letterSpacing:"-0.035em",maxWidth:300,margin:"0 auto"}}>
+                {getHeroTitle(dashboardSession)}
+              </div>
+              <div style={{fontSize:13,color:"rgba(226,232,240,0.46)",fontWeight:600,marginTop:9}}>
+                {dashboardSession ? dashboardType.label : "Keine Einheit geplant"}
+                {dashboardSession?.date ? <span style={{color:"rgba(148,163,184,0.32)",marginLeft:8}}>{dashboardSession.date}</span> : null}
+              </div>
+              {dashboardSession?.km ? (
+                <div style={{marginTop:6,fontSize:13,color:dashboardType.col,fontWeight:700}}>
+                  {dashboardSession.km} km
+                  {dashboardSession.pace ? <span style={{color:"rgba(148,163,184,0.45)",marginLeft:6,fontWeight:600}}>{dashboardSession.pace}</span> : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {/* ── 2. PROGRESS GRAPH — bare, no card, blends into background ── */}
+          <div style={{position:"relative"}}>
+            {/* momentum score — tiny corner label */}
+            <div style={{position:"absolute",top:10,right:14,zIndex:1,lineHeight:1}}>
+              {formScore.earlyStage ? (
+                <span style={{fontSize:10,fontWeight:700,color:formScore.color,opacity:0.55}}>{formScore.label}</span>
+              ) : (
+                <span style={{fontSize:12,fontWeight:800,color:formScore.color,opacity:0.7,letterSpacing:"-0.02em"}}>
+                  {formScore.score > 0 ? "+" : ""}{formScore.score}%
+                </span>
+              )}
+            </div>
+
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:96,display:"block",overflow:"visible"}}>
               <defs>
-                <linearGradient id="actualProgressStroke" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor={dashboardSession ? dashboardType.col : "#f8fafc"} stopOpacity="0.72" />
-                  <stop offset="100%" stopColor={dashboardSession ? dashboardType.col : "#f8fafc"} stopOpacity="1" />
+                {/* fixed green→teal gradient — consistent premium look */}
+                <linearGradient id="pgLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.8"/>
+                  <stop offset="100%" stopColor="#38bdf8" stopOpacity="1"/>
                 </linearGradient>
-                <linearGradient id="actualProgressFill" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor={dashboardSession ? dashboardType.col : "#f8fafc"} stopOpacity="0.22" />
-                  <stop offset="100%" stopColor={dashboardSession ? dashboardType.col : "#f8fafc"} stopOpacity="0" />
+                <linearGradient id="pgFillGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor={dashboardSession ? dashboardType.col : "#10b981"} stopOpacity="0.12"/>
+                  <stop offset="100%" stopColor={dashboardSession ? dashboardType.col : "#10b981"} stopOpacity="0"/>
                 </linearGradient>
+                {/* soft glow filter on the main line */}
+                <filter id="pgGlow" x="-8%" y="-40%" width="116%" height="180%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="1.6" result="blur"/>
+                  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
               </defs>
+
+              {/* subtle fill area */}
               <path
-                d={buildAreaPath(dashboardProgressPoints, "actualY")}
-                fill="url(#actualProgressFill)"
-                style={{transition:"opacity .8s ease",opacity:graphReady ? 1 : 0}}
+                d={buildAreaPath(dashboardProgressPoints,"actualY")}
+                fill="url(#pgFillGrad)"
+                style={{transition:"opacity .9s ease",opacity:graphReady ? 1 : 0}}
               />
+              {/* planned baseline — very faint dashes */}
               <path
                 d={plannedProgressPath}
                 fill="none"
-                stroke="rgba(148,163,184,0.28)"
-                strokeWidth="1.6"
+                stroke="rgba(148,163,184,0.13)"
+                strokeWidth="0.9"
                 strokeLinecap="round"
-                pathLength="100"
-                strokeDasharray="100"
-                strokeDashoffset={graphReady ? 0 : 100}
-                style={{transition:"stroke-dashoffset 1s ease, opacity .6s ease",opacity:graphReady ? 1 : 0.18}}
+                strokeDasharray="2,3.5"
+                style={{opacity:graphReady ? 0.8 : 0,transition:"opacity .8s ease"}}
               />
+              {/* main actual line — smooth cubic Bézier + glow */}
               <path
                 d={actualProgressPath}
                 fill="none"
-                stroke="url(#actualProgressStroke)"
-                strokeWidth="3.6"
+                stroke="url(#pgLineGrad)"
+                strokeWidth="3.4"
                 strokeLinecap="round"
+                filter="url(#pgGlow)"
                 pathLength="100"
                 strokeDasharray="100"
                 strokeDashoffset={graphReady ? 0 : 100}
-                style={{transition:"stroke-dashoffset 1.1s ease .08s, opacity .6s ease",opacity:graphReady ? 1 : 0.28}}
+                style={{transition:"stroke-dashoffset 1.2s cubic-bezier(0.22,1,0.36,1) .1s, opacity .7s ease",opacity:graphReady ? 1 : 0}}
               />
+              {/* end dot with glow */}
               {dashboardProgressPoints.length > 0 && (
                 <circle
-                  cx={dashboardProgressPoints[dashboardProgressPoints.length - 1].x}
-                  cy={dashboardProgressPoints[dashboardProgressPoints.length - 1].actualY}
-                  r="3"
-                  fill={dashboardSession ? dashboardType.col : "#f8fafc"}
-                  style={{transition:"opacity .45s ease",opacity:graphReady ? 1 : 0}}
+                  cx={dashboardProgressPoints[dashboardProgressPoints.length-1].x}
+                  cy={dashboardProgressPoints[dashboardProgressPoints.length-1].actualY}
+                  r="2.8"
+                  fill="#38bdf8"
+                  filter="url(#pgGlow)"
+                  style={{transition:"opacity .5s ease .3s",opacity:graphReady ? 1 : 0}}
                 />
               )}
-              </svg>
+            </svg>
+          </div>
 
-              <div style={{display:"flex",gap:8,marginTop:16,alignItems:"center"}}>
-                <button
-                  className="dashboard-action"
-                  onClick={()=>dashboardSession && quickCompleteSession(dashboardSession)}
-                  disabled={!dashboardSession}
-                  style={{flex:1,background:"rgba(16,185,129,0.24)",border:"1px solid rgba(16,185,129,0.36)",color:dashboardSession ? "#ecfdf5" : "#4b5563",borderRadius:999,padding:"11px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700}}
-                >
-                  ✓ Done
-                </button>
-                <button
-                  className="dashboard-action"
-                  onClick={()=>dashboardSession && quickSkipSession(dashboardSession)}
-                  disabled={!dashboardSession}
-                  style={{flex:1,background:"rgba(239,68,68,0.18)",border:"1px solid rgba(248,113,113,0.28)",color:dashboardSession ? "#fee2e2" : "#4b5563",borderRadius:999,padding:"11px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700}}
-                >
-                  Skip
-                </button>
-                <button
-                  className="dashboard-action"
-                  onClick={()=>dashboardSession && openModal(dashboardSession)}
-                  disabled={!dashboardSession}
-                  style={{width:42,height:42,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(148,163,184,0.1)",color:dashboardSession ? "#94a3b8" : "#374151",borderRadius:999,cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:15,fontWeight:700,flexShrink:0}}
-                  aria-label="Details öffnen"
-                >
-                  ⓘ
-                </button>
+          {/* ── 3. ACTION BUTTONS — below graph, before cards ─────────── */}
+          <div style={{display:"flex",gap:8,padding:"0 16px 12px"}}>
+            <button
+              className="dashboard-action"
+              onClick={()=>dashboardSession && quickCompleteSession(dashboardSession)}
+              disabled={!dashboardSession}
+              style={{flex:1,background:"rgba(16,185,129,0.2)",border:"1px solid rgba(16,185,129,0.32)",color:dashboardSession ? "#ecfdf5" : "#374151",borderRadius:999,padding:"12px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700}}
+            >
+              ✓ Done
+            </button>
+            <button
+              className="dashboard-action"
+              onClick={()=>dashboardSession && quickSkipSession(dashboardSession)}
+              disabled={!dashboardSession}
+              style={{flex:1,background:"rgba(239,68,68,0.14)",border:"1px solid rgba(248,113,113,0.22)",color:dashboardSession ? "#fee2e2" : "#374151",borderRadius:999,padding:"12px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700}}
+            >
+              Skip
+            </button>
+            <button
+              className="dashboard-action"
+              onClick={()=>dashboardSession && openModal(dashboardSession)}
+              disabled={!dashboardSession}
+              style={{width:44,height:44,flexShrink:0,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(148,163,184,0.1)",color:dashboardSession ? "#64748b" : "#1e293b",borderRadius:999,cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:16,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}
+              aria-label="Details öffnen"
+            >
+              ⓘ
+            </button>
+          </div>
+
+          {/* ── 4-7. Cards ─────────────────────────────────────────────── */}
+          <div style={{display:"flex",flexDirection:"column",gap:10,padding:"0 14px"}}>
+
+            <DailyDecisionCard decision={dailyDecision} />
+
+            <MarathonPredictionCard
+              variant="compact"
+              prediction={marathonPrediction}
+              targetTimeLabel={targetTimeDisplay}
+              coachHints={[]}
+            />
+
+            {/* Key metrics: Recovery · Last · Streak */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8}}>
+              <div style={{padding:"10px 10px 9px",background:"rgba(255,255,255,0.03)",borderRadius:16,border:`1px solid ${recoveryState.tone}1e`}}>
+                <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:"0.1em",color:"rgba(148,163,184,0.38)",fontWeight:700,marginBottom:5}}>Recovery</div>
+                <div style={{fontSize:15,fontWeight:800,color:recoveryState.tone,lineHeight:1.1}}>{recoveryState.label}</div>
               </div>
-
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,marginTop:14}}>
-                <div style={{fontSize:20,fontWeight:800,color:"#fff",letterSpacing:"-0.02em"}}>{dashboardMetric}</div>
-                <div style={{borderRadius:999,padding:"5px 10px",background:"rgba(255,255,255,0.05)",color:dashboardSession ? dashboardType.col : "#94a3b8",fontSize:11,fontWeight:700}}>
-                  {dashboardSession ? (todayNextSession?.mode === "today" ? "Heute" : "Nächste") : "Ruhetag"}
+              <div style={{padding:"10px 10px 9px",background:"rgba(255,255,255,0.03)",borderRadius:16,border:`1px solid ${weeklyFatigue.color}1e`}}>
+                <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:"0.1em",color:"rgba(148,163,184,0.38)",fontWeight:700,marginBottom:5}}>Last</div>
+                <div style={{fontSize:15,fontWeight:800,color:weeklyFatigue.color,lineHeight:1.1}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
+              </div>
+              <div style={{padding:"10px 10px 9px",background:"rgba(255,255,255,0.03)",borderRadius:16,border:"1px solid rgba(148,163,184,0.09)"}}>
+                <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:"0.1em",color:"rgba(148,163,184,0.38)",fontWeight:700,marginBottom:5}}>Streak</div>
+                <div style={{fontSize:15,fontWeight:800,color:"#c4b5fd",lineHeight:1.1}}>
+                  {consistencyStats.sessionStreak}
+                  <span style={{fontSize:10,fontWeight:600,color:"rgba(148,163,184,0.38)",marginLeft:3}}>Sessions</span>
                 </div>
               </div>
             </div>
 
-          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
-            {[
-              { label: "Fortschritt", value: `${pct}%`, detail: `${doneSess}/${totalSess} Sessions`, color: "#10b981" },
-              { label: "Kilometer", value: `${Math.round(loggedKm)} km`, detail: `${kmPct}% von Plan`, color: "#38bdf8" },
-              { label: "Long Runs", value: `${doneLongRuns}/${longRuns}`, detail: "erledigt", color: "#f59e0b" },
-              { label: "Quality", value: `${doneHardSessions}/${hardSessions}`, detail: "Intervall & Tempo", color: "#fb7185" },
-            ].map((metric)=>(
-              <div key={metric.label} style={{padding:"10px 12px 8px",background:"rgba(255,255,255,0.03)",borderRadius:16}}>
-                <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.12em",color:"rgba(148,163,184,0.45)",fontWeight:700,marginBottom:6}}>{metric.label}</div>
-                <div style={{fontSize:20,fontWeight:800,color:metric.color,letterSpacing:"-0.03em",lineHeight:1}}>{metric.value}</div>
-                <div style={{fontSize:11,color:"rgba(226,232,240,0.45)",marginTop:5,lineHeight:1.3}}>{metric.detail}</div>
-              </div>
-            ))}
+            {/* Plan stats — no card wrapper, bare row */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:4,padding:"2px 0 4px"}}>
+              {[
+                { label: "Plan", value: `${pct}%`, sub: `${doneSess}/${totalSess}`, color: "#10b981" },
+                { label: "km", value: `${Math.round(loggedKm)}`, sub: `${kmPct}%`, color: "#38bdf8" },
+                { label: "Long", value: `${doneLongRuns}/${longRuns}`, sub: "LR done", color: "#f59e0b" },
+                { label: "Quality", value: `${doneHardSessions}/${hardSessions}`, sub: "done", color: "#fb7185" },
+              ].map(m=>(
+                <div key={m.label} style={{textAlign:"center",padding:"6px 2px"}}>
+                  <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:"0.07em",color:"rgba(148,163,184,0.3)",fontWeight:700,marginBottom:3}}>{m.label}</div>
+                  <div style={{fontSize:13,fontWeight:800,color:m.color,lineHeight:1}}>{m.value}</div>
+                  <div style={{fontSize:9,color:"rgba(148,163,184,0.3)",marginTop:2}}>{m.sub}</div>
+                </div>
+              ))}
+            </div>
+
           </div>
-
-          <DailyDecisionCard decision={dailyDecision} />
-
-          <MarathonPredictionCard
-            variant="compact"
-            prediction={marathonPrediction}
-            targetTimeLabel={targetTimeDisplay}
-            coachHints={coachHints}
-          />
-          </>
         </div>
       ):activeView==="week"?(
         <>
