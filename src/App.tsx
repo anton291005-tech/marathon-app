@@ -765,25 +765,45 @@ function buildProgressGraph(plan, logs){
 }
 
 function getFormScore(plan, logs){
-  const sessions = plan.flatMap((week) => week.s);
-  const plannedFinal = sessions.reduce((sum, session) => sum + getSessionWeight(session), 0);
-  const actualFinal = sessions.reduce((sum, session) => sum + getMomentumWeight(session, logs[session.id]), 0);
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  // Only count sessions that were due on or before today — comparing against the full future
+  // plan inevitably produces extreme negatives early in training (e.g. -96% after one session).
+  const dueSessions = plan
+    .flatMap((week) => week.s)
+    .filter((session) => {
+      const d = parseSessionDateLabel(session.date);
+      if (!d) return false;
+      const sd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      return sd.getTime() <= todayStart.getTime();
+    });
+
+  // Minimum data threshold: need at least 5 due trainable sessions before showing a real score.
+  const dueTrainable = dueSessions.filter((s) => s.type !== "rest");
+  const minSessionsForScore = 5;
+  if (dueTrainable.length < minSessionsForScore) {
+    return { score: null, label: "Training startet gerade", color: "#94a3b8", arrow: "→", earlyStage: true };
+  }
+
+  const plannedFinal = dueSessions.reduce((sum, session) => sum + getSessionWeight(session), 0);
+  const actualFinal = dueSessions.reduce((sum, session) => sum + getMomentumWeight(session, logs[session.id]), 0);
   const rawScore = plannedFinal > 0 ? ((actualFinal - plannedFinal) / plannedFinal) * 100 : 0;
   const score = Math.round(rawScore);
 
   if(score > 10){
-    return { score, label: "Sehr stark", color: "#34d399", arrow: "↑" };
+    return { score, label: "Sehr stark", color: "#34d399", arrow: "↑", earlyStage: false };
   }
   if(score >= 3){
-    return { score, label: "Im Flow", color: "#34d399", arrow: "↑" };
+    return { score, label: "Im Flow", color: "#34d399", arrow: "↑", earlyStage: false };
   }
   if(score >= -3){
-    return { score, label: "Im Plan", color: "#60a5fa", arrow: "→" };
+    return { score, label: "Im Plan", color: "#60a5fa", arrow: "→", earlyStage: false };
   }
   if(score >= -10){
-    return { score, label: "Leicht hinter Plan", color: "#f87171", arrow: "↓" };
+    return { score, label: "Leicht hinter Plan", color: "#f87171", arrow: "↓", earlyStage: false };
   }
-  return { score, label: "Aufholen nötig", color: "#f87171", arrow: "↓" };
+  return { score, label: "Aufholen nötig", color: "#f87171", arrow: "↓", earlyStage: false };
 }
 
 function buildSmoothPath(points, key){
@@ -1270,12 +1290,20 @@ export default function App(){
                   <div style={{fontSize:13,color:"rgba(226,232,240,0.52)",fontWeight:600}}>Plan gegen Form</div>
                 </div>
                 <div style={{textAlign:"right",minWidth:112}}>
-                  <div style={{fontSize:28,fontWeight:800,color:formScore.color,letterSpacing:"-0.03em",lineHeight:1}}>
-                    {formScore.score > 0 ? "+" : ""}{formScore.score}%
-                  </div>
-                  <div style={{fontSize:12,color:"rgba(226,232,240,0.64)",fontWeight:700,marginTop:6}}>
-                    {formScore.arrow} {formScore.label}
-                  </div>
+                  {formScore.earlyStage ? (
+                    <div style={{fontSize:14,fontWeight:700,color:formScore.color,lineHeight:1.4,maxWidth:160}}>
+                      {formScore.label}
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{fontSize:28,fontWeight:800,color:formScore.color,letterSpacing:"-0.03em",lineHeight:1}}>
+                        {formScore.score > 0 ? "+" : ""}{formScore.score}%
+                      </div>
+                      <div style={{fontSize:12,color:"rgba(226,232,240,0.64)",fontWeight:700,marginTop:6}}>
+                        {formScore.arrow} {formScore.label}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
