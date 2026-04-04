@@ -18,7 +18,7 @@ import WeeklyAnalysisCard from "./components/WeeklyAnalysisCard";
 import DailyDecisionCard from "./components/DailyDecisionCard";
 import { getCoachFeedback } from "./coachFeedback";
 import { getDailyDecision } from "./dailyDecision";
-import { hasLoggedTrainingEngagement, isHomePreStart } from "./homeStatus";
+import { isHomePreStart } from "./homeStatus";
 import { getMarathonPrediction } from "./marathonPrediction";
 import { analyzeWeek } from "./weeklyAnalysis";
 import { readRemoteStorage, writeRemoteStorage } from "./storage";
@@ -1091,8 +1091,7 @@ export default function App(){
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const firstTrainingStart = firstTrainingDate ? new Date(firstTrainingDate.getFullYear(), firstTrainingDate.getMonth(), firstTrainingDate.getDate()) : null;
-  const isCalendarBeforeFirstSession = !!(firstTrainingStart && todayStart < firstTrainingStart);
-  const trainingEngagement = hasLoggedTrainingEngagement(logs, ACTIVE_SESSIONS);
+  const hasCalendarStarted = !!(firstTrainingStart && todayStart >= firstTrainingStart);
   const isPreStart = isHomePreStart(logs, ACTIVE_SESSIONS);
   const blockStartLabel = firstTrainingDate
     ? firstTrainingDate.toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })
@@ -1154,22 +1153,15 @@ export default function App(){
 
             {/* status chip */}
             <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:12}}>
-              {isPreStart && !trainingEngagement ? (
+              {!firstTrainingStart ? null : !hasCalendarStarted ? (
                 <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(148,163,184,0.06)",border:"1px solid rgba(148,163,184,0.1)",borderRadius:999,padding:"4px 11px"}}>
                   <span style={{width:5,height:5,borderRadius:"50%",background:"#475569",display:"inline-block"}}/>
-                  <span style={{fontSize:11,color:"#475569",fontWeight:700}}>Plan startet{blockStartLabel ? ` ${blockStartLabel}` : ""}</span>
+                  <span style={{fontSize:11,color:"#475569",fontWeight:700}}>Plan startet am {blockStartLabel}</span>
                 </div>
-              ) : isCalendarBeforeFirstSession && trainingEngagement ? (
+              ) : (
                 <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(56,189,248,0.08)",border:"1px solid rgba(56,189,248,0.16)",borderRadius:999,padding:"4px 11px"}}>
                   <span style={{width:5,height:5,borderRadius:"50%",background:"#38bdf8",boxShadow:"0 0 5px #38bdf8",display:"inline-block"}}/>
                   <span style={{fontSize:11,color:"#7dd3fc",fontWeight:700}}>Training läuft</span>
-                </div>
-              ) : (
-                <div style={{display:"inline-flex",alignItems:"center",gap:6,background:`${dashboardType.col}14`,border:`1px solid ${dashboardType.col}28`,borderRadius:999,padding:"4px 11px"}}>
-                  <span style={{width:5,height:5,borderRadius:"50%",background:dashboardType.col,boxShadow:`0 0 6px ${dashboardType.col}`,display:"inline-block"}}/>
-                  <span style={{fontSize:11,color:dashboardType.col,fontWeight:700}}>
-                    {todayNextSession?.mode === "today" ? "Heute" : dashboardSession ? "Nächste Einheit" : "Ruhetag"}
-                  </span>
                 </div>
               )}
             </div>
