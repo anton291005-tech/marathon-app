@@ -1042,17 +1042,6 @@ export default function App(){
   }).length;
 
   const decisionTodayNextSession = getTodayNextSession(ACTIVE_SESSIONS, logs);
-  const dailyDecision = getDailyDecision({
-    recoveryLabel: recoveryState.label,
-    weeklyFatigueLabel: weeklyFatigue.label,
-    recentHardCount: decisionRecentHardCount,
-    avgRecentFeeling: decisionAvgFeeling,
-    missedRecentCount: decisionMissedRecent,
-    doneSessions: doneSess,
-    sessionStreak: consistencyStats.sessionStreak,
-    todaySessionType: decisionTodayNextSession?.session?.type ?? null,
-    isToday: decisionTodayNextSession?.mode === "today",
-  });
   const marathonConfidenceLabel = marathonPrediction.ready
     ? predictionReadiness.ready
       ? performancePrediction.confidence
@@ -1063,6 +1052,23 @@ export default function App(){
   const currentPhaseIndex = PHASE_ORDER.indexOf(w.phase);
   const currentPhaseProgress = Math.round(((currentPhaseIndex + 1) / PHASE_ORDER.length) * 100);
   const phaseStatus = pct >= currentPhaseProgress + 10 ? "Voraus" : pct >= currentPhaseProgress - 10 ? "Im Plan" : "Aufholen";
+  const nextKeyDate = nextKeySession ? parseSessionDateLabel(nextKeySession.date) : null;
+  const daysToNextKeySession = nextKeyDate
+    ? Math.ceil((new Date(nextKeyDate.getFullYear(), nextKeyDate.getMonth(), nextKeyDate.getDate()).getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24))
+    : null;
+  const dailyDecision = getDailyDecision({
+    recoveryLabel: recoveryState.label,
+    weeklyFatigueLabel: weeklyFatigue.label,
+    recentHardCount: decisionRecentHardCount,
+    avgRecentFeeling: decisionAvgFeeling,
+    missedRecentCount: decisionMissedRecent,
+    doneSessions: doneSess,
+    sessionStreak: consistencyStats.sessionStreak,
+    todaySessionType: decisionTodayNextSession?.session?.type ?? null,
+    isToday: decisionTodayNextSession?.mode === "today",
+    phase: w.phase,
+    daysToNextKeySession,
+  });
   const modalLog = modal ? logs[modal.id] : null;
   const modalWeek = modal ? PLAN.find((week) => week.s.some((session) => session.id === modal.id)) : null;
   const modalMilestones = modal && modalWeek ? getSessionMilestones(modal, modalWeek) : [];
@@ -1263,16 +1269,29 @@ export default function App(){
           {/* ── BELOW-FOLD CONTENT ─────────────────────────────────────── */}
           <div style={{display:"flex",flexDirection:"column",gap:12,padding:"2px 16px 0"}}>
 
-            {/* Daily decision — ultra-minimal: coloured dot + short label */}
-            <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 10px 4px"}}>
+            {/* Daily decision — compact coach recommendation */}
+            <div style={{display:"flex",alignItems:"flex-start",gap:11,padding:"12px 10px 6px"}}>
               <div style={{
                 width:9,height:9,borderRadius:"50%",flexShrink:0,
                 background:dailyDecision.status==="green"?"#34d399":dailyDecision.status==="yellow"?"#fbbf24":"#f87171",
                 boxShadow:dailyDecision.status==="green"?"0 0 10px #34d3996b":dailyDecision.status==="yellow"?"0 0 10px #fbbf246b":"0 0 10px #f871716b",
+                marginTop:6,
               }}/>
-              <span style={{fontSize:15,fontWeight:700,color:"rgba(226,232,240,0.9)",letterSpacing:"-0.01em",lineHeight:1.3}}>
-                {dailyDecision.shortRecommendation}
-              </span>
+              <div style={{display:"flex",flexDirection:"column",gap:3,minWidth:0}}>
+                <span style={{fontSize:15,fontWeight:700,color:"rgba(226,232,240,0.92)",letterSpacing:"-0.01em",lineHeight:1.25}}>
+                  {dailyDecision.shortRecommendation}
+                </span>
+                {dailyDecision.reasons.length > 0 && (
+                  <span style={{fontSize:11.5,color:"rgba(148,163,184,0.86)",lineHeight:1.25}}>
+                    {dailyDecision.reasons.slice(0, 2).join(" · ")}
+                  </span>
+                )}
+                {dailyDecision.adjustment && (
+                  <span style={{fontSize:11.5,fontWeight:700,color:dailyDecision.status==="red"?"#fca5a5":dailyDecision.status==="yellow"?"#fde68a":"#86efac",lineHeight:1.25}}>
+                    {dailyDecision.adjustment}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Metrics group — cleaner, softer and less boxy */}

@@ -10,10 +10,12 @@ export type DailyDecision = {
   status: DecisionStatus;
   /** 2–4 word label for compact Home display */
   shortRecommendation: string;
-  /** Full recommendation sentence for detail views */
+  /** Keep for compatibility in potential detail views */
   recommendation: string;
-  /** 1–3 brief reason strings shown below */
+  /** Max 2 short reason strings for compact UI */
   reasons: string[];
+  /** Optional one-liner practical adjustment */
+  adjustment?: string;
   /** True when there is not enough logged data yet */
   earlyStage: boolean;
 };
@@ -37,6 +39,10 @@ export type DailyDecisionInput = {
   todaySessionType: string | null;
   /** True if today's session is specifically "today" (vs just "next") */
   isToday: boolean;
+  /** Current plan phase key, e.g. "build", "peak", "taper" */
+  phase?: string | null;
+  /** Days until next key session (interval/tempo/race/long>=24), null if none */
+  daysToNextKeySession?: number | null;
 };
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -44,12 +50,20 @@ export type DailyDecisionInput = {
 function isHardType(type: string | null): boolean {
   return type === "interval" || type === "tempo" || type === "race";
 }
+function isKeyType(type: string | null): boolean {
+  return isHardType(type) || type === "long";
+}
 
 function isFatigue(label: string): boolean {
   return label.includes("Fatigue");
 }
 function isFresh(label: string): boolean {
   return label.includes("Fresh");
+}
+
+function clampReasons(reasons: string[]): string[] {
+  const unique = Array.from(new Set(reasons.map((r) => r.trim()).filter(Boolean)));
+  return unique.slice(0, 2);
 }
 
 // ─── Main function ────────────────────────────────────────────────────────────
@@ -65,116 +79,112 @@ export function getDailyDecision(input: DailyDecisionInput): DailyDecision {
     sessionStreak,
     todaySessionType,
     isToday,
+    phase,
+    daysToNextKeySession,
   } = input;
 
-  // Early-stage: too little data to make a meaningful assessment.
-  // Give a calm, encouraging nudge without a coloured verdict.
+  // Early stage: calm default until enough personal signal exists.
   if (doneSessions < 4) {
     return {
       status: "green",
-      shortRecommendation: "Nach Plan laufen",
-      recommendation: "Training startet gerade — heute einfach sauber nach Plan laufen.",
-      reasons: ["Noch wenig Logs vorhanden. Sammle erste Einheiten für genauere Einschätzungen."],
+      shortRecommendation: "Wie geplant",
+      recommendation: "Heute wie geplant.",
+      reasons: ["Noch wenig Daten", "Plan aktuell ruhig"],
       earlyStage: true,
     };
   }
 
-  // ─── Score-based decision ──────────────────────────────────────────────────
-  // Each risk factor adds points; high total → more conservative recommendation.
-
-  let riskScore = 0;
+  // Signal aggregation: stable and easy to extend with future health/AI inputs.
+  let loadScore = 0;
   const reasons: string[] = [];
 
-  // Recovery signal (strongest single signal)
   if (isFatigue(recoveryLabel)) {
-    riskScore += 3;
-    reasons.push("Recovery zeigt erhöhte Belastung in den letzten Einheiten.");
+    loadScore += 3;
+    reasons.push("Recovery niedrig");
   } else if (!isFresh(recoveryLabel)) {
-    // "Normal"
-    riskScore += 1;
-    reasons.push("Recovery ist normal — kein freies Fenster, aber kein Alarm.");
+    loadScore += 1;
+    reasons.push("Recovery normal");
   } else {
-    reasons.push("Recovery aktuell stabil.");
+    loadScore -= 0.5;
+    reasons.push("Recovery stabil");
   }
 
-  // Weekly load
   if (weeklyFatigueLabel === "hoch") {
-    riskScore += 2;
-    reasons.push("Die Wochenlast ist hoch.");
+    loadScore += 2;
+    reasons.push("Zuletzt hohe Last");
   } else if (weeklyFatigueLabel === "mittel") {
-    riskScore += 1;
-    reasons.push("Wochenlast moderat — Rhythmus halten.");
+    loadScore += 1;
+    reasons.push("Last moderat");
+  } else {
+    loadScore -= 0.3;
+    reasons.push("Plan aktuell ruhig");
   }
 
-  // Recent hard sessions cluster (in last ~5 done)
   if (recentHardCount >= 3) {
-    riskScore += 2;
-    reasons.push("Mehrere Quality-Reize in kurzer Folge.");
+    loadScore += 2;
+    reasons.push("Mehrere harte Reize");
   } else if (recentHardCount === 2) {
-    riskScore += 1;
-    reasons.push("Zwei harte Einheiten zuletzt — etwas Frische schonen.");
+    loadScore += 1.2;
+    reasons.push("Gestern harter Reiz");
   }
 
-  // Feeling signal (only when clearly low)
-  if (avgRecentFeeling > 0 && avgRecentFeeling < 2.5) {
-    riskScore += 2;
-    reasons.push("Zuletzt eher niedriges Belastungsgefühl eingetragen.");
-  } else if (avgRecentFeeling >= 4.2 && isFresh(recoveryLabel)) {
-    riskScore -= 1; // feeling good + fresh → small bonus
-    reasons.push("Gefühlsmäßig gut drauf zuletzt.");
+  if (avgRecentFeeling > 0 && avgRecentFeeling < 2.7) {
+    loadScore += 1.8;
+    reasons.push("Subjektiv müde");
+  } else if (avgRecentFeeling >= 4.2) {
+    loadScore -= 0.6;
   }
 
-  // Missed sessions: not a reason to push harder today
   if (missedRecentCount >= 3) {
-    riskScore += 1;
-    reasons.push("Einige Einheiten zuletzt ausgelassen — lieber stabil bleiben statt aufholen.");
+    loadScore += 1.2;
+    reasons.push("Mehrere Einheiten offen");
+  } else if (missedRecentCount === 2) {
+    loadScore += 0.8;
+    reasons.push("Rhythmus unterbrochen");
   }
 
-  // Streak bonus: consistent block = slight green nudge
-  if (sessionStreak >= 5 && riskScore <= 1) {
-    reasons.push(`${sessionStreak} Einheiten in Folge erledigt — guter Rhythmus.`);
+  if (sessionStreak >= 6) {
+    loadScore -= 0.4;
   }
 
-  // Cap reasons at 3
-  const trimmedReasons = reasons.slice(0, 3);
-
-  // ─── Derive status + recommendation ───────────────────────────────────────
-
-  // today vs. "next upcoming" slightly adjusts phrasing
-  const sessionLabel = isToday ? "heute" : "als Nächstes";
-
-  if (riskScore <= 1) {
-    // Green: go as planned
-    const rec = isHardType(todaySessionType)
-      ? `Wie geplant trainieren — gutes Fenster für ${sessionLabel}.`
-      : `Wie geplant trainieren — Bedingungen passen.`;
-    return { status: "green", shortRecommendation: "Wie geplant laufen", recommendation: rec, reasons: trimmedReasons, earlyStage: false };
+  // Small caution bump when a key session is very close.
+  if (daysToNextKeySession !== null && daysToNextKeySession !== undefined && daysToNextKeySession <= 2 && isKeyType(todaySessionType)) {
+    loadScore += 0.6;
+  }
+  if (phase === "peak" && isHardType(todaySessionType)) {
+    loadScore += 0.5;
   }
 
-  if (riskScore <= 3) {
-    // Yellow: run, but softer
-    const rec = isHardType(todaySessionType)
-      ? `Locker angehen — Intensität ${sessionLabel} moderat halten.`
-      : `Wie geplant, aber auf die eigenen Signale hören.`;
-    const short = isHardType(todaySessionType) ? "Locker angehen" : "Auf Signale hören";
-    return { status: "yellow", shortRecommendation: short, recommendation: rec, reasons: trimmedReasons, earlyStage: false };
-  }
+  const compactReasons = clampReasons(reasons);
 
-  // Red: clearly reduce or rest
-  if (todaySessionType === "rest" || todaySessionType === "bike") {
+  if (loadScore <= 1.1) {
     return {
-      status: "red",
-      shortRecommendation: "Heute erholen",
-      recommendation: "Heute wirklich erholen — der Ruhetag kommt gerade richtig.",
-      reasons: trimmedReasons,
+      status: "green",
+      shortRecommendation: "Wie geplant",
+      recommendation: isToday ? "Heute wie geplant." : "Als Nächstes wie geplant.",
+      reasons: compactReasons,
       earlyStage: false,
     };
   }
+
+  if (loadScore <= 2.9) {
+    const isHardToday = isHardType(todaySessionType);
+    return {
+      status: "yellow",
+      shortRecommendation: isHardToday ? "Heute locker" : "Kürzer laufen",
+      recommendation: isHardToday ? "Heute locker." : "Heute kürzer laufen.",
+      reasons: compactReasons,
+      adjustment: isHardToday ? "Tempo weglassen" : "Heute 20 % kürzer",
+      earlyStage: false,
+    };
+  }
+
   return {
     status: "red",
-    shortRecommendation: "Intensität reduzieren",
-    recommendation: "Intensität heute deutlich reduzieren oder eine leichte Einheit wählen.",
-    reasons: trimmedReasons,
+    shortRecommendation: "Pause / sehr locker",
+    recommendation: "Heute Pause oder sehr locker.",
+    reasons: compactReasons,
+    adjustment: todaySessionType === "rest" ? "Ruhetag nutzen" : "Nur locker laufen",
     earlyStage: false,
   };
 }
