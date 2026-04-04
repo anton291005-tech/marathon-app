@@ -11,7 +11,14 @@ import {
   parseTargetTimeToSeconds,
   safeParseJSON,
 } from "./appSmartFeatures";
+import MarathonPredictionCard from "./components/MarathonPredictionCard";
+import RaceCalculator from "./components/RaceCalculator";
+import SurfaceCard from "./components/SurfaceCard";
+import WeeklyAnalysisCard from "./components/WeeklyAnalysisCard";
+import { getCoachFeedback } from "./coachFeedback";
+import { hasLoggedTrainingEngagement, isHomePreStart } from "./homeStatus";
 import { getMarathonPrediction } from "./marathonPrediction";
+import { analyzeWeek } from "./weeklyAnalysis";
 import { readRemoteStorage, writeRemoteStorage } from "./storage";
 
 const PI = {
@@ -322,6 +329,7 @@ const PLAN=[
 
 const ALL_SESSIONS = PLAN.flatMap((week) => week.s);
 const ACTIVE_SESSIONS = ALL_SESSIONS.filter((session) => session.type !== "rest");
+
 const LONG_RUN_SESSIONS = ACTIVE_SESSIONS.filter((session) => session.type === "long" && session.km > 0);
 const LONGEST_LONG_RUN_KM = LONG_RUN_SESSIONS.reduce((max, session) => Math.max(max, session.km || 0), 0);
 const FIRST_30K_ID = LONG_RUN_SESSIONS.find((session) => session.km >= 30)?.id;
@@ -850,22 +858,6 @@ function MetricCard({ label, value, sublabel, accent }){
   );
 }
 
-function SurfaceCard({ children, style }){
-  return (
-    <div
-      style={{
-        background:"linear-gradient(160deg,rgba(18,18,36,0.98),rgba(11,16,28,0.94))",
-        borderRadius:20,
-        padding:16,
-        border:"1px solid rgba(148,163,184,0.1)",
-        ...style,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
 function FilterChip({ active, children, onClick }){
   return (
     <button
@@ -1131,6 +1123,13 @@ export default function App(){
   });
   const recoveryHistory = getRecoveryHistory(PLAN, logs);
   const consistencyStats = getConsistencyStats(PLAN, logs);
+  const coachHints = getCoachFeedback({ plan: PLAN, logs, consistencyStats, now: new Date() });
+  const weekAnalysis = analyzeWeek(w, logs, new Date());
+  const marathonConfidenceLabel = marathonPrediction.ready
+    ? predictionReadiness.ready
+      ? performancePrediction.confidence
+      : "Datenbasis wächst"
+    : null;
   const nextKeySession = ACTIVE_SESSIONS.find((session) => getSessionStatus(logs[session.id]) === "open" && getSessionMilestones(session, PLAN.find((week) => week.s.some((item) => item.id === session.id)) || w).length > 0)
     || ACTIVE_SESSIONS.find((session) => getSessionStatus(logs[session.id]) === "open");
   const currentPhaseIndex = PHASE_ORDER.indexOf(w.phase);
@@ -1158,7 +1157,9 @@ export default function App(){
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const firstTrainingStart = firstTrainingDate ? new Date(firstTrainingDate.getFullYear(), firstTrainingDate.getMonth(), firstTrainingDate.getDate()) : null;
-  const isPreStart = !!(firstTrainingStart && todayStart < firstTrainingStart);
+  const isCalendarBeforeFirstSession = !!(firstTrainingStart && todayStart < firstTrainingStart);
+  const trainingEngagement = hasLoggedTrainingEngagement(logs, ACTIVE_SESSIONS);
+  const isPreStart = isHomePreStart(logs, ACTIVE_SESSIONS);
   const blockStartLabel = firstTrainingDate
     ? firstTrainingDate.toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })
     : "";
@@ -1226,11 +1227,17 @@ export default function App(){
                   Training startet noch nicht
                 </div>
                 <div style={{fontSize:14,color:"rgba(226,232,240,0.62)",lineHeight:1.7,maxWidth:340}}>
-                  Dein Marathonblock beginnt am {blockStartLabel}. Vorher gibt es noch keinen aktiven Trainingsverlauf.
+                  Erledige oder logge deine erste Einheit, um Fortschritt und Prognose zu sehen.
+                  {blockStartLabel ? ` Erste geplante Einheit: ${blockStartLabel}.` : ""}
                 </div>
               </>
             ) : (
               <>
+                {isCalendarBeforeFirstSession && trainingEngagement ? (
+                  <div style={{fontSize:12,color:"rgba(125,211,252,0.92)",fontWeight:700,marginBottom:2,maxWidth:340,lineHeight:1.5}}>
+                    Training läuft bereits — Plan offiziell ab {blockStartLabel}
+                  </div>
+                ) : null}
                 <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.16em",color:"rgba(148,163,184,0.52)",fontWeight:700}}>
                   {todayNextSession?.mode === "today" ? "Heute" : dashboardSession ? "Nächste Einheit" : "Heute"}
                 </div>
@@ -1388,35 +1395,12 @@ export default function App(){
             ))}
           </div>
 
-          <SurfaceCard style={{ marginTop: 2 }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7c8aa5", fontWeight: 700, marginBottom: 10 }}>
-              Marathon-Prognose · letzte 42 Tage
-            </div>
-            {marathonPrediction.ready ? (
-              <>
-                <div style={{ fontSize: 30, fontWeight: 800, color: "#fff", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
-                  {marathonPrediction.predictedTime}
-                </div>
-                <div style={{ fontSize: 14, color: "#94a3b8", marginTop: 8, fontWeight: 600 }}>
-                  Spanne {marathonPrediction.rangeLabel}
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
-                  <div>
-                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", fontWeight: 700 }}>Consistency</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: "#38bdf8" }}>{marathonPrediction.consistencyScore}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", fontWeight: 700 }}>Sub-3</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: "#34d399" }}>{marathonPrediction.sub3ProbabilityPercent}%</div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.65 }}>
-                {marathonPrediction.message}
-              </div>
-            )}
-          </SurfaceCard>
+          <MarathonPredictionCard
+            variant="compact"
+            prediction={marathonPrediction}
+            targetTimeLabel={targetTimeDisplay}
+            coachHints={coachHints}
+          />
           </>
           )}
         </div>
@@ -1466,6 +1450,8 @@ export default function App(){
                 <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.6}}>{coachingHint.body}</div>
               </div>
             </div>
+
+            <WeeklyAnalysisCard weekLabel={w.label} weekDates={w.dates} analysis={weekAnalysis} />
 
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               {jumpTargets.map((target)=>(
@@ -1636,50 +1622,13 @@ export default function App(){
         </>
       ):activeView==="performance"?(
         <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14,...viewTransitionStyle}}>
-          <SurfaceCard style={{ border: "1px solid rgba(56,189,248,0.22)", boxShadow: "0 24px 48px rgba(2,6,23,0.35)" }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.12em", color: "#7c8aa5", fontWeight: 700, marginBottom: 8 }}>
-              Marathon-Prognose (42-Tage-Fenster)
-            </div>
-            {marathonPrediction.ready ? (
-              <>
-                <div style={{ fontSize: 34, fontWeight: 800, color: "#fff", letterSpacing: "-0.04em", marginBottom: 6 }}>
-                  {marathonPrediction.predictedTime}
-                </div>
-                <div style={{ fontSize: 15, color: "#cbd5e1", marginBottom: 14, fontWeight: 600 }}>
-                  Realistische Spanne: <span style={{ color: "#e2e8f0" }}>{marathonPrediction.rangeLabel}</span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 12 }}>
-                  <div style={{ background: "rgba(9,11,26,0.85)", borderRadius: 14, padding: "12px 10px", border: "1px solid rgba(148,163,184,0.12)" }}>
-                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", fontWeight: 700 }}>Consistency</div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: "#38bdf8", marginTop: 4 }}>{marathonPrediction.consistencyScore}</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6, lineHeight: 1.4 }}>Erledigt, km-Treue, Wochen-Streak</div>
-                  </div>
-                  <div style={{ background: "rgba(9,11,26,0.85)", borderRadius: 14, padding: "12px 10px", border: "1px solid rgba(148,163,184,0.12)" }}>
-                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", fontWeight: 700 }}>Sub-3</div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: "#34d399", marginTop: 4 }}>{marathonPrediction.sub3ProbabilityPercent}%</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6, lineHeight: 1.4 }}>geschätzte Chance</div>
-                  </div>
-                  <div style={{ background: "rgba(9,11,26,0.85)", borderRadius: 14, padding: "12px 10px", border: "1px solid rgba(148,163,184,0.12)" }}>
-                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", fontWeight: 700 }}>Sub-2:50</div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: "#fbbf24", marginTop: 4 }}>{marathonPrediction.sub250ProbabilityPercent}%</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6, lineHeight: 1.4 }}>optional</div>
-                  </div>
-                </div>
-                <div style={{ fontSize: 12, color: "#64748b", marginTop: 14, lineHeight: 1.55 }}>
-                  Heuristik aus gewichteten Einheiten, Ist-km vs. Plan und ausgefallenen Sessions — kein Labortest.
-                </div>
-              </>
-            ) : (
-              <div style={{ fontSize: 14, color: "#cbd5e1", lineHeight: 1.7 }}>
-                {marathonPrediction.message}
-                {marathonPrediction.consistencyScore != null && (
-                  <div style={{ marginTop: 12, fontSize: 13, color: "#94a3b8" }}>
-                    Consistency (vorläufig): <span style={{ color: "#38bdf8", fontWeight: 800 }}>{marathonPrediction.consistencyScore}</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </SurfaceCard>
+          <MarathonPredictionCard
+            variant="full"
+            prediction={marathonPrediction}
+            targetTimeLabel={targetTimeDisplay}
+            confidenceLabel={marathonConfidenceLabel}
+            coachHints={coachHints}
+          />
 
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
             <SurfaceCard>
@@ -1854,6 +1803,8 @@ export default function App(){
               Format `hh:mm:ss`. Die Zielzeit beeinflusst nur Strategie und Prognose-Anzeige, nicht deinen Plan.
             </div>
           </SurfaceCard>
+
+          <RaceCalculator />
 
           <SurfaceCard>
             <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Logs sichern</div>

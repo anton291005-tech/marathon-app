@@ -21,6 +21,10 @@ export type PlanSession = {
 export type PlanWeek = {
   wn: number;
   phase: string;
+  label?: string;
+  dates?: string;
+  km: number;
+  focus?: string;
   s: PlanSession[];
 };
 
@@ -138,14 +142,14 @@ export function getSessionWeight(session: PlanSession, phase: string): number {
   return 1.0;
 }
 
-function getPlannedKmEquiv(session: PlanSession): number {
+export function getPlannedKmEquiv(session: PlanSession): number {
   if (session.km > 0) return session.km;
   if (session.type === "bike") return 12;
   if (session.type === "strength") return 8;
   return 0;
 }
 
-function getEffectiveKm(session: PlanSession, log: SessionLog | undefined): number {
+export function getEffectiveKm(session: PlanSession, log: SessionLog | undefined): number {
   if (!log?.done) return 0;
   const parsed = parseFloat(String(log.actualKm || "").replace(",", "."));
   if (Number.isFinite(parsed) && parsed > 0) return parsed;
@@ -174,7 +178,7 @@ function sigmoid(x: number): number {
 }
 
 /** Kalendertag der Session ≤ heute (Sessions am heutigen Tag gelten als fällig/vergangen für die Auswertung). */
-function isScheduledOnOrBeforeToday(sessionDate: Date, now: Date): boolean {
+export function isScheduledOnOrBeforeToday(sessionDate: Date, now: Date): boolean {
   const sd = new Date(sessionDate);
   sd.setHours(0, 0, 0, 0);
   const nd = new Date(now);
