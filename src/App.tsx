@@ -792,14 +792,6 @@ function buildSmoothPath(points, key){
   return path;
 }
 
-function buildAreaPath(points, key){
-  if(!points.length)return "";
-  const linePath = buildSmoothPath(points, key);
-  const last = points[points.length - 1];
-  const first = points[0];
-  return `${linePath} L ${last.x} 100 L ${first.x} 100 Z`;
-}
-
 function getDashboardMetric(session){
   if(!session)return "Ruhetag";
   if(session.type === "bike"){
@@ -887,7 +879,6 @@ export default function App(){
     targetTime: "2:49:50",
   }));
   const [shareFeedback,setShareFeedback]=useState("");
-  const [graphReady,setGraphReady]=useState(false);
   const [viewMotionDir,setViewMotionDir]=useState(0);
   const swipeStartRef = useRef(null);
   const lastSwipeAtRef = useRef(0);
@@ -916,11 +907,6 @@ export default function App(){
       }
     })();
   },[]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setGraphReady(true), 60);
-    return () => window.clearTimeout(timer);
-  }, []);
 
   const save=async(newLogs)=>{
     setLogs(newLogs);
@@ -1246,9 +1232,9 @@ export default function App(){
             {/* background: fades from hero dark → transparent, no hard bottom edge */}
             <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(11,15,31,0.995) 0%,rgba(9,12,22,0.98) 35%,rgba(8,10,19,0.72) 76%,transparent 100%)",pointerEvents:"none"}} />
 
-            {/* ambient glow — stays in the top portion */}
-            <div style={{position:"absolute",inset:0,pointerEvents:"none",overflow:"hidden"}}>
-              <div style={{position:"absolute",left:"50%",top:"6px",width:460,height:420,transform:`translateX(-50%) scale(${graphReady ? 1 : 0.92})`,background:`radial-gradient(circle at center, ${dashboardGlow} 0%, transparent 66%)`,filter:"blur(56px)",opacity:graphReady ? 0.98 : 0.34,transition:"opacity 1.5s ease, transform 1.5s ease"}} />
+            {/* subtle hero tint to keep focus without hiding chart */}
+            <div style={{position:"absolute",inset:0,pointerEvents:"none"}}>
+              <div style={{position:"absolute",left:"50%",top:"20px",width:420,height:280,transform:"translateX(-50%)",background:`radial-gradient(circle at center, ${dashboardGlow} 0%, transparent 72%)`,opacity:0.24}} />
             </div>
 
             {/* status chip */}
@@ -1289,27 +1275,18 @@ export default function App(){
               </div>
             </div>
 
-            {/* graph — inside the same wrapper, no visual separation */}
-            <div style={{position:"relative",marginTop:12,padding:"0 8px"}}>
-              <div style={{position:"absolute",left:8,right:8,top:10,bottom:10,pointerEvents:"none",borderRadius:22,background:"linear-gradient(180deg,rgba(8,12,24,0.16),rgba(8,12,24,0.02))"}} />
-
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:244,display:"block",overflow:"visible"}}>
-                <defs>
-                  <linearGradient id="pgFillGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#f8fafc" stopOpacity="0.24"/>
-                    <stop offset="55%" stopColor="#e2e8f0" stopOpacity="0.08"/>
-                    <stop offset="100%" stopColor={dashboardSession ? dashboardType.col : "#10b981"} stopOpacity="0"/>
-                  </linearGradient>
-                  <filter id="pgGlow" x="-14%" y="-45%" width="128%" height="194%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="2.8" result="blur"/>
-                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                  </filter>
-                </defs>
-                <path d={buildAreaPath(dashboardProgressPoints,"actualY")} fill="url(#pgFillGrad)" style={{transition:"opacity .9s ease",opacity:graphReady ? 1 : 0}} />
-                <path d={actualProgressPath} fill="none" stroke="#f8fafc" strokeWidth="6.2" strokeLinecap="round" strokeLinejoin="round" filter="url(#pgGlow)" pathLength="100" strokeDasharray="100" strokeDashoffset={graphReady ? 0 : 100} style={{transition:"stroke-dashoffset 1.1s cubic-bezier(0.22,1,0.36,1) .08s, opacity .65s ease",opacity:graphReady ? 1 : 0}} />
-                {dashboardProgressPoints.length > 0 && (
-                  <circle cx={dashboardProgressPoints[dashboardProgressPoints.length-1].x} cy={dashboardProgressPoints[dashboardProgressPoints.length-1].actualY} r="4.1" fill="#ffffff" filter="url(#pgGlow)" style={{transition:"opacity .45s ease .3s",opacity:graphReady ? 1 : 0}} />
-                )}
+            {/* graph — simple, always-visible line chart */}
+            <div style={{position:"relative",marginTop:10,padding:"0 10px"}}>
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:204,display:"block"}}>
+                <path
+                  d={actualProgressPath}
+                  fill="none"
+                  stroke="#f8fafc"
+                  strokeWidth="4.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{opacity:1}}
+                />
               </svg>
             </div>
           </div>
