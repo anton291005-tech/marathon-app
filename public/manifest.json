@@ -6,28 +6,20 @@
     {
       "src": "logo192.png",
       "type": "image/png",
-      "sizes": "192x192",
-      "purpose": "any maskable"
+      "sizes": "192x192"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icon.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
+      "sizes": "512x512"
     }
   ],
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#f40812",
-  "background_color": "#f40812",
+  "theme_color": "#0b0b15",
+  "background_color": "#0b0b15",
   "description": "Kompakte Marathon-App fuer Training, Logs und Formgefuehl.",
   "categories": ["sports", "health", "productivity"]
 }
