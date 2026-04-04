@@ -21,6 +21,7 @@ const PI = {
   SPEC:  { label:"Wettkampfspez.",     emoji:"🎯", col:"#f59e0b", bg:"rgba(245,158,11,0.12)" },
   TAPER: { label:"Taper",             emoji:"⚡", col:"#a855f7", bg:"rgba(168,85,247,0.12)" },
 };
+const DEFAULT_VIEW = "home";
 const TI = {
   rest:     { label:"Ruhe",         emoji:"😴", col:"#4b5563" },
   easy:     { label:"Easy Run",     emoji:"🟢", col:"#10b981" },
@@ -898,7 +899,7 @@ export default function App(){
   const [logs, setLogs] = useState(() => safeParseJSON(localStorage.getItem("marathonLogs"), {}));
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({feeling:0,actualKm:"",notes:"",done:false,skipped:false});
-  const [view,setView]=useState("home");
+  const [view,setView]=useState(DEFAULT_VIEW);
   const [weekFilter,setWeekFilter]=useState("all");
   const [overviewPhaseFilter,setOverviewPhaseFilter]=useState("all");
   const [preferences,setPreferences]=useState(() => safeParseJSON(localStorage.getItem("marathonPreferences"), {
@@ -909,6 +910,12 @@ export default function App(){
   const [viewMotionDir,setViewMotionDir]=useState(0);
   const swipeStartRef = useRef(null);
   const lastSwipeAtRef = useRef(0);
+
+  useEffect(() => {
+    if (!VIEW_ORDER.includes(view)) {
+      setView(DEFAULT_VIEW);
+    }
+  }, [view]);
 
   useEffect(() => {
     localStorage.setItem("marathonLogs", JSON.stringify(logs));
@@ -985,8 +992,9 @@ export default function App(){
   const closeModal=()=>setModal(null);
 
   const navigateToView = (nextView, forcedDirection = null)=>{
-    if(nextView === view)return;
-    const currentIndex = VIEW_ORDER.indexOf(view);
+    const currentView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
+    if(nextView === currentView)return;
+    const currentIndex = VIEW_ORDER.indexOf(currentView);
     const nextIndex = VIEW_ORDER.indexOf(nextView);
     const direction = forcedDirection ?? (nextIndex > currentIndex ? 1 : -1);
     setViewMotionDir(direction);
@@ -994,7 +1002,8 @@ export default function App(){
   };
 
   const stepView = (direction)=>{
-    const currentIndex = VIEW_ORDER.indexOf(view);
+    const currentView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
+    const currentIndex = VIEW_ORDER.indexOf(currentView);
     if(currentIndex < 0)return;
     const nextIndex = Math.max(0, Math.min(VIEW_ORDER.length - 1, currentIndex + direction));
     if(nextIndex !== currentIndex){
@@ -1158,6 +1167,7 @@ export default function App(){
   const viewTransitionStyle = viewMotionDir === 0
     ? {}
     : { animation: `${viewMotionDir > 0 ? "viewSlideNext" : "viewSlidePrev"} .34s cubic-bezier(0.22, 1, 0.36, 1)` };
+  const activeView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
 
   return(
     <div
@@ -1192,7 +1202,7 @@ export default function App(){
           100% { opacity: 1; transform: translate3d(0,0,0); }
         }
       `}</style>
-      {view==="home"?(
+      {activeView==="home"?(
         <div style={{padding:"28px 18px 18px",display:"flex",flexDirection:"column",gap:28,position:"relative",overflow:"hidden",...viewTransitionStyle}}>
           <div style={{position:"absolute",inset:"-40px 0 auto",height:620,pointerEvents:"none"}}>
             <div style={{position:"absolute",left:"50%",top:0,width:360,height:360,transform:`translateX(-50%) scale(${graphReady ? 1 : 0.92})`,background:`radial-gradient(circle at center, ${dashboardGlow} 0%, rgba(11,11,21,0) 72%)`,filter:"blur(68px)",opacity:graphReady ? 0.95 : 0.42,transition:"transform 1.2s ease, opacity 1.2s ease"}} />
@@ -1371,7 +1381,7 @@ export default function App(){
           </>
           )}
         </div>
-      ):view==="week"?(
+      ):activeView==="week"?(
         <>
           <div style={{padding:"16px",display:"flex",flexDirection:"column",gap:14,...viewTransitionStyle}}>
             <div style={{background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:22,padding:16,boxShadow:"0 20px 40px rgba(2,6,23,0.22)"}}>
@@ -1585,7 +1595,7 @@ export default function App(){
             </div>
           </div>
         </>
-      ):view==="performance"?(
+      ):activeView==="performance"?(
         <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14,...viewTransitionStyle}}>
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
             <SurfaceCard>
@@ -1618,7 +1628,7 @@ export default function App(){
             <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.7}}>{recommendedAction}</div>
           </SurfaceCard>
         </div>
-      ):view==="overview"?(
+      ):activeView==="overview"?(
         <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14,...viewTransitionStyle}}>
           {doneSess === 0 && (
             <div style={{background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:20,padding:16}}>
@@ -1741,7 +1751,7 @@ export default function App(){
             })}
           </SurfaceCard>
         </div>
-      ):view==="settings"?(
+      ):activeView==="settings"?(
         <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14,...viewTransitionStyle}}>
           <SurfaceCard>
             <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Einstellungen</div>
@@ -1780,7 +1790,7 @@ export default function App(){
             { key: "overview", label: "Übersicht", icon: "◎" },
             { key: "settings", label: "Einst.", icon: "⚙" },
           ].map((item)=>{
-            const active = view === item.key;
+            const active = activeView === item.key;
             return (
               <button
                 className="bottom-nav-btn"
