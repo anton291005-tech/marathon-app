@@ -1286,17 +1286,17 @@ export default function App(){
         <div style={{display:"flex",flexDirection:"column",paddingBottom:24,...viewTransitionStyle}}>
 
           {/* ── HERO + GRAPH — one seamless gradient section ───────────── */}
-          <div style={{position:"relative",paddingTop:28}}>
+          <div style={{position:"relative",paddingTop:22,paddingBottom:4}}>
             {/* background: fades from hero dark → transparent, no hard bottom edge */}
-            <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(12,16,34,0.99) 0%,rgba(9,12,22,0.96) 45%,rgba(8,10,19,0.3) 78%,transparent 100%)",pointerEvents:"none"}} />
+            <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(12,16,34,0.99) 0%,rgba(9,12,22,0.98) 36%,rgba(7,10,20,0.62) 76%,transparent 100%)",pointerEvents:"none"}} />
 
             {/* ambient glow — stays in the top portion */}
             <div style={{position:"absolute",inset:0,pointerEvents:"none",overflow:"hidden"}}>
-              <div style={{position:"absolute",left:"50%",top:"-10px",width:380,height:340,transform:`translateX(-50%) scale(${graphReady ? 1 : 0.86})`,background:`radial-gradient(circle at center, ${dashboardGlow} 0%, transparent 68%)`,filter:"blur(68px)",opacity:graphReady ? 0.82 : 0.25,transition:"opacity 1.5s ease, transform 1.5s ease"}} />
+              <div style={{position:"absolute",left:"50%",top:"-2px",width:430,height:380,transform:`translateX(-50%) scale(${graphReady ? 1 : 0.9})`,background:`radial-gradient(circle at center, ${dashboardGlow} 0%, transparent 66%)`,filter:"blur(62px)",opacity:graphReady ? 0.94 : 0.28,transition:"opacity 1.5s ease, transform 1.5s ease"}} />
             </div>
 
             {/* status chip */}
-            <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:16}}>
+            <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:12}}>
               {isPreStart && !trainingEngagement ? (
                 <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(148,163,184,0.06)",border:"1px solid rgba(148,163,184,0.1)",borderRadius:999,padding:"4px 11px"}}>
                   <span style={{width:5,height:5,borderRadius:"50%",background:"#475569",display:"inline-block"}}/>
@@ -1319,11 +1319,11 @@ export default function App(){
 
             {/* session title */}
             <div style={{position:"relative",textAlign:"center",padding:"0 20px"}}>
-              <div style={{fontSize:32,lineHeight:1,marginBottom:10}}>{dashboardType.emoji}</div>
-              <div style={{fontSize:36,fontWeight:800,color:"#fff",lineHeight:1.04,letterSpacing:"-0.04em",maxWidth:310,margin:"0 auto"}}>
+              <div style={{fontSize:34,lineHeight:1,marginBottom:10}}>{dashboardType.emoji}</div>
+              <div style={{fontSize:38,fontWeight:800,color:"#fff",lineHeight:1.03,letterSpacing:"-0.04em",maxWidth:320,margin:"0 auto"}}>
                 {getHeroTitle(dashboardSession)}
               </div>
-              <div style={{fontSize:12,color:"rgba(226,232,240,0.38)",fontWeight:600,marginTop:8,letterSpacing:"0.01em"}}>
+              <div style={{fontSize:13,color:"rgba(226,232,240,0.62)",fontWeight:650,marginTop:8,letterSpacing:"0.01em"}}>
                 {dashboardSession ? dashboardType.label : "Keine Einheit geplant"}
                 {dashboardSession?.km ? (
                   <span style={{color:dashboardType.col,marginLeft:8,fontWeight:700}}>
@@ -1334,50 +1334,53 @@ export default function App(){
             </div>
 
             {/* graph — inside the same wrapper, no visual separation */}
-            <div style={{position:"relative",marginTop:6}}>
+            <div style={{position:"relative",marginTop:10,padding:"0 10px"}}>
+              <div style={{position:"absolute",left:10,right:10,top:10,bottom:8,pointerEvents:"none",borderRadius:20,background:"linear-gradient(180deg,rgba(10,15,30,0.2),rgba(8,12,24,0.02))"}} />
               {/* momentum score — tiny, upper-right corner */}
-              <div style={{position:"absolute",top:8,right:16,zIndex:1}}>
+              <div style={{position:"absolute",top:10,right:20,zIndex:1}}>
                 {formScore.earlyStage ? (
-                  <span style={{fontSize:10,fontWeight:700,color:formScore.color,opacity:0.45}}>{formScore.label}</span>
+                  <span style={{fontSize:10,fontWeight:700,color:formScore.color,opacity:0.62}}>{formScore.label}</span>
                 ) : (
-                  <span style={{fontSize:11,fontWeight:800,color:formScore.color,opacity:0.58,letterSpacing:"-0.02em"}}>
+                  <span style={{fontSize:12,fontWeight:800,color:formScore.color,opacity:0.74,letterSpacing:"-0.02em"}}>
                     {formScore.score > 0 ? "+" : ""}{formScore.score}%
                   </span>
                 )}
               </div>
 
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:120,display:"block",overflow:"visible"}}>
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:188,display:"block",overflow:"visible"}}>
                 <defs>
                   <linearGradient id="pgLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.75"/>
-                    <stop offset="100%" stopColor="#38bdf8" stopOpacity="1"/>
+                    <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.98"/>
+                    <stop offset="55%" stopColor="#38bdf8" stopOpacity="1"/>
+                    <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.98"/>
                   </linearGradient>
                   <linearGradient id="pgFillGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor={dashboardSession ? dashboardType.col : "#10b981"} stopOpacity="0.11"/>
+                    <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.26"/>
+                    <stop offset="60%" stopColor={dashboardSession ? dashboardType.col : "#10b981"} stopOpacity="0.1"/>
                     <stop offset="100%" stopColor={dashboardSession ? dashboardType.col : "#10b981"} stopOpacity="0"/>
                   </linearGradient>
-                  <filter id="pgGlow" x="-8%" y="-40%" width="116%" height="180%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="1.8" result="blur"/>
+                  <filter id="pgGlow" x="-12%" y="-42%" width="124%" height="188%">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>
                     <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
                   </filter>
                 </defs>
                 <path d={buildAreaPath(dashboardProgressPoints,"actualY")} fill="url(#pgFillGrad)" style={{transition:"opacity .9s ease",opacity:graphReady ? 1 : 0}} />
-                <path d={plannedProgressPath} fill="none" stroke="rgba(148,163,184,0.1)" strokeWidth="0.8" strokeLinecap="round" strokeDasharray="1.5,4" style={{opacity:graphReady ? 0.7 : 0,transition:"opacity .8s ease"}} />
-                <path d={actualProgressPath} fill="none" stroke="url(#pgLineGrad)" strokeWidth="3.2" strokeLinecap="round" filter="url(#pgGlow)" pathLength="100" strokeDasharray="100" strokeDashoffset={graphReady ? 0 : 100} style={{transition:"stroke-dashoffset 1.3s cubic-bezier(0.22,1,0.36,1) .1s, opacity .7s ease",opacity:graphReady ? 1 : 0}} />
+                <path d={plannedProgressPath} fill="none" stroke="rgba(148,163,184,0.22)" strokeWidth="1.15" strokeLinecap="round" strokeDasharray="2.5,4.5" style={{opacity:graphReady ? 0.86 : 0,transition:"opacity .8s ease"}} />
+                <path d={actualProgressPath} fill="none" stroke="url(#pgLineGrad)" strokeWidth="4.9" strokeLinecap="round" filter="url(#pgGlow)" pathLength="100" strokeDasharray="100" strokeDashoffset={graphReady ? 0 : 100} style={{transition:"stroke-dashoffset 1.3s cubic-bezier(0.22,1,0.36,1) .1s, opacity .7s ease",opacity:graphReady ? 1 : 0}} />
                 {dashboardProgressPoints.length > 0 && (
-                  <circle cx={dashboardProgressPoints[dashboardProgressPoints.length-1].x} cy={dashboardProgressPoints[dashboardProgressPoints.length-1].actualY} r="2.6" fill="#38bdf8" filter="url(#pgGlow)" style={{transition:"opacity .5s ease .35s",opacity:graphReady ? 1 : 0}} />
+                  <circle cx={dashboardProgressPoints[dashboardProgressPoints.length-1].x} cy={dashboardProgressPoints[dashboardProgressPoints.length-1].actualY} r="3.6" fill="#67e8f9" filter="url(#pgGlow)" style={{transition:"opacity .5s ease .35s",opacity:graphReady ? 1 : 0}} />
                 )}
               </svg>
             </div>
           </div>
 
           {/* ── ACTION BUTTONS ─────────────────────────────────────────── */}
-          <div style={{display:"flex",gap:8,padding:"4px 16px 16px"}}>
+          <div style={{display:"flex",gap:10,padding:"2px 16px 14px"}}>
             <button
               className="dashboard-action"
               onClick={()=>dashboardSession && quickCompleteSession(dashboardSession)}
               disabled={!dashboardSession}
-              style={{flex:1,background:"rgba(16,185,129,0.18)",border:"1px solid rgba(16,185,129,0.28)",color:dashboardSession ? "#d1fae5" : "#374151",borderRadius:999,padding:"12px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700}}
+              style={{flex:1,background:"rgba(16,185,129,0.22)",border:"1px solid rgba(16,185,129,0.34)",color:dashboardSession ? "#d1fae5" : "#374151",borderRadius:999,padding:"14px 12px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:14,fontWeight:800,boxShadow:"0 8px 24px rgba(16,185,129,0.08)"}}
             >
               ✓ Done
             </button>
@@ -1385,7 +1388,7 @@ export default function App(){
               className="dashboard-action"
               onClick={()=>dashboardSession && quickSkipSession(dashboardSession)}
               disabled={!dashboardSession}
-              style={{flex:1,background:"rgba(239,68,68,0.12)",border:"1px solid rgba(248,113,113,0.2)",color:dashboardSession ? "#fecaca" : "#374151",borderRadius:999,padding:"12px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700}}
+              style={{flex:1,background:"rgba(239,68,68,0.16)",border:"1px solid rgba(248,113,113,0.26)",color:dashboardSession ? "#fecaca" : "#374151",borderRadius:999,padding:"14px 12px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:14,fontWeight:800,boxShadow:"0 8px 24px rgba(248,113,113,0.07)"}}
             >
               Skip
             </button>
@@ -1393,7 +1396,7 @@ export default function App(){
               className="dashboard-action"
               onClick={()=>dashboardSession && openModal(dashboardSession)}
               disabled={!dashboardSession}
-              style={{width:44,height:44,flexShrink:0,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(148,163,184,0.09)",color:dashboardSession ? "#64748b" : "#1e293b",borderRadius:999,cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}
+              style={{width:50,height:50,flexShrink:0,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(148,163,184,0.13)",color:dashboardSession ? "#94a3b8" : "#1e293b",borderRadius:999,cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}
               aria-label="Details öffnen"
             >
               ⓘ
@@ -1401,50 +1404,50 @@ export default function App(){
           </div>
 
           {/* ── BELOW-FOLD CONTENT ─────────────────────────────────────── */}
-          <div style={{display:"flex",flexDirection:"column",gap:0,padding:"0 16px"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:10,padding:"0 16px"}}>
 
             {/* Daily decision — ultra-minimal: coloured dot + short label */}
-            <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0 16px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 12px",borderRadius:14,background:"rgba(15,23,42,0.34)",border:"1px solid rgba(148,163,184,0.1)"}}>
               <div style={{
-                width:8,height:8,borderRadius:"50%",flexShrink:0,
+                width:9,height:9,borderRadius:"50%",flexShrink:0,
                 background:dailyDecision.status==="green"?"#34d399":dailyDecision.status==="yellow"?"#fbbf24":"#f87171",
-                boxShadow:dailyDecision.status==="green"?"0 0 8px #34d39955":dailyDecision.status==="yellow"?"0 0 8px #fbbf2455":"0 0 8px #f8717155",
+                boxShadow:dailyDecision.status==="green"?"0 0 10px #34d3996b":dailyDecision.status==="yellow"?"0 0 10px #fbbf246b":"0 0 10px #f871716b",
               }}/>
-              <span style={{fontSize:14,fontWeight:700,color:"rgba(226,232,240,0.86)",letterSpacing:"-0.01em"}}>
+              <span style={{fontSize:15,fontWeight:700,color:"rgba(226,232,240,0.92)",letterSpacing:"-0.01em",lineHeight:1.3}}>
                 {dailyDecision.shortRecommendation}
               </span>
             </div>
 
             {/* Key signals — borderless tabular row */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",borderTop:"1px solid rgba(148,163,184,0.07)"}}>
-              <div style={{padding:"11px 4px 9px",textAlign:"center"}}>
-                <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.3)",fontWeight:700,marginBottom:4}}>Recovery</div>
-                <div style={{fontSize:14,fontWeight:800,color:recoveryState.tone,lineHeight:1}}>{recoveryState.label}</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",borderRadius:14,background:"rgba(15,23,42,0.28)",border:"1px solid rgba(148,163,184,0.1)"}}>
+              <div style={{padding:"13px 5px 11px",textAlign:"center"}}>
+                <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:5}}>Recovery</div>
+                <div style={{fontSize:16,fontWeight:800,color:recoveryState.tone,lineHeight:1}}>{recoveryState.label}</div>
               </div>
-              <div style={{padding:"11px 4px 9px",textAlign:"center",borderLeft:"1px solid rgba(148,163,184,0.07)",borderRight:"1px solid rgba(148,163,184,0.07)"}}>
-                <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.3)",fontWeight:700,marginBottom:4}}>Last</div>
-                <div style={{fontSize:14,fontWeight:800,color:weeklyFatigue.color,lineHeight:1}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
+              <div style={{padding:"13px 5px 11px",textAlign:"center",borderLeft:"1px solid rgba(148,163,184,0.1)",borderRight:"1px solid rgba(148,163,184,0.1)"}}>
+                <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:5}}>Last</div>
+                <div style={{fontSize:16,fontWeight:800,color:weeklyFatigue.color,lineHeight:1}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
               </div>
-              <div style={{padding:"11px 4px 9px",textAlign:"center"}}>
-                <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.3)",fontWeight:700,marginBottom:4}}>Streak</div>
-                <div style={{fontSize:14,fontWeight:800,color:"#c4b5fd",lineHeight:1}}>
-                  {consistencyStats.sessionStreak}<span style={{fontSize:9,color:"rgba(148,163,184,0.3)",marginLeft:2}}>×</span>
+              <div style={{padding:"13px 5px 11px",textAlign:"center"}}>
+                <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:5}}>Streak</div>
+                <div style={{fontSize:16,fontWeight:800,color:"#c4b5fd",lineHeight:1}}>
+                  {consistencyStats.sessionStreak}<span style={{fontSize:10,color:"rgba(148,163,184,0.44)",marginLeft:2}}>×</span>
                 </div>
               </div>
             </div>
 
             {/* Plan stats — bare 4-col row */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",borderTop:"1px solid rgba(148,163,184,0.06)"}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",borderRadius:14,background:"rgba(15,23,42,0.24)",border:"1px solid rgba(148,163,184,0.08)"}}>
               {[
                 { label: "Plan", value: `${pct}%`, sub: `${doneSess}/${totalSess}`, color: "#10b981" },
                 { label: "km", value: `${Math.round(loggedKm)}`, sub: `${kmPct}%`, color: "#38bdf8" },
                 { label: "Long", value: `${doneLongRuns}/${longRuns}`, sub: "done", color: "#f59e0b" },
                 { label: "Quality", value: `${doneHardSessions}/${hardSessions}`, sub: "done", color: "#fb7185" },
               ].map(m=>(
-                <div key={m.label} style={{padding:"10px 4px 8px",textAlign:"center"}}>
-                  <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:"0.07em",color:"rgba(148,163,184,0.28)",fontWeight:700,marginBottom:3}}>{m.label}</div>
-                  <div style={{fontSize:13,fontWeight:800,color:m.color,lineHeight:1}}>{m.value}</div>
-                  <div style={{fontSize:9,color:"rgba(148,163,184,0.28)",marginTop:2}}>{m.sub}</div>
+                <div key={m.label} style={{padding:"12px 4px 10px",textAlign:"center"}}>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.46)",fontWeight:700,marginBottom:4}}>{m.label}</div>
+                  <div style={{fontSize:15,fontWeight:800,color:m.color,lineHeight:1}}>{m.value}</div>
+                  <div style={{fontSize:10,color:"rgba(148,163,184,0.46)",marginTop:3}}>{m.sub}</div>
                 </div>
               ))}
             </div>
