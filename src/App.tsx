@@ -15,7 +15,9 @@ import MarathonPredictionCard from "./components/MarathonPredictionCard";
 import RaceCalculator from "./components/RaceCalculator";
 import SurfaceCard from "./components/SurfaceCard";
 import WeeklyAnalysisCard from "./components/WeeklyAnalysisCard";
+import DailyDecisionCard from "./components/DailyDecisionCard";
 import { getCoachFeedback } from "./coachFeedback";
+import { getDailyDecision } from "./dailyDecision";
 import { hasLoggedTrainingEngagement, isHomePreStart } from "./homeStatus";
 import { getMarathonPrediction } from "./marathonPrediction";
 import { analyzeWeek } from "./weeklyAnalysis";
@@ -1145,6 +1147,48 @@ export default function App(){
   const consistencyStats = getConsistencyStats(PLAN, logs);
   const coachHints = getCoachFeedback({ plan: PLAN, logs, consistencyStats, now: new Date() });
   const weekAnalysis = analyzeWeek(w, logs, new Date());
+
+  // --- Daily Decision Engine signals ---
+  // Compute lightweight inputs so getDailyDecision stays a pure function.
+  const decisionRecentSessions = ACTIVE_SESSIONS
+    .filter((session) => logs[session.id]?.done)
+    .slice(-5)
+    .map((session) => ({ session, log: logs[session.id] }));
+
+  const decisionRecentHardCount = decisionRecentSessions.filter((item) =>
+    ["interval", "tempo", "race"].includes(item.session.type)
+  ).length;
+
+  const decisionAvgFeeling = decisionRecentSessions.length
+    ? decisionRecentSessions.reduce((sum, item) => sum + (item.log?.feeling || 3), 0) / decisionRecentSessions.length
+    : 0;
+
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  const decisionMissedRecent = ACTIVE_SESSIONS.filter((session) => {
+    const d = parseSessionDateLabel(session.date);
+    if (!d) return false;
+    const sd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    if (sd < sevenDaysAgo || sd > todayMidnight) return false;
+    const log = logs[session.id];
+    return !log?.done && !log?.skipped;
+  }).length;
+
+  const decisionTodayNextSession = getTodayNextSession(ACTIVE_SESSIONS, logs);
+  const dailyDecision = getDailyDecision({
+    recoveryLabel: recoveryState.label,
+    weeklyFatigueLabel: weeklyFatigue.label,
+    recentHardCount: decisionRecentHardCount,
+    avgRecentFeeling: decisionAvgFeeling,
+    missedRecentCount: decisionMissedRecent,
+    doneSessions: doneSess,
+    sessionStreak: consistencyStats.sessionStreak,
+    todaySessionType: decisionTodayNextSession?.session?.type ?? null,
+    isToday: decisionTodayNextSession?.mode === "today",
+  });
   const marathonConfidenceLabel = marathonPrediction.ready
     ? predictionReadiness.ready
       ? performancePrediction.confidence
@@ -1241,48 +1285,28 @@ export default function App(){
 
           <div style={{position:"relative",paddingTop:10,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
             <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.2em",color:"rgba(148,163,184,0.6)",fontWeight:700}}>MyRace</div>
+            {isCalendarBeforeFirstSession && trainingEngagement ? (
+              <div style={{fontSize:12,color:"rgba(125,211,252,0.92)",fontWeight:700,marginBottom:2,maxWidth:340,lineHeight:1.5}}>
+                Training läuft bereits — Plan offiziell ab {blockStartLabel}
+              </div>
+            ) : null}
             {isPreStart ? (
-              <>
-                <div style={{fontSize:34,fontWeight:800,color:"#fff",lineHeight:1.05,letterSpacing:"-0.04em",maxWidth:320}}>
-                  Training startet noch nicht
-                </div>
-                <div style={{fontSize:14,color:"rgba(226,232,240,0.62)",lineHeight:1.7,maxWidth:340}}>
-                  Erledige oder logge deine erste Einheit, um Fortschritt und Prognose zu sehen.
-                  {blockStartLabel ? ` Erste geplante Einheit: ${blockStartLabel}.` : ""}
-                </div>
-              </>
-            ) : (
-              <>
-                {isCalendarBeforeFirstSession && trainingEngagement ? (
-                  <div style={{fontSize:12,color:"rgba(125,211,252,0.92)",fontWeight:700,marginBottom:2,maxWidth:340,lineHeight:1.5}}>
-                    Training läuft bereits — Plan offiziell ab {blockStartLabel}
-                  </div>
-                ) : null}
-                <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.16em",color:"rgba(148,163,184,0.52)",fontWeight:700}}>
-                  {todayNextSession?.mode === "today" ? "Heute" : dashboardSession ? "Nächste Einheit" : "Heute"}
-                </div>
-                <div style={{fontSize:38,fontWeight:800,color:"#fff",lineHeight:1.02,letterSpacing:"-0.04em",maxWidth:320}}>
-                  {getHeroTitle(dashboardSession)}
-                </div>
-                <div style={{fontSize:14,color:"rgba(226,232,240,0.54)",fontWeight:600}}>
-                  {dashboardSession ? dashboardType.label : "Keine Einheit geplant"}
-                </div>
-              </>
-            )}
+              <div style={{fontSize:13,color:"rgba(148,163,184,0.6)",fontWeight:600,maxWidth:300,lineHeight:1.6}}>
+                Erste Einheit{blockStartLabel ? ` ab ${blockStartLabel}` : ""} — logge dein Training für Prognose und Momentum.
+              </div>
+            ) : null}
+            <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.16em",color:"rgba(148,163,184,0.52)",fontWeight:700}}>
+              {todayNextSession?.mode === "today" ? "Heute" : dashboardSession ? "Nächste Einheit" : "Heute"}
+            </div>
+            <div style={{fontSize:38,fontWeight:800,color:"#fff",lineHeight:1.02,letterSpacing:"-0.04em",maxWidth:320}}>
+              {getHeroTitle(dashboardSession)}
+            </div>
+            <div style={{fontSize:14,color:"rgba(226,232,240,0.54)",fontWeight:600}}>
+              {dashboardSession ? dashboardType.label : "Keine Einheit geplant"}
+            </div>
           </div>
 
-          {isPreStart ? (
-            <div style={{position:"relative",padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:12,textAlign:"center"}}>
-              <div style={{width:"100%",maxWidth:420,height:180,position:"relative",opacity:0.9}}>
-                <div style={{position:"absolute",inset:"24px 0 0",background:"linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0))",borderRadius:28}} />
-                <div style={{position:"absolute",left:"8%",right:"8%",top:"55%",height:1,background:"linear-gradient(90deg,rgba(148,163,184,0),rgba(148,163,184,0.25),rgba(148,163,184,0))"}} />
-              </div>
-              <div style={{fontSize:13,color:"rgba(226,232,240,0.54)",lineHeight:1.6,maxWidth:320}}>
-                Momentum und Form Score erscheinen automatisch, sobald dein Trainingsblock aktiv startet.
-              </div>
-            </div>
-          ) : (
-            <>
+          <>
             <div style={{position:"relative",paddingTop:6}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:16,flexWrap:"wrap"}}>
                 <div>
@@ -1423,6 +1447,8 @@ export default function App(){
             ))}
           </div>
 
+          <DailyDecisionCard decision={dailyDecision} />
+
           <MarathonPredictionCard
             variant="compact"
             prediction={marathonPrediction}
@@ -1430,7 +1456,6 @@ export default function App(){
             coachHints={coachHints}
           />
           </>
-          )}
         </div>
       ):activeView==="week"?(
         <>
