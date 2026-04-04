@@ -9,27 +9,11 @@ const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
 
-const hideBootSplash = () => {
-  const splash = document.getElementById('boot-splash');
-  if (!splash) return;
-  splash.classList.add('hidden');
-  window.setTimeout(() => {
-    if (splash.parentNode) {
-      splash.remove();
-    }
-  }, 260);
-};
-
 root.render(
   <React.StrictMode>
     <App />
   </React.StrictMode>
 );
-
-window.setTimeout(hideBootSplash, 420);
-window.requestAnimationFrame(() => {
-  window.setTimeout(hideBootSplash, 140);
-});
 
 registerServiceWorker();
 

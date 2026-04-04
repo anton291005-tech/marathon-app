@@ -3,23 +3,11 @@ export function registerServiceWorker() {
     return;
   }
 
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .getRegistrations()
-      .then((registrations) =>
-        Promise.all(registrations.map((registration) => registration.unregister()))
-      )
-      .then(() => {
-        if ("caches" in window) {
-          return caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))));
-        }
-        return undefined;
-      })
-      .then(() => {
-        console.log("Service Worker deaktiviert und Cache bereinigt.");
-      })
-      .catch((error) => {
-        console.error("Service Worker Fehler:", error);
-      });
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((registration) => {
+      registration.unregister();
+    });
+  }).catch(() => {
+    // Startup should stay silent and stable if unregistering fails.
   });
 }

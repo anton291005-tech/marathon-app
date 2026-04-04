@@ -905,7 +905,6 @@ export default function App(){
     targetTime: "2:49:50",
   }));
   const [shareFeedback,setShareFeedback]=useState("");
-  const [loaded,setLoaded]=useState(false);
   const [graphReady,setGraphReady]=useState(false);
   const [viewMotionDir,setViewMotionDir]=useState(0);
   const swipeStartRef = useRef(null);
@@ -921,9 +920,12 @@ export default function App(){
 
   useEffect(()=>{
     (async()=>{
-      const r=await readRemoteStorage("mwaw26-logs");
-      if(r)setLogs(safeParseJSON(r.value, {}));
-      setLoaded(true);
+      try{
+        const r=await readRemoteStorage("mwaw26-logs");
+        if(r)setLogs(safeParseJSON(r.value, {}));
+      }catch{
+        // Startup should never block rendering if remote storage is unavailable.
+      }
     })();
   },[]);
 
@@ -1156,8 +1158,6 @@ export default function App(){
   const viewTransitionStyle = viewMotionDir === 0
     ? {}
     : { animation: `${viewMotionDir > 0 ? "viewSlideNext" : "viewSlidePrev"} .34s cubic-bezier(0.22, 1, 0.36, 1)` };
-
-  if(!loaded)return <div style={{minHeight:"100vh",background:"#0b0b15",display:"flex",alignItems:"center",justifyContent:"center",color:"#aaa",fontFamily:"system-ui"}}>Lade Plan…</div>;
 
   return(
     <div
