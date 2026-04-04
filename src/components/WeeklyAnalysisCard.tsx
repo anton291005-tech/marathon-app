@@ -29,13 +29,9 @@ export default function WeeklyAnalysisCard({ weekLabel, weekDates, analysis }: P
 
   return (
     <SurfaceCard style={{ border: `1px solid ${b}` }}>
-      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7c8aa5", fontWeight: 700, marginBottom: 6 }}>
+      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7c8aa5", fontWeight: 700, marginBottom: 10 }}>
         Wochenanalyse
       </div>
-      <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 4 }}>
-        {weekLabel}
-      </div>
-      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>{weekDates}</div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 10, marginBottom: 14 }}>
         <div style={{ background: "rgba(9,11,26,0.85)", borderRadius: 12, padding: "10px 8px", border: "1px solid rgba(148,163,184,0.1)" }}>
@@ -60,16 +56,16 @@ export default function WeeklyAnalysisCard({ weekLabel, weekDates, analysis }: P
         </div>
       </div>
 
-      <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 10, lineHeight: 1.5 }}>
-        Long Run (Woche):{" "}
-        {!analysis.longRunPlanned ? (
-          <span>nicht geplant</span>
-        ) : analysis.longRunDone ? (
-          <span style={{ color: "#86efac", fontWeight: 700 }}>erledigt{analysis.longRunKmPlanned ? ` (bis ${analysis.longRunKmPlanned} km)` : ""}</span>
-        ) : (
-          <span style={{ color: "#fca5a5", fontWeight: 700 }}>noch offen</span>
-        )}
-      </div>
+      {analysis.longRunPlanned && (
+        <div style={{ fontSize: 11, marginBottom: 10 }}>
+          <span style={{ color: "#64748b" }}>Long Run · </span>
+          {analysis.longRunDone ? (
+            <span style={{ color: "#86efac", fontWeight: 700 }}>✓{analysis.longRunKmPlanned ? ` ${analysis.longRunKmPlanned} km` : ""}</span>
+          ) : (
+            <span style={{ color: "#fca5a5", fontWeight: 700 }}>offen</span>
+          )}
+        </div>
+      )}
 
       <div
         style={{

@@ -56,7 +56,7 @@ export default function MarathonPredictionCard({
           textAlign: "center",
         }}
       >
-        {isFull ? "Marathon-Prognose" : "Marathon-Prognose · letzte 42 Tage"}
+        Marathon-Prognose
       </div>
 
       {targetTimeLabel ? (
@@ -91,14 +91,14 @@ export default function MarathonPredictionCard({
           {prediction.rangeLabel ? (
             <div
               style={{
-                fontSize: isFull ? 14 : 13,
-                color: "#94a3b8",
+                fontSize: 13,
+                color: "#64748b",
                 textAlign: "center",
                 fontWeight: 600,
-                marginBottom: isFull ? 18 : 14,
+                marginBottom: isFull ? 16 : 12,
               }}
             >
-              Spanne {prediction.rangeLabel}
+              {prediction.rangeLabel}
             </div>
           ) : null}
 
@@ -217,19 +217,14 @@ export default function MarathonPredictionCard({
             </div>
           ) : null}
 
-          {isFull ? (
-            <div style={{ fontSize: 11, color: "#64748b", marginTop: 14, lineHeight: 1.5, textAlign: "center" }}>
-              Heuristik aus Logs — keine Laborprognose.
-            </div>
-          ) : null}
+          {null}
         </>
       ) : (
-        <div style={{ fontSize: 14, color: "#94a3b8", lineHeight: 1.65, textAlign: "center" }}>
-          {prediction.message}
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.5 }}>{prediction.message}</div>
           {prediction.consistencyScore != null ? (
-            <div style={{ marginTop: 12, fontSize: 13 }}>
-              Consistency (vorläufig):{" "}
-              <span style={{ color: "#38bdf8", fontWeight: 800 }}>{prediction.consistencyScore}</span>
+            <div style={{ marginTop: 10, fontSize: 11, color: "#64748b" }}>
+              Consistency: <span style={{ color: "#38bdf8", fontWeight: 800 }}>{prediction.consistencyScore}</span>
             </div>
           ) : null}
         </div>

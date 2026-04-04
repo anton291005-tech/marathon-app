@@ -45,12 +45,9 @@ export default function RaceCalculator() {
 
   return (
     <SurfaceCard>
-      <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 6 }}>Race Calculator</div>
-      <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.6, marginBottom: 14 }}>
-        Marathonzielzeit → Pace, 5-km-Zwischenzeiten und Halbmarathon (gleichmäßiges Tempo, 42,195 km).
-      </div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 12 }}>Race Calculator</div>
       <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#7c8aa5", fontWeight: 700, marginBottom: 6 }}>
-        Zielzeit (hh:mm:ss)
+        Zielzeit
       </div>
       <input
         type="text"
@@ -72,7 +69,7 @@ export default function RaceCalculator() {
       />
 
       {!result ? (
-        <div style={{ fontSize: 13, color: "#f87171" }}>Bitte gültige Zeit eingeben (z. B. 2:50:00).</div>
+        <div style={{ fontSize: 12, color: "#f87171" }}>Ungültige Zeit</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ textAlign: "center", padding: "14px 12px", borderRadius: 16, background: "rgba(56,189,248,0.08)", border: "1px solid rgba(56,189,248,0.2)" }}>

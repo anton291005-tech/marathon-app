@@ -1277,7 +1277,7 @@ export default function App(){
         }
       `}</style>
       {activeView==="home"?(
-        <div style={{padding:"28px 18px 18px",display:"flex",flexDirection:"column",gap:28,position:"relative",overflow:"hidden",...viewTransitionStyle}}>
+        <div style={{padding:"24px 16px 16px",display:"flex",flexDirection:"column",gap:18,position:"relative",overflow:"hidden",...viewTransitionStyle}}>
           <div style={{position:"absolute",inset:"-40px 0 auto",height:620,pointerEvents:"none"}}>
             <div style={{position:"absolute",left:"50%",top:0,width:360,height:360,transform:`translateX(-50%) scale(${graphReady ? 1 : 0.92})`,background:`radial-gradient(circle at center, ${dashboardGlow} 0%, rgba(11,11,21,0) 72%)`,filter:"blur(68px)",opacity:graphReady ? 0.95 : 0.42,transition:"transform 1.2s ease, opacity 1.2s ease"}} />
             <div style={{position:"absolute",left:"50%",top:150,width:440,height:320,transform:`translateX(-50%) scale(${graphReady ? 1 : 0.9})`,background:`radial-gradient(circle at center, ${dashboardGlow} 0%, rgba(11,11,21,0) 76%)`,filter:"blur(82px)",opacity:graphReady ? 0.52 : 0.2,transition:"transform 1.25s ease, opacity 1.25s ease"}} />
@@ -1308,12 +1308,9 @@ export default function App(){
 
           <>
             <div style={{position:"relative",paddingTop:6}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:16,flexWrap:"wrap"}}>
-                <div>
-                  <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.14em",color:"rgba(148,163,184,0.5)",fontWeight:700,marginBottom:4}}>Momentum</div>
-                  <div style={{fontSize:13,color:"rgba(226,232,240,0.52)",fontWeight:600}}>Plan gegen Form</div>
-                </div>
-                <div style={{textAlign:"right",minWidth:112}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:16}}>
+                <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.14em",color:"rgba(148,163,184,0.45)",fontWeight:700}}>Momentum</div>
+                <div style={{textAlign:"right"}}>
                   {formScore.earlyStage ? (
                     <div style={{fontSize:14,fontWeight:700,color:formScore.color,lineHeight:1.4,maxWidth:160}}>
                       {formScore.label}
@@ -1331,20 +1328,7 @@ export default function App(){
                 </div>
               </div>
 
-              <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",marginBottom:16,gap:14,flexWrap:"wrap"}}>
-                <div style={{display:"flex",gap:14,alignItems:"center"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6,fontSize:10,color:"rgba(148,163,184,0.56)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>
-                    <span style={{width:10,height:10,borderRadius:"50%",background:"rgba(148,163,184,0.55)",display:"inline-block"}} />
-                    Plan
-                  </div>
-                  <div style={{display:"flex",alignItems:"center",gap:6,fontSize:10,color:"rgba(226,232,240,0.82)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>
-                    <span style={{width:10,height:10,borderRadius:"50%",background:dashboardSession ? dashboardType.col : "#f8fafc",display:"inline-block"}} />
-                    Ist
-                  </div>
-                </div>
-              </div>
-
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:214,display:"block",overflow:"visible"}}>
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:160,display:"block",overflow:"visible"}}>
               <defs>
                 <linearGradient id="actualProgressStroke" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor={dashboardSession ? dashboardType.col : "#f8fafc"} stopOpacity="0.72" />
@@ -1393,56 +1377,53 @@ export default function App(){
               )}
               </svg>
 
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:10,marginTop:20}}>
-                <button
-                  className="dashboard-action"
-                  onClick={()=>dashboardSession && openModal(dashboardSession)}
-                  disabled={!dashboardSession}
-                  style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(148,163,184,0.1)",color:dashboardSession ? "#e2e8f0" : "#64748b",borderRadius:999,padding:"13px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700,boxShadow:"0 12px 24px rgba(2,6,23,0.14)"}}
-                >
-                  ⓘ Info
-                </button>
+              <div style={{display:"flex",gap:8,marginTop:16,alignItems:"center"}}>
                 <button
                   className="dashboard-action"
                   onClick={()=>dashboardSession && quickCompleteSession(dashboardSession)}
                   disabled={!dashboardSession}
-                  style={{background:"rgba(16,185,129,0.28)",border:"1px solid rgba(16,185,129,0.4)",color:dashboardSession ? "#ecfdf5" : "#4b5563",borderRadius:999,padding:"13px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700,boxShadow:"0 14px 30px rgba(16,185,129,0.14)"}}
+                  style={{flex:1,background:"rgba(16,185,129,0.24)",border:"1px solid rgba(16,185,129,0.36)",color:dashboardSession ? "#ecfdf5" : "#4b5563",borderRadius:999,padding:"11px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700}}
                 >
-                  Done
+                  ✓ Done
                 </button>
                 <button
                   className="dashboard-action"
                   onClick={()=>dashboardSession && quickSkipSession(dashboardSession)}
                   disabled={!dashboardSession}
-                  style={{background:"rgba(239,68,68,0.24)",border:"1px solid rgba(248,113,113,0.36)",color:dashboardSession ? "#fee2e2" : "#4b5563",borderRadius:999,padding:"13px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700,boxShadow:"0 14px 30px rgba(239,68,68,0.12)"}}
+                  style={{flex:1,background:"rgba(239,68,68,0.18)",border:"1px solid rgba(248,113,113,0.28)",color:dashboardSession ? "#fee2e2" : "#4b5563",borderRadius:999,padding:"11px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700}}
                 >
                   Skip
                 </button>
+                <button
+                  className="dashboard-action"
+                  onClick={()=>dashboardSession && openModal(dashboardSession)}
+                  disabled={!dashboardSession}
+                  style={{width:42,height:42,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(148,163,184,0.1)",color:dashboardSession ? "#94a3b8" : "#374151",borderRadius:999,cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:15,fontWeight:700,flexShrink:0}}
+                  aria-label="Details öffnen"
+                >
+                  ⓘ
+                </button>
               </div>
 
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"end",gap:16,marginTop:22}}>
-                <div style={{textAlign:"left"}}>
-                  <div style={{fontSize:22,fontWeight:800,color:"#fff",letterSpacing:"-0.02em"}}>{dashboardMetric}</div>
-                </div>
-                <div style={{textAlign:"right",display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:999,padding:"8px 12px",background:"rgba(255,255,255,0.05)",color:dashboardSession ? dashboardType.col : "#94a3b8",fontSize:12,fontWeight:700}}>
-                  <div>
-                    {dashboardSession ? (todayNextSession?.mode === "today" ? "Heute dran" : "Als Nächstes") : "Ruhetag"}
-                  </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,marginTop:14}}>
+                <div style={{fontSize:20,fontWeight:800,color:"#fff",letterSpacing:"-0.02em"}}>{dashboardMetric}</div>
+                <div style={{borderRadius:999,padding:"5px 10px",background:"rgba(255,255,255,0.05)",color:dashboardSession ? dashboardType.col : "#94a3b8",fontSize:11,fontWeight:700}}>
+                  {dashboardSession ? (todayNextSession?.mode === "today" ? "Heute" : "Nächste") : "Ruhetag"}
                 </div>
               </div>
             </div>
 
-          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
             {[
-              { label: "Fortschritt", value: `${pct}%`, detail: `${doneSess}/${totalSess} Einheiten`, color: "#10b981" },
-              { label: "Kilometer", value: `${Math.round(loggedKm)}`, detail: `${kmPct}% von ${totalTargetKm} km`, color: "#38bdf8" },
-              { label: "Long Runs", value: `${doneLongRuns}/${longRuns}`, detail: "abgeschlossen", color: "#f59e0b" },
-              { label: "Harte Einheiten", value: `${doneHardSessions}/${hardSessions}`, detail: "Intervall, Tempo, Rennen", color: "#fb7185" },
+              { label: "Fortschritt", value: `${pct}%`, detail: `${doneSess}/${totalSess} Sessions`, color: "#10b981" },
+              { label: "Kilometer", value: `${Math.round(loggedKm)} km`, detail: `${kmPct}% von Plan`, color: "#38bdf8" },
+              { label: "Long Runs", value: `${doneLongRuns}/${longRuns}`, detail: "erledigt", color: "#f59e0b" },
+              { label: "Quality", value: `${doneHardSessions}/${hardSessions}`, detail: "Intervall & Tempo", color: "#fb7185" },
             ].map((metric)=>(
-              <div key={metric.label} style={{padding:"10px 12px 8px",background:"rgba(255,255,255,0.03)",borderRadius:18}}>
-                <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.12em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:8}}>{metric.label}</div>
-                <div style={{fontSize:22,fontWeight:800,color:metric.color,letterSpacing:"-0.03em",lineHeight:1}}>{metric.value}</div>
-                <div style={{fontSize:11,color:"rgba(226,232,240,0.54)",marginTop:7,lineHeight:1.45}}>{metric.detail}</div>
+              <div key={metric.label} style={{padding:"10px 12px 8px",background:"rgba(255,255,255,0.03)",borderRadius:16}}>
+                <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.12em",color:"rgba(148,163,184,0.45)",fontWeight:700,marginBottom:6}}>{metric.label}</div>
+                <div style={{fontSize:20,fontWeight:800,color:metric.color,letterSpacing:"-0.03em",lineHeight:1}}>{metric.value}</div>
+                <div style={{fontSize:11,color:"rgba(226,232,240,0.45)",marginTop:5,lineHeight:1.3}}>{metric.detail}</div>
               </div>
             ))}
           </div>
@@ -1466,15 +1447,14 @@ export default function App(){
                 <div style={{flex:1,textAlign:"center",minWidth:0}}>
                   <span style={{display:"inline-block",padding:"5px 12px",borderRadius:999,fontSize:11,fontWeight:700,background:ph.bg,color:ph.col,marginBottom:8}}>{ph.emoji} {ph.label}</span>
                   <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{w.label}</div>
-                  <div style={{fontSize:12,color:"#7c8aa5",marginTop:4}}>{w.dates} · Ziel: {w.km} km</div>
-                  <div style={{fontSize:12,color:"#cbd5e1",marginTop:8,lineHeight:1.5}}>{w.focus}</div>
+                  <div style={{fontSize:12,color:"#7c8aa5",marginTop:4}}>{w.dates} · {w.km} km</div>
                 </div>
                 <button onClick={()=>setWIdx(i=>Math.min(PLAN.length-1,i+1))} disabled={wIdx===PLAN.length-1} style={{background:wIdx===PLAN.length-1?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:38,height:38,borderRadius:12,cursor:wIdx===PLAN.length-1?"not-allowed":"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
               </div>
 
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:16}}>
-                <MetricCard label="Wochenziel" value={`${w.km}`} sublabel="geplante Kilometer" accent="#38bdf8" />
-                <MetricCard label="Ist-Stand" value={wLoggedKm.toFixed(1)} sublabel={`${Math.round(clampPct(w.km > 0 ? (wLoggedKm / w.km) * 100 : 0))}% der Woche`} accent="#10b981" />
+                <MetricCard label="Ziel" value={`${w.km} km`} sublabel="diese Woche" accent="#38bdf8" />
+                <MetricCard label="Ist" value={`${wLoggedKm.toFixed(1)} km`} sublabel={`${Math.round(clampPct(w.km > 0 ? (wLoggedKm / w.km) * 100 : 0))}% erledigt`} accent="#10b981" />
               </div>
 
               <div style={{marginTop:14}}>
@@ -1487,20 +1467,15 @@ export default function App(){
                 </div>
               </div>
 
-              <div style={{marginTop:14,padding:"12px 14px",borderRadius:16,background:"rgba(10,14,26,0.72)",border:`1px solid ${weeklyFatigue.color}33`}}>
-                <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-                  <div>
-                    <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Wochenlast</div>
-                    <div style={{fontSize:18,fontWeight:800,color:weeklyFatigue.color}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
-                  </div>
-                  <div style={{fontSize:12,color:"#94a3b8",maxWidth:260,lineHeight:1.5}}>{weeklyFatigue.note}</div>
+              <div style={{marginTop:12,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div style={{padding:"10px 12px",borderRadius:14,background:"rgba(10,14,26,0.72)",border:`1px solid ${weeklyFatigue.color}33`}}>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:5}}>Last</div>
+                  <div style={{fontSize:15,fontWeight:800,color:weeklyFatigue.color}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
                 </div>
-              </div>
-
-              <div style={{marginTop:12,padding:"12px 14px",borderRadius:16,background:"rgba(10,14,26,0.72)",border:`1px solid ${coachingHint.color}33`}}>
-                <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Coach Signal</div>
-                <div style={{fontSize:17,fontWeight:800,color:coachingHint.color,marginBottom:6}}>{coachingHint.title}</div>
-                <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.6}}>{coachingHint.body}</div>
+                <div style={{padding:"10px 12px",borderRadius:14,background:"rgba(10,14,26,0.72)",border:`1px solid ${coachingHint.color}33`}}>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:5}}>Coach</div>
+                  <div style={{fontSize:13,fontWeight:700,color:coachingHint.color,lineHeight:1.3}}>{coachingHint.title}</div>
+                </div>
               </div>
             </div>
 
@@ -1607,7 +1582,7 @@ export default function App(){
                           </div>
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          {hasHint && <div style={{fontSize:11,color:isDone?"#86efac":isSkipped?"#fca5a5":"#7c8aa5",fontWeight:700,whiteSpace:"nowrap"}}>{isDone||isSkipped?"Status bearbeiten":"Tippen für Details"}</div>}
+                          {hasHint && !isDone && !isSkipped && <div style={{fontSize:11,color:"#4b5563",fontWeight:700,whiteSpace:"nowrap"}}>Details</div>}
                           {hasHint && (
                             <button
                               onClick={(e)=>{e.stopPropagation(); quickCompleteSession(session);}}
@@ -1639,21 +1614,15 @@ export default function App(){
                       <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.6,marginTop:10}}>{session.desc}</div>
 
                       {log ? (
-                        <div style={{marginTop:12,padding:"10px 12px",borderRadius:14,background:"rgba(15,23,42,0.55)",border:"1px solid rgba(148,163,184,0.1)"}}>
-                          <div style={{fontSize:11,color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Letzter Log</div>
-                          <div style={{fontSize:12,color:"#f8fafc",lineHeight:1.6}}>
-                            Status: {getSessionStatusLabel(log)}
-                            {" · "}
-                            Gefühl: {log.feeling > 0 ? `${"★".repeat(log.feeling)} (${log.feeling}/5)` : "nicht bewertet"}
+                        <div style={{marginTop:10,padding:"8px 10px",borderRadius:12,background:"rgba(15,23,42,0.5)",border:"1px solid rgba(148,163,184,0.08)"}}>
+                          <div style={{fontSize:12,color:"#f8fafc",lineHeight:1.5}}>
+                            {getSessionStatusLabel(log)}
+                            {log.feeling > 0 ? ` · ${"★".repeat(log.feeling)}` : ""}
                             {log.actualKm ? ` · ${log.actualKm} km` : ""}
-                            {log.notes ? ` · ${log.notes.substring(0, 70)}${log.notes.length > 70 ? "…" : ""}` : ""}
+                            {log.notes ? ` · ${log.notes.substring(0, 60)}${log.notes.length > 60 ? "…" : ""}` : ""}
                           </div>
                         </div>
-                      ) : (
-                        <div style={{marginTop:12,padding:"10px 12px",borderRadius:14,background:"rgba(15,23,42,0.42)",border:"1px dashed rgba(148,163,184,0.12)",fontSize:12,color:"#7c8aa5",lineHeight:1.6}}>
-                          Noch kein Log. Du kannst die Einheit direkt mit ✓ abhaken oder Details öffnen.
-                        </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 );
@@ -1685,71 +1654,59 @@ export default function App(){
 
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
             <SurfaceCard>
-              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Recovery</div>
-              <div style={{fontSize:22,fontWeight:800,color:recoveryState.tone,marginBottom:8}}>{recoveryState.label}</div>
-              <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.65}}>{recoveryState.detail}</div>
+              <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Recovery</div>
+              <div style={{fontSize:20,fontWeight:800,color:recoveryState.tone,lineHeight:1.1}}>{recoveryState.label}</div>
             </SurfaceCard>
             <SurfaceCard>
-              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Wochenlast</div>
-              <div style={{fontSize:22,fontWeight:800,color:weeklyFatigue.color,marginBottom:8}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
-              <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.65}}>{weeklyFatigue.note}</div>
+              <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Wochenlast</div>
+              <div style={{fontSize:20,fontWeight:800,color:weeklyFatigue.color,lineHeight:1.1}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
             </SurfaceCard>
             <SurfaceCard>
-              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Konstanz</div>
-              <div style={{fontSize:22,fontWeight:800,color:"#fff",marginBottom:8}}>{consistencyStats.sessionStreak} Einheiten</div>
-              <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.65}}>{consistencyStats.weeklyStreak} Wochen in Folge vollständig geloggt.</div>
+              <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Streak</div>
+              <div style={{fontSize:20,fontWeight:800,color:"#fff",lineHeight:1.1}}>{consistencyStats.sessionStreak} <span style={{fontSize:13,fontWeight:600,color:"#94a3b8"}}>Sessions</span></div>
+              <div style={{fontSize:11,color:"#64748b",marginTop:4}}>{consistencyStats.weeklyStreak} Wochen</div>
             </SurfaceCard>
             <SurfaceCard>
-              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>{marathonPrediction.ready ? "Schnellprognose (Gesamtplan)" : "Formprognose"}</div>
-              <div style={{fontSize:22,fontWeight:800,color:predictionReadiness.ready ? "#fff" : "#cbd5e1",marginBottom:8}}>{performancePrediction.predictedTime}</div>
-              <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.65}}>
-                {marathonPrediction.ready ? "Kurzmodell über alle Wochen — Detail siehe 42-Tage-Karte oben." : performancePrediction.trend}
-                {predictionReadiness.ready && !marathonPrediction.ready ? ` · Sicherheit ${performancePrediction.confidence}` : ""}
-              </div>
+              <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>{marathonPrediction.ready ? "Gesamtplan" : "Formprognose"}</div>
+              <div style={{fontSize:22,fontWeight:800,color:predictionReadiness.ready ? "#fff" : "#cbd5e1",marginBottom:4}}>{performancePrediction.predictedTime}</div>
+              {!marathonPrediction.ready && <div style={{fontSize:12,color:"#94a3b8"}}>{performancePrediction.trend}{predictionReadiness.ready ? ` · ${performancePrediction.confidence}` : ""}</div>}
             </SurfaceCard>
           </div>
 
           <SurfaceCard>
-            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Aktuelle Lesart</div>
-            <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.7}}>{recommendedAction}</div>
+            <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Lesart</div>
+            <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.6}}>{recommendedAction}</div>
           </SurfaceCard>
         </div>
       ):activeView==="overview"?(
         <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14,...viewTransitionStyle}}>
           {doneSess === 0 && (
-            <div style={{background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:20,padding:16}}>
-              <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:6}}>Dein Log startet hier</div>
-              <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.7}}>
-                Sobald du ein paar Einheiten speicherst, werden Fortschritt, Formprognose und Recovery deutlich belastbarer. Für den Einstieg reicht schon ein schneller Haken in der Wochenansicht.
-              </div>
+            <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(148,163,184,0.08)",borderRadius:18,padding:"12px 14px"}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>Log startet hier</div>
+              <div style={{fontSize:12,color:"#94a3b8"}}>Erste Einheit abhaken → Prognose und Momentum starten.</div>
             </div>
           )}
 
           <SurfaceCard>
-            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Planübersicht</div>
-            <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.7,marginBottom:8}}>
-              Diese Ansicht konzentriert sich bewusst auf Phasen, Wochenstruktur und Rennstrategie statt auf tägliche Statuswerte.
-            </div>
-            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6}}>
-              Aktuelle Phase: <span style={{color:ph.col,fontWeight:700}}>{ph.label}</span>
-              {" · "}
-              {nextKeySession ? `Nächster Fokus: ${nextKeySession.title}` : "Alle Schlüsselreize geloggt"}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Planübersicht</div>
+              <div style={{fontSize:12,color:"#94a3b8"}}>
+                <span style={{color:ph.col,fontWeight:700}}>{ph.emoji} {ph.label}</span>
+                {nextKeySession ? <span> · {nextKeySession.title}</span> : <span> · Alle Keys geloggt</span>}
+              </div>
             </div>
           </SurfaceCard>
 
           <SurfaceCard>
-            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:12}}>Race Strategy</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginBottom:12}}>
-              <MetricCard label="Marathon Zielzeit" value={targetTimeDisplay} sublabel="Aggressiv, aber kontrollierbar" accent="#10b981" />
-              <MetricCard label="Marathon Pace" value={targetPaceDisplay} sublabel="Ruhig anlaufen, dann stabilisieren" accent="#38bdf8" />
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:10}}>Race Strategy</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginBottom:10}}>
+              <MetricCard label="Zielzeit" value={targetTimeDisplay} sublabel="Marathon" accent="#10b981" />
+              <MetricCard label="Pace" value={targetPaceDisplay} sublabel="pro km" accent="#38bdf8" />
             </div>
-            <div style={{fontSize:13,color:"#e2e8f0",lineHeight:1.7}}>
-              <div><b>Erste Hälfte:</b> 1:25 low bis 1:25:30, bewusst entspannt und ohne unnötige Peaks.</div>
-              <div><b>Zweite Hälfte:</b> Ab km 25 Rhythmus halten, ab km 32 in kleine Abschnitte denken und kontrolliert nachschärfen.</div>
-              <div><b>Mental:</b> Früh geduldig bleiben, Mitte effizient arbeiten, Ende in Aid-Station zu Aid-Station denken.</div>
-            </div>
-            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6,marginTop:12}}>
-              Optionaler Halbmarathon-Check: 3:56-3:59/km anlaufen, erste 5 km konservativ, danach auf sauberen Druck gehen.
+            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.7,display:"flex",flexDirection:"column",gap:4}}>
+              <div><span style={{color:"#e2e8f0",fontWeight:700}}>HM:</span> ~1:25 — entspannt anlaufen</div>
+              <div><span style={{color:"#e2e8f0",fontWeight:700}}>km 25+:</span> Rhythmus halten</div>
+              <div><span style={{color:"#e2e8f0",fontWeight:700}}>km 32+:</span> in Abschnitte denken, nachlegen</div>
             </div>
           </SurfaceCard>
 
@@ -1765,9 +1722,6 @@ export default function App(){
                 </div>
               ))}
             </div>
-            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6,marginTop:12}}>
-              Der Verlauf kombiniert Gefühl, erledigte Einheiten, ausgelassene Sessions und harte Reize zu einem leichten Wochenindikator.
-            </div>
           </SurfaceCard>
 
           <SurfaceCard>
@@ -1780,15 +1734,12 @@ export default function App(){
           </SurfaceCard>
 
           <SurfaceCard>
-            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:10}}>Trainingsplan-Übersicht</div>
-            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.7,marginBottom:16}}>
-              📊 <b>Pyramidal→Polarized</b>: Base-Phase pyramidal (~80% easy, 15% Schwelle, 5% HIT) → Build-Phase polarisiert (80% easy, 15-20% HIT).<br/>
-              🚴 <b>Rennrad</b> als gelenkschonendes Volumen und aktive Regeneration.<br/>
-              📈 <b>Peak</b> vor dem Rennen mit anschließender Taper-Entlastung.<br/>
-              🏔️ <b>Längster Lauf</b>: {LONGEST_LONG_RUN_KM} km als Schlüsseleinheit der Vorbereitung.
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:6}}>
+              <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Alle Wochen</div>
+              <div style={{fontSize:11,color:"#94a3b8"}}>Längster Lauf: {LONGEST_LONG_RUN_KM} km</div>
             </div>
 
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
               {[{ key: "all", label: "Alle Phasen" }, ...PHASE_ORDER.map((phaseKey) => ({ key: phaseKey, label: PI[phaseKey].label }))].map((item)=>(
                 <FilterChip key={item.key} active={overviewPhaseFilter===item.key} onClick={()=>setOverviewPhaseFilter(item.key)}>
                   {item.label}
@@ -1818,7 +1769,7 @@ export default function App(){
                         >
                           <div style={{minWidth:0}}>
                             <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>{week.label}</div>
-                            <div style={{fontSize:11,color:"#7c8aa5",marginTop:4}}>{week.dates} · {week.km} km Ziel</div>
+                            <div style={{fontSize:11,color:"#7c8aa5",marginTop:4}}>{week.dates} · {week.km} km</div>
                             {phaseHasPeak && <div style={{fontSize:11,color:"#10b981",marginTop:6,fontWeight:700}}>🔥 Peak Woche</div>}
                             {weekSkipped > 0 && <div style={{fontSize:11,color:"#fca5a5",marginTop:6,fontWeight:700}}>⏭ {weekSkipped} ausgelassen</div>}
                           </div>
@@ -1840,30 +1791,22 @@ export default function App(){
       ):activeView==="settings"?(
         <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14,...viewTransitionStyle}}>
           <SurfaceCard>
-            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Einstellungen</div>
-            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6,marginBottom:14}}>
-              Nur das Nötigste: Zielzeit und sichere Backup-Funktionen für deine Logs.
-            </div>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:14}}>Einstellungen</div>
             <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Zielzeit</div>
             <input
               type="text"
               value={preferences.targetTime}
               onChange={(e)=>setPreferences((prev)=>({...prev,targetTime:e.target.value}))}
               placeholder="2:49:50"
-              style={{width:"100%",background:"#070b16",border:"1px solid rgba(148,163,184,0.14)",borderRadius:12,padding:"11px 12px",color:"#e2e8f0",fontSize:14,boxSizing:"border-box",marginBottom:10}}
+              style={{width:"100%",background:"#070b16",border:"1px solid rgba(148,163,184,0.14)",borderRadius:12,padding:"11px 12px",color:"#e2e8f0",fontSize:14,boxSizing:"border-box",marginBottom:6}}
             />
-            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6}}>
-              Format `hh:mm:ss`. Die Zielzeit beeinflusst nur Strategie und Prognose-Anzeige, nicht deinen Plan.
-            </div>
+            <div style={{fontSize:11,color:"#64748b"}}>Format: hh:mm:ss</div>
           </SurfaceCard>
 
           <RaceCalculator />
 
           <SurfaceCard>
-            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Logs sichern</div>
-            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6,marginBottom:2}}>
-              Exportiere deinen Stand als JSON oder importiere ein vorhandenes Backup.
-            </div>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:10}}>Backup</div>
             <BackupControls logs={logs} onImportSuccess={setLogs} />
           </SurfaceCard>
         </div>
