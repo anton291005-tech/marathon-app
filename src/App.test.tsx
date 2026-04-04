@@ -4,7 +4,8 @@ import App from './App';
 
 test('renders marathon planner shell', async () => {
   render(<App />);
-  expect(await screen.findByText(/Sub-2:50 Marathonplan/i)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /📅 Wochenplan/i })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /📊 Übersicht/i })).toBeInTheDocument();
+  expect(await screen.findByText(/Trainingsverlauf/i)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Home öffnen/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Woche öffnen/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Übersicht öffnen/i })).toBeInTheDocument();
 });

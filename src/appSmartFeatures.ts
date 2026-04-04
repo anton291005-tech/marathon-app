@@ -110,7 +110,7 @@ export function getPredictionReadiness({ doneSessionsCount, loggedKm, doneLongRu
 
 export function getShareSummary({ pct, week, nextKeySession, recoveryState, consistencyStats }){
   return [
-    "Marathon App Snapshot",
+    "MyRace Snapshot",
     `Fortschritt: ${pct}%`,
     `Aktuelle Woche: ${week.label}`,
     `Recovery: ${recoveryState.label}`,

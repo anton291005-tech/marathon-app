@@ -718,6 +718,141 @@ function getRecommendedAction({ recoveryState, weeklyFatigue, nextKeySession, ph
   return "Block halten, Rhythmus konservieren und die Form nicht mit Extra-Arbeit stören.";
 }
 
+function getSessionWeight(session){
+  if(session.type === "race" && session.km >= 42)return 12;
+  if(session.type === "race" && session.km >= 21)return 9;
+  if(session.type === "long" && session.km >= 30)return 10;
+  if(session.type === "long" && session.km >= 24)return 8;
+  if(session.type === "interval")return 7;
+  if(session.type === "tempo")return 6;
+  if(session.type === "easy")return 3;
+  if(session.type === "bike" || session.type === "strength")return 2;
+  return 0;
+}
+
+function getMomentumWeight(session, log){
+  const baseWeight = getSessionWeight(session);
+
+  if(log?.skipped){
+    return -(baseWeight * 0.4);
+  }
+
+  if(!log?.done){
+    return 0;
+  }
+
+  const feelingModifier = log.feeling === 5
+    ? 1.25
+    : log.feeling === 4
+      ? 1.15
+      : log.feeling === 2
+        ? 0.85
+        : log.feeling === 1
+          ? 0.75
+          : 1;
+
+  return baseWeight * feelingModifier;
+}
+
+function buildProgressGraph(plan, logs){
+  const sessions = plan.flatMap((week) => week.s);
+  let planned = 0;
+  let actual = 0;
+
+  const cumulative = sessions.map((session, index) => {
+    planned += getSessionWeight(session);
+    actual += getMomentumWeight(session, logs[session.id]);
+
+    return { index, planned, actual };
+  });
+
+  const values = cumulative.flatMap((item) => [item.planned, item.actual, 0]);
+  const maxValue = Math.max(1, ...values);
+  const minValue = Math.min(0, ...values);
+  const range = Math.max(1, maxValue - minValue);
+  const count = Math.max(1, cumulative.length - 1);
+
+  return cumulative.map((item) => ({
+    x: (item.index / count) * 100,
+    plannedY: 100 - (((item.planned - minValue) / range) * 100),
+    actualY: 100 - (((item.actual - minValue) / range) * 100),
+  }));
+}
+
+function getFormScore(plan, logs){
+  const sessions = plan.flatMap((week) => week.s);
+  const plannedFinal = sessions.reduce((sum, session) => sum + getSessionWeight(session), 0);
+  const actualFinal = sessions.reduce((sum, session) => sum + getMomentumWeight(session, logs[session.id]), 0);
+  const rawScore = plannedFinal > 0 ? ((actualFinal - plannedFinal) / plannedFinal) * 100 : 0;
+  const score = Math.round(rawScore);
+
+  if(score > 10){
+    return { score, label: "Sehr stark", color: "#34d399", arrow: "↑" };
+  }
+  if(score >= 3){
+    return { score, label: "Im Flow", color: "#34d399", arrow: "↑" };
+  }
+  if(score >= -3){
+    return { score, label: "Im Plan", color: "#60a5fa", arrow: "→" };
+  }
+  if(score >= -10){
+    return { score, label: "Leicht hinter Plan", color: "#f87171", arrow: "↓" };
+  }
+  return { score, label: "Aufholen nötig", color: "#f87171", arrow: "↓" };
+}
+
+function buildSmoothPath(points, key){
+  if(!points.length)return "";
+  if(points.length === 1)return `M ${points[0].x} ${points[0][key]}`;
+
+  let path = `M ${points[0].x} ${points[0][key]}`;
+
+  for(let index = 0; index < points.length - 1; index += 1){
+    const current = points[index];
+    const next = points[index + 1];
+    const midX = (current.x + next.x) / 2;
+    const midY = (current[key] + next[key]) / 2;
+    path += ` Q ${current.x} ${current[key]} ${midX} ${midY}`;
+  }
+
+  const last = points[points.length - 1];
+  path += ` T ${last.x} ${last[key]}`;
+  return path;
+}
+
+function buildAreaPath(points, key){
+  if(!points.length)return "";
+  const linePath = buildSmoothPath(points, key);
+  const last = points[points.length - 1];
+  const first = points[0];
+  return `${linePath} L ${last.x} 100 L ${first.x} 100 Z`;
+}
+
+function getDashboardMetric(session){
+  if(!session)return "Ruhetag";
+  if(session.type === "bike"){
+    const match = session.desc?.match(/(\d+\s*(?:-|–)?\d*\s*min)/i);
+    return match?.[1] || "Zeit";
+  }
+  if(session.type === "strength"){
+    return "💪";
+  }
+  if(session.km > 0){
+    return `${session.km} km`;
+  }
+  return "Session";
+}
+
+function getHeroTitle(session){
+  if(!session){
+    return "Ruhetag";
+  }
+  if(session.km > 0 && !session.title.toLowerCase().includes("km")){
+    return `${session.km} km ${session.title}`;
+  }
+  return session.title;
+}
+
 function MetricCard({ label, value, sublabel, accent }){
   return (
     <div style={{background:"rgba(13,16,33,0.86)",border:"1px solid rgba(148,163,184,0.12)",borderRadius:18,padding:14,minWidth:0,boxShadow:"0 14px 34px rgba(2,6,23,0.22)"}}>
@@ -792,7 +927,7 @@ export default function App(){
   const [logs, setLogs] = useState(() => safeParseJSON(localStorage.getItem("marathonLogs"), {}));
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({feeling:0,actualKm:"",notes:"",done:false,skipped:false});
-  const [view,setView]=useState("week");
+  const [view,setView]=useState("home");
   const [weekFilter,setWeekFilter]=useState("all");
   const [overviewPhaseFilter,setOverviewPhaseFilter]=useState("all");
   const [preferences,setPreferences]=useState(() => safeParseJSON(localStorage.getItem("marathonPreferences"), {
@@ -800,6 +935,7 @@ export default function App(){
   }));
   const [shareFeedback,setShareFeedback]=useState("");
   const [loaded,setLoaded]=useState(false);
+  const [graphReady,setGraphReady]=useState(false);
 
   useEffect(() => {
     localStorage.setItem("marathonLogs", JSON.stringify(logs));
@@ -817,6 +953,11 @@ export default function App(){
     })();
   },[]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setGraphReady(true), 60);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const save=async(newLogs)=>{
     setLogs(newLogs);
     await writeRemoteStorage("mwaw26-logs", JSON.stringify(newLogs));
@@ -830,6 +971,19 @@ export default function App(){
         ...existing,
         done: !existing.done,
         skipped: false,
+        at: new Date().toISOString(),
+      }
+    });
+  };
+
+  const quickSkipSession=async(session)=>{
+    const existing = logs[session.id] || {};
+    await save({
+      ...logs,
+      [session.id]: {
+        ...existing,
+        done: false,
+        skipped: !existing.skipped,
         at: new Date().toISOString(),
       }
     });
@@ -953,19 +1107,46 @@ export default function App(){
   const visibleWeekSessions = w.s.filter((session) => matchesWeekFilter(session, logs[session.id], weekFilter));
   const visibleOverviewPhases = overviewPhaseFilter === "all" ? Object.keys(PI) : [overviewPhaseFilter];
   const todayNextSession = getTodayNextSession(ACTIVE_SESSIONS, logs);
+  const dashboardSession = todayNextSession?.session || null;
+  const dashboardType = dashboardSession ? TI[dashboardSession.type] : { label: "Keine Einheit geplant", emoji: "😴", col: "#64748b" };
+  const dashboardGlow = dashboardSession ? `${dashboardType.col}55` : "rgba(100,116,139,0.35)";
+  const dashboardProgressPoints = buildProgressGraph(PLAN, logs);
+  const formScore = getFormScore(PLAN, logs);
+  const plannedProgressPath = buildSmoothPath(dashboardProgressPoints, "plannedY");
+  const actualProgressPath = buildSmoothPath(dashboardProgressPoints, "actualY");
+  const dashboardMetric = getDashboardMetric(dashboardSession);
   const jumpTargets = getJumpTargets(PLAN);
   const shareSummary = getShareSummary({ pct, week: w, nextKeySession, recoveryState, consistencyStats });
 
   if(!loaded)return <div style={{minHeight:"100vh",background:"#0b0b15",display:"flex",alignItems:"center",justifyContent:"center",color:"#aaa",fontFamily:"system-ui"}}>Lade Plan…</div>;
 
   return(
-    <div style={{minHeight:"100vh",background:"radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui,sans-serif",fontSize:14,WebkitTapHighlightColor:"transparent"}}>
+    <div style={{minHeight:"100vh",background:"radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui,sans-serif",fontSize:14,WebkitTapHighlightColor:"transparent",paddingBottom:"calc(108px + env(safe-area-inset-bottom, 0px))"}}>
+      <style>{`
+        .dashboard-action,
+        .bottom-nav-btn {
+          -webkit-tap-highlight-color: transparent;
+        }
+        .dashboard-action {
+          transition: transform .12s ease, background .22s ease, border-color .22s ease, box-shadow .22s ease, color .22s ease;
+        }
+        .dashboard-action:active {
+          transform: scale(.97);
+        }
+        .bottom-nav-btn {
+          transition: transform .12s ease, background .22s ease, color .22s ease, opacity .22s ease;
+        }
+        .bottom-nav-btn:active {
+          transform: scale(.97);
+        }
+      `}</style>
+      {view !== "home" && (
       <div style={{background:"linear-gradient(145deg,rgba(15,15,35,0.98),rgba(19,23,50,0.96))",padding:"16px 16px 18px",borderBottom:"1px solid rgba(59,130,246,0.12)",boxShadow:"0 14px 40px rgba(2,6,23,0.28)"}}>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
             <div style={{maxWidth:520}}>
-              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.14em",color:"#60a5fa",fontWeight:700,marginBottom:8}}>Marathon Block 2026</div>
-              <div style={{fontSize:24,fontWeight:800,color:"#fff",lineHeight:1.1}}>🏃 Sub-2:50 Marathonplan</div>
+              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.14em",color:"#60a5fa",fontWeight:700,marginBottom:8}}>MyRace</div>
+              <div style={{fontSize:24,fontWeight:800,color:"#fff",lineHeight:1.1}}>MyRace</div>
               <div style={{fontSize:12,color:"#94a3b8",marginTop:6,lineHeight:1.5}}>Warschau · 27.09.2026 · Zieltempo 4:01/km · Mobile Tracking, Logbook und Backup bleiben vollständig kompatibel.</div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(120px,1fr))",gap:10,width:"100%",maxWidth:360}}>
@@ -977,7 +1158,7 @@ export default function App(){
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
             <CompactStatusCard label="Recovery Status" title={recoveryState.label} subtitle={recoveryState.detail} accent={recoveryState.tone} trend={trendMeta.recoveryTrend} />
-            <CompactStatusCard label="Aktuelle Form" title={performancePrediction.predictedTime} subtitle={`${performancePrediction.trend} · Confidence ${performancePrediction.confidence}`} accent="#f8fafc" trend={trendMeta.formTrend} />
+            <CompactStatusCard label="Aktuelle Form" title={performancePrediction.predictedTime} subtitle={`${performancePrediction.trend} · Sicherheit ${performancePrediction.confidence}`} accent="#f8fafc" trend={trendMeta.formTrend} />
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
             <CompactStatusCard
@@ -987,14 +1168,11 @@ export default function App(){
               accent="#fff"
             />
             <CompactStatusCard
-              label="Consistency"
-              title={`${consistencyStats.sessionStreak} Sessions · ${consistencyStats.weeklyStreak} Wochen`}
+              label="Konstanz"
+              title={`${consistencyStats.sessionStreak} Einheiten · ${consistencyStats.weeklyStreak} Wochen`}
               subtitle="Folge aus erledigten Sessions bzw. vollständig geloggten Wochen."
               accent="#fff"
             />
-          </div>
-          <div style={{marginTop:2}}>
-            <BackupControls logs={logs} onImportSuccess={setLogs} />
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#7c8aa5"}}>
@@ -1007,16 +1185,149 @@ export default function App(){
           </div>
         </div>
       </div>
+      )}
 
-      <div style={{display:"flex",background:"rgba(5,8,18,0.72)",backdropFilter:"blur(10px)",borderBottom:"1px solid rgba(30,41,59,0.8)",padding:"0 16px",position:"sticky",top:0,zIndex:10}}>
-        {["week","overview"].map(v=>(
-          <button key={v} onClick={()=>setView(v)} style={{background:"none",border:"none",color:view===v?"#fff":"#64748b",padding:"13px 14px",cursor:"pointer",fontSize:13,borderBottom:view===v?"2px solid #38bdf8":"2px solid transparent",fontWeight:view===v?700:500}}>
-            {v==="week"?"📅 Wochenplan":"📊 Übersicht"}
-          </button>
-        ))}
-      </div>
+      {view==="home"?(
+        <div style={{padding:"30px 18px 14px",display:"flex",flexDirection:"column",gap:24}}>
+          <div style={{position:"relative",paddingTop:18}}>
+            <div style={{position:"absolute",left:"50%",top:18,width:250,height:250,transform:`translateX(-50%) scale(${graphReady ? 1 : 0.92})`,background:`radial-gradient(circle at center, ${dashboardGlow} 0%, rgba(11,11,21,0) 72%)`,filter:"blur(44px)",opacity:graphReady ? 0.9 : 0.35,pointerEvents:"none",transition:"transform 1s ease, opacity 1s ease"}} />
+            <div style={{position:"absolute",left:"50%",top:42,width:170,height:170,transform:`translateX(-50%) scale(${graphReady ? 1 : 0.86})`,background:`radial-gradient(circle at center, ${dashboardGlow} 0%, rgba(11,11,21,0) 75%)`,filter:"blur(26px)",opacity:graphReady ? 0.55 : 0.18,pointerEvents:"none",transition:"transform 1.15s ease, opacity 1.15s ease"}} />
+            <SurfaceCard style={{position:"relative",padding:"38px 22px 34px",textAlign:"center",background:"linear-gradient(180deg,rgba(16,19,34,0.88),rgba(9,12,22,0.76))",border:"1px solid rgba(148,163,184,0.06)",boxShadow:"0 24px 64px rgba(2,6,23,0.28)"}}>
+              <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.16em",color:"rgba(148,163,184,0.62)",fontWeight:700,marginBottom:14}}>
+                {todayNextSession?.mode === "today" ? "Heute" : dashboardSession ? "Nächste Einheit" : "Heute"}
+              </div>
+              <div style={{fontSize:36,fontWeight:800,color:"#fff",lineHeight:1.04,letterSpacing:"-0.03em",maxWidth:300,margin:"0 auto"}}>
+                {getHeroTitle(dashboardSession)}
+              </div>
+              <div style={{fontSize:14,color:"rgba(226,232,240,0.58)",marginTop:14,fontWeight:600}}>
+                {dashboardSession ? dashboardType.label : "Keine Einheit geplant"}
+              </div>
+            </SurfaceCard>
+          </div>
 
-      {view==="week"?(
+          <SurfaceCard style={{padding:"22px 18px 18px",background:"linear-gradient(180deg,rgba(13,16,29,0.88),rgba(8,11,20,0.78))",border:"1px solid rgba(148,163,184,0.06)",boxShadow:"0 22px 58px rgba(2,6,23,0.24)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:16,flexWrap:"wrap"}}>
+              <div>
+                <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.14em",color:"rgba(148,163,184,0.56)",fontWeight:700,marginBottom:4}}>Trainingsverlauf</div>
+                <div style={{fontSize:13,color:"rgba(226,232,240,0.56)",fontWeight:600}}>Plan gegen Momentum</div>
+              </div>
+              <div style={{textAlign:"right",minWidth:112}}>
+                <div style={{fontSize:28,fontWeight:800,color:formScore.color,letterSpacing:"-0.03em",lineHeight:1}}>
+                  {formScore.score > 0 ? "+" : ""}{formScore.score}%
+                </div>
+                <div style={{fontSize:12,color:"rgba(226,232,240,0.64)",fontWeight:700,marginTop:6}}>
+                  {formScore.arrow} {formScore.label}
+                </div>
+              </div>
+            </div>
+
+            <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",marginBottom:16,gap:14,flexWrap:"wrap"}}>
+              <div style={{display:"flex",gap:14,alignItems:"center"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,fontSize:10,color:"rgba(148,163,184,0.56)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>
+                  <span style={{width:10,height:10,borderRadius:"50%",background:"rgba(148,163,184,0.55)",display:"inline-block"}} />
+                  Plan
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6,fontSize:10,color:"rgba(226,232,240,0.82)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>
+                  <span style={{width:10,height:10,borderRadius:"50%",background:dashboardSession ? dashboardType.col : "#f8fafc",display:"inline-block"}} />
+                  Ist
+                </div>
+              </div>
+            </div>
+
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{width:"100%",height:214,display:"block",overflow:"visible"}}>
+              <defs>
+                <linearGradient id="actualProgressStroke" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor={dashboardSession ? dashboardType.col : "#f8fafc"} stopOpacity="0.72" />
+                  <stop offset="100%" stopColor={dashboardSession ? dashboardType.col : "#f8fafc"} stopOpacity="1" />
+                </linearGradient>
+                <linearGradient id="actualProgressFill" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor={dashboardSession ? dashboardType.col : "#f8fafc"} stopOpacity="0.22" />
+                  <stop offset="100%" stopColor={dashboardSession ? dashboardType.col : "#f8fafc"} stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path
+                d={buildAreaPath(dashboardProgressPoints, "actualY")}
+                fill="url(#actualProgressFill)"
+                style={{transition:"opacity .8s ease",opacity:graphReady ? 1 : 0}}
+              />
+              <path
+                d={plannedProgressPath}
+                fill="none"
+                stroke="rgba(148,163,184,0.28)"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                pathLength="100"
+                strokeDasharray="100"
+                strokeDashoffset={graphReady ? 0 : 100}
+                style={{transition:"stroke-dashoffset 1s ease, opacity .6s ease",opacity:graphReady ? 1 : 0.18}}
+              />
+              <path
+                d={actualProgressPath}
+                fill="none"
+                stroke="url(#actualProgressStroke)"
+                strokeWidth="3.6"
+                strokeLinecap="round"
+                pathLength="100"
+                strokeDasharray="100"
+                strokeDashoffset={graphReady ? 0 : 100}
+                style={{transition:"stroke-dashoffset 1.1s ease .08s, opacity .6s ease",opacity:graphReady ? 1 : 0.28}}
+              />
+              {dashboardProgressPoints.length > 0 && (
+                <circle
+                  cx={dashboardProgressPoints[dashboardProgressPoints.length - 1].x}
+                  cy={dashboardProgressPoints[dashboardProgressPoints.length - 1].actualY}
+                  r="3"
+                  fill={dashboardSession ? dashboardType.col : "#f8fafc"}
+                  style={{transition:"opacity .45s ease",opacity:graphReady ? 1 : 0}}
+                />
+              )}
+            </svg>
+
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:10,marginTop:18}}>
+              <button
+                className="dashboard-action"
+                onClick={()=>dashboardSession && openModal(dashboardSession)}
+                disabled={!dashboardSession}
+                style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(148,163,184,0.08)",color:dashboardSession ? "#e2e8f0" : "#64748b",borderRadius:999,padding:"13px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700,boxShadow:"0 12px 24px rgba(2,6,23,0.14)"}}
+              >
+                ⓘ Info
+              </button>
+              <button
+                className="dashboard-action"
+                onClick={()=>dashboardSession && quickCompleteSession(dashboardSession)}
+                disabled={!dashboardSession}
+                style={{background:"rgba(16,185,129,0.18)",border:"1px solid rgba(16,185,129,0.18)",color:dashboardSession ? "#d1fae5" : "#4b5563",borderRadius:999,padding:"13px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700,boxShadow:"0 12px 24px rgba(16,185,129,0.08)"}}
+              >
+                Done
+              </button>
+              <button
+                className="dashboard-action"
+                onClick={()=>dashboardSession && quickSkipSession(dashboardSession)}
+                disabled={!dashboardSession}
+                style={{background:"rgba(248,113,113,0.14)",border:"1px solid rgba(248,113,113,0.16)",color:dashboardSession ? "#fecaca" : "#4b5563",borderRadius:999,padding:"13px 10px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:13,fontWeight:700,boxShadow:"0 12px 24px rgba(248,113,113,0.07)"}}
+              >
+                Skip
+              </button>
+            </div>
+
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"end",gap:16,marginTop:20}}>
+              <div style={{textAlign:"left"}}>
+                <div style={{fontSize:22,fontWeight:800,color:"#fff",letterSpacing:"-0.02em"}}>{dashboardMetric}</div>
+              </div>
+              <div style={{textAlign:"right",display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:999,padding:"8px 12px",background:"rgba(255,255,255,0.05)",color:dashboardSession ? dashboardType.col : "#94a3b8",fontSize:12,fontWeight:700}}>
+                <div>
+                  {dashboardSession ? (todayNextSession?.mode === "today" ? "Heute dran" : "Als Nächstes") : "Ruhetag"}
+                </div>
+              </div>
+            </div>
+          </SurfaceCard>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12}}>
+            <CompactStatusCard label="Fortschritt" title={`${pct}%`} subtitle={`${doneSess}/${totalSess} Einheiten`} accent="#10b981" />
+            <CompactStatusCard label="Recovery" title={recoveryState.label} subtitle={recoveryState.detail} accent={recoveryState.tone} trend={trendMeta.recoveryTrend} />
+          </div>
+        </div>
+      ):view==="week"?(
         <>
           <div style={{padding:"16px",display:"flex",flexDirection:"column",gap:14}}>
             <div style={{background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:22,padding:16,boxShadow:"0 20px 40px rgba(2,6,23,0.22)"}}>
@@ -1049,7 +1360,7 @@ export default function App(){
               <div style={{marginTop:14,padding:"12px 14px",borderRadius:16,background:"rgba(10,14,26,0.72)",border:`1px solid ${weeklyFatigue.color}33`}}>
                 <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}>
                   <div>
-                    <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Weekly Fatigue</div>
+                    <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Wochenlast</div>
                     <div style={{fontSize:18,fontWeight:800,color:weeklyFatigue.color}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
                   </div>
                   <div style={{fontSize:12,color:"#94a3b8",maxWidth:260,lineHeight:1.5}}>{weeklyFatigue.note}</div>
@@ -1230,7 +1541,40 @@ export default function App(){
             </div>
           </div>
         </>
-      ):(
+      ):view==="performance"?(
+        <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+            <SurfaceCard>
+              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Recovery</div>
+              <div style={{fontSize:22,fontWeight:800,color:recoveryState.tone,marginBottom:8}}>{recoveryState.label}</div>
+              <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.65}}>{recoveryState.detail}</div>
+            </SurfaceCard>
+            <SurfaceCard>
+              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Wochenlast</div>
+              <div style={{fontSize:22,fontWeight:800,color:weeklyFatigue.color,marginBottom:8}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
+              <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.65}}>{weeklyFatigue.note}</div>
+            </SurfaceCard>
+            <SurfaceCard>
+              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Konstanz</div>
+              <div style={{fontSize:22,fontWeight:800,color:"#fff",marginBottom:8}}>{consistencyStats.sessionStreak} Einheiten</div>
+              <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.65}}>{consistencyStats.weeklyStreak} Wochen in Folge vollständig geloggt.</div>
+            </SurfaceCard>
+            <SurfaceCard>
+              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Formprognose</div>
+              <div style={{fontSize:22,fontWeight:800,color:predictionReadiness.ready ? "#fff" : "#cbd5e1",marginBottom:8}}>{performancePrediction.predictedTime}</div>
+              <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.65}}>
+                {performancePrediction.trend}
+                {predictionReadiness.ready ? ` · Sicherheit ${performancePrediction.confidence}` : ""}
+              </div>
+            </SurfaceCard>
+          </div>
+
+          <SurfaceCard>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Aktuelle Lesart</div>
+            <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.7}}>{recommendedAction}</div>
+          </SurfaceCard>
+        </div>
+      ):view==="overview"?(
         <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14}}>
           {doneSess === 0 && (
             <div style={{background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:20,padding:16}}>
@@ -1261,7 +1605,7 @@ export default function App(){
 
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
             <SurfaceCard>
-              <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Share Card</div>
+              <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Teilen</div>
               <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.7,whiteSpace:"pre-line"}}>{shareSummary}</div>
               <button onClick={copyShareSummary} style={{marginTop:12,background:"rgba(56,189,248,0.18)",color:"#dbeafe",border:"1px solid rgba(56,189,248,0.28)",borderRadius:12,padding:"10px 12px",cursor:"pointer",fontSize:12,fontWeight:700}}>
                 Zusammenfassung kopieren
@@ -1269,7 +1613,7 @@ export default function App(){
               {shareFeedback && <div style={{fontSize:11,color:"#94a3b8",marginTop:8}}>{shareFeedback}</div>}
             </SurfaceCard>
             <SurfaceCard>
-              <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Preferences</div>
+              <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Zielzeit</div>
               <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Zielzeit</div>
               <input
                 type="text"
@@ -1295,7 +1639,7 @@ export default function App(){
               <MetricCard label="Long Runs" value={`${doneLongRuns}/${longRuns}`} sublabel="Lange Läufe abgeschlossen" accent="#f59e0b" />
               <MetricCard label="Harte Einheiten" value={`${doneHardSessions}/${hardSessions}`} sublabel="Intervall, Tempo, Rennen" accent="#fb7185" />
               <MetricCard label="Phase Status" value={phaseStatus} sublabel={`${ph.label} · ${pct}% Gesamtfortschritt`} accent={ph.col} />
-              <MetricCard label="Weekly Fatigue" value={`${weeklyFatigue.icon} ${weeklyFatigue.label}`} sublabel={`${weeklyFatigue.note} · ${trendMeta.loadTrend.icon} ${trendMeta.loadTrend.label}`} accent={weeklyFatigue.color} />
+              <MetricCard label="Wochenlast" value={`${weeklyFatigue.icon} ${weeklyFatigue.label}`} sublabel={`${weeklyFatigue.note} · ${trendMeta.loadTrend.icon} ${trendMeta.loadTrend.label}`} accent={weeklyFatigue.color} />
               <MetricCard label="Ausgelassen" value={`${skippedSess}`} sublabel="Bewusst markierte Sessions" accent="#f87171" />
             </div>
           </SurfaceCard>
@@ -1391,7 +1735,74 @@ export default function App(){
             })}
           </SurfaceCard>
         </div>
-      )}
+      ):view==="settings"?(
+        <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14}}>
+          <SurfaceCard>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Einstellungen</div>
+            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6,marginBottom:14}}>
+              Nur das Nötigste: Zielzeit und sichere Backup-Funktionen für deine Logs.
+            </div>
+            <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Zielzeit</div>
+            <input
+              type="text"
+              value={preferences.targetTime}
+              onChange={(e)=>setPreferences((prev)=>({...prev,targetTime:e.target.value}))}
+              placeholder="2:49:50"
+              style={{width:"100%",background:"#070b16",border:"1px solid rgba(148,163,184,0.14)",borderRadius:12,padding:"11px 12px",color:"#e2e8f0",fontSize:14,boxSizing:"border-box",marginBottom:10}}
+            />
+            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6}}>
+              Format `hh:mm:ss`. Die Zielzeit beeinflusst nur Strategie und Prognose-Anzeige, nicht deinen Plan.
+            </div>
+          </SurfaceCard>
+
+          <SurfaceCard>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:8}}>Logs sichern</div>
+            <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6,marginBottom:2}}>
+              Exportiere deinen Stand als JSON oder importiere ein vorhandenes Backup.
+            </div>
+            <BackupControls logs={logs} onImportSuccess={setLogs} />
+          </SurfaceCard>
+        </div>
+      ):null}
+
+      <div style={{position:"fixed",left:12,right:12,bottom:"calc(12px + env(safe-area-inset-bottom, 0px))",zIndex:90}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:6,background:"rgba(9,12,22,0.72)",border:"1px solid rgba(148,163,184,0.08)",borderRadius:24,padding:"10px 8px 11px",boxShadow:"0 20px 50px rgba(2,6,23,0.32)",backdropFilter:"blur(22px)"}}>
+          {[
+            { key: "home", label: "Home", icon: "◉" },
+            { key: "week", label: "Woche", icon: "▤" },
+            { key: "performance", label: "Leistung", icon: "◔" },
+            { key: "overview", label: "Übersicht", icon: "◎" },
+            { key: "settings", label: "Einst.", icon: "⚙" },
+          ].map((item)=>{
+            const active = view === item.key;
+            return (
+              <button
+                className="bottom-nav-btn"
+                key={item.key}
+                onClick={()=>setView(item.key)}
+                style={{
+                  background:active ? "linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))" : "transparent",
+                  border:"1px solid transparent",
+                  color:active ? "#fff" : "rgba(148,163,184,0.88)",
+                  borderRadius:18,
+                  padding:"10px 6px 8px",
+                  cursor:"pointer",
+                  display:"flex",
+                  flexDirection:"column",
+                  alignItems:"center",
+                  gap:4,
+                  minHeight:56
+                }}
+                aria-label={`${item.label} öffnen`}
+              >
+                <span style={{fontSize:16,lineHeight:1,opacity:active ? 1 : 0.82}}>{item.icon}</span>
+                <span style={{fontSize:10,fontWeight:700,opacity:active ? 1 : 0.7}}>{item.label}</span>
+                <span style={{width:4,height:4,borderRadius:"50%",background:active ? "#fff" : "transparent",marginTop:2,boxShadow:active ? "0 0 10px rgba(255,255,255,0.5)" : "none"}} />
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {modal&&modalWeek&&modalWorkout&&(
         <div onClick={closeModal} style={{position:"fixed",inset:0,background:"rgba(2,6,23,0.82)",display:"flex",alignItems:"stretch",justifyContent:"center",padding:0,zIndex:1000}}>

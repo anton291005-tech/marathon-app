@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "short_name": "Marathon",
-  "name": "Marathon App",
+  "short_name": "MyRace",
+  "name": "MyRace",
   "icons": [
     {
       "src": "logo192.png",
