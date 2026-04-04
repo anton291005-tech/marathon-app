@@ -14,6 +14,15 @@ root.render(
   </React.StrictMode>
 );
 
+window.requestAnimationFrame(() => {
+  const splash = document.getElementById('boot-splash');
+  if (!splash) return;
+  splash.classList.add('hidden');
+  window.setTimeout(() => {
+    splash.remove();
+  }, 320);
+});
+
 registerServiceWorker();
 
 // If you want to start measuring performance in your app, pass a function

@@ -26,8 +26,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#0b0b15",
-  "background_color": "#0b0b15",
+  "theme_color": "#f40812",
+  "background_color": "#f40812",
   "description": "Kompakte Marathon-App fuer Training, Logs und Formgefuehl.",
   "categories": ["sports", "health", "productivity"]
 }
