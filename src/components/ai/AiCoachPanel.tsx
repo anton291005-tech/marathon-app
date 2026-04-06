@@ -53,7 +53,7 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
     try {
       console.log("SENDING TO AI:", userInput);
 
-      const res = await fetch("http://localhost:8787/api/ai", {
+      const res = await fetch("/api/ai", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

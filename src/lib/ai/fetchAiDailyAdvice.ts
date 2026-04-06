@@ -10,9 +10,9 @@
 
 import type { DailyCoachDecision, DailyCoachDecisionInput } from "./getDailyCoachDecision";
 
-const AI_BASE_URL = (
-  process.env.REACT_APP_AI_API_BASE || "http://localhost:8787"
-).replace(/\/$/, "");
+// Empty string → relative URLs → works on both Vercel and local (via proxy).
+// Set REACT_APP_AI_API_BASE only when the API runs on a completely separate origin.
+const AI_BASE_URL = (process.env.REACT_APP_AI_API_BASE || "").replace(/\/$/, "");
 
 export type AiDailyAdvice = Pick<
   DailyCoachDecision,
