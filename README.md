@@ -1,46 +1,78 @@
-# Getting Started with Create React App
+# Marathon App
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Marathon-/Training-App mit AI Coach, Action Cards und lokalem/mockbasiertem sowie OpenAI-faehigem Antwortpfad.
 
-## Available Scripts
+## Scripts
 
-In the project directory, you can run:
+- `npm start` - nur Frontend (CRA)
+- `npm run start:api` - lokaler API-Server (`POST /api/ai`) auf Port `8787` (oder `AI_SERVER_PORT`)
+- `npm run start:full` - startet Frontend + API parallel
+- `npm test` - Tests
+- `npm run build` - Produktionsbuild
 
-### `npm start`
+## AI Architektur (kurz)
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+- `src/lib/ai/generateAiResponse.ts` entscheidet zwischen:
+  - `mockBrain` (lokal)
+  - `openaiBrain` (via `/api/ai`)
+- `src/lib/ai/openaiBrain.ts` spricht nur den lokalen API-Endpunkt an
+- `server/index.js` ruft OpenAI Responses API serverseitig auf (Key bleibt im Backend)
+- `src/lib/ai/actions.ts` fuehrt Aenderungen weiterhin lokal und erst nach User-Bestaetigung aus
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## Env Konfiguration
 
-### `npm test`
+Lege im Projektroot eine `.env` an.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### Frontend (CRA)
 
-### `npm run build`
+- `REACT_APP_AI_PROVIDER=mock` oder `openai`
+- `REACT_APP_AI_ENABLED=true|false`
+- `REACT_APP_AI_API_BASE=` (optional, Default: leer -> gleicher Host, nutzt Proxy)
+- `REACT_APP_AI_MODEL=gpt-4.1-mini` (optional model hint)
+- `REACT_APP_AI_TIMEOUT_MS=8000` (optional)
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### Backend (`server/index.js`)
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+- `OPENAI_API_KEY=...` (Pflicht fuer echten OpenAI-Pfad)
+- `OPENAI_MODEL=gpt-4.1-mini` (optional, serverseitiger Default)
+- `AI_SERVER_PORT=8787` (optional)
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Mock vs OpenAI umstellen
 
-### `npm run eject`
+1. **Mock aktiv**:
+   - `REACT_APP_AI_PROVIDER=mock`
+2. **OpenAI aktiv**:
+   - `REACT_APP_AI_PROVIDER=openai`
+   - `REACT_APP_AI_ENABLED=true`
+   - `OPENAI_API_KEY` gesetzt
+   - `npm run start:full`
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+## Wo der echte OpenAI-Aufruf passiert
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+- Endpoint: `POST /api/ai`
+- Datei: `server/index.js`
+- Responses API Aufruf: `client.responses.create(...)`
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+Du kannst das spaeter 1:1 in ein separates Backend verschieben; Frontend bleibt unveraendert, solange `/api/ai` dasselbe Schema liefert.
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+## Wie pruefen, ob wirklich OpenAI genutzt wird
 
-## Learn More
+1. `REACT_APP_AI_PROVIDER=openai` setzen
+2. `OPENAI_API_KEY` setzen
+3. `npm run start:full`
+4. Health pruefen: `GET http://localhost:8787/api/ai/health`
+5. Im Chat testen, z. B.:
+   - "Ich kann erst naechsten Donnerstag anfangen"
+   - "Ich bin krank"
+   - "Mein Rennen wurde verschoben"
+   - "Wo finde ich die Einstellungen?"
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## Fallback-Verhalten
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Wenn OpenAI fehlschlaegt (kein Key, Endpoint down, Parse-Fehler), faellt `generateAiResponse(...)` automatisch auf `mockBrain` zurueck.
+
+Im Chattext wird der Hinweis angehaengt:
+
+- `(Cloud-Antwort war nicht verfuegbar, lokaler Coach aktiv.)`
+
+So bleibt die App immer benutzbar.

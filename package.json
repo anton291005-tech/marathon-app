@@ -11,6 +11,12 @@
     "@types/node": "^16.18.126",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "http-proxy-middleware": "^3.0.5",
+    "openai": "^6.33.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-scripts": "5.0.1",
@@ -19,7 +25,9 @@
   },
   "scripts": {
     "start": "react-scripts start",
-"build": "CI=false react-scripts build",
+    "start:api": "node server/index.js",
+    "start:full": "concurrently \"npm run start:api\" \"npm start\"",
+    "build": "CI=false react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },

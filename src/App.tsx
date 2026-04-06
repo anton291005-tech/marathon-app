@@ -16,12 +16,18 @@ import RaceCalculator from "./components/RaceCalculator";
 import SurfaceCard from "./components/SurfaceCard";
 import WeeklyAnalysisCard from "./components/WeeklyAnalysisCard";
 import DailyDecisionCard from "./components/DailyDecisionCard";
+import AiCoachPanel from "./components/ai/AiCoachPanel";
+import DailyCoachDecisionCard from "./components/ai/DailyCoachDecisionCard";
+import { getDailyCoachDecision } from "./lib/ai/getDailyCoachDecision";
+import { fetchAiDailyAdvice } from "./lib/ai/fetchAiDailyAdvice";
 import { getCoachFeedback } from "./coachFeedback";
 import { getDailyDecision } from "./dailyDecision";
 import { isHomePreStart } from "./homeStatus";
 import { getMarathonPrediction } from "./marathonPrediction";
 import { analyzeWeek } from "./weeklyAnalysis";
 import { readRemoteStorage, writeRemoteStorage } from "./storage";
+import { applyPlanPatches } from "./lib/ai/actions";
+import { getAiContext } from "./lib/ai/getAiContext";
 
 const PI = {
   MINI:  { label:"Mini-Prep",         emoji:"🔄", col:"#6366f1", bg:"rgba(99,102,241,0.12)" },
@@ -328,6 +334,7 @@ const PLAN=[
     s("w25-so","So","27. Sep","race","🏆 WARSCHAU MARATHON – SUB 2:50!",42.2,"START 🔥 Erste Hälfte: 4:04–4:05/km · Zweite Hälfte: aufdrehen! Du hast es dir verdient!","⌀ 4:01/km = 2:49:50"),
   ]},
 ];
+const BASE_PLAN = PLAN;
 
 const ALL_SESSIONS = PLAN.flatMap((week) => week.s);
 const ACTIVE_SESSIONS = ALL_SESSIONS.filter((session) => session.type !== "rest");
@@ -337,7 +344,7 @@ const LONGEST_LONG_RUN_KM = LONG_RUN_SESSIONS.reduce((max, session) => Math.max(
 const FIRST_30K_ID = LONG_RUN_SESSIONS.find((session) => session.km >= 30)?.id;
 
 const PHASE_ORDER = Object.keys(PI);
-const VIEW_ORDER = ["home","week","performance","overview","settings"];
+const VIEW_ORDER = ["home","week","performance","overview","coach","settings"];
 
 function clampPct(value){
   return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
@@ -783,16 +790,20 @@ function DetailBlock({ title, children }){
 export default function App(){
   const [wIdx,setWIdx]=useState(0);
   const [logs, setLogs] = useState(() => safeParseJSON(localStorage.getItem("marathonLogs"), {}));
+  const [aiPlanPatches, setAiPlanPatches] = useState(() => safeParseJSON(localStorage.getItem("marathonAiPlanPatches"), []));
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({feeling:0,actualKm:"",notes:"",done:false,skipped:false});
   const [view,setView]=useState(DEFAULT_VIEW);
   const [weekFilter,setWeekFilter]=useState("all");
   const [overviewPhaseFilter,setOverviewPhaseFilter]=useState("all");
+  const [aiNavHint,setAiNavHint]=useState(null);
   const [preferences,setPreferences]=useState(() => safeParseJSON(localStorage.getItem("marathonPreferences"), {
     targetTime: "2:49:50",
   }));
   const [shareFeedback,setShareFeedback]=useState("");
   const [viewMotionDir,setViewMotionDir]=useState(0);
+  // AI-enhanced daily coach advice — null while loading or when AI is unavailable.
+  const [aiDailyAdvice, setAiDailyAdvice] = useState(null);
   const swipeStartRef = useRef(null);
   const lastSwipeAtRef = useRef(0);
 
@@ -809,6 +820,10 @@ export default function App(){
   useEffect(() => {
     localStorage.setItem("marathonPreferences", JSON.stringify(preferences));
   }, [preferences]);
+
+  useEffect(() => {
+    localStorage.setItem("marathonAiPlanPatches", JSON.stringify(aiPlanPatches));
+  }, [aiPlanPatches]);
 
   useEffect(()=>{
     (async()=>{
@@ -934,6 +949,58 @@ export default function App(){
     setModal(null);
   };
 
+  const PLAN = applyPlanPatches(BASE_PLAN, aiPlanPatches);
+  const ALL_SESSIONS = PLAN.flatMap((week) => week.s);
+  const ACTIVE_SESSIONS = ALL_SESSIONS.filter((session) => session.type !== "rest");
+  const LONG_RUN_SESSIONS = ACTIVE_SESSIONS.filter((session) => session.type === "long" && session.km > 0);
+
+  const handleAiApplyPlanPatches = (_message, _action, patches)=>{
+    if(!patches?.length)return;
+    setAiPlanPatches((prev)=>{
+      const byId = new Map((prev || []).map((patch)=>[patch.sessionId, patch]));
+      patches.forEach((patch)=>byId.set(patch.sessionId, patch));
+      return Array.from(byId.values());
+    });
+  };
+
+  const handleAiNavigate = (targetScreen, section)=>{
+    if(section){
+      setAiNavHint({ screen: targetScreen, section });
+    }
+    if(targetScreen === "week"){
+      const now = new Date();
+      const todaySession = PLAN.find((week)=>week.s.some((session)=>{
+        const parsed = parseSessionDateLabel(session.date);
+        if(!parsed)return false;
+        const normalized = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        return normalized.getTime() === today.getTime();
+      }));
+      if(todaySession){
+        const idx = PLAN.indexOf(todaySession);
+        if(idx >= 0)setWIdx(idx);
+      }
+    }
+    navigateToView(targetScreen);
+  };
+
+  const buildCurrentAiContext = ()=>getAiContext({
+    plan: PLAN,
+    logs,
+    targetTime: preferences.targetTime,
+    availableScreens: [
+      { key: "home", label: "Start" },
+      { key: "week", label: "Wochenplan", sections: ["current_week"] },
+      { key: "performance", label: "Leistung" },
+      { key: "overview", label: "Uebersicht" },
+      { key: "coach", label: "AI Coach" },
+      { key: "settings", label: "Einstellungen", sections: ["race_goal"] },
+    ],
+    settings: {
+      targetTime: preferences.targetTime,
+    },
+  });
+
   const w=PLAN[wIdx];
   const ph=PI[w.phase];
   const totalSess=ACTIVE_SESSIONS.length;
@@ -1056,7 +1123,8 @@ export default function App(){
   const daysToNextKeySession = nextKeyDate
     ? Math.ceil((new Date(nextKeyDate.getFullYear(), nextKeyDate.getMonth(), nextKeyDate.getDate()).getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24))
     : null;
-  const dailyDecision = getDailyDecision({
+  // ── Daily coach decision: deterministic rules first, AI enhancement second ──
+  const dailyCoachDecisionInput = {
     recoveryLabel: recoveryState.label,
     weeklyFatigueLabel: weeklyFatigue.label,
     recentHardCount: decisionRecentHardCount,
@@ -1068,7 +1136,41 @@ export default function App(){
     isToday: decisionTodayNextSession?.mode === "today",
     phase: w.phase,
     daysToNextKeySession,
-  });
+  };
+  // Layer 1: deterministic rule-based result (always instant, always safe).
+  const ruleBasedDailyDecision = getDailyCoachDecision(dailyCoachDecisionInput);
+  // Layer 2: merge AI advice when it exists and the rule layer allows it.
+  const dailyCoachDecision = (aiDailyAdvice && !ruleBasedDailyDecision.isHardOverride)
+    ? { ...ruleBasedDailyDecision, ...aiDailyAdvice }
+    : ruleBasedDailyDecision;
+
+  // A stable string key — changes only when the signals that drive the decision
+  // change, so we don't fire an AI call on every keystroke or minor re-render.
+  const aiDecisionKey = [
+    recoveryState.label,
+    weeklyFatigue.label,
+    decisionTodayNextSession?.session?.type ?? "none",
+    doneSess,
+  ].join("|");
+
+  // Effect: fetch AI enhancement for non-high-risk situations.
+  // Runs whenever aiDecisionKey changes (i.e. context changes meaningfully).
+  // Falls back to the rule-based decision silently when AI is unreachable.
+  useEffect(() => {
+    if (ruleBasedDailyDecision.isHardOverride) {
+      // Safety rule is final — no AI call needed.
+      setAiDailyAdvice(null);
+      return;
+    }
+    const controller = new AbortController();
+    fetchAiDailyAdvice(dailyCoachDecisionInput, controller.signal)
+      .then((result) => {
+        if (result) setAiDailyAdvice(result);
+      })
+      .catch(() => { /* network failure — rule-based decision stays */ });
+    return () => controller.abort();
+  }, [aiDecisionKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ────────────────────────────────────────────────────────────────────────────
   const modalLog = modal ? logs[modal.id] : null;
   const modalWeek = modal ? PLAN.find((week) => week.s.some((session) => session.id === modal.id)) : null;
   const modalMilestones = modal && modalWeek ? getSessionMilestones(modal, modalWeek) : [];
@@ -1261,30 +1363,18 @@ export default function App(){
           {/* ── BELOW-FOLD CONTENT ─────────────────────────────────────── */}
           <div style={{display:"flex",flexDirection:"column",gap:12,padding:"2px 16px 0"}}>
 
-            {/* Daily decision — compact coach recommendation */}
-            <div style={{display:"flex",alignItems:"flex-start",gap:11,padding:"12px 10px 6px"}}>
-              <div style={{
-                width:9,height:9,borderRadius:"50%",flexShrink:0,
-                background:dailyDecision.status==="green"?"#34d399":dailyDecision.status==="yellow"?"#fbbf24":"#f87171",
-                boxShadow:dailyDecision.status==="green"?"0 0 10px #34d3996b":dailyDecision.status==="yellow"?"0 0 10px #fbbf246b":"0 0 10px #f871716b",
-                marginTop:6,
-              }}/>
-              <div style={{display:"flex",flexDirection:"column",gap:3,minWidth:0}}>
-                <span style={{fontSize:15,fontWeight:700,color:"rgba(226,232,240,0.92)",letterSpacing:"-0.01em",lineHeight:1.25}}>
-                  {dailyDecision.shortRecommendation}
-                </span>
-                {dailyDecision.reasons.length > 0 && (
-                  <span style={{fontSize:11.5,color:"rgba(148,163,184,0.86)",lineHeight:1.25}}>
-                    {dailyDecision.reasons.slice(0, 2).join(" · ")}
-                  </span>
-                )}
-                {dailyDecision.adjustment && (
-                  <span style={{fontSize:11.5,fontWeight:700,color:dailyDecision.status==="red"?"#fca5a5":dailyDecision.status==="yellow"?"#fde68a":"#86efac",lineHeight:1.25}}>
-                    {dailyDecision.adjustment}
-                  </span>
-                )}
-              </div>
-            </div>
+            {/* Daily coach decision card */}
+            <DailyCoachDecisionCard
+              decision={dailyCoachDecision}
+              onGoToCoach={() => navigateToView("coach")}
+              onAdjustPlan={() => {
+                if (dashboardSession) {
+                  openModal(dashboardSession);
+                } else {
+                  navigateToView("coach");
+                }
+              }}
+            />
 
             {/* Metrics group — cleaner, softer and less boxy */}
             <div style={{display:"flex",flexDirection:"column",gap:9,padding:"12px",borderRadius:20,background:"linear-gradient(160deg,rgba(15,23,42,0.33),rgba(12,18,34,0.2))",border:"1px solid rgba(148,163,184,0.1)"}}>
@@ -1673,17 +1763,28 @@ export default function App(){
             })}
           </SurfaceCard>
         </div>
+      ):activeView==="coach"?(
+        <AiCoachPanel
+          getContext={buildCurrentAiContext}
+          onApplyPlanPatches={handleAiApplyPlanPatches}
+          onNavigate={handleAiNavigate}
+        />
       ):activeView==="settings"?(
         <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14,...viewTransitionStyle}}>
           <SurfaceCard>
             <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:14}}>Einstellungen</div>
+            {aiNavHint?.screen === "settings" && (
+              <div style={{fontSize:11,color:"#7dd3fc",marginBottom:10,background:"rgba(56,189,248,0.12)",border:"1px solid rgba(56,189,248,0.28)",borderRadius:10,padding:"8px 10px"}}>
+                AI Navigation: {aiNavHint.section === "race_goal" ? "Rennziel" : aiNavHint.section}
+              </div>
+            )}
             <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Zielzeit</div>
             <input
               type="text"
               value={preferences.targetTime}
               onChange={(e)=>setPreferences((prev)=>({...prev,targetTime:e.target.value}))}
               placeholder="2:49:50"
-              style={{width:"100%",background:"#070b16",border:"1px solid rgba(148,163,184,0.14)",borderRadius:12,padding:"11px 12px",color:"#e2e8f0",fontSize:14,boxSizing:"border-box",marginBottom:6}}
+              style={{width:"100%",background:"#070b16",border:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "1px solid rgba(56,189,248,0.5)" : "1px solid rgba(148,163,184,0.14)",borderRadius:12,padding:"11px 12px",color:"#e2e8f0",fontSize:14,boxSizing:"border-box",marginBottom:6,boxShadow:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "0 0 0 2px rgba(56,189,248,0.2)" : "none"}}
             />
             <div style={{fontSize:11,color:"#64748b"}}>Format: hh:mm:ss</div>
           </SurfaceCard>
@@ -1698,12 +1799,13 @@ export default function App(){
       ):null}
 
       <div style={{position:"fixed",left:12,right:12,bottom:"calc(12px + env(safe-area-inset-bottom, 0px))",zIndex:90}}>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:6,background:"rgba(9,12,22,0.72)",border:"1px solid rgba(148,163,184,0.08)",borderRadius:24,padding:"10px 8px 11px",boxShadow:"0 20px 50px rgba(2,6,23,0.32)",backdropFilter:"blur(22px)"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:6,background:"rgba(9,12,22,0.72)",border:"1px solid rgba(148,163,184,0.08)",borderRadius:24,padding:"10px 8px 11px",boxShadow:"0 20px 50px rgba(2,6,23,0.32)",backdropFilter:"blur(22px)"}}>
           {[
             { key: "home", label: homeTabLabel, icon: null },
             { key: "week", label: "Woche", icon: "▤" },
             { key: "performance", label: "Leistung", icon: "◔" },
             { key: "overview", label: "Übersicht", icon: "◎" },
+            { key: "coach", label: "AI Coach", icon: "✦" },
             { key: "settings", label: "Einstellungen", icon: "⚙" },
           ].map((item)=>{
             const active = activeView === item.key;
@@ -1728,7 +1830,7 @@ export default function App(){
                 aria-label={`${item.label} öffnen`}
               >
                 {item.icon && <span style={{fontSize:16,lineHeight:1,opacity:active ? 1 : 0.82}}>{item.icon}</span>}
-                <span style={{fontSize:item.key === "home" ? 11 : item.key === "settings" ? 8.8 : 10,fontWeight:800,opacity:active ? 1 : 0.7,letterSpacing:item.key === "home" ? "0.08em" : "0",whiteSpace:"nowrap"}}>
+                <span style={{fontSize:item.key === "home" ? 11 : item.key === "settings" || item.key === "coach" ? 8.8 : 10,fontWeight:800,opacity:active ? 1 : 0.7,letterSpacing:item.key === "home" ? "0.08em" : "0",whiteSpace:"nowrap"}}>
                   {item.label}
                 </span>
                 <span style={{width:4,height:4,borderRadius:"50%",background:active ? "#fff" : "transparent",marginTop:2,boxShadow:active ? "0 0 10px rgba(255,255,255,0.5)" : "none"}} />
