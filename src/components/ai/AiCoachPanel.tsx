@@ -33,6 +33,7 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
   ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const canSend = useMemo(() => input.trim().length > 0 && !busy, [input, busy]);
@@ -85,23 +86,45 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
       pushMessage({
         id: createId(),
         role: "assistant",
-        type: "text",
-        text: "Coach ist gerade nicht erreichbar. Bitte erneut versuchen.",
+        type: "error",
+        text: "Coach gerade nicht erreichbar. Bitte versuche es gleich nochmal.",
+        retryPrompt: userInput,
       });
+    }
+  };
+
+  const retryFromError = async (errorMessageId: string, userPrompt: string) => {
+    const prompt = userPrompt.trim();
+    if (!prompt || busyRef.current) return;
+    removeMessageById(errorMessageId);
+    const loadingId = createId();
+    pushMessage({ id: loadingId, role: "assistant", type: "loading", text: "" });
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      await sendToAI(prompt, loadingId);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
   };
 
   const sendMessage = async (rawText?: string) => {
     const text = (rawText ?? input).trim();
-    if (!text || busy) return;
+    if (!text || busyRef.current) return;
     if (!rawText) setInput("");
     pushMessage({ id: createId(), role: "user", type: "text", text });
     console.log("USER INPUT:", text);
     const loadingId = createId();
     pushMessage({ id: loadingId, role: "assistant", type: "loading", text: "" });
+    busyRef.current = true;
     setBusy(true);
-    await sendToAI(text, loadingId);
-    setBusy(false);
+    try {
+      await sendToAI(text, loadingId);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   };
 
   const onConfirmAction = (messageId: string, action: AiAssistantAction) => {
@@ -224,6 +247,9 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
           onConfirmAction={onConfirmAction}
           onCancelAction={onCancelAction}
           onEditAction={onEditAction}
+          onRetryError={(messageId, userPrompt) => {
+            void retryFromError(messageId, userPrompt);
+          }}
         />
       </div>
 
@@ -237,6 +263,7 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
               void sendMessage();
             }
           }}
+          disabled={busy}
           placeholder="Frage deinen Coach..."
           style={{
             flex: 1,
@@ -246,6 +273,7 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
             padding: "12px 12px",
             color: "#e2e8f0",
             fontSize: 14,
+            opacity: busy ? 0.65 : 1,
           }}
         />
         <button
