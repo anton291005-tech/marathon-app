@@ -41,6 +41,81 @@ export function parseSessionDateLabel(label, year = 2026){
   return new Date(year, month, day, 12, 0, 0, 0);
 }
 
+export function normalizeCalendarDay(d){
+  const x = d instanceof Date ? d : new Date(d);
+  return new Date(x.getFullYear(), x.getMonth(), x.getDate());
+}
+
+/**
+ * Session gilt als erledigt, wenn manuell done ODER ein Health-Lauf zugeordnet ist.
+ * (skipped wird hier nicht als „done“ gewertet.)
+ */
+export function isSessionLogDone(log){
+  if(!log)return false;
+  if(log.done === true)return true;
+  if(log.assignedRun && log.assignedRun.runId)return true;
+  return false;
+}
+
+export function sessionsScheduledOnCalendarDay(plan, dayStart){
+  const key = normalizeCalendarDay(dayStart).getTime();
+  const out = [];
+  for(const week of plan){
+    for(const session of week.s){
+      const pd = parseSessionDateLabel(session.date);
+      if(!pd)continue;
+      if(normalizeCalendarDay(pd).getTime() === key){
+        out.push(session);
+      }
+    }
+  }
+  return out;
+}
+
+/** Plan-Woche, die den Kalendertag enthält (Trainingstag), sonst null */
+export function findPlanWeekContainingDate(plan, dayStart){
+  const t = normalizeCalendarDay(dayStart).getTime();
+  for(const week of plan){
+    for(const session of week.s){
+      const pd = parseSessionDateLabel(session.date);
+      if(!pd)continue;
+      if(normalizeCalendarDay(pd).getTime() === t){
+        return week;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Streak: aufeinanderfolgende Kalendertage (rückwärts ab heute), an denen alle
+ * geplanten Nicht-Ruhe-Sessions erledigt sind. Reine Ruhetage im Plan zählen als erfüllt.
+ * Liegt der Tag außerhalb des Plans (keine Session), endet der Streak.
+ */
+export function getCalendarTrainingStreak(plan, logs, now = new Date()){
+  let streak = 0;
+  let d = normalizeCalendarDay(now);
+  for(;;){
+    const onDay = sessionsScheduledOnCalendarDay(plan, d);
+    if(onDay.length === 0){
+      break;
+    }
+    const active = onDay.filter((s) => s.type !== "rest");
+    if(active.length === 0){
+      streak += 1;
+      d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+      continue;
+    }
+    const allDone = active.every((s) => isSessionLogDone(logs[s.id]));
+    if(!allDone){
+      break;
+    }
+    streak += 1;
+    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+  }
+  return streak;
+}
+
 export function getTodayNextSession(activeSessions, logs, now = new Date()){
   const todayKey = now.toDateString();
   const datedSessions = activeSessions
@@ -52,7 +127,11 @@ export function getTodayNextSession(activeSessions, logs, now = new Date()){
     return { mode: "today", session: todaySession.session };
   }
 
-  const nextOpenSession = datedSessions.find((item) => item.date >= now && !logs[item.session.id]?.done);
+  const nowDay = normalizeCalendarDay(now).getTime();
+  const nextOpenSession = datedSessions.find((item) => {
+    const sd = normalizeCalendarDay(item.date).getTime();
+    return sd >= nowDay && !isSessionLogDone(logs[item.session.id]);
+  });
   if(nextOpenSession){
     return { mode: "next", session: nextOpenSession.session };
   }
@@ -71,23 +150,15 @@ export function getJumpTargets(plan){
   ].filter(Boolean);
 }
 
-export function getConsistencyStats(plan, logs){
-  const weekCompletion = plan.map((week) => week.s.filter((session) => session.type !== "rest").every((session) => logs[session.id]?.done));
+export function getConsistencyStats(plan, logs, now = new Date()){
+  const weekCompletion = plan.map((week) => week.s.filter((session) => session.type !== "rest").every((session) => isSessionLogDone(logs[session.id])));
   let weeklyStreak = 0;
   for(let index = weekCompletion.length - 1; index >= 0; index -= 1){
     if(!weekCompletion[index])break;
     weeklyStreak += 1;
   }
 
-  const sessionLogStates = plan
-    .flatMap((week) => week.s)
-    .filter((session) => session.type !== "rest")
-    .map((session) => logs[session.id]?.done === true);
-  let sessionStreak = 0;
-  for(let index = sessionLogStates.length - 1; index >= 0; index -= 1){
-    if(!sessionLogStates[index])break;
-    sessionStreak += 1;
-  }
+  const sessionStreak = getCalendarTrainingStreak(plan, logs, now);
 
   return { weeklyStreak, sessionStreak };
 }
@@ -114,7 +185,7 @@ export function getShareSummary({ pct, week, nextKeySession, recoveryState, cons
     `Fortschritt: ${pct}%`,
     `Aktuelle Woche: ${week.label}`,
     `Recovery: ${recoveryState.label}`,
-    `Streak: ${consistencyStats.sessionStreak} Sessions in Folge`,
+    `Streak: ${consistencyStats.sessionStreak} Tage in Folge`,
     `Nächster Fokus: ${nextKeySession ? nextKeySession.title : "Alles erledigt"}`,
   ].join("\n");
 }

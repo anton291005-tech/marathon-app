@@ -1,12 +1,16 @@
 // @ts-nocheck
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import BackupControls from "./BackupControls";
+import { Capacitor } from "@capacitor/core";
 import {
+  findPlanWeekContainingDate,
   getConsistencyStats,
   getJumpTargets,
   getPredictionReadiness,
   getShareSummary,
   getTodayNextSession,
+  isSessionLogDone,
+  normalizeCalendarDay,
   parseSessionDateLabel,
   parseTargetTimeToSeconds,
   safeParseJSON,
@@ -15,19 +19,23 @@ import MarathonPredictionCard from "./components/MarathonPredictionCard";
 import RaceCalculator from "./components/RaceCalculator";
 import SurfaceCard from "./components/SurfaceCard";
 import WeeklyAnalysisCard from "./components/WeeklyAnalysisCard";
-import DailyDecisionCard from "./components/DailyDecisionCard";
 import AiCoachPanel from "./components/ai/AiCoachPanel";
 import DailyCoachDecisionCard from "./components/ai/DailyCoachDecisionCard";
 import { getDailyCoachDecision } from "./lib/ai/getDailyCoachDecision";
 import { fetchAiDailyAdvice } from "./lib/ai/fetchAiDailyAdvice";
 import { getCoachFeedback } from "./coachFeedback";
-import { getDailyDecision } from "./dailyDecision";
 import { isHomePreStart } from "./homeStatus";
 import { getMarathonPrediction } from "./marathonPrediction";
 import { analyzeWeek } from "./weeklyAnalysis";
 import { readRemoteStorage, writeRemoteStorage } from "./storage";
 import { applyPlanPatches } from "./lib/ai/actions";
 import { getAiContext } from "./lib/ai/getAiContext";
+import {
+  HEALTH_RUNS_STORAGE_KEY,
+  loadHealthRunsFromStorage,
+  mergeHealthRuns,
+  workoutToStored,
+} from "./healthRuns";
 
 const PI = {
   MINI:  { label:"Mini-Prep",         emoji:"🔄", col:"#6366f1", bg:"rgba(99,102,241,0.12)" },
@@ -350,8 +358,20 @@ function clampPct(value){
   return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
 }
 
+function healthRunMatchesSessionDay(run, sessionDateLabel){
+  if(!run?.startDate || !sessionDateLabel)return false;
+  const a = normalizeCalendarDay(new Date(run.startDate));
+  const b = parseSessionDateLabel(sessionDateLabel);
+  if(!b)return false;
+  return a.getTime() === normalizeCalendarDay(b).getTime();
+}
+
 function getLoggedKm(session, log){
-  if(!log?.done)return 0;
+  if(!isSessionLogDone(log))return 0;
+  const ar = log?.assignedRun;
+  if(ar && typeof ar.distanceKm === "number" && Number.isFinite(ar.distanceKm) && ar.distanceKm > 0){
+    return ar.distanceKm;
+  }
   return parseFloat(log.actualKm) || session.km || 0;
 }
 
@@ -615,8 +635,8 @@ function getFuelingHints(session){
 }
 
 function getSessionStatus(log){
-  if(log?.done)return "done";
   if(log?.skipped)return "skipped";
+  if(isSessionLogDone(log))return "done";
   return "open";
 }
 
@@ -641,10 +661,10 @@ function getSessionStatusTone(log, typeColor){
 function getRecoveryHistory(plan, logs){
   return plan.map((week) => {
     const activeSessions = week.s.filter((session) => session.type !== "rest");
-    const doneCount = activeSessions.filter((session) => logs[session.id]?.done).length;
+    const doneCount = activeSessions.filter((session) => isSessionLogDone(logs[session.id])).length;
     const skippedCount = activeSessions.filter((session) => logs[session.id]?.skipped).length;
     const avgFeeling = activeSessions
-      .filter((session) => logs[session.id]?.done && logs[session.id]?.feeling)
+      .filter((session) => isSessionLogDone(logs[session.id]) && logs[session.id]?.feeling)
       .reduce((sum, session, _, arr) => {
         return sum + (logs[session.id]?.feeling || 0) / arr.length;
       }, 0);
@@ -804,6 +824,14 @@ export default function App(){
   const [viewMotionDir,setViewMotionDir]=useState(0);
   // AI-enhanced daily coach advice — null while loading or when AI is unavailable.
   const [aiDailyAdvice, setAiDailyAdvice] = useState(null);
+  const [healthRuns, setHealthRuns] = useState(() =>
+    loadHealthRunsFromStorage((key) => localStorage.getItem(key), safeParseJSON),
+  );
+  const [healthRunsFetchBusy, setHealthRunsFetchBusy] = useState(false);
+  const [healthAppleConnectBusy, setHealthAppleConnectBusy] = useState(false);
+  const [appleHealthConnectFeedback, setAppleHealthConnectFeedback] = useState(null);
+  const [appleHealthLoadFeedback, setAppleHealthLoadFeedback] = useState(null);
+  const [settingsHealthRunSelectionId, setSettingsHealthRunSelectionId] = useState(null);
   const swipeStartRef = useRef(null);
   const lastSwipeAtRef = useRef(0);
 
@@ -825,6 +853,148 @@ export default function App(){
     localStorage.setItem("marathonAiPlanPatches", JSON.stringify(aiPlanPatches));
   }, [aiPlanPatches]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(HEALTH_RUNS_STORAGE_KEY, JSON.stringify(healthRuns));
+    } catch {
+      // ignore quota errors
+    }
+  }, [healthRuns]);
+
+  /** Shared Apple-Health permission step (Health.requestAuthorization). Used by startup sync and Settings „Verbinden“. */
+  const requestAppleHealthReadAuthorization = useCallback(async () => {
+    try {
+      const { Health } = await import("@capgo/capacitor-health");
+      const availability = await Health.isAvailable();
+      if (!availability?.available) {
+        return { ok: false, reason: "unavailable" };
+      }
+      try {
+        await Health.requestAuthorization({ read: ["distance"] });
+        return { ok: true };
+      } catch {
+        return { ok: false, reason: "denied" };
+      }
+    } catch {
+      return { ok: false, reason: "denied" };
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!Capacitor.isNativePlatform()) return;
+      try {
+        const auth = await requestAppleHealthReadAuthorization();
+        if (!auth.ok || cancelled) return;
+        const { Health } = await import("@capgo/capacitor-health");
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - 120);
+        const { workouts } = await Health.queryWorkouts({
+          workoutType: "running",
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          limit: 400,
+          ascending: true,
+        });
+        if (cancelled || !Array.isArray(workouts)) return;
+        const incoming = workouts.map((w) => workoutToStored(w));
+        setHealthRuns((prev) => mergeHealthRuns(prev, incoming));
+      } catch {
+        // Health optional — App bleibt ohne Health nutzbar
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [requestAppleHealthReadAuthorization]);
+
+  const handleAppleHealthConnectInSettings = async () => {
+    if (!Capacitor.isNativePlatform()) return;
+    setAppleHealthConnectFeedback(null);
+    setHealthAppleConnectBusy(true);
+    try {
+      const auth = await requestAppleHealthReadAuthorization();
+      if (auth.ok) {
+        setAppleHealthConnectFeedback({
+          tone: "ok",
+          text: "Mit Apple Health verbunden – Zugriff auf Laufdaten ist erlaubt.",
+        });
+      } else if (auth.reason === "unavailable") {
+        setAppleHealthConnectFeedback({
+          tone: "err",
+          text: "Apple Health ist auf diesem Gerät nicht verfügbar.",
+        });
+      } else {
+        setAppleHealthConnectFeedback({
+          tone: "err",
+          text: "Kein Zugriff auf Apple Health. Bitte unter Einstellungen › Gesundheit › Daten­zugriff & Geräte die Berechtigungen für diese App prüfen.",
+        });
+      }
+    } finally {
+      setHealthAppleConnectBusy(false);
+    }
+  };
+
+  /** Lädt nur Workouts (kein requestAuthorization). */
+  const reloadHealthRunsFromApple = async () => {
+    if (!Capacitor.isNativePlatform()) return;
+    setAppleHealthLoadFeedback(null);
+    setHealthRunsFetchBusy(true);
+    try {
+      const { Health } = await import("@capgo/capacitor-health");
+      const availability = await Health.isAvailable();
+      if (!availability?.available) {
+        setAppleHealthLoadFeedback({
+          tone: "err",
+          text: "Apple Health ist nicht verfügbar.",
+        });
+        return;
+      }
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 120);
+      let workouts;
+      try {
+        const res = await Health.queryWorkouts({
+          workoutType: "running",
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          limit: 400,
+          ascending: true,
+        });
+        workouts = res.workouts;
+      } catch {
+        setAppleHealthLoadFeedback({
+          tone: "err",
+          text: "Bitte zuerst Apple-Health-Zugriff erlauben.",
+        });
+        return;
+      }
+      if (!Array.isArray(workouts)) {
+        setAppleHealthLoadFeedback({
+          tone: "err",
+          text: "Bitte zuerst Apple-Health-Zugriff erlauben.",
+        });
+        return;
+      }
+      const incoming = workouts.map((w) => workoutToStored(w));
+      setHealthRuns((prev) => mergeHealthRuns(prev, incoming));
+      setAppleHealthLoadFeedback({
+        tone: "ok",
+        text: "Läufe aus Apple Health geladen.",
+      });
+    } catch {
+      setAppleHealthLoadFeedback({
+        tone: "err",
+        text: "Bitte zuerst Apple-Health-Zugriff erlauben.",
+      });
+    } finally {
+      setHealthRunsFetchBusy(false);
+    }
+  };
+
   useEffect(()=>{
     (async()=>{
       try{
@@ -839,6 +1009,36 @@ export default function App(){
   const save=async(newLogs)=>{
     setLogs(newLogs);
     await writeRemoteStorage("mwaw26-logs", JSON.stringify(newLogs));
+  };
+
+  const assignHealthRunToSession = async (session, run) => {
+    const km = (run.distanceMeters || 0) / 1000;
+    const existing = logs[session.id] || {};
+    await save({
+      ...logs,
+      [session.id]: {
+        ...existing,
+        assignedRun: {
+          runId: run.runId,
+          startDate: run.startDate,
+          duration: run.duration,
+          distanceKm: Math.round(km * 100) / 100,
+        },
+      },
+    });
+    setSettingsHealthRunSelectionId(null);
+  };
+
+  const clearHealthRunAssignment = async (session) => {
+    if (!session) return;
+    const existing = logs[session.id] || {};
+    const next = { ...existing };
+    delete next.assignedRun;
+    await save({
+      ...logs,
+      [session.id]: next,
+    });
+    setSettingsHealthRunSelectionId(null);
   };
 
   const quickCompleteSession=async(session)=>{
@@ -945,7 +1145,8 @@ export default function App(){
 
   const saveModal=async()=>{
     if(!modal)return;
-    await save({...logs,[modal.id]:{...form,at:new Date().toISOString()}});
+    const prev = logs[modal.id] || {};
+    await save({...logs,[modal.id]:{...prev,...form,at:new Date().toISOString()}});
     setModal(null);
   };
 
@@ -1005,28 +1206,28 @@ export default function App(){
   const ph=PI[w.phase];
   const totalSess=ACTIVE_SESSIONS.length;
   const totalTargetKm=PLAN.reduce((sum, week) => sum + week.km, 0);
-  const doneSessions = ACTIVE_SESSIONS.filter((session) => logs[session.id]?.done);
+  const doneSessions = ACTIVE_SESSIONS.filter((session) => isSessionLogDone(logs[session.id]));
   const doneSess=doneSessions.length;
   const loggedKm=ACTIVE_SESSIONS.reduce((sum, session) => sum + getLoggedKm(session, logs[session.id]), 0);
   const wLoggedKm=w.s.reduce((sum, session) => sum + getLoggedKm(session, logs[session.id]), 0);
   const pct=totalSess>0?Math.round((doneSess/totalSess)*100):0;
   const kmPct=totalTargetKm>0?Math.round((loggedKm/totalTargetKm)*100):0;
   const longRuns = LONG_RUN_SESSIONS.length;
-  const doneLongRuns = LONG_RUN_SESSIONS.filter((session) => logs[session.id]?.done).length;
+  const doneLongRuns = LONG_RUN_SESSIONS.filter((session) => isSessionLogDone(logs[session.id])).length;
   const hardSessions = ACTIVE_SESSIONS.filter((session) => ["interval","tempo","race"].includes(session.type)).length;
-  const doneHardSessions = ACTIVE_SESSIONS.filter((session) => ["interval","tempo","race"].includes(session.type) && logs[session.id]?.done).length;
+  const doneHardSessions = ACTIVE_SESSIONS.filter((session) => ["interval","tempo","race"].includes(session.type) && isSessionLogDone(logs[session.id])).length;
   const completedSessionRatio = totalSess > 0 ? doneSess / totalSess : 0;
   const avgFeeling = doneSessions.length
     ? doneSessions.reduce((sum, session) => sum + (logs[session.id]?.feeling || 3), 0) / doneSessions.length
     : 3;
   const recentRecoverySessions = ACTIVE_SESSIONS
-    .filter((session) => logs[session.id]?.done)
+    .filter((session) => isSessionLogDone(logs[session.id]))
     .slice(-5)
     .map((session) => ({ session, log: logs[session.id] }));
   const recoveryState = getRecoveryState(recentRecoverySessions, completedSessionRatio);
   const weeklyFatigue = getWeeklyFatigue(w);
-  const qualityLongRunScore = LONG_RUN_SESSIONS.filter((session) => logs[session.id]?.done).length
-    ? LONG_RUN_SESSIONS.filter((session) => logs[session.id]?.done).reduce((sum, session, _, arr) => {
+  const qualityLongRunScore = LONG_RUN_SESSIONS.filter((session) => isSessionLogDone(logs[session.id])).length
+    ? LONG_RUN_SESSIONS.filter((session) => isSessionLogDone(logs[session.id])).reduce((sum, session, _, arr) => {
       const log = logs[session.id];
       const actualKm = parseFloat(log?.actualKm) || session.km || 0;
       const distanceScore = session.km >= 28 ? Math.min(1, actualKm / session.km) : 0.75;
@@ -1034,7 +1235,7 @@ export default function App(){
       return sum + ((distanceScore * 0.65) + (feelingScore * 0.35)) / arr.length;
     }, 0)
     : 0.4;
-  const halfMarathonRace = ACTIVE_SESSIONS.find((session) => session.type === "race" && session.km >= 21 && session.km < 42 && logs[session.id]?.done);
+  const halfMarathonRace = ACTIVE_SESSIONS.find((session) => session.type === "race" && session.km >= 21 && session.km < 42 && isSessionLogDone(logs[session.id]));
   const halfMarathonSignal = halfMarathonRace
     ? Math.min(1, ((logs[halfMarathonRace.id]?.feeling || 3) / 5) * 0.55 + ((parseFloat(logs[halfMarathonRace.id]?.actualKm) || halfMarathonRace.km) >= 21 ? 0.45 : 0.2))
     : 0.45;
@@ -1068,21 +1269,22 @@ export default function App(){
       trend: predictionReadiness.detail,
       confidence: "wartet auf Daten",
     };
+  const appNow = new Date();
   const marathonPrediction = getMarathonPrediction({
     plan: PLAN,
     logs,
     targetSeconds,
-    now: new Date(),
+    now: appNow,
   });
   const recoveryHistory = getRecoveryHistory(PLAN, logs);
-  const consistencyStats = getConsistencyStats(PLAN, logs);
-  const coachHints = getCoachFeedback({ plan: PLAN, logs, consistencyStats, now: new Date() });
-  const weekAnalysis = analyzeWeek(w, logs, new Date());
+  const consistencyStats = getConsistencyStats(PLAN, logs, appNow);
+  const coachHints = getCoachFeedback({ plan: PLAN, logs, consistencyStats, now: appNow });
+  const weekAnalysis = analyzeWeek(w, logs, appNow);
 
   // --- Daily Decision Engine signals ---
   // Compute lightweight inputs so getDailyDecision stays a pure function.
   const decisionRecentSessions = ACTIVE_SESSIONS
-    .filter((session) => logs[session.id]?.done)
+    .filter((session) => isSessionLogDone(logs[session.id]))
     .slice(-5)
     .map((session) => ({ session, log: logs[session.id] }));
 
@@ -1105,10 +1307,10 @@ export default function App(){
     const sd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     if (sd < sevenDaysAgo || sd > todayMidnight) return false;
     const log = logs[session.id];
-    return !log?.done && !log?.skipped;
+    return !isSessionLogDone(log) && !log?.skipped;
   }).length;
 
-  const decisionTodayNextSession = getTodayNextSession(ACTIVE_SESSIONS, logs);
+  const decisionTodayNextSession = getTodayNextSession(ACTIVE_SESSIONS, logs, appNow);
   const marathonConfidenceLabel = marathonPrediction.ready
     ? predictionReadiness.ready
       ? performancePrediction.confidence
@@ -1124,6 +1326,12 @@ export default function App(){
     ? Math.ceil((new Date(nextKeyDate.getFullYear(), nextKeyDate.getMonth(), nextKeyDate.getDate()).getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24))
     : null;
   // ── Daily coach decision: deterministic rules first, AI enhancement second ──
+  const todayCoachLogForDecision =
+    decisionTodayNextSession?.mode === "today" && decisionTodayNextSession.session
+      ? logs[decisionTodayNextSession.session.id]
+      : null;
+  const todayCompletedViaAssignedRun = !!(todayCoachLogForDecision?.assignedRun?.runId);
+
   const dailyCoachDecisionInput = {
     recoveryLabel: recoveryState.label,
     weeklyFatigueLabel: weeklyFatigue.label,
@@ -1136,6 +1344,7 @@ export default function App(){
     isToday: decisionTodayNextSession?.mode === "today",
     phase: w.phase,
     daysToNextKeySession,
+    todayCompletedViaAssignedRun,
   };
   // Layer 1: deterministic rule-based result (always instant, always safe).
   const ruleBasedDailyDecision = getDailyCoachDecision(dailyCoachDecisionInput);
@@ -1151,6 +1360,7 @@ export default function App(){
     weeklyFatigue.label,
     decisionTodayNextSession?.session?.type ?? "none",
     doneSess,
+    todayCompletedViaAssignedRun ? "1" : "0",
   ].join("|");
 
   // Effect: fetch AI enhancement for non-high-risk situations.
@@ -1187,10 +1397,10 @@ export default function App(){
   const recommendedAction = getRecommendedAction({ recoveryState, weeklyFatigue, nextKeySession, phaseStatus });
   const visibleWeekSessions = w.s.filter((session) => matchesWeekFilter(session, logs[session.id], weekFilter));
   const visibleOverviewPhases = overviewPhaseFilter === "all" ? Object.keys(PI) : [overviewPhaseFilter];
-  const todayNextSession = getTodayNextSession(ACTIVE_SESSIONS, logs);
+  const todayNextSession = getTodayNextSession(ACTIVE_SESSIONS, logs, appNow);
   const firstTrainingSession = ACTIVE_SESSIONS[0] || null;
   const firstTrainingDate = firstTrainingSession ? parseSessionDateLabel(firstTrainingSession.date) : null;
-  const today = new Date();
+  const today = appNow;
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const firstTrainingStart = firstTrainingDate ? new Date(firstTrainingDate.getFullYear(), firstTrainingDate.getMonth(), firstTrainingDate.getDate()) : null;
   const hasCalendarStarted = !!(firstTrainingStart && todayStart >= firstTrainingStart);
@@ -1200,7 +1410,14 @@ export default function App(){
     : "";
   const dashboardSession = todayNextSession?.session || null;
   const dashboardType = dashboardSession ? TI[dashboardSession.type] : { label: "Keine Einheit geplant", emoji: "😴", col: "#64748b" };
-  const prepProgressPct = totalSess > 0 ? Math.round((doneSess / totalSess) * 100) : 0;
+  const ringWeek = findPlanWeekContainingDate(PLAN, todayStart) || w;
+  const weekActiveForRing = ringWeek.s.filter((s) => s.type !== "rest");
+  const weekDoneForRing = weekActiveForRing.filter((s) => isSessionLogDone(logs[s.id])).length;
+  const weekTotalForRing = weekActiveForRing.length;
+  const prepProgressPct = weekTotalForRing > 0 ? Math.round((weekDoneForRing / weekTotalForRing) * 100) : 0;
+  const dashboardLog = dashboardSession ? logs[dashboardSession.id] : null;
+  const dashboardDone = !!(dashboardSession && isSessionLogDone(dashboardLog));
+  const dashboardHealthDone = !!(dashboardLog?.assignedRun?.runId);
   const ringRadius = 44;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const ringDashOffset = ringCircumference * (1 - (prepProgressPct / 100));
@@ -1211,13 +1428,34 @@ export default function App(){
     ? {}
     : { animation: `${viewMotionDir > 0 ? "viewSlideNext" : "viewSlidePrev"} .34s cubic-bezier(0.22, 1, 0.36, 1)` };
   const activeView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
+  const safeTopPad = "max(20px, env(safe-area-inset-top, 0px))";
+  const healthRunsForDashboard =
+    dashboardSession && Capacitor.isNativePlatform()
+      ? healthRuns.filter((r) => healthRunMatchesSessionDay(r, dashboardSession.date))
+      : [];
+  const settingsSelectedHealthRun =
+    dashboardSession && settingsHealthRunSelectionId
+      ? healthRunsForDashboard.find((r) => r.runId === settingsHealthRunSelectionId)
+      : null;
+
+  useEffect(() => {
+    setSettingsHealthRunSelectionId(null);
+  }, [dashboardSession?.id]);
+
+  useEffect(() => {
+    if (!settingsHealthRunSelectionId || !dashboardSession) return;
+    const ok = healthRuns.some(
+      (r) => r.runId === settingsHealthRunSelectionId && healthRunMatchesSessionDay(r, dashboardSession.date),
+    );
+    if (!ok) setSettingsHealthRunSelectionId(null);
+  }, [healthRuns, dashboardSession, settingsHealthRunSelectionId]);
 
   return(
     <div
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onWheel={handleWheel}
-      style={{minHeight:"100vh",background:"radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui,sans-serif",fontSize:14,WebkitTapHighlightColor:"transparent",paddingBottom:"calc(108px + env(safe-area-inset-bottom, 0px))"}}
+      style={{minHeight:"100vh",background:"radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui,sans-serif",fontSize:14,WebkitTapHighlightColor:"transparent",paddingTop:safeTopPad,paddingBottom:"calc(108px + env(safe-area-inset-bottom, 0px))"}}
     >
       <style>{`
         .dashboard-action,
@@ -1249,7 +1487,7 @@ export default function App(){
         <div style={{display:"flex",flexDirection:"column",paddingBottom:24,...viewTransitionStyle}}>
 
           {/* ── HERO + PROGRESS RING — one seamless gradient section ───── */}
-          <div style={{position:"relative",paddingTop:20,paddingBottom:6}}>
+          <div style={{position:"relative",paddingTop:8,paddingBottom:6}}>
             {/* background: fades from hero dark → transparent, no hard bottom edge */}
             <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(11,15,31,0.995) 0%,rgba(9,12,22,0.98) 35%,rgba(8,10,19,0.72) 76%,transparent 100%)",pointerEvents:"none"}} />
 
@@ -1271,16 +1509,30 @@ export default function App(){
             {/* session title */}
             <div style={{position:"relative",textAlign:"center",padding:"0 20px"}}>
               <div style={{fontSize:34,lineHeight:1,marginBottom:10}}>{dashboardType.emoji}</div>
-              <div style={{fontSize:38,fontWeight:800,color:"#fff",lineHeight:1.03,letterSpacing:"-0.04em",maxWidth:320,margin:"0 auto"}}>
-                {getHeroTitle(dashboardSession)}
-              </div>
-              <div style={{fontSize:13,color:"rgba(226,232,240,0.62)",fontWeight:650,marginTop:8,letterSpacing:"0.01em"}}>
-                {dashboardSession ? dashboardType.label : "Keine Einheit geplant"}
-                {dashboardSession?.km ? (
-                  <span style={{color:dashboardType.col,marginLeft:8,fontWeight:700}}>
-                    · {dashboardSession.km} km{dashboardSession.pace ? ` ${dashboardSession.pace}` : ""}
-                  </span>
+              <div style={{fontSize:38,fontWeight:800,color:"#fff",lineHeight:1.03,letterSpacing:"-0.04em",maxWidth:320,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}>
+                {dashboardDone ? (
+                  <span style={{fontSize:36,color:"#4ade80",lineHeight:1}} aria-hidden>✓</span>
                 ) : null}
+                <span>{getHeroTitle(dashboardSession)}</span>
+                {dashboardDone ? (
+                  <span style={{fontSize:12,fontWeight:800,color:"#86efac",padding:"4px 10px",borderRadius:999,background:"rgba(16,185,129,0.2)",border:"1px solid rgba(16,185,129,0.35)"}}>Erledigt</span>
+                ) : null}
+              </div>
+              <div style={{fontSize:13,color:"rgba(226,232,240,0.62)",fontWeight:650,marginTop:8,letterSpacing:"0.01em",lineHeight:1.45}}>
+                {dashboardHealthDone ? (
+                  <span style={{color:"#86efac",fontWeight:700}}>Heute erledigt (durch Apple Health Lauf)</span>
+                ) : dashboardDone ? (
+                  <span style={{color:"#86efac",fontWeight:700}}>Heute erledigt</span>
+                ) : (
+                  <>
+                    {dashboardSession ? dashboardType.label : "Keine Einheit geplant"}
+                    {dashboardSession?.km ? (
+                      <span style={{color:dashboardType.col,marginLeft:8,fontWeight:700}}>
+                        · {dashboardSession.km} km{dashboardSession.pace ? ` ${dashboardSession.pace}` : ""}
+                      </span>
+                    ) : null}
+                  </>
+                )}
               </div>
             </div>
 
@@ -1326,7 +1578,7 @@ export default function App(){
                 </div>
               </div>
               <div style={{marginTop:8,fontSize:13,fontWeight:600,color:"rgba(226,232,240,0.62)"}}>
-                {doneSess} von {totalSess} Einheiten
+                {weekDoneForRing} von {weekTotalForRing} Einheiten · diese Planwoche
               </div>
             </div>
           </div>
@@ -1364,17 +1616,31 @@ export default function App(){
           <div style={{display:"flex",flexDirection:"column",gap:12,padding:"2px 16px 0"}}>
 
             {/* Daily coach decision card */}
-            <DailyCoachDecisionCard
-              decision={dailyCoachDecision}
-              onGoToCoach={() => navigateToView("coach")}
-              onAdjustPlan={() => {
-                if (dashboardSession) {
-                  openModal(dashboardSession);
-                } else {
-                  navigateToView("coach");
-                }
+            <button
+              type="button"
+              onClick={() => navigateToView("coach")}
+              style={{
+                width:"100%",
+                textAlign:"left",
+                cursor:"pointer",
+                borderRadius:18,
+                border:"1px solid rgba(56,189,248,0.22)",
+                background:"linear-gradient(160deg,rgba(12,22,36,0.92),rgba(10,16,28,0.88))",
+                padding:"14px 16px",
+                display:"flex",
+                flexDirection:"column",
+                gap:6,
+                color:"#e2e8f0",
               }}
-            />
+            >
+              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#7c8aa5",fontWeight:700}}>Heutige Einschätzung</div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                <span style={{fontSize:15,fontWeight:800,color:"#f8fafc"}}>Coach &amp; Details</span>
+                <span style={{fontSize:12,fontWeight:800,padding:"5px 12px",borderRadius:999,background:todayCompletedViaAssignedRun ? "rgba(16,185,129,0.2)" : "rgba(56,189,248,0.12)",color:todayCompletedViaAssignedRun ? "#86efac" : "#7dd3fc",border:`1px solid ${todayCompletedViaAssignedRun ? "rgba(16,185,129,0.35)" : "rgba(56,189,248,0.28)"}`}}>
+                  {todayCompletedViaAssignedRun ? "Erledigt" : "Wie geplant"}
+                </span>
+              </div>
+            </button>
 
             {/* Metrics group — cleaner, softer and less boxy */}
             <div style={{display:"flex",flexDirection:"column",gap:9,padding:"12px",borderRadius:20,background:"linear-gradient(160deg,rgba(15,23,42,0.33),rgba(12,18,34,0.2))",border:"1px solid rgba(148,163,184,0.1)"}}>
@@ -1397,7 +1663,7 @@ export default function App(){
 
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>
                 {[
-                  { label: "Plan", value: `${pct}%`, sub: `${doneSess}/${totalSess}`, color: "#10b981" },
+                  { label: "Plan", value: `${pct}%`, sub: `${weekDoneForRing}/${weekTotalForRing} diese Woche`, color: "#10b981" },
                   { label: "km", value: `${Math.round(loggedKm)}`, sub: `${kmPct}%`, color: "#38bdf8" },
                   { label: "Long", value: `${doneLongRuns}/${longRuns}`, sub: "done", color: "#f59e0b" },
                   { label: "Quality", value: `${doneHardSessions}/${hardSessions}`, sub: "done", color: "#fb7185" },
@@ -1545,6 +1811,9 @@ export default function App(){
                             <span style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:statusTone.background,color:statusTone.color,fontWeight:700,border:`1px solid ${statusTone.border}`}}>
                               {getSessionStatusLabel(log)}
                             </span>
+                            {log?.assignedRun?.runId ? (
+                              <span style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:"rgba(56,189,248,0.14)",color:"#7dd3fc",fontWeight:700,border:"1px solid rgba(56,189,248,0.28)"}}>übernommen ✔</span>
+                            ) : null}
                             {milestones.map((milestone)=>(
                               <span key={milestone.label} style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:`${milestone.color}1f`,color:milestone.color,fontWeight:700}}>
                                 {milestone.emoji} {milestone.label}
@@ -1606,7 +1875,7 @@ export default function App(){
 
             <div style={{display:"flex",justifyContent:"center",gap:8,padding:"4px 2px 6px",flexWrap:"wrap"}}>
               {PLAN.map((week,i)=>{
-                const weekDone=week.s.filter(session=>logs[session.id]?.done).length;
+                const weekDone=week.s.filter(session=>isSessionLogDone(logs[session.id])).length;
                 const weekSkipped=week.s.filter(session=>logs[session.id]?.skipped).length;
                 const weekTotal=week.s.filter(session=>session.type!=="rest").length;
                 const full=weekTotal>0&&weekDone===weekTotal;
@@ -1638,7 +1907,7 @@ export default function App(){
             </SurfaceCard>
             <SurfaceCard>
               <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Streak</div>
-              <div style={{fontSize:20,fontWeight:800,color:"#fff",lineHeight:1.1}}>{consistencyStats.sessionStreak} <span style={{fontSize:13,fontWeight:600,color:"#94a3b8"}}>Sessions</span></div>
+              <div style={{fontSize:20,fontWeight:800,color:"#fff",lineHeight:1.1}}>{consistencyStats.sessionStreak} <span style={{fontSize:13,fontWeight:600,color:"#94a3b8"}}>Tage</span></div>
               <div style={{fontSize:11,color:"#64748b",marginTop:4}}>{consistencyStats.weeklyStreak} Wochen</div>
             </SurfaceCard>
             <SurfaceCard>
@@ -1731,7 +2000,7 @@ export default function App(){
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
                     {phaseWeeks.map(week=>{
                       const idx=PLAN.indexOf(week);
-                      const weekDone=week.s.filter(session=>logs[session.id]?.done).length;
+                      const weekDone=week.s.filter(session=>isSessionLogDone(logs[session.id])).length;
                       const weekSkipped=week.s.filter(session=>logs[session.id]?.skipped).length;
                       const weekTotal=week.s.filter(session=>session.type!=="rest").length;
                       const weekPct=weekTotal > 0 ? Math.round((weekDone / weekTotal) * 100) : 0;
@@ -1764,11 +2033,24 @@ export default function App(){
           </SurfaceCard>
         </div>
       ):activeView==="coach"?(
-        <AiCoachPanel
-          getContext={buildCurrentAiContext}
-          onApplyPlanPatches={handleAiApplyPlanPatches}
-          onNavigate={handleAiNavigate}
-        />
+        <div style={{display:"flex",flexDirection:"column",gap:12,...viewTransitionStyle}}>
+          <div style={{padding:"0 16px"}}>
+            <DailyCoachDecisionCard
+              decision={dailyCoachDecision}
+              onGoToCoach={() => {}}
+              onAdjustPlan={() => {
+                if (dashboardSession) {
+                  openModal(dashboardSession);
+                }
+              }}
+            />
+          </div>
+          <AiCoachPanel
+            getContext={buildCurrentAiContext}
+            onApplyPlanPatches={handleAiApplyPlanPatches}
+            onNavigate={handleAiNavigate}
+          />
+        </div>
       ):activeView==="settings"?(
         <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14,...viewTransitionStyle}}>
           <SurfaceCard>
@@ -1788,6 +2070,206 @@ export default function App(){
             />
             <div style={{fontSize:11,color:"#64748b"}}>Format: hh:mm:ss</div>
           </SurfaceCard>
+
+          {Capacitor.isNativePlatform() ? (
+            <SurfaceCard>
+              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:10}}>Apple Health · Lauf zuordnen</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:8}}>
+                <button
+                  type="button"
+                  onClick={() => handleAppleHealthConnectInSettings()}
+                  disabled={healthAppleConnectBusy}
+                  style={{
+                    background:"rgba(16,185,129,0.16)",
+                    border:"1px solid rgba(52,211,153,0.4)",
+                    borderRadius:12,
+                    padding:"10px 14px",
+                    color:"#6ee7b7",
+                    fontSize:13,
+                    fontWeight:700,
+                    cursor:healthAppleConnectBusy ? "default" : "pointer",
+                    opacity:healthAppleConnectBusy ? 0.65 : 1,
+                  }}
+                >
+                  {healthAppleConnectBusy ? "Verbinde…" : "Apple Health verbinden"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => reloadHealthRunsFromApple()}
+                  disabled={healthRunsFetchBusy}
+                  style={{
+                    background:"rgba(56,189,248,0.18)",
+                    border:"1px solid rgba(56,189,248,0.35)",
+                    borderRadius:12,
+                    padding:"10px 14px",
+                    color:"#7dd3fc",
+                    fontSize:13,
+                    fontWeight:700,
+                    cursor:healthRunsFetchBusy ? "default" : "pointer",
+                    opacity:healthRunsFetchBusy ? 0.65 : 1,
+                  }}
+                >
+                  {healthRunsFetchBusy ? "Läufe werden geladen…" : "Läufe laden"}
+                </button>
+              </div>
+              {appleHealthConnectFeedback ? (
+                <div
+                  style={{
+                    fontSize:12,
+                    lineHeight:1.45,
+                    marginBottom:8,
+                    color:appleHealthConnectFeedback.tone === "ok" ? "#86efac" : "#fca5a5",
+                    fontWeight:650,
+                  }}
+                >
+                  {appleHealthConnectFeedback.text}
+                </div>
+              ) : null}
+              {appleHealthLoadFeedback ? (
+                <div
+                  style={{
+                    fontSize:12,
+                    lineHeight:1.45,
+                    marginBottom:10,
+                    color:appleHealthLoadFeedback.tone === "ok" ? "#86efac" : "#fca5a5",
+                    fontWeight:650,
+                  }}
+                >
+                  {appleHealthLoadFeedback.text}
+                </div>
+              ) : null}
+              {!dashboardSession ? (
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.5}}>Heute ist keine Trainingseinheit geplant – hier kannst du trotzdem Läufe aus Apple Health laden.</div>
+                  {healthRuns.length === 0 ? (
+                    <div style={{fontSize:13,color:"#e2e8f0",fontWeight:650}}>Keine Läufe geladen</div>
+                  ) : null}
+                </div>
+              ) : dashboardHealthDone ? (
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  <div style={{fontSize:14,fontWeight:800,color:"#86efac"}}>Lauf übernommen ✅</div>
+                  {(() => {
+                    const ar = dashboardLog?.assignedRun;
+                    if (!ar?.runId) return null;
+                    const start = ar.startDate ? new Date(ar.startDate) : null;
+                    const timeLabel = start
+                      ? start.toLocaleString("de-DE", { weekday:"short", day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })
+                      : "—";
+                    const durMin = typeof ar.duration === "number" && ar.duration > 0 ? Math.max(1, Math.round(ar.duration / 60)) : null;
+                    return (
+                      <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.55}}>
+                        <div><span style={{color:"#7c8aa5"}}>Distanz:</span> {typeof ar.distanceKm === "number" ? `${ar.distanceKm} km` : "—"}</div>
+                        <div><span style={{color:"#7c8aa5"}}>Start:</span> {timeLabel}</div>
+                        {durMin != null ? <div><span style={{color:"#7c8aa5"}}>Dauer:</span> ca. {durMin} Min.</div> : null}
+                      </div>
+                    );
+                  })()}
+                  <button
+                    type="button"
+                    onClick={() => clearHealthRunAssignment(dashboardSession)}
+                    style={{
+                      alignSelf:"flex-start",
+                      background:"rgba(15,23,42,0.85)",
+                      border:"1px solid rgba(148,163,184,0.2)",
+                      borderRadius:12,
+                      padding:"10px 14px",
+                      color:"#cbd5e1",
+                      fontSize:13,
+                      fontWeight:700,
+                      cursor:"pointer",
+                    }}
+                  >
+                    Zurücksetzen
+                  </button>
+                </div>
+              ) : healthRuns.length === 0 ? (
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  <div style={{fontSize:13,color:"#e2e8f0",fontWeight:650}}>Keine Läufe geladen</div>
+                </div>
+              ) : healthRunsForDashboard.length === 0 ? (
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.5}}>Keine Apple-Health-Läufe für heute gefunden.</div>
+                </div>
+              ) : settingsSelectedHealthRun ? (
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.5}}>
+                    {(() => {
+                      const run = settingsSelectedHealthRun;
+                      const km = (run.distanceMeters || 0) / 1000;
+                      const t = new Date(run.startDate).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+                      return (
+                        <span>
+                          Gewählter Lauf: {km > 0 ? `${km.toFixed(2)} km` : "Lauf"} · {t}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => assignHealthRunToSession(dashboardSession, settingsSelectedHealthRun)}
+                    style={{
+                      alignSelf:"flex-start",
+                      background:"rgba(56,189,248,0.22)",
+                      border:"1px solid rgba(56,189,248,0.45)",
+                      borderRadius:12,
+                      padding:"10px 14px",
+                      color:"#e0f2fe",
+                      fontSize:13,
+                      fontWeight:800,
+                      cursor:"pointer",
+                    }}
+                  >
+                    Für heute übernehmen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsHealthRunSelectionId(null)}
+                    style={{
+                      alignSelf:"flex-start",
+                      background:"transparent",
+                      border:"1px solid rgba(148,163,184,0.2)",
+                      borderRadius:12,
+                      padding:"8px 12px",
+                      color:"#94a3b8",
+                      fontSize:12,
+                      fontWeight:700,
+                      cursor:"pointer",
+                    }}
+                  >
+                    Andere Auswahl
+                  </button>
+                </div>
+              ) : (
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {healthRunsForDashboard.slice(-6).reverse().map((run) => {
+                    const km = (run.distanceMeters || 0) / 1000;
+                    const t = new Date(run.startDate).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+                    const selected = run.runId === settingsHealthRunSelectionId;
+                    return (
+                      <button
+                        key={run.runId}
+                        type="button"
+                        onClick={() => setSettingsHealthRunSelectionId(run.runId)}
+                        style={{
+                          background: selected ? "rgba(56,189,248,0.2)" : "rgba(15,23,42,0.85)",
+                          border: selected ? "1px solid rgba(56,189,248,0.5)" : "1px solid rgba(56,189,248,0.2)",
+                          borderRadius:14,
+                          padding:"10px 12px",
+                          color:"#e2e8f0",
+                          fontSize:13,
+                          fontWeight:700,
+                          cursor:"pointer",
+                          textAlign:"left",
+                        }}
+                      >
+                        {km > 0 ? `${km.toFixed(2)} km` : "Lauf"} · {t}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </SurfaceCard>
+          ) : null}
 
           <RaceCalculator />
 
@@ -1843,7 +2325,7 @@ export default function App(){
       {modal&&modalWeek&&modalWorkout&&(
         <div onClick={closeModal} style={{position:"fixed",inset:0,background:"rgba(2,6,23,0.82)",display:"flex",alignItems:"stretch",justifyContent:"center",padding:0,zIndex:1000}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(180deg,#0c1020 0%, #090d18 100%)",width:"100%",maxWidth:720,height:"100%",overflowY:"auto",borderLeft:"1px solid rgba(148,163,184,0.12)",borderRight:"1px solid rgba(148,163,184,0.12)"}}>
-            <div style={{padding:"18px 16px 140px",display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{padding:"calc(18px + max(0px, env(safe-area-inset-top, 0px))) 16px 140px",display:"flex",flexDirection:"column",gap:14}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
                 <div>
                   <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.12em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Session Details</div>
@@ -1855,9 +2337,18 @@ export default function App(){
 
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:`${TI[modal.type].col}22`,color:TI[modal.type].col,fontWeight:700}}>{TI[modal.type].emoji} {getSessionTypeLabel(modal.type)}</span>
-                <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:form.done?"rgba(16,185,129,0.16)":form.skipped?"rgba(248,113,113,0.14)":"rgba(148,163,184,0.12)",color:form.done?"#86efac":form.skipped?"#fca5a5":"#94a3b8",fontWeight:700}}>
-                  {form.done ? "Erledigt" : form.skipped ? "Ausgelassen" : "Offen"}
-                </span>
+                {(() => {
+                  const effLog = { ...(logs[modal.id] || {}), ...form, assignedRun: logs[modal.id]?.assignedRun };
+                  const st = getSessionStatusTone(effLog, TI[modal.type].col);
+                  return (
+                    <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:st.background,color:st.color,fontWeight:700,border:`1px solid ${st.border}`}}>
+                      {getSessionStatusLabel(effLog)}
+                    </span>
+                  );
+                })()}
+                {logs[modal.id]?.assignedRun?.runId ? (
+                  <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:"rgba(56,189,248,0.14)",color:"#7dd3fc",fontWeight:700}}>Apple Health · {logs[modal.id].assignedRun.distanceKm} km</span>
+                ) : null}
                 {modal.km > 0 && <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:"rgba(56,189,248,0.14)",color:"#38bdf8",fontWeight:700}}>Ziel: {modal.km} km</span>}
                 {modal.pace && <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:"rgba(168,85,247,0.14)",color:"#c084fc",fontWeight:700}}>Pace: {modal.pace}</span>}
                 {modalMilestones.map((milestone)=>(
@@ -1906,9 +2397,9 @@ export default function App(){
 
               <DetailBlock title="Letzter gespeicherter Eintrag">
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
-                  <MetricCard label="Status" value={getSessionStatusLabel(modalLog)} sublabel={modalLog?.at ? formatLogTimestamp(modalLog.at) : "Noch nicht gespeichert"} accent={modalLog?.done ? "#10b981" : modalLog?.skipped ? "#f87171" : "#94a3b8"} />
+                  <MetricCard label="Status" value={getSessionStatusLabel(modalLog)} sublabel={modalLog?.at ? formatLogTimestamp(modalLog.at) : "Noch nicht gespeichert"} accent={isSessionLogDone(modalLog) ? "#10b981" : modalLog?.skipped ? "#f87171" : "#94a3b8"} />
                   <MetricCard label="Gefühl" value={modalLog?.feeling ? `${"★".repeat(modalLog.feeling)}` : "Keine"} sublabel={modalLog?.feeling ? `${modalLog.feeling}/5` : "Noch kein Rating"} accent="#f59e0b" />
-                  <MetricCard label="Gelaufene km" value={modalLog?.actualKm || "—"} sublabel={modal.km > 0 ? `Ziel: ${modal.km} km` : "Keine Distanz geplant"} accent="#38bdf8" />
+                  <MetricCard label="Gelaufene km" value={modalLog?.assignedRun?.distanceKm != null ? String(modalLog.assignedRun.distanceKm) : modalLog?.actualKm || "—"} sublabel={modal.km > 0 ? `Ziel: ${modal.km} km` : "Keine Distanz geplant"} accent="#38bdf8" />
                   <MetricCard label="Notizen" value={modalLog?.notes ? "Vorhanden" : "Keine"} sublabel={modalLog?.notes || "Noch keine Notiz gespeichert"} accent="#c084fc" />
                 </div>
               </DetailBlock>

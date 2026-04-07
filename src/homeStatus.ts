@@ -10,6 +10,7 @@ export type LogLike = {
   actualKm?: string;
   notes?: string;
   feeling?: number;
+  assignedRun?: { runId?: string };
 };
 
 export function hasLoggedTrainingEngagement(
@@ -19,7 +20,9 @@ export function hasLoggedTrainingEngagement(
   return activeSessions.some((session) => {
     const log = logs[session.id];
     if (!log) return false;
-    if (log.done || log.skipped) return true;
+    if (log.skipped) return true;
+    if (log.done) return true;
+    if (log.assignedRun?.runId) return true;
     const raw = String(log.actualKm || "")
       .trim()
       .replace(",", ".");

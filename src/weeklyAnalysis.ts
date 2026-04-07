@@ -2,12 +2,13 @@
  * Wochen-Fazit und Kennzahlen für eine Plan-Woche (datenbasiert).
  */
 
-import { parseSessionDateLabel } from "./appSmartFeatures";
+import { isSessionLogDone, parseSessionDateLabel } from "./appSmartFeatures";
 import type { PlanWeek, SessionLog, PlanSession } from "./marathonPrediction";
 import { getPlannedKmEquiv } from "./marathonPrediction";
 
 function weekSessionLoggedKm(session: PlanSession, log: SessionLog | undefined): number {
-  if (!log?.done) return 0;
+  if (!isSessionLogDone(log)) return 0;
+  if (!log) return 0;
   const parsed = Number.parseFloat(String(log.actualKm || "").replace(",", "."));
   if (Number.isFinite(parsed) && parsed > 0) return parsed;
   return session.km > 0 ? session.km : getPlannedKmEquiv(session);
@@ -65,16 +66,16 @@ export function analyzeWeek(week: PlanWeek, logs: Record<string, SessionLog>, no
   const longRunKmPlanned = longSessions.reduce((m, s) => Math.max(m, s.km || 0), 0);
   let longRunDone = false;
   if (longSessions.length > 0) {
-    longRunDone = longSessions.some((s) => logs[s.id]?.done === true);
+    longRunDone = longSessions.some((s) => isSessionLogDone(logs[s.id]));
   }
 
   for (const s of trainable) {
     const log = logs[s.id];
     if (["interval", "tempo", "race"].includes(s.type)) {
       intensePlanned += 1;
-      if (log?.done) intenseDone += 1;
+      if (isSessionLogDone(log)) intenseDone += 1;
     }
-    if (log?.done) {
+    if (isSessionLogDone(log)) {
       doneSessions += 1;
       actualKm += weekSessionLoggedKm(s, log);
     }

@@ -39,6 +39,8 @@ export type DailyCoachDecisionInput = DailyDecisionInput & {
   hasIllnessSignal?: boolean;
   /** True if user-typed message or symptom flags indicate injury */
   hasInjurySignal?: boolean;
+  /** Heutige Session ist per zugeordnetem Health-Lauf erledigt */
+  todayCompletedViaAssignedRun?: boolean;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -84,6 +86,7 @@ export function getDailyCoachDecision(
     todaySessionType,
     hasIllnessSignal = false,
     hasInjurySignal = false,
+    todayCompletedViaAssignedRun = false,
   } = input;
 
   // ── Scenario B: Illness ─────────────────── isHardOverride: AI must not touch
@@ -112,6 +115,19 @@ export function getDailyCoachDecision(
         "48–72h Belastung deutlich senken.",
         "Alternative: Schwimmen, Rad oder Mobility.",
         "Erst wieder einsteigen, wenn schmerzfrei.",
+      ],
+      isHardOverride: true,
+    };
+  }
+
+  if (todayCompletedViaAssignedRun) {
+    return {
+      title: `Heute: ${todayLabel(todaySessionType)}`,
+      reason: "Heute erledigt (durch Apple Health Lauf).",
+      level: "easy",
+      details: [
+        "Der zugeordnete Lauf aus Apple Health gilt als erledigte Einheit.",
+        "Details und Einschätzung findest du im Coach.",
       ],
       isHardOverride: true,
     };

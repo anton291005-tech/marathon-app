@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import AiMessageList, { type UiChatMessage } from "./AiMessageList";
 import { executeAiAction } from "../../lib/ai/actions";
+import { generateAiResponse } from "../../lib/ai/generateAiResponse";
 import type { AiAssistantAction, AiContext, PlanPatch } from "../../lib/ai/types";
 
 type Props = {
@@ -51,35 +52,23 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
 
   const sendToAI = async (userInput: string, loadingId: string) => {
     try {
-      console.log("SENDING TO AI:", userInput);
+      const context = getContext();
+      console.log("[AiCoachPanel] sending to AI, input:", userInput); // eslint-disable-line no-console
 
-      const res = await fetch("/api/ai", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          input: userInput,
-          context: getContext(),
-        }),
-      });
+      // generateAiResponse calls the real API when REACT_APP_AI_PROVIDER=openai,
+      // and automatically falls back to the local mock brain if the API fails.
+      const data = await generateAiResponse(userInput, context);
 
-      console.log("RAW RESPONSE:", res);
-
-      if (!res.ok) {
-        console.error("API ERROR STATUS:", res.status);
-        throw new Error("API Fehler");
-      }
-
-      const data = await res.json();
-      console.log("AI RESPONSE:", data);
+      console.log("[AiCoachPanel] AI response:", data); // eslint-disable-line no-console
 
       removeMessageById(loadingId);
       pushMessage({
         id: createId(),
         role: "assistant",
         type: "text",
-        text: typeof data?.message === "string" ? data.message : "Keine Antwort",
+        text: typeof data?.message === "string" && data.message.trim()
+          ? data.message
+          : "Keine Antwort",
       });
 
       if (data?.action) {
@@ -91,13 +80,13 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
         });
       }
     } catch (err) {
-      console.error("AI ERROR:", err);
+      console.error("[AiCoachPanel] unhandled error:", err); // eslint-disable-line no-console
       removeMessageById(loadingId);
       pushMessage({
         id: createId(),
         role: "assistant",
         type: "text",
-        text: "Fehler bei der Anfrage",
+        text: "Coach ist gerade nicht erreichbar. Bitte erneut versuchen.",
       });
     }
   };

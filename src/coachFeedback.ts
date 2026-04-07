@@ -3,6 +3,7 @@
  * Nutzt 42-Tage-Fenster wie die Prognose + getConsistencyStats vom Aufrufer.
  */
 
+import { isSessionLogDone } from "./appSmartFeatures";
 import { getTrainingWindowData, isScheduledOnOrBeforeToday, getEffectiveKm, type PlanWeek, type SessionLog } from "./marathonPrediction";
 
 export type ConsistencyStats = {
@@ -27,7 +28,7 @@ export function getCoachFeedback(args: {
   // Long Runs ≥ 28 km im Fenster (marathonrelevantes Volumen)
   const long28Planned = pastTrainable.some((e) => e.session.type === "long" && e.session.km >= 28);
   const long28Done = pastTrainable.filter(
-    (e) => e.session.type === "long" && e.session.km >= 28 && e.log?.done
+    (e) => e.session.type === "long" && e.session.km >= 28 && isSessionLogDone(e.log)
   ).length;
   if (long28Planned && long28Done === 0) {
     hints.push("Dir fehlt aktuell ein abgeschlossener Long Run ab 28 km im 42-Tage-Fenster.");
@@ -47,7 +48,7 @@ export function getCoachFeedback(args: {
   cutoff14.setDate(cutoff14.getDate() - 14);
   const e14 = pastTrainable.filter((e) => e.date.getTime() >= cutoff14.getTime());
   if (e14.length >= 4) {
-    const done14 = e14.filter((e) => e.log?.done).length;
+    const done14 = e14.filter((e) => isSessionLogDone(e.log)).length;
     const rate = done14 / e14.length;
     if (rate >= 0.82) {
       hints.push("Gute Konstanz in den letzten 14 Tagen.");
@@ -58,7 +59,7 @@ export function getCoachFeedback(args: {
 
   // Verpasste Einheiten (fällig, weder done noch skipped)
   if (pastTrainable.length > 0) {
-    const missed = pastTrainable.filter((e) => !e.log?.done && !e.log?.skipped).length;
+    const missed = pastTrainable.filter((e) => !isSessionLogDone(e.log) && !e.log?.skipped).length;
     const missRatio = missed / pastTrainable.length;
     if (missRatio > 0.2) {
       hints.push("Viele geplante Einheiten sind noch offen — das drückt Formgefühl und Prognose.");
@@ -71,7 +72,7 @@ export function getCoachFeedback(args: {
   for (const e of pastTrainable) {
     if (e.plannedKmEquiv <= 0) continue;
     plannedKm += e.plannedKmEquiv;
-    if (e.log?.done) {
+    if (isSessionLogDone(e.log)) {
       actualKm += getEffectiveKm(e.session, e.log);
     }
   }
@@ -80,7 +81,7 @@ export function getCoachFeedback(args: {
   }
 
   // Intensiv vs. Easy (erledigt, 14 Tage)
-  const doneSessions14 = e14.filter((e) => e.log?.done);
+  const doneSessions14 = e14.filter((e) => isSessionLogDone(e.log));
   const intense14 = doneSessions14.filter((e) =>
     ["interval", "tempo", "race"].includes(e.session.type)
   ).length;
@@ -91,7 +92,7 @@ export function getCoachFeedback(args: {
 
   // Streak aus bestehender App-Logik
   if (args.consistencyStats.sessionStreak >= 6) {
-    hints.push(`${args.consistencyStats.sessionStreak} Einheiten in Folge erledigt — solide Serie.`);
+    hints.push(`${args.consistencyStats.sessionStreak} Tage in Folge mit erledigtem Plan — solide Serie.`);
   }
 
   // Fallback, damit nie komplett leer (wenn Prognose schon da ist)

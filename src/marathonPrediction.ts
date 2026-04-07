@@ -3,7 +3,7 @@
  * Heuristisch stabil — keine VDOT-/Wissenschafts-Präzision.
  */
 
-import { parseSessionDateLabel } from "./appSmartFeatures";
+import { isSessionLogDone, parseSessionDateLabel } from "./appSmartFeatures";
 
 // --- Typen (an Session-Shape aus App.tsx angelehnt) ---
 
@@ -35,6 +35,13 @@ export type SessionLog = {
   done?: boolean;
   skipped?: boolean;
   at?: string;
+  /** Zugeordneter Apple-Health-/Workout-Lauf (runId stabil über healthRuns) */
+  assignedRun?: {
+    runId: string;
+    startDate: string;
+    duration: number;
+    distanceKm: number;
+  };
 };
 
 export type TrainingWindowEntry = {
@@ -150,8 +157,12 @@ export function getPlannedKmEquiv(session: PlanSession): number {
 }
 
 export function getEffectiveKm(session: PlanSession, log: SessionLog | undefined): number {
-  if (!log?.done) return 0;
-  const parsed = parseFloat(String(log.actualKm || "").replace(",", "."));
+  if (!isSessionLogDone(log)) return 0;
+  const ar = log?.assignedRun;
+  if (ar && typeof ar.distanceKm === "number" && Number.isFinite(ar.distanceKm) && ar.distanceKm > 0) {
+    return ar.distanceKm;
+  }
+  const parsed = parseFloat(String(log?.actualKm || "").replace(",", "."));
   if (Number.isFinite(parsed) && parsed > 0) return parsed;
   return session.km > 0 ? session.km : getPlannedKmEquiv(session);
 }
@@ -238,13 +249,13 @@ function computeStreakComponents(entries: TrainingWindowEntry[], now: Date): Str
     return { completionRate: 0, kmAdherence: 0, weekStreakFactor: 0 };
   }
 
-  const doneCount = pastTrainable.filter((e) => e.log?.done).length;
+  const doneCount = pastTrainable.filter((e) => isSessionLogDone(e.log)).length;
   const completionRate = pastTrainable.length > 0 ? doneCount / pastTrainable.length : 0;
 
   let sumPlannedDone = 0;
   let sumActualDone = 0;
   for (const e of pastTrainable) {
-    if (!e.log?.done) continue;
+    if (!isSessionLogDone(e.log)) continue;
     const planned = e.plannedKmEquiv > 0 ? e.plannedKmEquiv : getPlannedKmEquiv(e.session);
     sumPlannedDone += planned;
     sumActualDone += getEffectiveKm(e.session, e.log);
@@ -262,7 +273,7 @@ function computeStreakComponents(entries: TrainingWindowEntry[], now: Date): Str
     const key = monday.toISOString().slice(0, 10);
     const cur = byWeek.get(key) || { total: 0, done: 0 };
     cur.total += 1;
-    if (e.log?.done) cur.done += 1;
+    if (isSessionLogDone(e.log)) cur.done += 1;
     byWeek.set(key, cur);
   }
   const weekKeys = Array.from(byWeek.keys()).sort();
@@ -343,9 +354,9 @@ export function getMarathonPrediction(args: {
     const log = e.log;
 
     if (log?.skipped) skippedTrainable += 1;
-    if (!log?.done && !log?.skipped) missedTrainable += 1;
+    if (!isSessionLogDone(log) && !log?.skipped) missedTrainable += 1;
 
-    if (log?.done) {
+    if (isSessionLogDone(log)) {
       doneSessions += 1;
       const km = getEffectiveKm(e.session, log);
       doneKm += km;
