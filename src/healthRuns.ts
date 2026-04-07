@@ -15,20 +15,45 @@ export type StoredHealthRun = {
   distanceMeters: number;
   workoutType?: string;
   sourceName?: string;
+  /** Durchschnittliche HF im Workout-Zeitfenster (Apple Health), falls ermittelbar */
+  avgHeartRateBpm?: number;
 };
 
 export function makeHealthRunId(startDate: string, duration: number, distanceMeters: number): string {
   return `${startDate}_${duration}_${distanceMeters}`;
 }
 
+/** HF-Samples (z. B. aus Health.readSamples), Wert in bpm */
+export type HeartRateSamplePoint = { startDate: string; value: number };
+
+/** Mittlere HF über Samples, deren Zeitpunkt innerhalb [workoutStart, workoutEnd] liegt */
+export function averageHeartRateBpmInWorkoutWindow(
+  workoutStartIso: string,
+  workoutEndIso: string,
+  samples: HeartRateSamplePoint[],
+): number | undefined {
+  const wStart = new Date(workoutStartIso).getTime();
+  const wEnd = new Date(workoutEndIso).getTime();
+  if (!Number.isFinite(wStart) || !Number.isFinite(wEnd)) return undefined;
+  const inRange = samples.filter((s) => {
+    const t = new Date(s.startDate).getTime();
+    return Number.isFinite(t) && t >= wStart && t <= wEnd;
+  });
+  if (inRange.length === 0) return undefined;
+  return inRange.reduce((a, s) => a + s.value, 0) / inRange.length;
+}
+
 /** Aus Capacitor-Workout → gespeicherte Form inkl. runId */
-export function workoutToStored(workout: {
-  startDate: string;
-  duration: number;
-  totalDistance?: number;
-  workoutType?: string;
-  sourceName?: string;
-}): StoredHealthRun {
+export function workoutToStored(
+  workout: {
+    startDate: string;
+    duration: number;
+    totalDistance?: number;
+    workoutType?: string;
+    sourceName?: string;
+  },
+  avgHeartRateBpm?: number,
+): StoredHealthRun {
   const distanceMeters = typeof workout.totalDistance === "number" ? workout.totalDistance : 0;
   const runId = makeHealthRunId(workout.startDate, workout.duration, distanceMeters);
   return {
@@ -38,6 +63,9 @@ export function workoutToStored(workout: {
     distanceMeters,
     workoutType: workout.workoutType,
     sourceName: workout.sourceName,
+    ...(typeof avgHeartRateBpm === "number" && Number.isFinite(avgHeartRateBpm)
+      ? { avgHeartRateBpm: Math.round(avgHeartRateBpm) }
+      : {}),
   };
 }
 

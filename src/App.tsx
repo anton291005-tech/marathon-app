@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import BackupControls from "./BackupControls";
 import { Capacitor } from "@capacitor/core";
 import {
@@ -32,10 +32,19 @@ import { applyPlanPatches } from "./lib/ai/actions";
 import { getAiContext } from "./lib/ai/getAiContext";
 import {
   HEALTH_RUNS_STORAGE_KEY,
+  averageHeartRateBpmInWorkoutWindow,
   loadHealthRunsFromStorage,
   mergeHealthRuns,
   workoutToStored,
 } from "./healthRuns";
+
+const APPLE_HEALTH_CONNECTED_KEY = "marathonAppleHealthConnected";
+/** iOS HealthKit read types (native plugin accepts strings; "workouts" is special-cased in Swift). */
+const APPLE_HEALTH_READ_TYPES = ["workouts", "distance", "heartRate", "calories"];
+
+function logHealthKit(message, ...rest) {
+  console.log("[HealthKit]", message, ...rest);
+}
 
 const PI = {
   MINI:  { label:"Mini-Prep",         emoji:"🔄", col:"#6366f1", bg:"rgba(99,102,241,0.12)" },
@@ -831,6 +840,12 @@ export default function App(){
   const [healthAppleConnectBusy, setHealthAppleConnectBusy] = useState(false);
   const [appleHealthConnectFeedback, setAppleHealthConnectFeedback] = useState(null);
   const [appleHealthLoadFeedback, setAppleHealthLoadFeedback] = useState(null);
+  const [isHealthConnected, setIsHealthConnected] = useState(
+    () => typeof localStorage !== "undefined" && localStorage.getItem(APPLE_HEALTH_CONNECTED_KEY) === "1",
+  );
+  /** null = not checked yet (iOS only) */
+  const [healthKitAvailable, setHealthKitAvailable] = useState(null);
+  const [appleHealthRunningCountLastFetch, setAppleHealthRunningCountLastFetch] = useState(-1);
   const [settingsHealthRunSelectionId, setSettingsHealthRunSelectionId] = useState(null);
   const swipeStartRef = useRef(null);
   const lastSwipeAtRef = useRef(0);
@@ -861,85 +876,135 @@ export default function App(){
     }
   }, [healthRuns]);
 
-  /** Shared Apple-Health permission step (Health.requestAuthorization). Used by startup sync and Settings „Verbinden“. */
-  const requestAppleHealthReadAuthorization = useCallback(async () => {
-    try {
-      const { Health } = await import("@capgo/capacitor-health");
-      const availability = await Health.isAvailable();
-      if (!availability?.available) {
-        return { ok: false, reason: "unavailable" };
-      }
-      try {
-        await Health.requestAuthorization({ read: ["distance"] });
-        return { ok: true };
-      } catch {
-        return { ok: false, reason: "denied" };
-      }
-    } catch {
-      return { ok: false, reason: "denied" };
+  const checkHealthKitAvailableOnDevice = async () => {
+    const { Health } = await import("@capgo/capacitor-health");
+    const availability = await Health.isAvailable();
+    if (availability?.available) {
+      logHealthKit("HealthKit available");
+    } else {
+      logHealthKit("HealthKit not available", availability?.reason ?? "");
     }
-  }, []);
+    return !!availability?.available;
+  };
+
+  const fetchRunningWorkoutsLast7Days = async () => {
+    logHealthKit("Fetching workouts");
+    const { Health } = await import("@capgo/capacitor-health");
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 7);
+    const startIso = start.toISOString();
+    const endIso = end.toISOString();
+
+    const res = await Health.queryWorkouts({
+      workoutType: "running",
+      startDate: startIso,
+      endDate: endIso,
+      limit: 200,
+      ascending: false,
+    });
+    const workouts = Array.isArray(res.workouts) ? res.workouts : [];
+
+    let hrPoints = [];
+    try {
+      const hr = await Health.readSamples({
+        dataType: "heartRate",
+        startDate: startIso,
+        endDate: endIso,
+        limit: 8000,
+        ascending: true,
+      });
+      hrPoints = (hr.samples || []).map((s) => ({ startDate: s.startDate, value: s.value }));
+    } catch (hrErr) {
+      console.error("[HealthKit] readSamples heartRate error", hrErr);
+    }
+
+    const incoming = workouts.map((w) =>
+      workoutToStored(
+        w,
+        averageHeartRateBpmInWorkoutWindow(w.startDate, w.endDate, hrPoints),
+      ),
+    );
+    setHealthRuns((prev) => mergeHealthRuns(prev, incoming));
+    setAppleHealthRunningCountLastFetch(workouts.length);
+    logHealthKit("Workouts loaded:", workouts.length);
+    return workouts.length;
+  };
 
   useEffect(() => {
+    if (Capacitor.getPlatform() !== "ios") return;
     let cancelled = false;
     (async () => {
-      if (!Capacitor.isNativePlatform()) return;
       try {
-        const auth = await requestAppleHealthReadAuthorization();
-        if (!auth.ok || cancelled) return;
-        const { Health } = await import("@capgo/capacitor-health");
-        const end = new Date();
-        const start = new Date();
-        start.setDate(start.getDate() - 120);
-        const { workouts } = await Health.queryWorkouts({
-          workoutType: "running",
-          startDate: start.toISOString(),
-          endDate: end.toISOString(),
-          limit: 400,
-          ascending: true,
-        });
-        if (cancelled || !Array.isArray(workouts)) return;
-        const incoming = workouts.map((w) => workoutToStored(w));
-        setHealthRuns((prev) => mergeHealthRuns(prev, incoming));
-      } catch {
-        // Health optional — App bleibt ohne Health nutzbar
+        const ok = await checkHealthKitAvailableOnDevice();
+        if (cancelled) return;
+        setHealthKitAvailable(ok);
+        if (!ok) return;
+        if (localStorage.getItem(APPLE_HEALTH_CONNECTED_KEY) === "1") {
+          setIsHealthConnected(true);
+          try {
+            await fetchRunningWorkoutsLast7Days();
+          } catch (e) {
+            console.error("[HealthKit] initial workout fetch failed", e);
+          }
+        }
+      } catch (e) {
+        console.error("[HealthKit] availability check failed", e);
+        if (!cancelled) setHealthKitAvailable(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [requestAppleHealthReadAuthorization]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bootstrap once on mount for iOS
+  }, []);
 
   const handleAppleHealthConnectInSettings = async () => {
-    if (!Capacitor.isNativePlatform()) return;
+    if (Capacitor.getPlatform() !== "ios") return;
     setAppleHealthConnectFeedback(null);
     setHealthAppleConnectBusy(true);
     try {
-      const auth = await requestAppleHealthReadAuthorization();
-      if (auth.ok) {
-        setAppleHealthConnectFeedback({
-          tone: "ok",
-          text: "Mit Apple Health verbunden – Zugriff auf Laufdaten ist erlaubt.",
-        });
-      } else if (auth.reason === "unavailable") {
+      const { Health } = await import("@capgo/capacitor-health");
+      const availability = await Health.isAvailable();
+      if (!availability?.available) {
         setAppleHealthConnectFeedback({
           tone: "err",
-          text: "Apple Health ist auf diesem Gerät nicht verfügbar.",
+          text: "Apple Health is not available on this device.",
         });
-      } else {
-        setAppleHealthConnectFeedback({
+        return;
+      }
+      logHealthKit("Requesting authorization", APPLE_HEALTH_READ_TYPES);
+      await Health.requestAuthorization({ read: APPLE_HEALTH_READ_TYPES });
+      logHealthKit("Permission granted");
+      localStorage.setItem(APPLE_HEALTH_CONNECTED_KEY, "1");
+      setIsHealthConnected(true);
+      setAppleHealthConnectFeedback({
+        tone: "ok",
+        text: "Connected to Apple Health.",
+      });
+      try {
+        await fetchRunningWorkoutsLast7Days();
+      } catch (fetchErr) {
+        console.error("[HealthKit] fetch after connect failed", fetchErr);
+        setAppleHealthLoadFeedback({
           tone: "err",
-          text: "Kein Zugriff auf Apple Health. Bitte unter Einstellungen › Gesundheit › Daten­zugriff & Geräte die Berechtigungen für diese App prüfen.",
+          text: "Could not load workouts. Try “Refresh workouts”.",
         });
       }
+    } catch (err) {
+      console.error("[HealthKit] connect / authorization failed", err);
+      setAppleHealthConnectFeedback({
+        tone: "err",
+        text: "Could not connect to Apple Health. Check Settings › Health › Data Access.",
+      });
     } finally {
       setHealthAppleConnectBusy(false);
     }
   };
 
-  /** Lädt nur Workouts (kein requestAuthorization). */
+  /** Loads running workouts (last 7 days) only — does not open the permission sheet. */
   const reloadHealthRunsFromApple = async () => {
-    if (!Capacitor.isNativePlatform()) return;
+    if (Capacitor.getPlatform() !== "ios") return;
     setAppleHealthLoadFeedback(null);
     setHealthRunsFetchBusy(true);
     try {
@@ -948,47 +1013,29 @@ export default function App(){
       if (!availability?.available) {
         setAppleHealthLoadFeedback({
           tone: "err",
-          text: "Apple Health ist nicht verfügbar.",
+          text: "Apple Health is not available.",
         });
         return;
       }
-      const end = new Date();
-      const start = new Date();
-      start.setDate(start.getDate() - 120);
-      let workouts;
       try {
-        const res = await Health.queryWorkouts({
-          workoutType: "running",
-          startDate: start.toISOString(),
-          endDate: end.toISOString(),
-          limit: 400,
-          ascending: true,
-        });
-        workouts = res.workouts;
-      } catch {
+        await fetchRunningWorkoutsLast7Days();
+      } catch (err) {
+        console.error("[HealthKit] queryWorkouts / merge failed", err);
         setAppleHealthLoadFeedback({
           tone: "err",
-          text: "Bitte zuerst Apple-Health-Zugriff erlauben.",
+          text: "Allow Apple Health access first (Workouts, Distance, Heart Rate, Active Energy).",
         });
         return;
       }
-      if (!Array.isArray(workouts)) {
-        setAppleHealthLoadFeedback({
-          tone: "err",
-          text: "Bitte zuerst Apple-Health-Zugriff erlauben.",
-        });
-        return;
-      }
-      const incoming = workouts.map((w) => workoutToStored(w));
-      setHealthRuns((prev) => mergeHealthRuns(prev, incoming));
       setAppleHealthLoadFeedback({
         tone: "ok",
-        text: "Läufe aus Apple Health geladen.",
+        text: "Workouts updated.",
       });
-    } catch {
+    } catch (err) {
+      console.error("[HealthKit] reloadHealthRunsFromApple error", err);
       setAppleHealthLoadFeedback({
         tone: "err",
-        text: "Bitte zuerst Apple-Health-Zugriff erlauben.",
+        text: "Allow Apple Health access first (Workouts, Distance, Heart Rate, Active Energy).",
       });
     } finally {
       setHealthRunsFetchBusy(false);
@@ -2071,32 +2118,54 @@ export default function App(){
             <div style={{fontSize:11,color:"#64748b"}}>Format: hh:mm:ss</div>
           </SurfaceCard>
 
-          {Capacitor.isNativePlatform() ? (
+          {Capacitor.getPlatform() === "ios" ? (
             <SurfaceCard>
               <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:10}}>Apple Health · Lauf zuordnen</div>
+              {healthKitAvailable === null ? (
+                <div style={{fontSize:12,color:"#94a3b8",marginBottom:8}}>Checking Apple Health…</div>
+              ) : null}
+              {healthKitAvailable === false ? (
+                <div style={{fontSize:12,color:"#fca5a5",marginBottom:8}}>Health data is not available on this device.</div>
+              ) : null}
+              <div
+                style={{
+                  fontSize:13,
+                  fontWeight:700,
+                  marginBottom:8,
+                  color:isHealthConnected ? "#86efac" : "#94a3b8",
+                  lineHeight:1.45,
+                }}
+              >
+                {isHealthConnected ? "Connected to Apple Health" : "Not connected — tap Connect Apple Health"}
+              </div>
+              {appleHealthRunningCountLastFetch === 0 ? (
+                <div style={{fontSize:12,color:"#94a3b8",marginBottom:10}}>No workouts found</div>
+              ) : null}
               <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:8}}>
-                <button
-                  type="button"
-                  onClick={() => handleAppleHealthConnectInSettings()}
-                  disabled={healthAppleConnectBusy}
-                  style={{
-                    background:"rgba(16,185,129,0.16)",
-                    border:"1px solid rgba(52,211,153,0.4)",
-                    borderRadius:12,
-                    padding:"10px 14px",
-                    color:"#6ee7b7",
-                    fontSize:13,
-                    fontWeight:700,
-                    cursor:healthAppleConnectBusy ? "default" : "pointer",
-                    opacity:healthAppleConnectBusy ? 0.65 : 1,
-                  }}
-                >
-                  {healthAppleConnectBusy ? "Verbinde…" : "Apple Health verbinden"}
-                </button>
+                {!isHealthConnected ? (
+                  <button
+                    type="button"
+                    onClick={() => handleAppleHealthConnectInSettings()}
+                    disabled={healthAppleConnectBusy || healthKitAvailable !== true}
+                    style={{
+                      background:"rgba(16,185,129,0.16)",
+                      border:"1px solid rgba(52,211,153,0.4)",
+                      borderRadius:12,
+                      padding:"10px 14px",
+                      color:"#6ee7b7",
+                      fontSize:13,
+                      fontWeight:700,
+                      cursor:healthAppleConnectBusy || healthKitAvailable !== true ? "default" : "pointer",
+                      opacity:healthAppleConnectBusy || healthKitAvailable !== true ? 0.55 : 1,
+                    }}
+                  >
+                    {healthAppleConnectBusy ? "Connecting…" : "Connect Apple Health"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => reloadHealthRunsFromApple()}
-                  disabled={healthRunsFetchBusy}
+                  disabled={healthRunsFetchBusy || healthKitAvailable !== true}
                   style={{
                     background:"rgba(56,189,248,0.18)",
                     border:"1px solid rgba(56,189,248,0.35)",
@@ -2105,11 +2174,11 @@ export default function App(){
                     color:"#7dd3fc",
                     fontSize:13,
                     fontWeight:700,
-                    cursor:healthRunsFetchBusy ? "default" : "pointer",
-                    opacity:healthRunsFetchBusy ? 0.65 : 1,
+                    cursor:healthRunsFetchBusy || healthKitAvailable !== true ? "default" : "pointer",
+                    opacity:healthRunsFetchBusy || healthKitAvailable !== true ? 0.55 : 1,
                   }}
                 >
-                  {healthRunsFetchBusy ? "Läufe werden geladen…" : "Läufe laden"}
+                  {healthRunsFetchBusy ? "Refreshing…" : "Refresh workouts"}
                 </button>
               </div>
               {appleHealthConnectFeedback ? (
@@ -2141,8 +2210,8 @@ export default function App(){
               {!dashboardSession ? (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
                   <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.5}}>Heute ist keine Trainingseinheit geplant – hier kannst du trotzdem Läufe aus Apple Health laden.</div>
-                  {healthRuns.length === 0 ? (
-                    <div style={{fontSize:13,color:"#e2e8f0",fontWeight:650}}>Keine Läufe geladen</div>
+                  {healthRuns.length === 0 && appleHealthRunningCountLastFetch !== 0 ? (
+                    <div style={{fontSize:13,color:"#e2e8f0",fontWeight:650}}>Noch keine Läufe geladen — „Refresh workouts“ tippen.</div>
                   ) : null}
                 </div>
               ) : dashboardHealthDone ? (
@@ -2184,7 +2253,11 @@ export default function App(){
                 </div>
               ) : healthRuns.length === 0 ? (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  <div style={{fontSize:13,color:"#e2e8f0",fontWeight:650}}>Keine Läufe geladen</div>
+                  <div style={{fontSize:13,color:"#e2e8f0",fontWeight:650}}>
+                    {appleHealthRunningCountLastFetch === 0
+                      ? "No workouts found for the last 7 days."
+                      : "Noch keine Läufe geladen — „Refresh workouts“ tippen."}
+                  </div>
                 </div>
               ) : healthRunsForDashboard.length === 0 ? (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -2197,9 +2270,14 @@ export default function App(){
                       const run = settingsSelectedHealthRun;
                       const km = (run.distanceMeters || 0) / 1000;
                       const t = new Date(run.startDate).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+                      const hr =
+                        typeof run.avgHeartRateBpm === "number" && run.avgHeartRateBpm > 0
+                          ? ` · Ø ${Math.round(run.avgHeartRateBpm)} bpm`
+                          : "";
                       return (
                         <span>
                           Gewählter Lauf: {km > 0 ? `${km.toFixed(2)} km` : "Lauf"} · {t}
+                          {hr}
                         </span>
                       );
                     })()}
@@ -2244,6 +2322,10 @@ export default function App(){
                   {healthRunsForDashboard.slice(-6).reverse().map((run) => {
                     const km = (run.distanceMeters || 0) / 1000;
                     const t = new Date(run.startDate).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+                    const hr =
+                      typeof run.avgHeartRateBpm === "number" && run.avgHeartRateBpm > 0
+                        ? ` · Ø ${Math.round(run.avgHeartRateBpm)} bpm`
+                        : "";
                     const selected = run.runId === settingsHealthRunSelectionId;
                     return (
                       <button
@@ -2263,6 +2345,7 @@ export default function App(){
                         }}
                       >
                         {km > 0 ? `${km.toFixed(2)} km` : "Lauf"} · {t}
+                        {hr}
                       </button>
                     );
                   })}
