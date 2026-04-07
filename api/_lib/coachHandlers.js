@@ -12,11 +12,14 @@
  */
 
 const OpenAI = require("openai");
+// Deliberately use a local copy so this directory is fully self-contained.
+// Do NOT change this back to "../../server/aiSchema" — that file is not always
+// committed to git and would cause a MODULE_NOT_FOUND error on Vercel.
 const {
   AI_RESPONSE_SCHEMA,
   ALLOWED_ACTIONS,
   isValidAiResponse,
-} = require("../../server/aiSchema");
+} = require("./aiSchema");
 
 // ─── OpenAI client ────────────────────────────────────────────────────────────
 
@@ -676,21 +679,39 @@ function parseDailyCoachResponse(response) {
   };
 }
 
+// ─── Body parsing helper ─────────────────────────────────────────────────────
+
+/**
+ * Vercel's runtime usually provides req.body as a parsed object.
+ * In some edge-cases (e.g. raw passthrough) it may arrive as a JSON string.
+ * This helper ensures we always get a plain object.
+ */
+function ensureParsedBody(raw) {
+  if (!raw) return {};
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw); } catch { return {}; }
+  }
+  if (typeof raw === "object") return raw;
+  return {};
+}
+
 // ─── Exported request handlers ───────────────────────────────────────────────
 
 /**
  * Handle POST /api/ai
- * @param {object} body - parsed request body
+ * @param {*} rawBody - req.body (parsed object or raw string)
  * @returns {{ status: number, body: object }}
  */
-async function handleAiCoach(body) {
+async function handleAiCoach(rawBody) {
+  const body = ensureParsedBody(rawBody);
+  console.log("[api/ai] incoming body keys:", Object.keys(body)); // eslint-disable-line no-console
   const {
     input,
     context,
     allowedActions,
     responseSchemaVersion,
     model: modelOverride,
-  } = body || {};
+  } = body;
 
   if (typeof input !== "string" || !input.trim()) {
     return { status: 400, body: { error: "Invalid input" } };
@@ -753,11 +774,12 @@ async function handleAiCoach(body) {
 
 /**
  * Handle POST /api/ai/daily-coach
- * @param {object} body - parsed request body
+ * @param {*} rawBody - req.body (parsed object or raw string)
  * @returns {{ status: number, body: object }}
  */
-async function handleDailyCoach(body) {
-  const { coachContext } = body || {};
+async function handleDailyCoach(rawBody) {
+  const body = ensureParsedBody(rawBody);
+  const { coachContext } = body;
   if (!coachContext || typeof coachContext !== "object") {
     return { status: 400, body: { error: "Invalid coachContext" } };
   }

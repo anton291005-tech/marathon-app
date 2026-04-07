@@ -11,6 +11,11 @@ module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
-  const { status, body } = await handleDailyCoach(req.body || {});
-  return res.status(status).json(body);
+  try {
+    const { status, body } = await handleDailyCoach(req.body);
+    return res.status(status).json(body);
+  } catch (err) {
+    console.error("[api/ai/daily-coach] unhandled error:", err?.message || err); // eslint-disable-line no-console
+    return res.status(200).json({ fallback: true });
+  }
 };
