@@ -4,7 +4,6 @@ import BackupControls from "./BackupControls";
 import { Capacitor } from "@capacitor/core";
 import {
   getConsistencyStats,
-  getJumpTargets,
   getPredictionReadiness,
   getShareSummary,
   getTodayNextSession,
@@ -693,14 +692,6 @@ function getRecoveryHistory(plan, logs){
   });
 }
 
-function matchesWeekFilter(session, log, filter){
-  if(filter === "all")return true;
-  if(filter === "open")return getSessionStatus(log) === "open";
-  if(filter === "hard")return ["interval","tempo","race"].includes(session.type);
-  if(filter === "milestones")return session.type === "race" || (session.type === "long" && session.km >= 28);
-  return true;
-}
-
 function getAdaptiveCoachingHint({ recoveryState, weeklyFatigue, performancePrediction, marathonPredictedTime, nextKeySession, phaseStatus }){
   if(recoveryState.label.includes("Fatigue") && weeklyFatigue.label === "hoch"){
     return {
@@ -828,7 +819,6 @@ export default function App(){
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({feeling:0,actualKm:"",notes:"",done:false,skipped:false});
   const [view,setView]=useState(DEFAULT_VIEW);
-  const [weekFilter,setWeekFilter]=useState("all");
   const [overviewPhaseFilter,setOverviewPhaseFilter]=useState("all");
   const [aiNavHint,setAiNavHint]=useState(null);
   const [preferences,setPreferences]=useState(() => safeParseJSON(localStorage.getItem("marathonPreferences"), {
@@ -1458,7 +1448,6 @@ export default function App(){
     phaseStatus,
   });
   const recommendedAction = getRecommendedAction({ recoveryState, weeklyFatigue, nextKeySession, phaseStatus });
-  const visibleWeekSessions = w.s.filter((session) => matchesWeekFilter(session, logs[session.id], weekFilter));
   const visibleOverviewPhases = overviewPhaseFilter === "all" ? Object.keys(PI) : [overviewPhaseFilter];
   const todayNextSession = getTodayNextSession(ACTIVE_SESSIONS, logs, appNow);
   const firstTrainingSession = ACTIVE_SESSIONS[0] || null;
@@ -1494,7 +1483,6 @@ export default function App(){
   const ringCircumference = 2 * Math.PI * ringRadius;
   const ringDashOffset = ringCircumference * (1 - (prepProgressPct / 100));
   const homeTabLabel = getHomeTabLabel(dashboardSession, isPreStart);
-  const jumpTargets = getJumpTargets(PLAN);
   const shareSummary = getShareSummary({ pct, week: w, nextKeySession, recoveryState, consistencyStats });
   const viewTransitionStyle = viewMotionDir === 0
     ? {}
@@ -1805,53 +1793,13 @@ export default function App(){
 
             <WeeklyAnalysisCard weekLabel={w.label} weekDates={w.dates} analysis={weekAnalysis} />
 
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {jumpTargets.map((target)=>(
-                <button
-                  key={target.label}
-                  onClick={()=>setWIdx(Math.max(0, PLAN.findIndex((week)=>week.wn === target.weekNumber)))}
-                  style={{background:"rgba(15,23,42,0.82)",color:"#cbd5e1",border:"1px solid rgba(148,163,184,0.12)",borderRadius:999,padding:"8px 12px",cursor:"pointer",fontSize:12,fontWeight:700,transition:"transform .18s ease, border-color .18s ease"}}
-                >
-                  {target.label}
-                </button>
-              ))}
-              <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(15,23,42,0.82)",border:"1px solid rgba(148,163,184,0.12)",borderRadius:999,padding:"8px 12px"}}>
-                <span style={{fontSize:12,color:"#94a3b8",fontWeight:700}}>Woche</span>
-                <input
-                  type="number"
-                  min="1"
-                  max={PLAN.length}
-                  value={w.wn}
-                  onChange={(e)=>{
-                    const nextWeek = Number(e.target.value);
-                    const idx = PLAN.findIndex((week)=>week.wn === nextWeek);
-                    if(idx >= 0)setWIdx(idx);
-                  }}
-                  style={{width:44,background:"transparent",border:"none",color:"#fff",fontSize:12,fontWeight:700}}
-                />
-              </div>
-            </div>
-
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {[
-                { key: "all", label: "Alle" },
-                { key: "open", label: "Nur offen" },
-                { key: "hard", label: "Harte Einheiten" },
-                { key: "milestones", label: "Milestones" },
-              ].map((item)=>(
-                <FilterChip key={item.key} active={weekFilter===item.key} onClick={()=>setWeekFilter(item.key)}>
-                  {item.label}
-                </FilterChip>
-              ))}
-            </div>
-
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {visibleWeekSessions.length === 0 && (
+            <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:2}}>
+              {w.s.length === 0 && (
                 <div style={{background:"rgba(11,16,28,0.94)",border:"1px solid rgba(148,163,184,0.1)",borderRadius:18,padding:18,fontSize:13,color:"#94a3b8",lineHeight:1.6}}>
-                  Für diesen Filter gibt es in der aktuellen Woche gerade keine passenden Einheiten.
+                  Für diese Woche sind keine Einheiten im Plan hinterlegt.
                 </div>
               )}
-              {visibleWeekSessions.map(session=>{
+              {w.s.map(session=>{
                 const ti=TI[session.type];
                 const log=logs[session.id];
                 const status = getSessionStatus(log);

@@ -147,17 +147,6 @@ export function getTodayNextSession(activeSessions, logs, now = new Date()){
   return null;
 }
 
-export function getJumpTargets(plan){
-  const peakWeek = plan.reduce((best, week) => week.km > (best?.km || 0) ? week : best, null);
-  const hmWeek = plan.find((week) => week.s.some((session) => session.type === "race" && session.km >= 21 && session.km < 42));
-  const raceWeek = plan.find((week) => week.s.some((session) => session.type === "race" && session.km >= 42));
-  return [
-    peakWeek ? { label: "Peak Week", weekNumber: peakWeek.wn } : null,
-    hmWeek ? { label: "HM Week", weekNumber: hmWeek.wn } : null,
-    raceWeek ? { label: "Race Week", weekNumber: raceWeek.wn } : null,
-  ].filter(Boolean);
-}
-
 export function getConsistencyStats(plan, logs, now = new Date()){
   const weekCompletion = plan.map((week) => week.s.filter((session) => session.type !== "rest").every((session) => isSessionLogDone(logs[session.id])));
   let weeklyStreak = 0;
