@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import BackupControls from "./BackupControls";
 import { Capacitor } from "@capacitor/core";
 import {
@@ -10,7 +10,6 @@ import {
   getShareSummary,
   getTodayNextSession,
   isSessionLogDone,
-  normalizeCalendarDay,
   parseSessionDateLabel,
   parseTargetTimeToSeconds,
   safeParseJSON,
@@ -367,12 +366,17 @@ function clampPct(value){
   return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
 }
 
-function healthRunMatchesSessionDay(run, sessionDateLabel){
-  if(!run?.startDate || !sessionDateLabel)return false;
-  const a = normalizeCalendarDay(new Date(run.startDate));
-  const b = parseSessionDateLabel(sessionDateLabel);
-  if(!b)return false;
-  return a.getTime() === normalizeCalendarDay(b).getTime();
+/** Running workouts in the last 7 days, newest first (by startDate). */
+function runningWorkoutsLast7DaysNewestFirst(healthRunsList) {
+  const now = Date.now();
+  const cutoff = now - 7 * 24 * 60 * 60 * 1000;
+  return [...(healthRunsList || [])]
+    .filter((r) => {
+      if (!r?.startDate) return false;
+      const t = new Date(r.startDate).getTime();
+      return Number.isFinite(t) && t >= cutoff && t <= now + 120_000;
+    })
+    .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
 }
 
 function getLoggedKm(session, log){
@@ -845,8 +849,8 @@ export default function App(){
   );
   /** null = not checked yet (iOS only) */
   const [healthKitAvailable, setHealthKitAvailable] = useState(null);
-  const [appleHealthRunningCountLastFetch, setAppleHealthRunningCountLastFetch] = useState(-1);
-  const [settingsHealthRunSelectionId, setSettingsHealthRunSelectionId] = useState(null);
+  /** Set after each workout query: all types from HealthKit, then running-only subset. */
+  const [appleHealthFetchStats, setAppleHealthFetchStats] = useState(null);
   const swipeStartRef = useRef(null);
   const lastSwipeAtRef = useRef(0);
 
@@ -890,27 +894,39 @@ export default function App(){
   const fetchRunningWorkoutsLast7Days = async () => {
     logHealthKit("Fetching workouts");
     const { Health } = await import("@capgo/capacitor-health");
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - 7);
+    const endNow = new Date();
+    const start = new Date(endNow.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // Native plugin docs: endDate is exclusive; nudge past "now" so sessions ending now are not dropped.
+    const endForNative = new Date(endNow.getTime() + 2000);
     const startIso = start.toISOString();
-    const endIso = end.toISOString();
+    const endIsoLogical = endNow.toISOString();
+    const endIsoForQuery = endForNative.toISOString();
+
+    console.log("[HealthKit] queryWorkouts startDate ISO", startIso);
+    console.log("[HealthKit] queryWorkouts endDate ISO", endIsoLogical);
+    console.log("[HealthKit] queryWorkouts endDate ISO (sent to native, +2s for exclusive end)", endIsoForQuery);
 
     const res = await Health.queryWorkouts({
-      workoutType: "running",
       startDate: startIso,
-      endDate: endIso,
-      limit: 200,
+      endDate: endIsoForQuery,
+      limit: 300,
       ascending: false,
     });
-    const workouts = Array.isArray(res.workouts) ? res.workouts : [];
+    console.log("[HealthKit] queryWorkouts raw response (full)", JSON.stringify(res));
+
+    const all = Array.isArray(res.workouts) ? res.workouts : [];
+    const running = all
+      .filter((w) => w.workoutType === "running" || w.workoutType === "runningTreadmill")
+      .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+    console.log("[HealthKit] Workout counts — total:", all.length, "running:", running.length);
+    if (running.length > 0) console.log("Latest run:", running[0]);
 
     let hrPoints = [];
     try {
       const hr = await Health.readSamples({
         dataType: "heartRate",
         startDate: startIso,
-        endDate: endIso,
+        endDate: endIsoForQuery,
         limit: 8000,
         ascending: true,
       });
@@ -919,16 +935,17 @@ export default function App(){
       console.error("[HealthKit] readSamples heartRate error", hrErr);
     }
 
-    const incoming = workouts.map((w) =>
+    const incoming = running.map((w) =>
       workoutToStored(
         w,
         averageHeartRateBpmInWorkoutWindow(w.startDate, w.endDate, hrPoints),
       ),
     );
     setHealthRuns((prev) => mergeHealthRuns(prev, incoming));
-    setAppleHealthRunningCountLastFetch(workouts.length);
-    logHealthKit("Workouts loaded:", workouts.length);
-    return workouts.length;
+    setAppleHealthFetchStats({ total: all.length, running: running.length });
+    console.log("[HealthKit] Workouts loaded:", running.length);
+    logHealthKit("Workout counts logged — total:", all.length, "running merged:", running.length);
+    return running.length;
   };
 
   useEffect(() => {
@@ -1073,7 +1090,6 @@ export default function App(){
         },
       },
     });
-    setSettingsHealthRunSelectionId(null);
   };
 
   const clearHealthRunAssignment = async (session) => {
@@ -1085,7 +1101,6 @@ export default function App(){
       ...logs,
       [session.id]: next,
     });
-    setSettingsHealthRunSelectionId(null);
   };
 
   const quickCompleteSession=async(session)=>{
@@ -1476,26 +1491,18 @@ export default function App(){
     : { animation: `${viewMotionDir > 0 ? "viewSlideNext" : "viewSlidePrev"} .34s cubic-bezier(0.22, 1, 0.36, 1)` };
   const activeView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
   const safeTopPad = "max(20px, env(safe-area-inset-top, 0px))";
-  const healthRunsForDashboard =
-    dashboardSession && Capacitor.isNativePlatform()
-      ? healthRuns.filter((r) => healthRunMatchesSessionDay(r, dashboardSession.date))
-      : [];
-  const settingsSelectedHealthRun =
-    dashboardSession && settingsHealthRunSelectionId
-      ? healthRunsForDashboard.find((r) => r.runId === settingsHealthRunSelectionId)
-      : null;
+  const appleHealthRecentRunsDesc = useMemo(
+    () => runningWorkoutsLast7DaysNewestFirst(healthRuns),
+    [healthRuns],
+  );
+  const latestAppleHealthRun = appleHealthRecentRunsDesc[0] ?? null;
 
   useEffect(() => {
-    setSettingsHealthRunSelectionId(null);
-  }, [dashboardSession?.id]);
-
-  useEffect(() => {
-    if (!settingsHealthRunSelectionId || !dashboardSession) return;
-    const ok = healthRuns.some(
-      (r) => r.runId === settingsHealthRunSelectionId && healthRunMatchesSessionDay(r, dashboardSession.date),
-    );
-    if (!ok) setSettingsHealthRunSelectionId(null);
-  }, [healthRuns, dashboardSession, settingsHealthRunSelectionId]);
+    if (Capacitor.getPlatform() !== "ios") return;
+    if (appleHealthRecentRunsDesc.length > 0) {
+      console.log("Latest run:", appleHealthRecentRunsDesc[0]);
+    }
+  }, [appleHealthRecentRunsDesc]);
 
   return(
     <div
@@ -2138,8 +2145,21 @@ export default function App(){
               >
                 {isHealthConnected ? "Connected to Apple Health" : "Not connected — tap Connect Apple Health"}
               </div>
-              {appleHealthRunningCountLastFetch === 0 ? (
-                <div style={{fontSize:12,color:"#94a3b8",marginBottom:10}}>No workouts found</div>
+              {appleHealthFetchStats ? (
+                <div style={{fontSize:12,color:"#94a3b8",marginBottom:8,lineHeight:1.5}}>
+                  <div>Total workouts: {appleHealthFetchStats.total}</div>
+                  <div>Running workouts: {appleHealthFetchStats.running}</div>
+                </div>
+              ) : null}
+              {appleHealthFetchStats && appleHealthFetchStats.total === 0 ? (
+                <div style={{fontSize:12,color:"#fca5a5",marginBottom:10,lineHeight:1.45}}>
+                  No Apple Health workouts found at all. Make sure you recorded runs via Apple Watch or a fitness app.
+                </div>
+              ) : null}
+              {appleHealthFetchStats && appleHealthFetchStats.total > 0 && appleHealthFetchStats.running === 0 ? (
+                <div style={{fontSize:12,color:"#fbbf24",marginBottom:10,lineHeight:1.45}}>
+                  HealthKit returned workouts, but none are typed as Running (HKWorkoutActivityType.running → workoutType running in JS). Check Total above — some apps save indoor runs as Other.
+                </div>
               ) : null}
               <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:8}}>
                 {!isHealthConnected ? (
@@ -2210,7 +2230,7 @@ export default function App(){
               {!dashboardSession ? (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
                   <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.5}}>Heute ist keine Trainingseinheit geplant – hier kannst du trotzdem Läufe aus Apple Health laden.</div>
-                  {healthRuns.length === 0 && appleHealthRunningCountLastFetch !== 0 ? (
+                  {healthRuns.length === 0 && appleHealthFetchStats == null ? (
                     <div style={{fontSize:13,color:"#e2e8f0",fontWeight:650}}>Noch keine Läufe geladen — „Refresh workouts“ tippen.</div>
                   ) : null}
                 </div>
@@ -2254,37 +2274,81 @@ export default function App(){
               ) : healthRuns.length === 0 ? (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
                   <div style={{fontSize:13,color:"#e2e8f0",fontWeight:650}}>
-                    {appleHealthRunningCountLastFetch === 0
+                    {appleHealthFetchStats && appleHealthFetchStats.total === 0
                       ? "No workouts found for the last 7 days."
-                      : "Noch keine Läufe geladen — „Refresh workouts“ tippen."}
+                      : appleHealthFetchStats && appleHealthFetchStats.total > 0 && appleHealthFetchStats.running === 0
+                        ? "No running workouts in the last 7 days (see note above)."
+                        : appleHealthFetchStats == null
+                          ? "Noch keine Läufe geladen — „Refresh workouts“ tippen."
+                          : "Keine Läufe in der App — oben Total/Running prüfen."}
                   </div>
                 </div>
-              ) : healthRunsForDashboard.length === 0 ? (
+              ) : appleHealthRecentRunsDesc.length === 0 ? (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.5}}>Keine Apple-Health-Läufe für heute gefunden.</div>
+                  <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.5}}>
+                    No Apple Health runs found in the last 7 days.
+                  </div>
                 </div>
-              ) : settingsSelectedHealthRun ? (
+              ) : (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.5}}>
+                  <div style={{fontSize:12,color:"#7c8aa5",fontWeight:700,marginBottom:4}}>Latest run (newest in last 7 days)</div>
+                  <div
+                    style={{
+                      fontSize:13,
+                      color:"#cbd5e1",
+                      lineHeight:1.6,
+                      background:"rgba(15,23,42,0.75)",
+                      border:"1px solid rgba(56,189,248,0.2)",
+                      borderRadius:14,
+                      padding:"12px 14px",
+                    }}
+                  >
                     {(() => {
-                      const run = settingsSelectedHealthRun;
+                      const run = latestAppleHealthRun;
+                      if (!run) return null;
                       const km = (run.distanceMeters || 0) / 1000;
-                      const t = new Date(run.startDate).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-                      const hr =
+                      const dateLabel = new Date(run.startDate).toLocaleString("de-DE", {
+                        weekday:"short",
+                        day:"2-digit",
+                        month:"short",
+                        year:"numeric",
+                        hour:"2-digit",
+                        minute:"2-digit",
+                      });
+                      const durMin =
+                        typeof run.duration === "number" && run.duration > 0
+                          ? Math.max(1, Math.round(run.duration / 60))
+                          : null;
+                      const hrLine =
                         typeof run.avgHeartRateBpm === "number" && run.avgHeartRateBpm > 0
-                          ? ` · Ø ${Math.round(run.avgHeartRateBpm)} bpm`
-                          : "";
+                          ? (
+                              <div>
+                                <span style={{color:"#7c8aa5"}}>Avg heart rate:</span>{" "}
+                                {Math.round(run.avgHeartRateBpm)} bpm
+                              </div>
+                            )
+                          : null;
                       return (
-                        <span>
-                          Gewählter Lauf: {km > 0 ? `${km.toFixed(2)} km` : "Lauf"} · {t}
-                          {hr}
-                        </span>
+                        <>
+                          <div>
+                            <span style={{color:"#7c8aa5"}}>Date:</span> {dateLabel}
+                          </div>
+                          <div>
+                            <span style={{color:"#7c8aa5"}}>Distance:</span>{" "}
+                            {km > 0 ? `${km.toFixed(2)} km` : "—"}
+                          </div>
+                          <div>
+                            <span style={{color:"#7c8aa5"}}>Duration:</span>{" "}
+                            {durMin != null ? `~${durMin} min` : "—"}
+                          </div>
+                          {hrLine}
+                        </>
                       );
                     })()}
                   </div>
                   <button
                     type="button"
-                    onClick={() => assignHealthRunToSession(dashboardSession, settingsSelectedHealthRun)}
+                    onClick={() => assignHealthRunToSession(dashboardSession, latestAppleHealthRun)}
                     style={{
                       alignSelf:"flex-start",
                       background:"rgba(56,189,248,0.22)",
@@ -2299,56 +2363,6 @@ export default function App(){
                   >
                     Für heute übernehmen
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setSettingsHealthRunSelectionId(null)}
-                    style={{
-                      alignSelf:"flex-start",
-                      background:"transparent",
-                      border:"1px solid rgba(148,163,184,0.2)",
-                      borderRadius:12,
-                      padding:"8px 12px",
-                      color:"#94a3b8",
-                      fontSize:12,
-                      fontWeight:700,
-                      cursor:"pointer",
-                    }}
-                  >
-                    Andere Auswahl
-                  </button>
-                </div>
-              ) : (
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {healthRunsForDashboard.slice(-6).reverse().map((run) => {
-                    const km = (run.distanceMeters || 0) / 1000;
-                    const t = new Date(run.startDate).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-                    const hr =
-                      typeof run.avgHeartRateBpm === "number" && run.avgHeartRateBpm > 0
-                        ? ` · Ø ${Math.round(run.avgHeartRateBpm)} bpm`
-                        : "";
-                    const selected = run.runId === settingsHealthRunSelectionId;
-                    return (
-                      <button
-                        key={run.runId}
-                        type="button"
-                        onClick={() => setSettingsHealthRunSelectionId(run.runId)}
-                        style={{
-                          background: selected ? "rgba(56,189,248,0.2)" : "rgba(15,23,42,0.85)",
-                          border: selected ? "1px solid rgba(56,189,248,0.5)" : "1px solid rgba(56,189,248,0.2)",
-                          borderRadius:14,
-                          padding:"10px 12px",
-                          color:"#e2e8f0",
-                          fontSize:13,
-                          fontWeight:700,
-                          cursor:"pointer",
-                          textAlign:"left",
-                        }}
-                      >
-                        {km > 0 ? `${km.toFixed(2)} km` : "Lauf"} · {t}
-                        {hr}
-                      </button>
-                    );
-                  })}
                 </div>
               )}
             </SurfaceCard>
