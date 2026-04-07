@@ -87,32 +87,40 @@ export function findPlanWeekContainingDate(plan, dayStart){
   return null;
 }
 
+function formatLocalYmd(dayStart){
+  const x = normalizeCalendarDay(dayStart);
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, "0");
+  const day = String(x.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Lauf-Einheiten im Plan (kein Ruhe/Kraft/Rad — zählt für Streak „echter Lauf“). */
+function isStreakRunSession(session){
+  return session && session.type !== "rest" && session.type !== "strength" && session.type !== "bike";
+}
+
 /**
- * Streak: aufeinanderfolgende Kalendertage (rückwärts ab heute), an denen alle
- * geplanten Nicht-Ruhe-Sessions erledigt sind. Reine Ruhetage im Plan zählen als erfüllt.
- * Liegt der Tag außerhalb des Plans (keine Session), endet der Streak.
+ * Streak: aufeinanderfolgende lokale Kalendertage ab heute rückwärts, an denen mindestens
+ * eine geplante Lauf-Session erledigt ist (manuell done oder Apple-Health zugeordnet).
+ * Mehrere Läufe am selben Tag zählen als ein Tag. Ruhetage ohne Lauf-Session brechen den Streak.
  */
 export function getCalendarTrainingStreak(plan, logs, now = new Date()){
   let streak = 0;
+  const streakDays = [];
   let d = normalizeCalendarDay(now);
   for(;;){
-    const onDay = sessionsScheduledOnCalendarDay(plan, d);
-    if(onDay.length === 0){
-      break;
-    }
-    const active = onDay.filter((s) => s.type !== "rest");
-    if(active.length === 0){
-      streak += 1;
-      d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
-      continue;
-    }
-    const allDone = active.every((s) => isSessionLogDone(logs[s.id]));
-    if(!allDone){
+    const onDay = sessionsScheduledOnCalendarDay(plan, d).filter(isStreakRunSession);
+    const hasCompletedRun = onDay.some((s) => isSessionLogDone(logs[s.id]));
+    if(!hasCompletedRun){
       break;
     }
     streak += 1;
+    streakDays.push(formatLocalYmd(d));
     d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
   }
+  console.log("streakDays:", streakDays);
+  console.log("streak value:", streak);
   return streak;
 }
 

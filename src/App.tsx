@@ -3,7 +3,6 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import BackupControls from "./BackupControls";
 import { Capacitor } from "@capacitor/core";
 import {
-  findPlanWeekContainingDate,
   getConsistencyStats,
   getJumpTargets,
   getPredictionReadiness,
@@ -1472,11 +1471,20 @@ export default function App(){
     : "";
   const dashboardSession = todayNextSession?.session || null;
   const dashboardType = dashboardSession ? TI[dashboardSession.type] : { label: "Keine Einheit geplant", emoji: "😴", col: "#64748b" };
-  const ringWeek = findPlanWeekContainingDate(PLAN, todayStart) || w;
-  const weekActiveForRing = ringWeek.s.filter((s) => s.type !== "rest");
-  const weekDoneForRing = weekActiveForRing.filter((s) => isSessionLogDone(logs[s.id])).length;
-  const weekTotalForRing = weekActiveForRing.length;
-  const prepProgressPct = weekTotalForRing > 0 ? Math.round((weekDoneForRing / weekTotalForRing) * 100) : 0;
+  const planRunningSessionsForKmRing = ACTIVE_SESSIONS.filter(
+    (s) => s.type !== "rest" && s.type !== "strength" && s.type !== "bike",
+  );
+  const overallPlannedKm = planRunningSessionsForKmRing.reduce((sum, s) => sum + (Number(s.km) || 0), 0);
+  const overallCompletedKm = planRunningSessionsForKmRing.reduce((sum, s) => {
+    if (!isSessionLogDone(logs[s.id])) return sum;
+    return sum + getLoggedKm(s, logs[s.id]);
+  }, 0);
+  let planKmProgressRaw = overallPlannedKm > 0 ? (overallCompletedKm / overallPlannedKm) * 100 : 0;
+  planKmProgressRaw = Math.max(0, Math.min(100, planKmProgressRaw));
+  let prepProgressPct = Math.round(planKmProgressRaw);
+  if (planKmProgressRaw > 0 && prepProgressPct < 1) prepProgressPct = 1;
+  const ringKmDoneDisplay = Math.round(overallCompletedKm * 10) / 10;
+  const ringKmPlannedDisplay = Math.round(overallPlannedKm * 10) / 10;
   const dashboardLog = dashboardSession ? logs[dashboardSession.id] : null;
   const dashboardDone = !!(dashboardSession && isSessionLogDone(dashboardLog));
   const dashboardHealthDone = !!(dashboardLog?.assignedRun?.runId);
@@ -1632,7 +1640,7 @@ export default function App(){
                 </div>
               </div>
               <div style={{marginTop:8,fontSize:13,fontWeight:600,color:"rgba(226,232,240,0.62)"}}>
-                {weekDoneForRing} von {weekTotalForRing} Einheiten · diese Planwoche
+                {ringKmDoneDisplay} von {ringKmPlannedDisplay} km
               </div>
             </div>
           </div>
@@ -1717,7 +1725,7 @@ export default function App(){
 
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>
                 {[
-                  { label: "Plan", value: `${pct}%`, sub: `${weekDoneForRing}/${weekTotalForRing} diese Woche`, color: "#10b981" },
+                  { label: "Plan", value: `${prepProgressPct}%`, sub: `${ringKmDoneDisplay} / ${ringKmPlannedDisplay} km gesamt`, color: "#10b981" },
                   { label: "km", value: `${Math.round(loggedKm)}`, sub: `${kmPct}%`, color: "#38bdf8" },
                   { label: "Long", value: `${doneLongRuns}/${longRuns}`, sub: "done", color: "#f59e0b" },
                   { label: "Quality", value: `${doneHardSessions}/${hardSessions}`, sub: "done", color: "#fb7185" },
