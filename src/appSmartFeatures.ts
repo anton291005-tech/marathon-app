@@ -120,7 +120,7 @@ export function getCalendarTrainingStreak(plan, logs, now = new Date()){
     d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
   }
   console.log("streakDays:", streakDays);
-  console.log("streak value:", streak);
+  console.log("streakValue:", streak);
   return streak;
 }
 

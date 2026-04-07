@@ -4,14 +4,22 @@
 
 import { isSessionLogDone, parseSessionDateLabel } from "./appSmartFeatures";
 import type { PlanWeek, SessionLog, PlanSession } from "./marathonPrediction";
-import { getPlannedKmEquiv } from "./marathonPrediction";
+import { getPlannedKmEquiv, getEffectiveKm } from "./marathonPrediction";
 
-function weekSessionLoggedKm(session: PlanSession, log: SessionLog | undefined): number {
-  if (!isSessionLogDone(log)) return 0;
-  if (!log) return 0;
-  const parsed = Number.parseFloat(String(log.actualKm || "").replace(",", "."));
-  if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  return session.km > 0 ? session.km : getPlannedKmEquiv(session);
+function countsTowardWeeklyRunKm(s: PlanSession): boolean {
+  return s.type !== "strength" && s.type !== "bike";
+}
+
+function weeklyKmSource(
+  log: SessionLog | undefined,
+): "appleHealth" | "actualKmField" | "plannedFallback" {
+  const ar = log?.assignedRun;
+  if (ar && typeof ar.distanceKm === "number" && Number.isFinite(ar.distanceKm) && ar.distanceKm > 0) {
+    return "appleHealth";
+  }
+  const parsed = Number.parseFloat(String(log?.actualKm || "").replace(",", "."));
+  if (Number.isFinite(parsed) && parsed > 0) return "actualKmField";
+  return "plannedFallback";
 }
 
 function weekDateBounds(week: PlanWeek): { first: Date | null; last: Date | null } {
@@ -55,11 +63,18 @@ export function analyzeWeek(week: PlanWeek, logs: Record<string, SessionLog>, no
   const trainable = week.s.filter((s) => s.type !== "rest");
   const plannedTrainSessions = trainable.length;
 
-  let plannedKm = week.km;
+  const plannedKm = week.km;
   let actualKm = 0;
   let doneSessions = 0;
   let intensePlanned = 0;
   let intenseDone = 0;
+
+  const weeklyKmIncludedRuns: Array<{
+    date: string;
+    source: "appleHealth" | "actualKmField" | "plannedFallback";
+    plannedKm: number;
+    actualKmUsed: number;
+  }> = [];
 
   const longSessions = trainable.filter((s) => s.type === "long" && s.km > 0);
   const longRunPlanned = longSessions.length > 0;
@@ -77,9 +92,22 @@ export function analyzeWeek(week: PlanWeek, logs: Record<string, SessionLog>, no
     }
     if (isSessionLogDone(log)) {
       doneSessions += 1;
-      actualKm += weekSessionLoggedKm(s, log);
+      if (countsTowardWeeklyRunKm(s)) {
+        const usedKm = getEffectiveKm(s, log);
+        actualKm += usedKm;
+        weeklyKmIncludedRuns.push({
+          date: s.date,
+          source: weeklyKmSource(log),
+          plannedKm: s.km > 0 ? s.km : getPlannedKmEquiv(s),
+          actualKmUsed: usedKm,
+        });
+      }
     }
   }
+
+  console.log("weeklyPlannedKm", plannedKm);
+  console.log("weeklyCompletedActualKm", actualKm);
+  console.log("weeklyKmIncludedRuns", weeklyKmIncludedRuns);
 
   let verdict = "Solide Woche";
   let verdictTone: WeeklyVerdictTone = "solid";

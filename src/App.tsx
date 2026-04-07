@@ -384,7 +384,9 @@ function getLoggedKm(session, log){
   if(ar && typeof ar.distanceKm === "number" && Number.isFinite(ar.distanceKm) && ar.distanceKm > 0){
     return ar.distanceKm;
   }
-  return parseFloat(log.actualKm) || session.km || 0;
+  const parsed = parseFloat(String(log?.actualKm || "").replace(",", "."));
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  return session.km > 0 ? session.km : 0;
 }
 
 function getSessionTypeLabel(type){
@@ -1483,8 +1485,8 @@ export default function App(){
   planKmProgressRaw = Math.max(0, Math.min(100, planKmProgressRaw));
   let prepProgressPct = Math.round(planKmProgressRaw);
   if (planKmProgressRaw > 0 && prepProgressPct < 1) prepProgressPct = 1;
-  const ringKmDoneDisplay = Math.round(overallCompletedKm * 10) / 10;
-  const ringKmPlannedDisplay = Math.round(overallPlannedKm * 10) / 10;
+  const ringKmDoneDisplay = Math.round(overallCompletedKm);
+  const ringKmPlannedDisplay = Math.round(overallPlannedKm);
   const dashboardLog = dashboardSession ? logs[dashboardSession.id] : null;
   const dashboardDone = !!(dashboardSession && isSessionLogDone(dashboardLog));
   const dashboardHealthDone = !!(dashboardLog?.assignedRun?.runId);
@@ -1511,6 +1513,12 @@ export default function App(){
       console.log("Latest run:", appleHealthRecentRunsDesc[0]);
     }
   }, [appleHealthRecentRunsDesc]);
+
+  useEffect(() => {
+    console.log("overallPlannedKm", overallPlannedKm);
+    console.log("overallCompletedKm", overallCompletedKm);
+    console.log("displayedProgressPercent", prepProgressPct);
+  }, [overallPlannedKm, overallCompletedKm, prepProgressPct]);
 
   return(
     <div
@@ -1636,7 +1644,20 @@ export default function App(){
                 </svg>
                 <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
                   <div style={{fontSize:48,fontWeight:800,color:"#f8fafc",lineHeight:1,letterSpacing:"-0.03em"}}>{prepProgressPct}%</div>
-                  <div style={{fontSize:10.5,fontWeight:700,color:"rgba(226,232,240,0.5)",marginTop:7,letterSpacing:"0.07em",textTransform:"uppercase"}}>VORBEREITUNG</div>
+                  <div
+                    style={{
+                      fontSize:9,
+                      fontWeight:700,
+                      color:"rgba(226,232,240,0.5)",
+                      marginTop:6,
+                      letterSpacing:"0.04em",
+                      textAlign:"center",
+                      lineHeight:1.25,
+                      maxWidth:150,
+                    }}
+                  >
+                    Gesamter Fortschritt der Vorbereitung
+                  </div>
                 </div>
               </div>
               <div style={{marginTop:8,fontSize:13,fontWeight:600,color:"rgba(226,232,240,0.62)"}}>
