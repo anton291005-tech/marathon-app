@@ -1595,6 +1595,12 @@ export default function App(){
   const activeView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
   const safeTopPad = "calc(env(safe-area-inset-top, 0px) + 4px)";
   const safeBottomContentPad = "calc(94px + env(safe-area-inset-bottom, 0px))";
+  const appRootBackground = {
+    backgroundColor: "#070912",
+    backgroundImage: "radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",
+    backgroundRepeat: "no-repeat",
+    backgroundAttachment: "fixed",
+  };
   const mainScrollAreaStyle = { flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch" };
   const appleHealthRecentRunsDesc = useMemo(
     () => runningWorkoutsLast7DaysNewestFirst(healthRuns),
@@ -1627,16 +1633,19 @@ export default function App(){
       onWheel={handleWheel}
       style={{
         boxSizing: "border-box",
+        flex: 1,
         minHeight: "100dvh",
         display: "flex",
         flexDirection: "column",
-        background: "transparent",
+        ...appRootBackground,
         color: "#e2e8f0",
         fontFamily: "'Segoe UI',system-ui,sans-serif",
         fontSize: 14,
         WebkitTapHighlightColor: "transparent",
         paddingTop: safeTopPad,
         paddingBottom: safeBottomContentPad,
+        paddingLeft: "env(safe-area-inset-left, 0px)",
+        paddingRight: "env(safe-area-inset-right, 0px)",
       }}
     >
       <style>{`
@@ -1905,10 +1914,23 @@ export default function App(){
                   { label: "Long", value: `${doneLongRuns}/${longRuns}`, sub: "done", color: "#f59e0b" },
                   { label: "Quality", value: `${doneHardSessions}/${hardSessions}`, sub: "done", color: "#fb7185" },
                 ].map(m=>(
-                  <div key={m.label} style={{padding:"11px 10px",borderRadius:14,background:"rgba(15,23,42,0.28)"}}>
-                    <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:5}}>{m.label}</div>
+                  <div
+                    key={m.label}
+                    style={{
+                      padding: "11px 10px",
+                      borderRadius: 14,
+                      background: "rgba(15,23,42,0.28)",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      textAlign: "center",
+                      gap: 5,
+                    }}
+                  >
+                    <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700}}>{m.label}</div>
                     <div style={{fontSize:17,fontWeight:800,color:m.color,lineHeight:1.05}}>{m.value}</div>
-                    <div style={{fontSize:11,color:"rgba(148,163,184,0.5)",marginTop:4}}>{m.sub}</div>
+                    <div style={{fontSize:11,color:"rgba(148,163,184,0.5)"}}>{m.sub}</div>
                   </div>
                 ))}
               </div>
