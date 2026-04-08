@@ -6,8 +6,11 @@ export type AiConfig = {
   requestTimeoutMs: number;
 };
 
+/** CRA injects env at build time; in some WebViews `process` is undefined — never reference `process` unguarded. */
 function readEnv(name: string): string {
-  return (process?.env?.[name] || "").trim();
+  if (typeof process === "undefined" || !process.env) return "";
+  const v = process.env[name];
+  return typeof v === "string" ? v.trim() : "";
 }
 
 export function getAiConfig(): AiConfig {

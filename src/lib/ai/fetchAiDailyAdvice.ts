@@ -10,9 +10,11 @@
 
 import type { DailyCoachDecision, DailyCoachDecisionInput } from "./getDailyCoachDecision";
 
-// Empty string → relative URLs → works on both Vercel and local (via proxy).
-// Set REACT_APP_AI_API_BASE only when the API runs on a completely separate origin.
-const AI_BASE_URL = (process.env.REACT_APP_AI_API_BASE || "").replace(/\/$/, "");
+function aiApiBaseUrl(): string {
+  if (typeof process === "undefined" || !process.env) return "";
+  const raw = process.env.REACT_APP_AI_API_BASE;
+  return (typeof raw === "string" ? raw : "").replace(/\/$/, "");
+}
 
 export type AiDailyAdvice = Pick<
   DailyCoachDecision,
@@ -26,7 +28,7 @@ export async function fetchAiDailyAdvice(
   signal?: AbortSignal,
 ): Promise<AiDailyAdvice | null> {
   try {
-    const res = await fetch(`${AI_BASE_URL}/api/ai/daily-coach`, {
+    const res = await fetch(`${aiApiBaseUrl()}/api/ai/daily-coach`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ coachContext: input }),
