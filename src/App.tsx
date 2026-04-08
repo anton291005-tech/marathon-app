@@ -50,6 +50,23 @@ function localCalendarYmd() {
   return `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, "0")}-${String(ts.getDate()).padStart(2, "0")}`;
 }
 
+/**
+ * HealthKit query range: local calendar (today − 7 days) at 00:00:00 through now (UTC instants via toISOString).
+ * iOS plugin defaults to last 24h if startDate is missing or fails to parse — always send valid ISO bounds.
+ */
+function appleHealthWorkoutQueryRange7DaysLocal() {
+  const endNow = new Date();
+  const startLocalMidnight = new Date(endNow.getFullYear(), endNow.getMonth(), endNow.getDate());
+  startLocalMidnight.setDate(startLocalMidnight.getDate() - 7);
+  startLocalMidnight.setHours(0, 0, 0, 0);
+  const endForNative = new Date(endNow.getTime() + 2000);
+  return {
+    startIso: startLocalMidnight.toISOString(),
+    endIsoLogical: endNow.toISOString(),
+    endIsoForQuery: endForNative.toISOString(),
+  };
+}
+
 function logHealthKit(message, ...rest) {
   console.log("[HealthKit]", message, ...rest);
 }
@@ -375,15 +392,19 @@ function clampPct(value){
   return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
 }
 
-/** Running workouts in the last 7 days, newest first (by startDate). */
+/** Running workouts in the last 7 local-calendar days (from 00:00 seven days ago), newest first. */
 function runningWorkoutsLast7DaysNewestFirst(healthRunsList) {
-  const now = Date.now();
-  const cutoff = now - 7 * 24 * 60 * 60 * 1000;
+  const endNow = new Date();
+  const windowStart = new Date(endNow.getFullYear(), endNow.getMonth(), endNow.getDate());
+  windowStart.setDate(windowStart.getDate() - 7);
+  windowStart.setHours(0, 0, 0, 0);
+  const cutoff = windowStart.getTime();
+  const endCap = endNow.getTime() + 120_000;
   return [...(healthRunsList || [])]
     .filter((r) => {
       if (!r?.startDate) return false;
       const t = new Date(r.startDate).getTime();
-      return Number.isFinite(t) && t >= cutoff && t <= now + 120_000;
+      return Number.isFinite(t) && t >= cutoff && t <= endCap;
     })
     .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
 }
@@ -900,31 +921,52 @@ export default function App(){
   const fetchRunningWorkoutsLast7Days = async () => {
     logHealthKit("Fetching workouts");
     const { Health } = await import("@capgo/capacitor-health");
-    const endNow = new Date();
-    const start = new Date(endNow.getTime() - 7 * 24 * 60 * 60 * 1000);
-    // Native plugin docs: endDate is exclusive; nudge past "now" so sessions ending now are not dropped.
-    const endForNative = new Date(endNow.getTime() + 2000);
-    const startIso = start.toISOString();
-    const endIsoLogical = endNow.toISOString();
-    const endIsoForQuery = endForNative.toISOString();
+    const { startIso, endIsoLogical, endIsoForQuery } = appleHealthWorkoutQueryRange7DaysLocal();
 
-    console.log("[HealthKit] queryWorkouts startDate ISO", startIso);
-    console.log("[HealthKit] queryWorkouts endDate ISO", endIsoLogical);
-    console.log("[HealthKit] queryWorkouts endDate ISO (sent to native, +2s for exclusive end)", endIsoForQuery);
-
-    const res = await Health.queryWorkouts({
-      startDate: startIso,
-      endDate: endIsoForQuery,
-      limit: 300,
-      ascending: false,
+    console.log("[HealthKit] queryWorkouts window (7 local days 00:00 → now)", {
+      startIso,
+      endIsoLogical,
+      endIsoForQuery,
     });
-    console.log("[HealthKit] queryWorkouts raw response (full)", JSON.stringify(res));
 
-    const all = Array.isArray(res.workouts) ? res.workouts : [];
-    const running = all
+    const perPageLimit = 400;
+    const maxPages = 20;
+    const all = [];
+    let anchor;
+    for (let page = 0; page < maxPages; page++) {
+      const res = await Health.queryWorkouts({
+        startDate: startIso,
+        endDate: endIsoForQuery,
+        limit: perPageLimit,
+        ascending: false,
+        ...(anchor ? { anchor } : {}),
+      });
+      const batch = Array.isArray(res.workouts) ? res.workouts : [];
+      all.push(...batch);
+      if (!res.anchor || batch.length === 0) break;
+      anchor = res.anchor;
+    }
+
+    const dedupeKeys = new Set();
+    const deduped = [];
+    for (const w of all) {
+      const k = `${w.startDate}|${w.duration}|${w.workoutType}|${w.totalDistance ?? ""}|${w.platformId ?? ""}`;
+      if (dedupeKeys.has(k)) continue;
+      dedupeKeys.add(k);
+      deduped.push(w);
+    }
+
+    console.log(
+      "[HealthKit] queryWorkouts merged pages — raw rows:",
+      all.length,
+      "deduped:",
+      deduped.length,
+    );
+
+    const running = deduped
       .filter((w) => w.workoutType === "running" || w.workoutType === "runningTreadmill")
       .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-    console.log("[HealthKit] Workout counts — total:", all.length, "running:", running.length);
+    console.log("[HealthKit] Workout counts — total (deduped):", deduped.length, "running:", running.length);
     if (running.length > 0) console.log("Latest run:", running[0]);
 
     let hrPoints = [];
@@ -948,7 +990,7 @@ export default function App(){
       ),
     );
     setHealthRuns((prev) => mergeHealthRuns(prev, incoming));
-    setAppleHealthFetchStats({ total: all.length, running: running.length });
+    setAppleHealthFetchStats({ total: deduped.length, running: running.length });
     console.log("[HealthKit] Workouts loaded:", running.length);
     logHealthKit("Workout counts logged — total:", all.length, "running merged:", running.length);
     return running.length;
