@@ -379,6 +379,9 @@ const PLAN=[
 const BASE_PLAN = PLAN;
 
 const ALL_SESSIONS = PLAN.flatMap((week) => week.s);
+const HEALTH_LINK_SESSION_TYPES = new Set(["easy", "long", "interval", "tempo", "race"]);
+/** Plan-Einheiten, die mit einem Apple-Health-Lauf verknüpft werden dürfen (chronologisch wie im Plan). */
+const HEALTH_LINKABLE_PLAN_SESSIONS = ALL_SESSIONS.filter((session) => HEALTH_LINK_SESSION_TYPES.has(session.type));
 const ACTIVE_SESSIONS = ALL_SESSIONS.filter((session) => session.type !== "rest");
 
 const LONG_RUN_SESSIONS = ACTIVE_SESSIONS.filter((session) => session.type === "long" && session.km > 0);
@@ -407,6 +410,16 @@ function runningWorkoutsLast7DaysNewestFirst(healthRunsList) {
       return Number.isFinite(t) && t >= cutoff && t <= endCap;
     })
     .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+}
+
+function planRowLabelForAssignedRun(runId, logsObj) {
+  if (!runId || !logsObj) return null;
+  for (const sess of ALL_SESSIONS) {
+    if (logsObj[sess.id]?.assignedRun?.runId === runId) {
+      return `${sess.day}, ${sess.date} – ${sess.title}`;
+    }
+  }
+  return null;
 }
 
 function getLoggedKm(session, log){
@@ -874,6 +887,8 @@ export default function App(){
   const [healthKitAvailable, setHealthKitAvailable] = useState(null);
   /** Set after each workout query: all types from HealthKit, then running-only subset. */
   const [appleHealthFetchStats, setAppleHealthFetchStats] = useState(null);
+  /** Apple Health: welcher Lauf (runId) zeigt gerade die Plan-Einheiten-Auswahl. */
+  const [healthSessionPickRunId, setHealthSessionPickRunId] = useState(null);
   /** Derived recovery/load hint from recent runs (updated when logs or plan patches change). */
   const [trainingLoadRec, setTrainingLoadRec] = useState(() =>
     buildTrainingLoadFallbackRecommendation(localCalendarYmd()),
@@ -966,8 +981,13 @@ export default function App(){
     const running = deduped
       .filter((w) => w.workoutType === "running" || w.workoutType === "runningTreadmill")
       .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-    console.log("[HealthKit] Workout counts — total (deduped):", deduped.length, "running:", running.length);
-    if (running.length > 0) console.log("Latest run:", running[0]);
+    console.log("[HealthKit] Workout counts — total (deduped):", deduped.length, "running after fetch:", running.length);
+    if (running.length > 0) {
+      console.log(
+        "[HealthKit] running top3 (native preview):",
+        running.slice(0, 3).map((w) => ({ platformId: w.platformId ?? null, start: w.startDate })),
+      );
+    }
 
     let hrPoints = [];
     try {
@@ -1124,24 +1144,48 @@ export default function App(){
   };
 
   const assignHealthRunToSession = async (session, run) => {
+    console.log("[HealthLink] assign", { runId: run.runId, sessionId: session.id });
     const km = (run.distanceMeters || 0) / 1000;
-    const existing = logs[session.id] || {};
-    await save({
-      ...logs,
-      [session.id]: {
-        ...existing,
-        suggestedHealthRunId: undefined,
-        assignedRun: {
-          runId: run.runId,
-          startDate: run.startDate,
-          duration: run.duration,
-          distanceKm: Math.round(km * 100) / 100,
-          ...(typeof run.avgHeartRateBpm === "number" && Number.isFinite(run.avgHeartRateBpm)
-            ? { avgHeartRateBpm: run.avgHeartRateBpm }
-            : {}),
-        },
+    const nextLogs = { ...logs };
+    for (const sid of Object.keys(nextLogs)) {
+      if (sid === session.id) continue;
+      const lg = nextLogs[sid];
+      if (lg?.assignedRun?.runId === run.runId) {
+        const copy = { ...lg };
+        delete copy.assignedRun;
+        nextLogs[sid] = copy;
+      }
+    }
+    const existing = nextLogs[session.id] || {};
+    nextLogs[session.id] = {
+      ...existing,
+      suggestedHealthRunId: undefined,
+      assignedRun: {
+        runId: run.runId,
+        startDate: run.startDate,
+        duration: run.duration,
+        distanceKm: Math.round(km * 100) / 100,
+        ...(typeof run.avgHeartRateBpm === "number" && Number.isFinite(run.avgHeartRateBpm)
+          ? { avgHeartRateBpm: run.avgHeartRateBpm }
+          : {}),
       },
-    });
+    };
+    await save(nextLogs);
+    console.log("[HealthLink] success", { runId: run.runId, sessionId: session.id });
+  };
+
+  const clearHealthRunAssignmentByRunId = async (runId) => {
+    if (!runId) return;
+    const nextLogs = { ...logs };
+    let touched = false;
+    for (const sid of Object.keys(nextLogs)) {
+      if (nextLogs[sid]?.assignedRun?.runId !== runId) continue;
+      const copy = { ...nextLogs[sid] };
+      delete copy.assignedRun;
+      nextLogs[sid] = copy;
+      touched = true;
+    }
+    if (touched) await save(nextLogs);
   };
 
   const clearHealthRunAssignment = async (session) => {
@@ -1606,12 +1650,18 @@ export default function App(){
     () => runningWorkoutsLast7DaysNewestFirst(healthRuns),
     [healthRuns],
   );
-  const latestAppleHealthRun = appleHealthRecentRunsDesc[0] ?? null;
+  /** Settings Apple Health: bis zu 3 Zeilen — nur UI-Ableitung aus derselben sortierten Liste. */
+  const workouts = useMemo(() => appleHealthRecentRunsDesc.slice(0, 3), [appleHealthRecentRunsDesc]);
 
   useEffect(() => {
     if (Capacitor.getPlatform() !== "ios") return;
-    if (appleHealthRecentRunsDesc.length > 0) {
-      console.log("Latest run:", appleHealthRecentRunsDesc[0]);
+    const runs = appleHealthRecentRunsDesc;
+    console.log("[HealthUI] running workouts (7d window, newest first):", runs.length);
+    if (runs.length > 0) {
+      console.log(
+        "[HealthUI] top3 display runId/start:",
+        runs.slice(0, 3).map((r) => ({ runId: r.runId, start: r.startDate })),
+      );
     }
   }, [appleHealthRecentRunsDesc]);
 
@@ -1873,7 +1923,7 @@ export default function App(){
                 <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.45, marginTop: 2 }}>{runIntelFeedback}</div>
               ) : null}
               {healthSuggestPending ? (
-                <div style={{ fontSize: 11, color: "#7dd3fc", marginTop: 2 }}>Apple Health Lauf erkannt — bitte „Für heute übernehmen“.</div>
+                <div style={{ fontSize: 11, color: "#7dd3fc", marginTop: 2 }}>Apple Health Lauf erkannt — in Einstellungen „Training wählen“ zum Zuordnen.</div>
               ) : null}
               <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(148,163,184,0.12)" }}>
                 <div
@@ -2420,50 +2470,11 @@ export default function App(){
                 </div>
               ) : null}
               {!dashboardSession ? (
-                <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.5}}>Heute ist keine Trainingseinheit geplant – hier kannst du trotzdem Läufe aus Apple Health laden.</div>
-                  {healthRuns.length === 0 && appleHealthFetchStats == null ? (
-                    <div style={{fontSize:13,color:"#e2e8f0",fontWeight:650}}>Noch keine Läufe geladen — „Refresh workouts“ tippen.</div>
-                  ) : null}
+                <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.5,marginBottom:10}}>
+                  Heute ist keine Trainingseinheit geplant – du kannst Läufe trotzdem einer beliebigen Plan-Einheit zuordnen.
                 </div>
-              ) : dashboardHealthDone ? (
-                <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  <div style={{fontSize:14,fontWeight:800,color:"#86efac"}}>Lauf übernommen ✅</div>
-                  {(() => {
-                    const ar = dashboardLog?.assignedRun;
-                    if (!ar?.runId) return null;
-                    const start = ar.startDate ? new Date(ar.startDate) : null;
-                    const timeLabel = start
-                      ? start.toLocaleString("de-DE", { weekday:"short", day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })
-                      : "—";
-                    const durMin = typeof ar.duration === "number" && ar.duration > 0 ? Math.max(1, Math.round(ar.duration / 60)) : null;
-                    return (
-                      <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.55}}>
-                        <div><span style={{color:"#7c8aa5"}}>Distanz:</span> {typeof ar.distanceKm === "number" ? `${ar.distanceKm} km` : "—"}</div>
-                        <div><span style={{color:"#7c8aa5"}}>Start:</span> {timeLabel}</div>
-                        {durMin != null ? <div><span style={{color:"#7c8aa5"}}>Dauer:</span> ca. {durMin} Min.</div> : null}
-                      </div>
-                    );
-                  })()}
-                  <button
-                    type="button"
-                    onClick={() => clearHealthRunAssignment(dashboardSession)}
-                    style={{
-                      alignSelf:"flex-start",
-                      background:"rgba(15,23,42,0.85)",
-                      border:"1px solid rgba(148,163,184,0.2)",
-                      borderRadius:12,
-                      padding:"10px 14px",
-                      color:"#cbd5e1",
-                      fontSize:13,
-                      fontWeight:700,
-                      cursor:"pointer",
-                    }}
-                  >
-                    Zurücksetzen
-                  </button>
-                </div>
-              ) : healthRuns.length === 0 ? (
+              ) : null}
+              {healthRuns.length === 0 ? (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
                   <div style={{fontSize:13,color:"#e2e8f0",fontWeight:650}}>
                     {appleHealthFetchStats && appleHealthFetchStats.total === 0
@@ -2478,83 +2489,177 @@ export default function App(){
               ) : appleHealthRecentRunsDesc.length === 0 ? (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
                   <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.5}}>
-                    No Apple Health runs found in the last 7 days.
+                    In den letzten 7 Tagen sind unter den geladenen Daten keine Running-Workouts im Fenster.
                   </div>
                 </div>
               ) : (
-                <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  <div style={{fontSize:12,color:"#7c8aa5",fontWeight:700,marginBottom:4}}>Latest run (newest in last 7 days)</div>
-                  <div
-                    style={{
-                      fontSize:13,
-                      color:"#cbd5e1",
-                      lineHeight:1.6,
-                      background:"rgba(15,23,42,0.75)",
-                      border:"1px solid rgba(56,189,248,0.2)",
-                      borderRadius:14,
-                      padding:"12px 14px",
-                    }}
-                  >
-                    {(() => {
-                      const run = latestAppleHealthRun;
-                      if (!run) return null;
-                      const km = (run.distanceMeters || 0) / 1000;
-                      const dateLabel = new Date(run.startDate).toLocaleString("de-DE", {
-                        weekday:"short",
-                        day:"2-digit",
-                        month:"short",
-                        year:"numeric",
-                        hour:"2-digit",
-                        minute:"2-digit",
-                      });
-                      const durMin =
-                        typeof run.duration === "number" && run.duration > 0
-                          ? Math.max(1, Math.round(run.duration / 60))
-                          : null;
-                      const hrLine =
-                        typeof run.avgHeartRateBpm === "number" && run.avgHeartRateBpm > 0
-                          ? (
-                              <div>
-                                <span style={{color:"#7c8aa5"}}>Avg heart rate:</span>{" "}
-                                {Math.round(run.avgHeartRateBpm)} bpm
-                              </div>
-                            )
-                          : null;
-                      return (
-                        <>
-                          <div>
-                            <span style={{color:"#7c8aa5"}}>Date:</span> {dateLabel}
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <div style={{fontSize:12,color:"#7c8aa5",fontWeight:700}}>Letzte Läufe (max. 3, neueste zuerst)</div>
+                  {workouts.map((workout, workoutIndex) => {
+                    const km = (workout.distanceMeters || 0) / 1000;
+                    const dateLabel = new Date(workout.startDate).toLocaleString("de-DE", {
+                      weekday:"short",
+                      day:"2-digit",
+                      month:"short",
+                      hour:"2-digit",
+                      minute:"2-digit",
+                    });
+                    const durMin =
+                      typeof workout.duration === "number" && workout.duration > 0
+                        ? Math.max(1, Math.round(workout.duration / 60))
+                        : null;
+                    const linkedLabel = planRowLabelForAssignedRun(workout.runId, logs);
+                    const pickerOpen = healthSessionPickRunId === workout.runId;
+                    return (
+                      <div
+                        key={`apple-health-settings-${workoutIndex}-${workout.runId}-${workout.startDate}`}
+                        style={{
+                          fontSize:13,
+                          color:"#cbd5e1",
+                          lineHeight:1.55,
+                          background:"rgba(15,23,42,0.75)",
+                          border:"1px solid rgba(56,189,248,0.2)",
+                          borderRadius:14,
+                          padding:"10px 12px",
+                          display:"flex",
+                          flexDirection:"column",
+                          gap:8,
+                        }}
+                      >
+                        <div><span style={{color:"#7c8aa5"}}>Distanz:</span> {km > 0 ? `${km.toFixed(2)} km` : "—"}</div>
+                        <div><span style={{color:"#7c8aa5"}}>Start:</span> {dateLabel}</div>
+                        <div><span style={{color:"#7c8aa5"}}>Dauer:</span> {durMin != null ? `ca. ${durMin} Min.` : "—"}</div>
+                        {linkedLabel ? (
+                          <div style={{fontSize:12,color:"#86efac",fontWeight:650}}>Bereits verknüpft: {linkedLabel}</div>
+                        ) : null}
+                        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                          <button
+                            type="button"
+                            onClick={() => setHealthSessionPickRunId(pickerOpen ? null : workout.runId)}
+                            style={{
+                              alignSelf:"flex-start",
+                              background:"rgba(56,189,248,0.22)",
+                              border:"1px solid rgba(56,189,248,0.45)",
+                              borderRadius:12,
+                              padding:"8px 12px",
+                              color:"#e0f2fe",
+                              fontSize:13,
+                              fontWeight:800,
+                              cursor:"pointer",
+                            }}
+                          >
+                            Training wählen
+                          </button>
+                          {linkedLabel ? (
+                            <button
+                              type="button"
+                              onClick={() => void clearHealthRunAssignmentByRunId(workout.runId)}
+                              style={{
+                                alignSelf:"flex-start",
+                                background:"rgba(15,23,42,0.85)",
+                                border:"1px solid rgba(148,163,184,0.2)",
+                                borderRadius:12,
+                                padding:"8px 12px",
+                                color:"#cbd5e1",
+                                fontSize:13,
+                                fontWeight:700,
+                                cursor:"pointer",
+                              }}
+                            >
+                              Verknüpfung aufheben
+                            </button>
+                          ) : null}
+                        </div>
+                        {pickerOpen ? (
+                          <div
+                            style={{
+                              marginTop:4,
+                              paddingTop:10,
+                              borderTop:"1px solid rgba(148,163,184,0.12)",
+                              display:"flex",
+                              flexDirection:"column",
+                              gap:6,
+                              maxHeight:220,
+                              overflowY:"auto",
+                            }}
+                          >
+                            <div style={{fontSize:11,color:"#7c8aa5",fontWeight:700}}>Plan-Einheit wählen</div>
+                            {HEALTH_LINKABLE_PLAN_SESSIONS.map((sess) => {
+                              const lg = logs[sess.id];
+                              const arId = lg?.assignedRun?.runId;
+                              const rowLabel = `${sess.day}, ${sess.date} – ${sess.title}`;
+                              const isThisRun = arId === workout.runId;
+                              const hasOther = arId && arId !== workout.runId;
+                              return (
+                                <button
+                                  key={sess.id}
+                                  type="button"
+                                  onClick={() => {
+                                    console.log("[HealthLink] selected workoutId", workout.runId);
+                                    console.log("[HealthLink] selected plan session", sess.id, rowLabel);
+                                    void assignHealthRunToSession(sess, workout).then(() => setHealthSessionPickRunId(null));
+                                  }}
+                                  style={{
+                                    textAlign:"left",
+                                    background:"rgba(9,13,24,0.9)",
+                                    border:"1px solid rgba(56,189,248,0.18)",
+                                    borderRadius:10,
+                                    padding:"8px 10px",
+                                    color:"#e2e8f0",
+                                    fontSize:12,
+                                    fontWeight:650,
+                                    cursor:"pointer",
+                                    lineHeight:1.4,
+                                  }}
+                                >
+                                  {rowLabel}
+                                  {isThisRun ? " · dieser Lauf" : null}
+                                  {hasOther ? " · andere Zuordnung wird ersetzt" : null}
+                                </button>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              onClick={() => setHealthSessionPickRunId(null)}
+                              style={{
+                                alignSelf:"flex-start",
+                                marginTop:4,
+                                background:"transparent",
+                                border:"1px solid rgba(148,163,184,0.25)",
+                                borderRadius:10,
+                                padding:"6px 10px",
+                                color:"#94a3b8",
+                                fontSize:12,
+                                fontWeight:700,
+                                cursor:"pointer",
+                              }}
+                            >
+                              Abbrechen
+                            </button>
                           </div>
-                          <div>
-                            <span style={{color:"#7c8aa5"}}>Distance:</span>{" "}
-                            {km > 0 ? `${km.toFixed(2)} km` : "—"}
-                          </div>
-                          <div>
-                            <span style={{color:"#7c8aa5"}}>Duration:</span>{" "}
-                            {durMin != null ? `~${durMin} min` : "—"}
-                          </div>
-                          {hrLine}
-                        </>
-                      );
-                    })()}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => assignHealthRunToSession(dashboardSession, latestAppleHealthRun)}
-                    style={{
-                      alignSelf:"flex-start",
-                      background:"rgba(56,189,248,0.22)",
-                      border:"1px solid rgba(56,189,248,0.45)",
-                      borderRadius:12,
-                      padding:"10px 14px",
-                      color:"#e0f2fe",
-                      fontSize:13,
-                      fontWeight:800,
-                      cursor:"pointer",
-                    }}
-                  >
-                    Für heute übernehmen
-                  </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                  {dashboardSession && dashboardHealthDone ? (
+                    <button
+                      type="button"
+                      onClick={() => clearHealthRunAssignment(dashboardSession)}
+                      style={{
+                        alignSelf:"flex-start",
+                        background:"rgba(15,23,42,0.85)",
+                        border:"1px solid rgba(148,163,184,0.2)",
+                        borderRadius:12,
+                        padding:"10px 14px",
+                        color:"#cbd5e1",
+                        fontSize:13,
+                        fontWeight:700,
+                        cursor:"pointer",
+                      }}
+                    >
+                      Zuordnung für heute zurücksetzen
+                    </button>
+                  ) : null}
                 </div>
               )}
             </SurfaceCard>
@@ -2619,7 +2724,7 @@ export default function App(){
                 >
                   {item.icon ?? ""}
                 </span>
-                <span style={{fontSize:item.key === "home" ? 11 : item.key === "settings" || item.key === "coach" ? 8.8 : 10,fontWeight:800,opacity:active ? 1 : 0.7,letterSpacing:item.key === "home" ? "0.08em" : "0",whiteSpace:"nowrap",margin:0,lineHeight:1}}>
+                <span style={{fontSize:item.key === "home" ? 11 : item.key === "settings" || item.key === "coach" ? 8.8 : 10,fontWeight:800,opacity:active ? 1 : 0.7,letterSpacing:item.key === "home" ? "0.08em" : "0",whiteSpace:"nowrap",margin:0,lineHeight:1,transform:item.key === "home" ? "translateY(-1px)" : undefined}}>
                   {item.label}
                 </span>
                 <span style={{width:4,height:4,borderRadius:"50%",background:active ? "#fff" : "transparent",flexShrink:0,margin:0,boxShadow:active ? "0 0 10px rgba(255,255,255,0.5)" : "none"}} />

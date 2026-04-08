@@ -15,12 +15,26 @@ export type StoredHealthRun = {
   distanceMeters: number;
   workoutType?: string;
   sourceName?: string;
+  /** HealthKit-Workout-UUID (iOS), falls vom Plugin geliefert — stabile Identität */
+  platformId?: string;
   /** Durchschnittliche HF im Workout-Zeitfenster (Apple Health), falls ermittelbar */
   avgHeartRateBpm?: number;
 };
 
 export function makeHealthRunId(startDate: string, duration: number, distanceMeters: number): string {
   return `${startDate}_${duration}_${distanceMeters}`;
+}
+
+/** Bevorzugt HealthKit-UUID; sonst deterministischer Fallback aus Start/Distanz/Dauer. */
+export function healthRunStableId(
+  startDate: string,
+  duration: number,
+  distanceMeters: number,
+  platformId?: string,
+): string {
+  const p = platformId && String(platformId).trim();
+  if (p) return `hk_${p}`;
+  return makeHealthRunId(startDate, duration, distanceMeters);
 }
 
 /** HF-Samples (z. B. aus Health.readSamples), Wert in bpm */
@@ -51,11 +65,13 @@ export function workoutToStored(
     totalDistance?: number;
     workoutType?: string;
     sourceName?: string;
+    platformId?: string;
   },
   avgHeartRateBpm?: number,
 ): StoredHealthRun {
   const distanceMeters = typeof workout.totalDistance === "number" ? workout.totalDistance : 0;
-  const runId = makeHealthRunId(workout.startDate, workout.duration, distanceMeters);
+  const platformId = workout.platformId && String(workout.platformId).trim();
+  const runId = healthRunStableId(workout.startDate, workout.duration, distanceMeters, platformId);
   return {
     runId,
     startDate: workout.startDate,
@@ -63,6 +79,7 @@ export function workoutToStored(
     distanceMeters,
     workoutType: workout.workoutType,
     sourceName: workout.sourceName,
+    ...(platformId ? { platformId } : {}),
     ...(typeof avgHeartRateBpm === "number" && Number.isFinite(avgHeartRateBpm)
       ? { avgHeartRateBpm: Math.round(avgHeartRateBpm) }
       : {}),
