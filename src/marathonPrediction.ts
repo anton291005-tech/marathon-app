@@ -41,6 +41,17 @@ export type SessionLog = {
     startDate: string;
     duration: number;
     distanceKm: number;
+    avgHeartRateBpm?: number;
+  };
+  /** Training Intelligence: erkanntes Health-Match ohne feste Zuordnung (niedrige Confidence) */
+  suggestedHealthRunId?: string;
+  /** Auswertung Plan vs. Health-Lauf */
+  runEvaluation?: {
+    status: string;
+    label?: string;
+    feedback?: string;
+    distanceDeltaKm?: number;
+    updatedAt?: string;
   };
 };
 

@@ -1,5 +1,7 @@
 // @ts-nocheck
 
+import { calculateStreak } from "./trainingIntelligence/streak";
+
 const MONTHS = {
   Jan: 0,
   Feb: 1,
@@ -87,75 +89,29 @@ export function findPlanWeekContainingDate(plan, dayStart){
   return null;
 }
 
-function formatLocalYmd(dayStart){
-  const x = normalizeCalendarDay(dayStart);
-  const y = x.getFullYear();
-  const m = String(x.getMonth() + 1).padStart(2, "0");
-  const day = String(x.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/** Lauf-Einheiten im Plan (kein Ruhe/Kraft/Rad — zählt für Streak „echter Lauf“). */
-function isStreakRunSession(session){
-  return session && session.type !== "rest" && session.type !== "strength" && session.type !== "bike";
-}
-
 /**
- * Streak: aufeinanderfolgende lokale Kalendertage rückwärts ab heute, an denen mindestens
- * eine geplante Lauf-Session erledigt ist (manuell done oder Apple-Health zugeordnet).
- * Mehrere Läufe am selben Tag zählen als ein Tag.
- *
- * Heute zählt nur, wenn mindestens eine Lauf-Session an dem Tag erledigt ist.
- * Ist heute noch offen (oder nur Ruhetag ohne Lauf im Plan), wird der Kalendertag übersprungen,
- * sodass gestern erledigt → Streak 1, auch wenn heute noch nicht gelaufen wurde.
- * Liegt in der Vergangenheit ein Tag mit geplantem Lauf, der nicht erledigt ist, endet die Serie.
- * Ein Ruhetag ohne Lauf-Session in der Vergangenheit beendet die Serie ebenfalls.
+ * Streak: aufeinanderfolgende lokale Kalendertage mit mindestens einer erledigten
+ * Trainings-Einheit (Lauf inkl. Apple Health, Kraft, Rad — kein Ruhetag).
+ * Heute ohne Erledigung wird übersprungen, gestern zählt weiter.
  */
 export function getCalendarTrainingStreak(plan, logs, now = new Date()){
-  const todayStart = normalizeCalendarDay(now);
-  const todayKey = todayStart.getTime();
-  let streak = 0;
-  const streakDays = [];
-  const sourceEntries = [];
-  let d = new Date(todayStart);
-  const maxIterations = 800;
-  for(let iteration = 0; iteration < maxIterations; iteration += 1){
-    const dayKey = normalizeCalendarDay(d).getTime();
-    const isCalendarToday = dayKey === todayKey;
-    const onDay = sessionsScheduledOnCalendarDay(plan, d).filter(isStreakRunSession);
-
-    if(onDay.length === 0){
-      if(isCalendarToday){
-        d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
-        continue;
-      }
-      break;
+  const completed = new Set();
+  for (const week of plan) {
+    for (const s of week.s) {
+      if (s.type === "rest") continue;
+      if (!isSessionLogDone(logs[s.id])) continue;
+      const pd = parseSessionDateLabel(s.date);
+      if (!pd) continue;
+      const x = normalizeCalendarDay(pd);
+      const y = x.getFullYear();
+      const m = String(x.getMonth() + 1).padStart(2, "0");
+      const day = String(x.getDate()).padStart(2, "0");
+      completed.add(`${y}-${m}-${day}`);
     }
-
-    const completedOnDay = onDay.filter((s) => isSessionLogDone(logs[s.id]));
-    const hasCompletedRun = completedOnDay.length > 0;
-    if(!hasCompletedRun){
-      if(isCalendarToday){
-        d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
-        continue;
-      }
-      break;
-    }
-
-    const ymd = formatLocalYmd(d);
-    streak += 1;
-    streakDays.push(ymd);
-    sourceEntries.push({
-      date: ymd,
-      sessionIds: onDay.map((s) => s.id),
-      completedSessionIds: completedOnDay.map((s) => s.id),
-      doneViaManual: completedOnDay.map((s) => !!(logs[s.id]?.done === true)),
-      doneViaAssignedRun: completedOnDay.map((s) => !!(logs[s.id]?.assignedRun?.runId)),
-    });
-    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
   }
-  console.log("streakSourceEntries:", sourceEntries);
-  console.log("streakNormalizedTrainingDates:", streakDays);
+  const sorted = [...completed].sort();
+  console.log("Streak input:", sorted);
+  const streak = calculateStreak(completed, now);
   console.log("streakValue:", streak);
   return streak;
 }

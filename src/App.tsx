@@ -34,6 +34,7 @@ import {
   mergeHealthRuns,
   workoutToStored,
 } from "./healthRuns";
+import { applyAppleHealthTrainingSync } from "./trainingIntelligence/applyAppleHealthSync";
 
 const APPLE_HEALTH_CONNECTED_KEY = "marathonAppleHealthConnected";
 /** iOS HealthKit read types (native plugin accepts strings; "workouts" is special-cased in Swift). */
@@ -1073,11 +1074,15 @@ export default function App(){
       ...logs,
       [session.id]: {
         ...existing,
+        suggestedHealthRunId: undefined,
         assignedRun: {
           runId: run.runId,
           startDate: run.startDate,
           duration: run.duration,
           distanceKm: Math.round(km * 100) / 100,
+          ...(typeof run.avgHeartRateBpm === "number" && Number.isFinite(run.avgHeartRateBpm)
+            ? { avgHeartRateBpm: run.avgHeartRateBpm }
+            : {}),
         },
       },
     });
@@ -1207,6 +1212,22 @@ export default function App(){
   const ALL_SESSIONS = PLAN.flatMap((week) => week.s);
   const ACTIVE_SESSIONS = ALL_SESSIONS.filter((session) => session.type !== "rest");
   const LONG_RUN_SESSIONS = ACTIVE_SESSIONS.filter((session) => session.type === "long" && session.km > 0);
+
+  const logsRef = useRef(logs);
+  logsRef.current = logs;
+
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== "ios") return;
+    if (!healthRuns.length) return;
+    const result = applyAppleHealthTrainingSync({
+      healthRuns,
+      planSessions: ACTIVE_SESSIONS,
+      logs: logsRef.current,
+    });
+    if (!result.changed) return;
+    void save(result.logs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Apple-Run-Merge nur bei neuen Health-Daten
+  }, [healthRuns]);
 
   const handleAiApplyPlanPatches = (_message, _action, patches)=>{
     if(!patches?.length)return;
@@ -1479,6 +1500,9 @@ export default function App(){
   const dashboardLog = dashboardSession ? logs[dashboardSession.id] : null;
   const dashboardDone = !!(dashboardSession && isSessionLogDone(dashboardLog));
   const dashboardHealthDone = !!(dashboardLog?.assignedRun?.runId);
+  const runIntelFeedback = dashboardLog?.runEvaluation?.feedback;
+  const runIntelLabel = dashboardLog?.runEvaluation?.label;
+  const healthSuggestPending = !!(dashboardLog?.suggestedHealthRunId && !dashboardLog?.assignedRun?.runId);
   const ringRadius = 38;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const ringDashOffset = ringCircumference * (1 - (prepProgressPct / 100));
@@ -1597,7 +1621,9 @@ export default function App(){
               </div>
               <div style={{fontSize:13,color:"rgba(226,232,240,0.62)",fontWeight:650,marginTop:8,letterSpacing:"0.01em",lineHeight:1.45}}>
                 {dashboardHealthDone ? (
-                  <span style={{color:"#86efac",fontWeight:700}}>Heute erledigt (durch Apple Health Lauf)</span>
+                  <span style={{color:"#86efac",fontWeight:700}}>
+                    Mit Einheit verknüpft · Apple Health{runIntelLabel ? ` · ${runIntelLabel}` : ""}
+                  </span>
                 ) : dashboardDone ? (
                   <span style={{color:"#86efac",fontWeight:700}}>Heute erledigt</span>
                 ) : (
@@ -1726,10 +1752,16 @@ export default function App(){
               <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#7c8aa5",fontWeight:700}}>Heutige Einschätzung</div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
                 <span style={{fontSize:15,fontWeight:800,color:"#f8fafc"}}>Coach &amp; Details</span>
-                <span style={{fontSize:12,fontWeight:800,padding:"5px 12px",borderRadius:999,background:todayCompletedViaAssignedRun ? "rgba(16,185,129,0.2)" : "rgba(56,189,248,0.12)",color:todayCompletedViaAssignedRun ? "#86efac" : "#7dd3fc",border:`1px solid ${todayCompletedViaAssignedRun ? "rgba(16,185,129,0.35)" : "rgba(56,189,248,0.28)"}`}}>
-                  {todayCompletedViaAssignedRun ? "Erledigt" : "Wie geplant"}
+                <span style={{fontSize:12,fontWeight:800,padding:"5px 12px",borderRadius:999,background:healthSuggestPending ? "rgba(251,191,36,0.16)" : todayCompletedViaAssignedRun ? "rgba(16,185,129,0.2)" : "rgba(56,189,248,0.12)",color:healthSuggestPending ? "#fcd34d" : todayCompletedViaAssignedRun ? "#86efac" : "#7dd3fc",border:`1px solid ${healthSuggestPending ? "rgba(251,191,36,0.35)" : todayCompletedViaAssignedRun ? "rgba(16,185,129,0.35)" : "rgba(56,189,248,0.28)"}`}}>
+                  {healthSuggestPending ? "Lauf erkannt" : runIntelLabel || (todayCompletedViaAssignedRun ? "Erledigt" : "Wie geplant")}
                 </span>
               </div>
+              {runIntelFeedback ? (
+                <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.45, marginTop: 2 }}>{runIntelFeedback}</div>
+              ) : null}
+              {healthSuggestPending ? (
+                <div style={{ fontSize: 11, color: "#7dd3fc", marginTop: 2 }}>Apple Health Lauf erkannt — bitte „Für heute übernehmen“.</div>
+              ) : null}
             </button>
 
             {/* Metrics group — cleaner, softer and less boxy */}
@@ -1862,7 +1894,11 @@ export default function App(){
                               {getSessionStatusLabel(log)}
                             </span>
                             {log?.assignedRun?.runId ? (
-                              <span style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:"rgba(56,189,248,0.14)",color:"#7dd3fc",fontWeight:700,border:"1px solid rgba(56,189,248,0.28)"}}>übernommen ✔</span>
+                              <span style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:"rgba(56,189,248,0.14)",color:"#7dd3fc",fontWeight:700,border:"1px solid rgba(56,189,248,0.28)"}}>
+                                {log?.runEvaluation?.label ? `${log.runEvaluation.label} · ` : ""}Mit Einheit verknüpft ✔
+                              </span>
+                            ) : log?.suggestedHealthRunId ? (
+                              <span style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:"rgba(251,191,36,0.14)",color:"#fcd34d",fontWeight:700,border:"1px solid rgba(251,191,36,0.28)"}}>Apple Health Lauf erkannt</span>
                             ) : null}
                             {milestones.map((milestone)=>(
                               <span key={milestone.label} style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:`${milestone.color}1f`,color:milestone.color,fontWeight:700}}>
