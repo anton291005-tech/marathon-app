@@ -55,31 +55,87 @@ function distanceDelta(log: SessionLog): number {
   return typeof d === "number" && Number.isFinite(d) ? d : 0;
 }
 
-/**
- * Completed running sessions (plan type in RUNNING_TYPES, log done), on or before `today`, newest first.
- */
-export function getRecentRelevantRuns(
+function ymdToUtcMidnightMs(ymd: string): number {
+  const [y, m, d] = ymd.split("-").map((x) => Number.parseInt(x, 10));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return NaN;
+  return Date.UTC(y, m - 1, d);
+}
+
+function collectCompletedRunningRows(
   planSessions: PlanSession[],
   logs: Record<string, SessionLog | undefined>,
-  todayYmd: string,
-): { primaryRun: CompletedRunSnapshot; secondaryRun: CompletedRunSnapshot | null } | null {
+  options: { maxDateYmdInclusive: string | null },
+): CompletedRunSnapshot[] {
   const rows: CompletedRunSnapshot[] = [];
+  const cap = options.maxDateYmdInclusive ? ymdToUtcMidnightMs(options.maxDateYmdInclusive) : NaN;
 
   for (const s of planSessions) {
     if (!RUNNING_TYPES.has(s.type)) continue;
     const log = logs[s.id];
     if (!log || !isSessionLogDone(log)) continue;
     const ymd = planSessionLocalYmd(s);
-    if (!ymd || ymd > todayYmd) continue;
+    if (!ymd) continue;
+    if (Number.isFinite(cap)) {
+      const rowT = ymdToUtcMidnightMs(ymd);
+      if (!Number.isFinite(rowT) || rowT > cap) continue;
+    }
     rows.push({ sessionId: s.id, date: ymd, log, sessionType: s.type });
   }
+  return rows;
+}
 
-  if (rows.length === 0) return null;
-
+function sortRunRowsDesc(rows: CompletedRunSnapshot[]): void {
   rows.sort((a, b) => {
+    const ta = ymdToUtcMidnightMs(a.date);
+    const tb = ymdToUtcMidnightMs(b.date);
+    if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) return tb - ta;
     if (a.date !== b.date) return b.date.localeCompare(a.date);
     return runCompletionSortTime(b.log) - runCompletionSortTime(a.log);
   });
+}
+
+/**
+ * Completed running sessions (plan type in RUNNING_TYPES, log done), newest first.
+ * 1) Strict: session local date on or before `todayYmd` (handles lexicographic YYYY-MM-DD vs calendar).
+ * 2) Relaxed: if strict is empty (common when plan uses year 2026 but device clock is still 2025),
+ *    use all completed runs in the plan so the feature stays usable in dev / year skew.
+ */
+export function getRecentRelevantRuns(
+  planSessions: PlanSession[],
+  logs: Record<string, SessionLog | undefined>,
+  todayYmd: string,
+): { primaryRun: CompletedRunSnapshot; secondaryRun: CompletedRunSnapshot | null } | null {
+  const logIds = Object.keys(logs || {});
+  const doneRunningPreview = planSessions.filter((s) => {
+    if (!RUNNING_TYPES.has(s.type)) return false;
+    const lg = logs[s.id];
+    return !!(lg && isSessionLogDone(lg));
+  }).length;
+
+  console.log("Recovery input logs:", {
+    logEntryCount: logIds.length,
+    doneRunningSessionCount: doneRunningPreview,
+    todayYmd,
+  });
+
+  let rows = collectCompletedRunningRows(planSessions, logs, { maxDateYmdInclusive: todayYmd });
+  console.log("Recovery strict row count (on/before today):", rows.length);
+
+  if (rows.length === 0) {
+    rows = collectCompletedRunningRows(planSessions, logs, { maxDateYmdInclusive: null });
+    console.log(
+      "Recovery: using relaxed window (no on/before-today matches — often plan year vs device date). Row count:",
+      rows.length,
+    );
+  }
+
+  if (rows.length === 0) {
+    console.log("Recovery primaryRun: null (no qualifying completed run)");
+    console.log("Recovery secondaryRun: null");
+    return null;
+  }
+
+  sortRunRowsDesc(rows);
 
   const primaryRun = rows[0];
   const secondaryRun = rows.length > 1 ? rows[1] : null;
@@ -182,16 +238,36 @@ export type GetTrainingLoadRecommendationParams = {
   today: string;
 };
 
+/** Shown when no qualifying completed run exists — keeps UI and tests stable (never null from the public API). */
+export function buildTrainingLoadFallbackRecommendation(todayYmd: string): TrainingLoadRecommendation {
+  return {
+    status: "green",
+    label: "Noch keine Basis",
+    feedback: "Sobald ein passender Lauf vorliegt, erscheint hier eine Trainings-Empfehlung.",
+    basedOnDate: todayYmd,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 /**
  * Derives next-day style recovery hint from the most recent completed run(s).
  * Uses `SessionLog` + plan session dates only (no separate SessionLog.date field).
+ * Always returns a value; uses {@link buildTrainingLoadFallbackRecommendation} when no run qualifies.
  */
 export function getTrainingLoadRecommendation(
   params: GetTrainingLoadRecommendationParams,
-): TrainingLoadRecommendation | null {
+): TrainingLoadRecommendation {
+  console.log("getTrainingLoadRecommendation called", {
+    planWeeks: params.plan.length,
+    today: params.today,
+  });
   const planSessions = params.plan.flatMap((w) => w.s);
   const recent = getRecentRelevantRuns(planSessions, params.logs, params.today);
-  if (!recent) return null;
+  if (!recent) {
+    const fallback = buildTrainingLoadFallbackRecommendation(params.today);
+    console.log("Recovery computed recommendation: fallback (no primary run)", fallback);
+    return fallback;
+  }
 
   const { primaryRun, secondaryRun } = recent;
   const status = classifyLoad(primaryRun, secondaryRun);
@@ -208,6 +284,6 @@ export function getTrainingLoadRecommendation(
     basedOnDate: primaryRun.date,
     updatedAt: new Date().toISOString(),
   };
-  console.log("Recovery output:", rec);
+  console.log("Recovery computed recommendation:", rec);
   return rec;
 }

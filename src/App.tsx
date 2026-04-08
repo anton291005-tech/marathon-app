@@ -35,11 +35,20 @@ import {
   workoutToStored,
 } from "./healthRuns";
 import { applyAppleHealthTrainingSync } from "./trainingIntelligence/applyAppleHealthSync";
-import { getTrainingLoadRecommendation } from "./trainingLoadRecommendation";
+import {
+  buildTrainingLoadFallbackRecommendation,
+  getTrainingLoadRecommendation,
+} from "./trainingLoadRecommendation";
 
 const APPLE_HEALTH_CONNECTED_KEY = "marathonAppleHealthConnected";
 /** iOS HealthKit read types (native plugin accepts strings; "workouts" is special-cased in Swift). */
 const APPLE_HEALTH_READ_TYPES = ["workouts", "distance", "heartRate", "calories"];
+
+function localCalendarYmd() {
+  const now = new Date();
+  const ts = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, "0")}-${String(ts.getDate()).padStart(2, "0")}`;
+}
 
 function logHealthKit(message, ...rest) {
   console.log("[HealthKit]", message, ...rest);
@@ -845,7 +854,9 @@ export default function App(){
   /** Set after each workout query: all types from HealthKit, then running-only subset. */
   const [appleHealthFetchStats, setAppleHealthFetchStats] = useState(null);
   /** Derived recovery/load hint from recent runs (updated when logs or plan patches change). */
-  const [trainingLoadRec, setTrainingLoadRec] = useState(null);
+  const [trainingLoadRec, setTrainingLoadRec] = useState(() =>
+    buildTrainingLoadFallbackRecommendation(localCalendarYmd()),
+  );
   const swipeStartRef = useRef(null);
   const lastSwipeAtRef = useRef(0);
 
@@ -1233,15 +1244,17 @@ export default function App(){
   }, [healthRuns]);
 
   useEffect(() => {
-    const now = new Date();
-    const ts = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayYmd = `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, "0")}-${String(ts.getDate()).padStart(2, "0")}`;
+    const todayYmd = localCalendarYmd();
+    const logKeys = Object.keys(logs || {});
+    console.log("[TrainingLoad] App effect (getTrainingLoadRecommendation path)", {
+      todayYmd,
+      logEntryCount: logKeys.length,
+      planWeeks: PLAN.length,
+    });
     const next = getTrainingLoadRecommendation({ plan: PLAN, logs, today: todayYmd });
+    console.log("[TrainingLoad] App trainingLoadRec state will be set to:", next);
     setTrainingLoadRec((prev) => {
-      if (!prev && !next) return prev;
       if (
-        prev &&
-        next &&
         prev.status === next.status &&
         prev.basedOnDate === next.basedOnDate &&
         prev.feedback === next.feedback &&
@@ -1788,42 +1801,40 @@ export default function App(){
               {healthSuggestPending ? (
                 <div style={{ fontSize: 11, color: "#7dd3fc", marginTop: 2 }}>Apple Health Lauf erkannt — bitte „Für heute übernehmen“.</div>
               ) : null}
-              {trainingLoadRec ? (
-                <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(148,163,184,0.12)" }}>
-                  <div
-                    style={{
-                      display: "inline-block",
-                      fontSize: 11,
-                      fontWeight: 800,
-                      padding: "4px 10px",
-                      borderRadius: 999,
-                      marginBottom: 6,
-                      background:
-                        trainingLoadRec.status === "red"
-                          ? "rgba(248,113,113,0.16)"
-                          : trainingLoadRec.status === "yellow"
-                            ? "rgba(251,191,36,0.14)"
-                            : "rgba(16,185,129,0.14)",
-                      color:
-                        trainingLoadRec.status === "red"
-                          ? "#fecaca"
-                          : trainingLoadRec.status === "yellow"
-                            ? "#fcd34d"
-                            : "#86efac",
-                      border: `1px solid ${
-                        trainingLoadRec.status === "red"
-                          ? "rgba(248,113,113,0.35)"
-                          : trainingLoadRec.status === "yellow"
-                            ? "rgba(251,191,36,0.32)"
-                            : "rgba(16,185,129,0.3)"
-                      }`,
-                    }}
-                  >
-                    {trainingLoadRec.label}
-                  </div>
-                  <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.45 }}>{trainingLoadRec.feedback}</div>
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(148,163,184,0.12)" }}>
+                <div
+                  style={{
+                    display: "inline-block",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    marginBottom: 6,
+                    background:
+                      trainingLoadRec.status === "red"
+                        ? "rgba(248,113,113,0.16)"
+                        : trainingLoadRec.status === "yellow"
+                          ? "rgba(251,191,36,0.14)"
+                          : "rgba(16,185,129,0.14)",
+                    color:
+                      trainingLoadRec.status === "red"
+                        ? "#fecaca"
+                        : trainingLoadRec.status === "yellow"
+                          ? "#fcd34d"
+                          : "#86efac",
+                    border: `1px solid ${
+                      trainingLoadRec.status === "red"
+                        ? "rgba(248,113,113,0.35)"
+                        : trainingLoadRec.status === "yellow"
+                          ? "rgba(251,191,36,0.32)"
+                          : "rgba(16,185,129,0.3)"
+                    }`,
+                  }}
+                >
+                  {trainingLoadRec.label}
                 </div>
-              ) : null}
+                <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.45 }}>{trainingLoadRec.feedback}</div>
+              </div>
             </button>
 
             {/* Metrics group — cleaner, softer and less boxy */}
