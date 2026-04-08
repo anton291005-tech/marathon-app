@@ -101,25 +101,61 @@ function isStreakRunSession(session){
 }
 
 /**
- * Streak: aufeinanderfolgende lokale Kalendertage ab heute rückwärts, an denen mindestens
+ * Streak: aufeinanderfolgende lokale Kalendertage rückwärts ab heute, an denen mindestens
  * eine geplante Lauf-Session erledigt ist (manuell done oder Apple-Health zugeordnet).
- * Mehrere Läufe am selben Tag zählen als ein Tag. Ruhetage ohne Lauf-Session brechen den Streak.
+ * Mehrere Läufe am selben Tag zählen als ein Tag.
+ *
+ * Heute zählt nur, wenn mindestens eine Lauf-Session an dem Tag erledigt ist.
+ * Ist heute noch offen (oder nur Ruhetag ohne Lauf im Plan), wird der Kalendertag übersprungen,
+ * sodass gestern erledigt → Streak 1, auch wenn heute noch nicht gelaufen wurde.
+ * Liegt in der Vergangenheit ein Tag mit geplantem Lauf, der nicht erledigt ist, endet die Serie.
+ * Ein Ruhetag ohne Lauf-Session in der Vergangenheit beendet die Serie ebenfalls.
  */
 export function getCalendarTrainingStreak(plan, logs, now = new Date()){
+  const todayStart = normalizeCalendarDay(now);
+  const todayKey = todayStart.getTime();
   let streak = 0;
   const streakDays = [];
-  let d = normalizeCalendarDay(now);
-  for(;;){
+  const sourceEntries = [];
+  let d = new Date(todayStart);
+  const maxIterations = 800;
+  for(let iteration = 0; iteration < maxIterations; iteration += 1){
+    const dayKey = normalizeCalendarDay(d).getTime();
+    const isCalendarToday = dayKey === todayKey;
     const onDay = sessionsScheduledOnCalendarDay(plan, d).filter(isStreakRunSession);
-    const hasCompletedRun = onDay.some((s) => isSessionLogDone(logs[s.id]));
-    if(!hasCompletedRun){
+
+    if(onDay.length === 0){
+      if(isCalendarToday){
+        d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+        continue;
+      }
       break;
     }
+
+    const completedOnDay = onDay.filter((s) => isSessionLogDone(logs[s.id]));
+    const hasCompletedRun = completedOnDay.length > 0;
+    if(!hasCompletedRun){
+      if(isCalendarToday){
+        d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+        continue;
+      }
+      break;
+    }
+
+    const ymd = formatLocalYmd(d);
     streak += 1;
-    streakDays.push(formatLocalYmd(d));
+    streakDays.push(ymd);
+    sourceEntries.push({
+      date: ymd,
+      sessionIds: onDay.map((s) => s.id),
+      completedSessionIds: completedOnDay.map((s) => s.id),
+      doneViaManual: completedOnDay.map((s) => !!(logs[s.id]?.done === true)),
+      doneViaAssignedRun: completedOnDay.map((s) => !!(logs[s.id]?.assignedRun?.runId)),
+    });
     d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
   }
-  console.log("streakDays:", streakDays);
+  console.log("streakSourceEntries:", sourceEntries);
+  console.log("streakNormalizedTrainingDates:", streakDays);
   console.log("streakValue:", streak);
   return streak;
 }

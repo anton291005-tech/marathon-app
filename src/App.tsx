@@ -1479,7 +1479,7 @@ export default function App(){
   const dashboardLog = dashboardSession ? logs[dashboardSession.id] : null;
   const dashboardDone = !!(dashboardSession && isSessionLogDone(dashboardLog));
   const dashboardHealthDone = !!(dashboardLog?.assignedRun?.runId);
-  const ringRadius = 44;
+  const ringRadius = 38;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const ringDashOffset = ringCircumference * (1 - (prepProgressPct / 100));
   const homeTabLabel = getHomeTabLabel(dashboardSession, isPreStart);
@@ -1488,7 +1488,9 @@ export default function App(){
     ? {}
     : { animation: `${viewMotionDir > 0 ? "viewSlideNext" : "viewSlidePrev"} .34s cubic-bezier(0.22, 1, 0.36, 1)` };
   const activeView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
-  const safeTopPad = "max(20px, env(safe-area-inset-top, 0px))";
+  const safeTopPad = "calc(env(safe-area-inset-top, 0px) + 4px)";
+  const safeBottomContentPad = "calc(94px + env(safe-area-inset-bottom, 0px))";
+  const mainScrollAreaStyle = { flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch" };
   const appleHealthRecentRunsDesc = useMemo(
     () => runningWorkoutsLast7DaysNewestFirst(healthRuns),
     [healthRuns],
@@ -1508,12 +1510,29 @@ export default function App(){
     console.log("displayedProgressPercent", prepProgressPct);
   }, [overallPlannedKm, overallCompletedKm, prepProgressPct]);
 
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== "ios") return;
+    console.log("[layout] iOS: viewport-fit=cover; root paddingTop=calc(env(safe-area-inset-top)+4px), content paddingBottom reserves bottom nav + safe area");
+  }, []);
+
   return(
     <div
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onWheel={handleWheel}
-      style={{minHeight:"100vh",background:"radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",color:"#e2e8f0",fontFamily:"'Segoe UI',system-ui,sans-serif",fontSize:14,WebkitTapHighlightColor:"transparent",paddingTop:safeTopPad,paddingBottom:"calc(108px + env(safe-area-inset-bottom, 0px))"}}
+      style={{
+        boxSizing: "border-box",
+        minHeight: "100dvh",
+        display: "flex",
+        flexDirection: "column",
+        background: "transparent",
+        color: "#e2e8f0",
+        fontFamily: "'Segoe UI',system-ui,sans-serif",
+        fontSize: 14,
+        WebkitTapHighlightColor: "transparent",
+        paddingTop: safeTopPad,
+        paddingBottom: safeBottomContentPad,
+      }}
     >
       <style>{`
         .dashboard-action,
