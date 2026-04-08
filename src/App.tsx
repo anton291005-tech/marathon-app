@@ -35,6 +35,7 @@ import {
   workoutToStored,
 } from "./healthRuns";
 import { applyAppleHealthTrainingSync } from "./trainingIntelligence/applyAppleHealthSync";
+import { getTrainingLoadRecommendation } from "./trainingLoadRecommendation";
 
 const APPLE_HEALTH_CONNECTED_KEY = "marathonAppleHealthConnected";
 /** iOS HealthKit read types (native plugin accepts strings; "workouts" is special-cased in Swift). */
@@ -843,6 +844,8 @@ export default function App(){
   const [healthKitAvailable, setHealthKitAvailable] = useState(null);
   /** Set after each workout query: all types from HealthKit, then running-only subset. */
   const [appleHealthFetchStats, setAppleHealthFetchStats] = useState(null);
+  /** Derived recovery/load hint from recent runs (updated when logs or plan patches change). */
+  const [trainingLoadRec, setTrainingLoadRec] = useState(null);
   const swipeStartRef = useRef(null);
   const lastSwipeAtRef = useRef(0);
 
@@ -1228,6 +1231,29 @@ export default function App(){
     void save(result.logs);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Apple-Run-Merge nur bei neuen Health-Daten
   }, [healthRuns]);
+
+  useEffect(() => {
+    const now = new Date();
+    const ts = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayYmd = `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, "0")}-${String(ts.getDate()).padStart(2, "0")}`;
+    const next = getTrainingLoadRecommendation({ plan: PLAN, logs, today: todayYmd });
+    setTrainingLoadRec((prev) => {
+      if (!prev && !next) return prev;
+      if (
+        prev &&
+        next &&
+        prev.status === next.status &&
+        prev.basedOnDate === next.basedOnDate &&
+        prev.feedback === next.feedback &&
+        prev.label === next.label
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  // PLAN follows aiPlanPatches; omit PLAN in deps (new array ref each render).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logs, aiPlanPatches]);
 
   const handleAiApplyPlanPatches = (_message, _action, patches)=>{
     if(!patches?.length)return;
@@ -1761,6 +1787,42 @@ export default function App(){
               ) : null}
               {healthSuggestPending ? (
                 <div style={{ fontSize: 11, color: "#7dd3fc", marginTop: 2 }}>Apple Health Lauf erkannt — bitte „Für heute übernehmen“.</div>
+              ) : null}
+              {trainingLoadRec ? (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(148,163,184,0.12)" }}>
+                  <div
+                    style={{
+                      display: "inline-block",
+                      fontSize: 11,
+                      fontWeight: 800,
+                      padding: "4px 10px",
+                      borderRadius: 999,
+                      marginBottom: 6,
+                      background:
+                        trainingLoadRec.status === "red"
+                          ? "rgba(248,113,113,0.16)"
+                          : trainingLoadRec.status === "yellow"
+                            ? "rgba(251,191,36,0.14)"
+                            : "rgba(16,185,129,0.14)",
+                      color:
+                        trainingLoadRec.status === "red"
+                          ? "#fecaca"
+                          : trainingLoadRec.status === "yellow"
+                            ? "#fcd34d"
+                            : "#86efac",
+                      border: `1px solid ${
+                        trainingLoadRec.status === "red"
+                          ? "rgba(248,113,113,0.35)"
+                          : trainingLoadRec.status === "yellow"
+                            ? "rgba(251,191,36,0.32)"
+                            : "rgba(16,185,129,0.3)"
+                      }`,
+                    }}
+                  >
+                    {trainingLoadRec.label}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.45 }}>{trainingLoadRec.feedback}</div>
+                </div>
               ) : null}
             </button>
 
