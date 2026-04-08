@@ -1637,17 +1637,39 @@ export default function App(){
         minHeight: "100dvh",
         display: "flex",
         flexDirection: "column",
-        ...appRootBackground,
+        position: "relative",
+        backgroundColor: "#070912",
         color: "#e2e8f0",
         fontFamily: "'Segoe UI',system-ui,sans-serif",
         fontSize: 14,
         WebkitTapHighlightColor: "transparent",
-        paddingTop: safeTopPad,
-        paddingBottom: safeBottomContentPad,
-        paddingLeft: "env(safe-area-inset-left, 0px)",
-        paddingRight: "env(safe-area-inset-right, 0px)",
       }}
     >
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: "none",
+          ...appRootBackground,
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          boxSizing: "border-box",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          paddingTop: safeTopPad,
+          paddingBottom: safeBottomContentPad,
+          paddingLeft: "env(safe-area-inset-left, 0px)",
+          paddingRight: "env(safe-area-inset-right, 0px)",
+        }}
+      >
       <style>{`
         .dashboard-action,
         .bottom-nav-btn {
@@ -1661,6 +1683,8 @@ export default function App(){
         }
         .bottom-nav-btn {
           transition: transform .12s ease, background .22s ease, color .22s ease, opacity .22s ease;
+          justify-content: center !important;
+          align-items: center !important;
         }
         .bottom-nav-btn:active {
           transform: scale(.97);
@@ -1675,15 +1699,14 @@ export default function App(){
         }
       `}</style>
       {activeView==="home"?(
-        <div style={{display:"flex",flexDirection:"column",paddingBottom:24,...viewTransitionStyle}}>
+        <div style={{display:"flex",flexDirection:"column",paddingBottom:12,...viewTransitionStyle}}>
 
           {/* ── HERO + PROGRESS RING — one seamless gradient section ───── */}
-          <div style={{position:"relative",paddingTop:8,paddingBottom:6}}>
-            {/* background: fades from hero dark → transparent, no hard bottom edge */}
-            <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(11,15,31,0.995) 0%,rgba(9,12,22,0.98) 35%,rgba(8,10,19,0.72) 76%,transparent 100%)",pointerEvents:"none"}} />
+          <div style={{position:"relative",paddingTop:6,paddingBottom:2}}>
+            <div style={{position:"absolute",left:0,right:0,top:0,bottom:0,background:"linear-gradient(180deg,rgba(26,31,68,0.98) 0%,rgba(9,12,22,0.98) 32%,rgba(8,10,19,0.72) 74%,transparent 100%)",pointerEvents:"none"}} />
 
             {/* status chip */}
-            <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:12}}>
+            <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:6}}>
               {!firstTrainingStart ? null : !hasCalendarStarted ? (
                 <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(148,163,184,0.06)",border:"1px solid rgba(148,163,184,0.1)",borderRadius:999,padding:"4px 11px"}}>
                   <span style={{width:5,height:5,borderRadius:"50%",background:"#475569",display:"inline-block"}}/>
@@ -1699,7 +1722,7 @@ export default function App(){
 
             {/* session title */}
             <div style={{position:"relative",textAlign:"center",padding:"0 20px"}}>
-              <div style={{fontSize:34,lineHeight:1,marginBottom:10}}>{dashboardType.emoji}</div>
+              <div style={{fontSize:34,lineHeight:1,marginBottom:4}}>{dashboardType.emoji}</div>
               <div style={{fontSize:38,fontWeight:800,color:"#fff",lineHeight:1.03,letterSpacing:"-0.04em",maxWidth:320,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}>
                 {dashboardDone ? (
                   <span style={{fontSize:36,color:"#4ade80",lineHeight:1}} aria-hidden>✓</span>
@@ -1709,7 +1732,7 @@ export default function App(){
                   <span style={{fontSize:12,fontWeight:800,color:"#86efac",padding:"4px 10px",borderRadius:999,background:"rgba(16,185,129,0.2)",border:"1px solid rgba(16,185,129,0.35)"}}>Erledigt</span>
                 ) : null}
               </div>
-              <div style={{fontSize:13,color:"rgba(226,232,240,0.62)",fontWeight:650,marginTop:8,letterSpacing:"0.01em",lineHeight:1.45}}>
+              <div style={{fontSize:13,color:"rgba(226,232,240,0.62)",fontWeight:650,marginTop:4,letterSpacing:"0.01em",lineHeight:1.45}}>
                 {dashboardHealthDone ? (
                   <span style={{color:"#86efac",fontWeight:700}}>
                     Mit Einheit verknüpft · Apple Health{runIntelLabel ? ` · ${runIntelLabel}` : ""}
@@ -1730,8 +1753,8 @@ export default function App(){
             </div>
 
             {/* progress ring */}
-            <div style={{position:"relative",marginTop:4,padding:"0 10px",display:"flex",flexDirection:"column",alignItems:"center"}}>
-              <div style={{position:"relative",width:236,height:236}}>
+            <div style={{position:"relative",marginTop:0,marginBottom:0,padding:"0 10px",display:"flex",flexDirection:"column",alignItems:"center"}}>
+              <div style={{position:"relative",width:204,height:204}}>
                 <svg viewBox="0 0 120 120" style={{width:"100%",height:"100%",display:"block"}}>
                   <defs>
                     <linearGradient id="prepRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1783,14 +1806,14 @@ export default function App(){
                   </div>
                 </div>
               </div>
-              <div style={{marginTop:8,fontSize:13,fontWeight:600,color:"rgba(226,232,240,0.62)"}}>
+              <div style={{marginTop:4,marginBottom:0,fontSize:13,fontWeight:600,color:"rgba(226,232,240,0.62)"}}>
                 {ringKmDoneDisplay} von {ringKmPlannedDisplay} km
               </div>
             </div>
           </div>
 
           {/* ── ACTION BUTTONS ─────────────────────────────────────────── */}
-          <div style={{display:"flex",gap:10,padding:"2px 16px 14px"}}>
+          <div style={{display:"flex",gap:10,padding:"0 16px 10px"}}>
             <button
               className="dashboard-action"
               onClick={()=>dashboardSession && quickCompleteSession(dashboardSession)}
@@ -1819,7 +1842,7 @@ export default function App(){
           </div>
 
           {/* ── BELOW-FOLD CONTENT ─────────────────────────────────────── */}
-          <div style={{display:"flex",flexDirection:"column",gap:12,padding:"2px 16px 0"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:8,padding:"0 16px 0"}}>
 
             {/* Daily coach decision card */}
             <button
@@ -2546,6 +2569,8 @@ export default function App(){
         </div>
       ):null}
 
+      </div>
+
       <div style={{position:"fixed",left:12,right:12,bottom:"calc(12px + env(safe-area-inset-bottom, 0px))",zIndex:90}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:6,background:"rgba(9,12,22,0.72)",border:"1px solid rgba(148,163,184,0.08)",borderRadius:24,padding:"10px 8px 11px",boxShadow:"0 20px 50px rgba(2,6,23,0.32)",backdropFilter:"blur(22px)"}}>
           {[
@@ -2567,21 +2592,37 @@ export default function App(){
                   border:"1px solid transparent",
                   color:active ? "#fff" : "rgba(148,163,184,0.88)",
                   borderRadius:18,
-                  padding:"10px 6px 8px",
+                  padding:"6px 6px 6px",
+                  margin:0,
                   cursor:"pointer",
                   display:"flex",
                   flexDirection:"column",
                   alignItems:"center",
+                  justifyContent:"center",
                   gap:4,
-                  minHeight:56
                 }}
                 aria-label={`${item.label} öffnen`}
               >
-                {item.icon && <span style={{fontSize:16,lineHeight:1,opacity:active ? 1 : 0.82}}>{item.icon}</span>}
-                <span style={{fontSize:item.key === "home" ? 11 : item.key === "settings" || item.key === "coach" ? 8.8 : 10,fontWeight:800,opacity:active ? 1 : 0.7,letterSpacing:item.key === "home" ? "0.08em" : "0",whiteSpace:"nowrap"}}>
+                <span
+                  aria-hidden
+                  style={{
+                    width:16,
+                    height:16,
+                    display:"flex",
+                    alignItems:"center",
+                    justifyContent:"center",
+                    fontSize:16,
+                    lineHeight:1,
+                    flexShrink:0,
+                    opacity:item.icon ? (active ? 1 : 0.82) : 0,
+                  }}
+                >
+                  {item.icon ?? ""}
+                </span>
+                <span style={{fontSize:item.key === "home" ? 11 : item.key === "settings" || item.key === "coach" ? 8.8 : 10,fontWeight:800,opacity:active ? 1 : 0.7,letterSpacing:item.key === "home" ? "0.08em" : "0",whiteSpace:"nowrap",margin:0,lineHeight:1}}>
                   {item.label}
                 </span>
-                <span style={{width:4,height:4,borderRadius:"50%",background:active ? "#fff" : "transparent",marginTop:2,boxShadow:active ? "0 0 10px rgba(255,255,255,0.5)" : "none"}} />
+                <span style={{width:4,height:4,borderRadius:"50%",background:active ? "#fff" : "transparent",flexShrink:0,margin:0,boxShadow:active ? "0 0 10px rgba(255,255,255,0.5)" : "none"}} />
               </button>
             );
           })}
