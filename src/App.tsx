@@ -871,6 +871,8 @@ export default function App(){
   }));
   const [shareFeedback,setShareFeedback]=useState("");
   const [viewMotionDir,setViewMotionDir]=useState(0);
+  /** Home: „Heutige Einschätzung“ — Details standardmäßig eingeklappt */
+  const [homeCoachAssessmentExpanded, setHomeCoachAssessmentExpanded] = useState(false);
   // AI-enhanced daily coach advice — null while loading or when AI is unavailable.
   const [aiDailyAdvice, setAiDailyAdvice] = useState(null);
   const [healthRuns, setHealthRuns] = useState(() =>
@@ -1631,6 +1633,13 @@ export default function App(){
   const ringRadius = 38;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const ringDashOffset = ringCircumference * (1 - (prepProgressPct / 100));
+  const coachAssessmentCoreLine = runIntelFeedback
+    ? (runIntelFeedback.length > 90 ? `${runIntelFeedback.slice(0, 90)}…` : runIntelFeedback)
+    : healthSuggestPending
+      ? "Apple Health Lauf erkannt — in Einstellungen „Training wählen“ zum Zuordnen."
+      : trainingLoadRec.feedback.length > 90
+        ? `${trainingLoadRec.feedback.slice(0, 90)}…`
+        : trainingLoadRec.feedback;
   const homeTabLabel = getHomeTabLabel(dashboardSession, isPreStart);
   const shareSummary = getShareSummary({ pct, week: w, nextKeySession, recoveryState, consistencyStats });
   const viewTransitionStyle = viewMotionDir === 0
@@ -1751,9 +1760,8 @@ export default function App(){
       {activeView==="home"?(
         <div style={{display:"flex",flexDirection:"column",paddingBottom:12,...viewTransitionStyle}}>
 
-          {/* ── HERO + PROGRESS RING — one seamless gradient section ───── */}
+          {/* ── HERO + PROGRESS RING (Hintergrund: globaler fixed Layer — kein zweiter Top-Gradient) ───── */}
           <div style={{position:"relative",paddingTop:6,paddingBottom:2}}>
-            <div style={{position:"absolute",left:0,right:0,top:0,bottom:0,background:"linear-gradient(180deg,rgba(26,31,68,0.98) 0%,rgba(9,12,22,0.98) 32%,rgba(8,10,19,0.72) 74%,transparent 100%)",pointerEvents:"none"}} />
 
             {/* status chip */}
             <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:6}}>
@@ -1811,17 +1819,14 @@ export default function App(){
                       <stop offset="0%" stopColor="#4ade80" />
                       <stop offset="100%" stopColor="#ecfdf5" />
                     </linearGradient>
-                    <filter id="prepRingGlow" x="-30%" y="-30%" width="160%" height="160%">
-                      <feGaussianBlur stdDeviation="0.7" />
-                    </filter>
                   </defs>
                   <circle
                     cx="60"
                     cy="60"
                     r={ringRadius}
                     fill="none"
-                    stroke="rgba(148,163,184,0.14)"
-                    strokeWidth="8.5"
+                    stroke="rgba(148,163,184,0.08)"
+                    strokeWidth="7.5"
                   />
                   <circle
                     cx="60"
@@ -1829,31 +1834,16 @@ export default function App(){
                     r={ringRadius}
                     fill="none"
                     stroke="url(#prepRingGrad)"
-                    strokeWidth="9.8"
+                    strokeWidth="8.2"
                     strokeLinecap="round"
                     strokeDasharray={`${ringCircumference} ${ringCircumference}`}
                     strokeDashoffset={ringDashOffset}
                     transform="rotate(-90 60 60)"
-                    filter="url(#prepRingGlow)"
                     style={{transition:"stroke-dashoffset .5s ease-out"}}
                   />
                 </svg>
-                <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
                   <div style={{fontSize:48,fontWeight:800,color:"#f8fafc",lineHeight:1,letterSpacing:"-0.03em"}}>{prepProgressPct}%</div>
-                  <div
-                    style={{
-                      fontSize:9,
-                      fontWeight:700,
-                      color:"rgba(226,232,240,0.5)",
-                      marginTop:6,
-                      letterSpacing:"0.04em",
-                      textAlign:"center",
-                      lineHeight:1.25,
-                      maxWidth:150,
-                    }}
-                  >
-                    Gesamter Fortschritt der Vorbereitung
-                  </div>
                 </div>
               </div>
               <div style={{marginTop:4,marginBottom:0,fontSize:13,fontWeight:600,color:"rgba(226,232,240,0.62)"}}>
@@ -1894,72 +1884,114 @@ export default function App(){
           {/* ── BELOW-FOLD CONTENT ─────────────────────────────────────── */}
           <div style={{display:"flex",flexDirection:"column",gap:8,padding:"0 16px 0"}}>
 
-            {/* Daily coach decision card */}
-            <button
-              type="button"
-              onClick={() => navigateToView("coach")}
+            {/* Daily coach decision card — kompakt, Details per Toggle */}
+            <div
               style={{
                 width:"100%",
-                textAlign:"left",
-                cursor:"pointer",
                 borderRadius:18,
                 border:"1px solid rgba(56,189,248,0.22)",
                 background:"linear-gradient(160deg,rgba(12,22,36,0.92),rgba(10,16,28,0.88))",
-                padding:"14px 16px",
+                padding:"10px 14px",
                 display:"flex",
                 flexDirection:"column",
-                gap:6,
+                gap:4,
                 color:"#e2e8f0",
               }}
             >
-              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#7c8aa5",fontWeight:700}}>Heutige Einschätzung</div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-                <span style={{fontSize:15,fontWeight:800,color:"#f8fafc"}}>Coach &amp; Details</span>
-                <span style={{fontSize:12,fontWeight:800,padding:"5px 12px",borderRadius:999,background:healthSuggestPending ? "rgba(251,191,36,0.16)" : todayCompletedViaAssignedRun ? "rgba(16,185,129,0.2)" : "rgba(56,189,248,0.12)",color:healthSuggestPending ? "#fcd34d" : todayCompletedViaAssignedRun ? "#86efac" : "#7dd3fc",border:`1px solid ${healthSuggestPending ? "rgba(251,191,36,0.35)" : todayCompletedViaAssignedRun ? "rgba(16,185,129,0.35)" : "rgba(56,189,248,0.28)"}`}}>
-                  {healthSuggestPending ? "Lauf erkannt" : runIntelLabel || (todayCompletedViaAssignedRun ? "Erledigt" : "Wie geplant")}
-                </span>
-              </div>
-              {runIntelFeedback ? (
-                <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.45, marginTop: 2 }}>{runIntelFeedback}</div>
-              ) : null}
-              {healthSuggestPending ? (
-                <div style={{ fontSize: 11, color: "#7dd3fc", marginTop: 2 }}>Apple Health Lauf erkannt — in Einstellungen „Training wählen“ zum Zuordnen.</div>
-              ) : null}
-              <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(148,163,184,0.12)" }}>
-                <div
-                  style={{
-                    display: "inline-block",
-                    fontSize: 11,
-                    fontWeight: 800,
-                    padding: "4px 10px",
-                    borderRadius: 999,
-                    marginBottom: 6,
-                    background:
-                      trainingLoadRec.status === "red"
-                        ? "rgba(248,113,113,0.16)"
-                        : trainingLoadRec.status === "yellow"
-                          ? "rgba(251,191,36,0.14)"
-                          : "rgba(16,185,129,0.14)",
-                    color:
-                      trainingLoadRec.status === "red"
-                        ? "#fecaca"
-                        : trainingLoadRec.status === "yellow"
-                          ? "#fcd34d"
-                          : "#86efac",
-                    border: `1px solid ${
-                      trainingLoadRec.status === "red"
-                        ? "rgba(248,113,113,0.35)"
-                        : trainingLoadRec.status === "yellow"
-                          ? "rgba(251,191,36,0.32)"
-                          : "rgba(16,185,129,0.3)"
-                    }`,
-                  }}
-                >
-                  {trainingLoadRec.label}
+              <button
+                type="button"
+                onClick={() => navigateToView("coach")}
+                style={{
+                  width:"100%",
+                  margin:0,
+                  padding:0,
+                  border:"none",
+                  background:"transparent",
+                  cursor:"pointer",
+                  textAlign:"left",
+                  font:"inherit",
+                  color:"inherit",
+                  display:"flex",
+                  flexDirection:"column",
+                  gap:4,
+                }}
+              >
+                <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#7c8aa5",fontWeight:700}}>Heutige Einschätzung</div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                  <span style={{fontSize:15,fontWeight:800,color:"#f8fafc"}}>Coach &amp; Details</span>
+                  <span style={{fontSize:12,fontWeight:800,padding:"4px 10px",borderRadius:999,background:healthSuggestPending ? "rgba(251,191,36,0.16)" : todayCompletedViaAssignedRun ? "rgba(16,185,129,0.2)" : "rgba(56,189,248,0.12)",color:healthSuggestPending ? "#fcd34d" : todayCompletedViaAssignedRun ? "#86efac" : "#7dd3fc",border:`1px solid ${healthSuggestPending ? "rgba(251,191,36,0.35)" : todayCompletedViaAssignedRun ? "rgba(16,185,129,0.35)" : "rgba(56,189,248,0.28)"}`}}>
+                    {healthSuggestPending ? "Lauf erkannt" : runIntelLabel || (todayCompletedViaAssignedRun ? "Erledigt" : "Wie geplant")}
+                  </span>
                 </div>
-                <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.45 }}>{trainingLoadRec.feedback}</div>
-              </div>
-            </button>
+                {!homeCoachAssessmentExpanded ? (
+                  <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.4 }}>{coachAssessmentCoreLine}</div>
+                ) : null}
+                {homeCoachAssessmentExpanded ? (
+                  <>
+                    {runIntelFeedback ? (
+                      <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.45, marginTop: 2 }}>{runIntelFeedback}</div>
+                    ) : null}
+                    {healthSuggestPending ? (
+                      <div style={{ fontSize: 11, color: "#7dd3fc", marginTop: 2 }}>Apple Health Lauf erkannt — in Einstellungen „Training wählen“ zum Zuordnen.</div>
+                    ) : null}
+                    <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(148,163,184,0.12)" }}>
+                      <div
+                        style={{
+                          display: "inline-block",
+                          fontSize: 11,
+                          fontWeight: 800,
+                          padding: "3px 9px",
+                          borderRadius: 999,
+                          marginBottom: 4,
+                          background:
+                            trainingLoadRec.status === "red"
+                              ? "rgba(248,113,113,0.16)"
+                              : trainingLoadRec.status === "yellow"
+                                ? "rgba(251,191,36,0.14)"
+                                : "rgba(16,185,129,0.14)",
+                          color:
+                            trainingLoadRec.status === "red"
+                              ? "#fecaca"
+                              : trainingLoadRec.status === "yellow"
+                                ? "#fcd34d"
+                                : "#86efac",
+                          border: `1px solid ${
+                            trainingLoadRec.status === "red"
+                              ? "rgba(248,113,113,0.35)"
+                              : trainingLoadRec.status === "yellow"
+                                ? "rgba(251,191,36,0.32)"
+                                : "rgba(16,185,129,0.3)"
+                          }`,
+                        }}
+                      >
+                        {trainingLoadRec.label}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.45 }}>{trainingLoadRec.feedback}</div>
+                    </div>
+                  </>
+                ) : null}
+              </button>
+              <button
+                type="button"
+                onClick={() => setHomeCoachAssessmentExpanded((v) => !v)}
+                style={{
+                  alignSelf:"flex-start",
+                  margin:0,
+                  marginTop:2,
+                  padding:"4px 0",
+                  border:"none",
+                  background:"transparent",
+                  cursor:"pointer",
+                  fontSize:12,
+                  fontWeight:700,
+                  color:"#7dd3fc",
+                  letterSpacing:"0.02em",
+                }}
+              >
+                {homeCoachAssessmentExpanded ? "Weniger anzeigen" : "Mehr anzeigen"}
+                <span style={{ marginLeft: 6, opacity: 0.85 }} aria-hidden>{homeCoachAssessmentExpanded ? "▴" : "▾"}</span>
+              </button>
+            </div>
 
             {/* Metrics group — cleaner, softer and less boxy */}
             <div style={{display:"flex",flexDirection:"column",gap:9,padding:"12px",borderRadius:20,background:"linear-gradient(160deg,rgba(15,23,42,0.33),rgba(12,18,34,0.2))",border:"1px solid rgba(148,163,184,0.1)"}}>
