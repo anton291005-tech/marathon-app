@@ -1812,11 +1812,15 @@ export default function App(){
                     left: "50%",
                     top: "50%",
                     transform: "translate(-50%, -50%)",
+                    margin: 0,
+                    padding: 0,
                     fontSize: 48,
                     fontWeight: 800,
                     color: "#f8fafc",
                     letterSpacing: "-0.03em",
                     whiteSpace: "nowrap",
+                    lineHeight: 1,
+                    textAlign: "center",
                   }}
                 >
                   {prepProgressPct}%
@@ -1824,8 +1828,12 @@ export default function App(){
               </div>
               <div
                 style={{
+                  alignSelf: "stretch",
                   width: "100%",
                   boxSizing: "border-box",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
                   textAlign: "center",
                   fontSize: 13,
                   fontWeight: 600,
@@ -2085,6 +2093,7 @@ export default function App(){
               )}
               {w.s.map(session=>{
                 const ti=TI[session.type];
+                const weekTitleColor = session.type === "rest" ? "#94a3b8" : ti?.col || "#fff";
                 const log=logs[session.id];
                 const status = getSessionStatus(log);
                 const isDone=status==="done";
@@ -2120,7 +2129,12 @@ export default function App(){
                         <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
                       </div>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:15,fontWeight:700,color:"#fff",lineHeight:1.35}}>{session.title}</div>
+                        <div style={{display:"flex",flexWrap:"wrap",alignItems:"baseline",gap:"4px 10px",lineHeight:1.35}}>
+                          <span style={{fontSize:15,fontWeight:700,color:weekTitleColor}}>{session.title}</span>
+                          {session.km > 0 ? (
+                            <span style={{fontSize:14,fontWeight:700,color:"rgba(148,163,184,0.88)",whiteSpace:"nowrap"}}>{session.km} km</span>
+                          ) : null}
+                        </div>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -2178,7 +2192,7 @@ export default function App(){
                             ))}
                           </div>
                           <div>
-                            <div style={{fontSize:15,fontWeight:700,color:"#fff",lineHeight:1.35}}>{session.title}</div>
+                            <div style={{fontSize:15,fontWeight:700,color:weekTitleColor,lineHeight:1.35}}>{session.title}</div>
                             <div style={{fontSize:12,color:"#7c8aa5",marginTop:5}}>{session.date}</div>
                           </div>
                         </div>
