@@ -1758,13 +1758,13 @@ export default function App(){
         }
       `}</style>
       {activeView==="home"?(
-        <div style={{display:"flex",flexDirection:"column",paddingBottom:12,...viewTransitionStyle}}>
+        <div style={{display:"flex",flexDirection:"column",paddingBottom:4,overflowX:"hidden",...viewTransitionStyle}}>
 
           {/* ── HERO + PROGRESS RING (Hintergrund: globaler fixed Layer — kein zweiter Top-Gradient) ───── */}
-          <div style={{position:"relative",paddingTop:6,paddingBottom:2}}>
+          <div style={{position:"relative",paddingTop:2,paddingBottom:0}}>
 
             {/* status chip */}
-            <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:6}}>
+            <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:4}}>
               {!firstTrainingStart ? null : !hasCalendarStarted ? (
                 <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(148,163,184,0.06)",border:"1px solid rgba(148,163,184,0.1)",borderRadius:999,padding:"4px 11px"}}>
                   <span style={{width:5,height:5,borderRadius:"50%",background:"#475569",display:"inline-block"}}/>
@@ -1811,7 +1811,7 @@ export default function App(){
             </div>
 
             {/* progress ring */}
-            <div style={{position:"relative",marginTop:0,marginBottom:0,padding:"0 10px",display:"flex",flexDirection:"column",alignItems:"center"}}>
+            <div style={{position:"relative",marginTop:0,marginBottom:0,padding:"0 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
               <div style={{position:"relative",width:204,height:204}}>
                 <svg viewBox="0 0 120 120" style={{width:"100%",height:"100%",display:"block"}}>
                   <defs>
@@ -1842,11 +1842,32 @@ export default function App(){
                     style={{transition:"stroke-dashoffset .5s ease-out"}}
                   />
                 </svg>
-                <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <div style={{fontSize:48,fontWeight:800,color:"#f8fafc",lineHeight:1,letterSpacing:"-0.03em"}}>{prepProgressPct}%</div>
+                <div
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    top: "50%",
+                    transform: "translate(-50%, -50%)",
+                    fontSize: 48,
+                    fontWeight: 800,
+                    color: "#f8fafc",
+                    letterSpacing: "-0.03em",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {prepProgressPct}%
                 </div>
               </div>
-              <div style={{marginTop:4,marginBottom:0,fontSize:13,fontWeight:600,color:"rgba(226,232,240,0.62)"}}>
+              <div
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  textAlign: "center",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "rgba(226,232,240,0.62)",
+                }}
+              >
                 {ringKmDoneDisplay} von {ringKmPlannedDisplay} km
               </div>
             </div>
