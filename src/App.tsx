@@ -15,7 +15,6 @@ import {
 import MarathonPredictionCard from "./components/MarathonPredictionCard";
 import RaceCalculator from "./components/RaceCalculator";
 import SurfaceCard from "./components/SurfaceCard";
-import WeeklyAnalysisCard from "./components/WeeklyAnalysisCard";
 import AiCoachPanel from "./components/ai/AiCoachPanel";
 import DailyCoachDecisionCard from "./components/ai/DailyCoachDecisionCard";
 import { getDailyCoachDecision } from "./lib/ai/getDailyCoachDecision";
@@ -737,38 +736,6 @@ function getRecoveryHistory(plan, logs){
   });
 }
 
-function getAdaptiveCoachingHint({ recoveryState, weeklyFatigue, performancePrediction, marathonPredictedTime, nextKeySession, phaseStatus }){
-  if(recoveryState.label.includes("Fatigue") && weeklyFatigue.label === "hoch"){
-    return {
-      title: "Belastung aktiv deckeln",
-      body: "Diese Woche lieber Qualität präzise statt heroisch laufen. Schlaf, Fueling und lockere Tage haben jetzt Priorität.",
-      color: "#f87171",
-    };
-  }
-  if(recoveryState.label.includes("Fresh") && nextKeySession){
-    return {
-      title: "Gutes Fenster für Qualität",
-      body: `Du wirkst gerade stabil. Die nächste Schlüsseleinheit "${nextKeySession.title}" kannst du kontrolliert selbstbewusst angehen.`,
-      color: "#34d399",
-    };
-  }
-  if(phaseStatus === "Aufholen"){
-    return {
-      title: "Nicht hektisch aufholen",
-      body: "Fehlende Einheiten nicht stapeln. Lieber den aktuellen Rhythmus sauber treffen als verlorenes Volumen erzwingen.",
-      color: "#fbbf24",
-    };
-  }
-  const headlineTime = marathonPredictedTime || performancePrediction?.predictedTime;
-  return {
-    title: "Konstanz schlägt Drama",
-    body: headlineTime
-      ? `Deine Prognose liegt aktuell bei ${headlineTime}. Saubere Wochen und stabile Energie bringen jetzt am meisten.`
-      : "Sammle erst ein paar saubere Logs. Danach werden die Hinweise spürbar belastbarer.",
-    color: "#60a5fa",
-  };
-}
-
 function getRecommendedAction({ recoveryState, weeklyFatigue, nextKeySession, phaseStatus }){
   if(recoveryState.label.includes("Fatigue") || weeklyFatigue.label === "hoch"){
     return "Halte die nächste Einheit bewusst kontrolliert, priorisiere Schlaf, Trinken und Carbs statt Zusatzvolumen.";
@@ -873,6 +840,8 @@ export default function App(){
   const [viewMotionDir,setViewMotionDir]=useState(0);
   /** Home: „Heutige Einschätzung“ — Details standardmäßig eingeklappt */
   const [homeCoachAssessmentExpanded, setHomeCoachAssessmentExpanded] = useState(false);
+  /** Woche-Tab: Beschreibungstext (`session.desc`) pro Einheit ein-/ausklappbar */
+  const [weekTabDescExpandedById, setWeekTabDescExpandedById] = useState(() => ({}));
   // AI-enhanced daily coach advice — null while loading or when AI is unavailable.
   const [aiDailyAdvice, setAiDailyAdvice] = useState(null);
   const [healthRuns, setHealthRuns] = useState(() =>
@@ -907,6 +876,10 @@ export default function App(){
   useEffect(() => {
     localStorage.setItem("marathonLogs", JSON.stringify(logs));
   }, [logs]);
+
+  useEffect(() => {
+    setWeekTabDescExpandedById({});
+  }, [wIdx]);
 
   useEffect(() => {
     localStorage.setItem("marathonPreferences", JSON.stringify(preferences));
@@ -1410,7 +1383,6 @@ export default function App(){
   const doneSessions = ACTIVE_SESSIONS.filter((session) => isSessionLogDone(logs[session.id]));
   const doneSess=doneSessions.length;
   const loggedKm=ACTIVE_SESSIONS.reduce((sum, session) => sum + getLoggedKm(session, logs[session.id]), 0);
-  const wLoggedKm=w.s.reduce((sum, session) => sum + getLoggedKm(session, logs[session.id]), 0);
   const pct=totalSess>0?Math.round((doneSess/totalSess)*100):0;
   const kmPct=totalTargetKm>0?Math.round((loggedKm/totalTargetKm)*100):0;
   const longRuns = LONG_RUN_SESSIONS.length;
@@ -1587,14 +1559,6 @@ export default function App(){
   const modalMilestones = modal && modalWeek ? getSessionMilestones(modal, modalWeek) : [];
   const modalWorkout = modal ? parseWorkoutStructure(modal) : null;
   const modalFuelingHints = modal ? getFuelingHints(modal) : [];
-  const coachingHint = getAdaptiveCoachingHint({
-    recoveryState,
-    weeklyFatigue,
-    performancePrediction,
-    marathonPredictedTime: marathonPrediction.ready ? marathonPrediction.predictedTime : null,
-    nextKeySession,
-    phaseStatus,
-  });
   const recommendedAction = getRecommendedAction({ recoveryState, weeklyFatigue, nextKeySession, phaseStatus });
   const visibleOverviewPhases = overviewPhaseFilter === "all" ? Object.keys(PI) : [overviewPhaseFilter];
   const todayNextSession = getTodayNextSession(ACTIVE_SESSIONS, logs, appNow);
@@ -2066,48 +2030,54 @@ export default function App(){
         </div>
       ):activeView==="week"?(
         <>
-          <div style={{padding:"16px",display:"flex",flexDirection:"column",gap:14,...viewTransitionStyle}}>
-            <div style={{background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:22,padding:16,boxShadow:"0 20px 40px rgba(2,6,23,0.22)"}}>
+          <div style={{padding:"14px",display:"flex",flexDirection:"column",gap:10,...viewTransitionStyle}}>
+            <div style={{background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:22,padding:"14px 14px 12px",boxShadow:"0 20px 40px rgba(2,6,23,0.22)"}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:38,height:38,borderRadius:12,cursor:wIdx===0?"not-allowed":"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
                 <div style={{flex:1,textAlign:"center",minWidth:0}}>
-                  <span style={{display:"inline-block",padding:"5px 12px",borderRadius:999,fontSize:11,fontWeight:700,background:ph.bg,color:ph.col,marginBottom:8}}>{ph.emoji} {ph.label}</span>
-                  <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{w.label}</div>
-                  <div style={{fontSize:12,color:"#7c8aa5",marginTop:4}}>{w.dates} · {w.km} km</div>
+                  <span style={{display:"inline-block",padding:"4px 11px",borderRadius:999,fontSize:11,fontWeight:700,background:ph.bg,color:ph.col,marginBottom:6}}>{ph.emoji} {ph.label}</span>
+                  <div style={{fontSize:18,fontWeight:800,color:"#fff",lineHeight:1.2}}>{w.label}</div>
+                  <div style={{fontSize:12,color:"#7c8aa5",marginTop:3}}>{w.dates}</div>
                 </div>
                 <button onClick={()=>setWIdx(i=>Math.min(PLAN.length-1,i+1))} disabled={wIdx===PLAN.length-1} style={{background:wIdx===PLAN.length-1?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:38,height:38,borderRadius:12,cursor:wIdx===PLAN.length-1?"not-allowed":"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
               </div>
 
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:16}}>
-                <MetricCard label="Ziel" value={`${w.km} km`} sublabel="diese Woche" accent="#38bdf8" />
-                <MetricCard label="Ist" value={`${wLoggedKm.toFixed(1)} km`} sublabel={`${Math.round(clampPct(w.km > 0 ? (wLoggedKm / w.km) * 100 : 0))}% erledigt`} accent="#10b981" />
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:12}}>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:4}}>Ziel</div>
+                  <div style={{fontSize:20,fontWeight:800,color:"#38bdf8",lineHeight:1.1}}>{weekAnalysis.plannedKm} km</div>
+                  <div style={{fontSize:11,color:"rgba(148,163,184,0.48)",marginTop:2}}>geplant</div>
+                </div>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:4}}>Ist</div>
+                  <div style={{fontSize:20,fontWeight:800,color:"#10b981",lineHeight:1.1}}>{weekAnalysis.actualKm.toFixed(1)} km</div>
+                  <div style={{fontSize:11,color:"rgba(148,163,184,0.48)",marginTop:2}}>{Math.round(clampPct(weekAnalysis.plannedKm > 0 ? (weekAnalysis.actualKm / weekAnalysis.plannedKm) * 100 : 0))}% erledigt</div>
+                </div>
               </div>
 
-              <div style={{marginTop:14}}>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#7c8aa5",marginBottom:6}}>
+              <div style={{marginTop:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,fontSize:11,color:"#7c8aa5",marginBottom:6}}>
                   <span>Wochenfortschritt</span>
-                  <span>{wLoggedKm.toFixed(1)} / {w.km} km</span>
+                  <span style={{fontWeight:700,color:"rgba(226,232,240,0.75)",whiteSpace:"nowrap"}}>{Math.round(clampPct(weekAnalysis.plannedKm > 0 ? (weekAnalysis.actualKm / weekAnalysis.plannedKm) * 100 : 0))}%</span>
                 </div>
                 <div style={{height:7,background:"rgba(15,23,42,0.85)",borderRadius:999,overflow:"hidden"}}>
-                  <div style={{height:"100%",background:"linear-gradient(90deg,#10b981,#38bdf8)",borderRadius:999,width:`${clampPct(w.km > 0 ? (wLoggedKm / w.km) * 100 : 0)}%`,transition:"width .3s"}}/>
+                  <div style={{height:"100%",background:"linear-gradient(90deg,#10b981,#38bdf8)",borderRadius:999,width:`${clampPct(weekAnalysis.plannedKm > 0 ? (weekAnalysis.actualKm / weekAnalysis.plannedKm) * 100 : 0)}%`,transition:"width .3s"}}/>
                 </div>
               </div>
 
-              <div style={{marginTop:12,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                <div style={{padding:"10px 12px",borderRadius:14,background:"rgba(10,14,26,0.72)",border:`1px solid ${weeklyFatigue.color}33`}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:5}}>Last</div>
-                  <div style={{fontSize:15,fontWeight:800,color:weeklyFatigue.color}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
+              <div style={{display:"flex",gap:8,marginTop:12}}>
+                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"7px 6px",borderRadius:12,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:3}}>Einheiten</div>
+                  <div style={{fontSize:16,fontWeight:800,color:"#e2e8f0",lineHeight:1.15}}>{weekAnalysis.doneSessions}/{weekAnalysis.plannedTrainSessions}</div>
                 </div>
-                <div style={{padding:"10px 12px",borderRadius:14,background:"rgba(10,14,26,0.72)",border:`1px solid ${coachingHint.color}33`}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:5}}>Coach</div>
-                  <div style={{fontSize:13,fontWeight:700,color:coachingHint.color,lineHeight:1.3}}>{coachingHint.title}</div>
+                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"7px 6px",borderRadius:12,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:3}}>Intensiv</div>
+                  <div style={{fontSize:16,fontWeight:800,color:"#fb7185",lineHeight:1.15}}>{weekAnalysis.intenseDone}/{weekAnalysis.intensePlanned}</div>
                 </div>
               </div>
             </div>
 
-            <WeeklyAnalysisCard weekLabel={w.label} weekDates={w.dates} analysis={weekAnalysis} />
-
-            <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:2}}>
+            <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:0}}>
               {w.s.length === 0 && (
                 <div style={{background:"rgba(11,16,28,0.94)",border:"1px solid rgba(148,163,184,0.1)",borderRadius:18,padding:18,fontSize:13,color:"#94a3b8",lineHeight:1.6}}>
                   Für diese Woche sind keine Einheiten im Plan hinterlegt.
@@ -2122,26 +2092,64 @@ export default function App(){
                 const statusTone = getSessionStatusTone(log, ti.col);
                 const milestones = getSessionMilestones(session, w);
                 const hasHint = session.type !== "rest";
+                const sessionDescText = (session.desc && String(session.desc).trim()) || "";
+                const descExpanded = !!weekTabDescExpandedById[session.id];
+                const sessionCardShell = {
+                  background:isDone
+                    ?"linear-gradient(160deg,rgba(7,36,31,0.94),rgba(13,19,32,0.96))"
+                    : isSkipped
+                      ?"linear-gradient(160deg,rgba(40,14,14,0.9),rgba(18,18,30,0.96))"
+                      :"linear-gradient(160deg,rgba(18,18,36,0.98),rgba(11,16,28,0.94))",
+                  borderRadius:18,
+                  display:"flex",
+                  gap:12,
+                  alignItems:"flex-start",
+                  cursor:hasHint?"pointer":"default",
+                  opacity:session.type==="rest"?0.78:1,
+                  border:`1px solid ${isDone?"rgba(16,185,129,0.26)":isSkipped?"rgba(248,113,113,0.2)":"rgba(148,163,184,0.1)"}`,
+                  boxShadow:isDone?"0 12px 30px rgba(16,185,129,0.08)":isSkipped?"0 12px 28px rgba(248,113,113,0.08)":"0 14px 32px rgba(2,6,23,0.16)",
+                };
+                if (sessionDescText && !descExpanded) {
+                  return(
+                    <div
+                      key={session.id}
+                      onClick={()=>hasHint&&openModal(session)}
+                      style={{...sessionCardShell,padding:"11px 14px 12px"}}
+                    >
+                      <div style={{width:42,flexShrink:0,textAlign:"center"}}>
+                        <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:15,fontWeight:700,color:"#fff",lineHeight:1.35}}>{session.title}</div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setWeekTabDescExpandedById((prev) => ({ ...prev, [session.id]: true }));
+                          }}
+                          style={{
+                            marginTop: 6,
+                            padding: 0,
+                            border: "none",
+                            background: "transparent",
+                            cursor: "pointer",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: "#7dd3fc",
+                            textAlign: "left",
+                          }}
+                        >
+                          Mehr anzeigen
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
                 return(
                   <div
                     key={session.id}
                     onClick={()=>hasHint&&openModal(session)}
-                    style={{
-                      background:isDone
-                        ?"linear-gradient(160deg,rgba(7,36,31,0.94),rgba(13,19,32,0.96))"
-                        : isSkipped
-                          ?"linear-gradient(160deg,rgba(40,14,14,0.9),rgba(18,18,30,0.96))"
-                          :"linear-gradient(160deg,rgba(18,18,36,0.98),rgba(11,16,28,0.94))",
-                      borderRadius:18,
-                      padding:"14px 14px 15px",
-                      display:"flex",
-                      gap:12,
-                      alignItems:"flex-start",
-                      cursor:hasHint?"pointer":"default",
-                      opacity:session.type==="rest"?0.78:1,
-                      border:`1px solid ${isDone?"rgba(16,185,129,0.26)":isSkipped?"rgba(248,113,113,0.2)":"rgba(148,163,184,0.1)"}`,
-                      boxShadow:isDone?"0 12px 30px rgba(16,185,129,0.08)":isSkipped?"0 12px 28px rgba(248,113,113,0.08)":"0 14px 32px rgba(2,6,23,0.16)"
-                    }}
+                    style={{...sessionCardShell,padding:"14px 14px 15px"}}
                   >
                     <div style={{width:42,flexShrink:0,textAlign:"center"}}>
                       <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
@@ -2199,12 +2207,36 @@ export default function App(){
                         </div>
                       </div>
 
+                      {sessionDescText ? (
+                        <div style={{ marginTop: 10 }}>
+                          <div style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.6 }}>{sessionDescText}</div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setWeekTabDescExpandedById((prev) => ({ ...prev, [session.id]: false }));
+                            }}
+                            style={{
+                              marginTop: 8,
+                              padding: 0,
+                              border: "none",
+                              background: "transparent",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: "#7dd3fc",
+                              textAlign: "left",
+                            }}
+                          >
+                            Weniger anzeigen
+                          </button>
+                        </div>
+                      ) : null}
+
                       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
                         {session.km > 0 && <div style={{fontSize:12,color:"#38bdf8",fontWeight:700}}>{session.km} km Ziel</div>}
                         {session.pace && <div style={{fontSize:12,color:"#c084fc",fontWeight:700}}>⏱ {session.pace}</div>}
                       </div>
-
-                      <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.6,marginTop:10}}>{session.desc}</div>
 
                       {log ? (
                         <div style={{marginTop:10,padding:"8px 10px",borderRadius:12,background:"rgba(15,23,42,0.5)",border:"1px solid rgba(148,163,184,0.08)"}}>
