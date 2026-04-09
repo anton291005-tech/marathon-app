@@ -1774,73 +1774,69 @@ export default function App(){
               </div>
             </div>
 
-            {/* progress ring */}
-            <div style={{position:"relative",marginTop:0,marginBottom:0,padding:"0 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-              <div style={{position:"relative",width:204,height:204}}>
-                <svg viewBox="0 0 120 120" style={{width:"100%",height:"100%",display:"block"}}>
-                  <defs>
-                    <linearGradient id="prepRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#4ade80" />
-                      <stop offset="100%" stopColor="#ecfdf5" />
-                    </linearGradient>
-                  </defs>
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r={ringRadius}
-                    fill="none"
-                    stroke="rgba(148,163,184,0.08)"
-                    strokeWidth="7.5"
-                  />
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r={ringRadius}
-                    fill="none"
-                    stroke="url(#prepRingGrad)"
-                    strokeWidth="8.2"
-                    strokeLinecap="round"
-                    strokeDasharray={`${ringCircumference} ${ringCircumference}`}
-                    strokeDashoffset={ringDashOffset}
-                    transform="rotate(-90 60 60)"
-                    style={{transition:"stroke-dashoffset .5s ease-out"}}
-                  />
-                </svg>
+            {/* progress ring — Ring + km-Zeile eine zentrierte Einheit (gemeinsame Querachse) */}
+            <div style={{position:"relative",marginTop:0,marginBottom:0,padding:"0 10px",display:"flex",justifyContent:"center"}}>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                <div style={{position:"relative",width:204,height:204}}>
+                  <svg viewBox="0 0 120 120" style={{width:"100%",height:"100%",display:"block"}}>
+                    <defs>
+                      <linearGradient id="prepRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#4ade80" />
+                        <stop offset="100%" stopColor="#ecfdf5" />
+                      </linearGradient>
+                    </defs>
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r={ringRadius}
+                      fill="none"
+                      stroke="rgba(148,163,184,0.08)"
+                      strokeWidth="7.5"
+                    />
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r={ringRadius}
+                      fill="none"
+                      stroke="url(#prepRingGrad)"
+                      strokeWidth="8.2"
+                      strokeLinecap="round"
+                      strokeDasharray={`${ringCircumference} ${ringCircumference}`}
+                      strokeDashoffset={ringDashOffset}
+                      transform="rotate(-90 60 60)"
+                      style={{transition:"stroke-dashoffset .5s ease-out"}}
+                    />
+                  </svg>
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: "50%",
+                      top: "50%",
+                      transform: "translate(-50%, -50%)",
+                      margin: 0,
+                      padding: 0,
+                      fontSize: 48,
+                      fontWeight: 800,
+                      color: "#f8fafc",
+                      letterSpacing: "-0.03em",
+                      whiteSpace: "nowrap",
+                      lineHeight: 1,
+                      textAlign: "center",
+                    }}
+                  >
+                    {prepProgressPct}%
+                  </div>
+                </div>
                 <div
                   style={{
-                    position: "absolute",
-                    left: "50%",
-                    top: "50%",
-                    transform: "translate(-50%, -50%)",
-                    margin: 0,
-                    padding: 0,
-                    fontSize: 48,
-                    fontWeight: 800,
-                    color: "#f8fafc",
-                    letterSpacing: "-0.03em",
-                    whiteSpace: "nowrap",
-                    lineHeight: 1,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "rgba(226,232,240,0.62)",
                     textAlign: "center",
                   }}
                 >
-                  {prepProgressPct}%
+                  {ringKmDoneDisplay} von {ringKmPlannedDisplay} km
                 </div>
-              </div>
-              <div
-                style={{
-                  alignSelf: "stretch",
-                  width: "100%",
-                  boxSizing: "border-box",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  textAlign: "center",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "rgba(226,232,240,0.62)",
-                }}
-              >
-                {ringKmDoneDisplay} von {ringKmPlannedDisplay} km
               </div>
             </div>
           </div>
