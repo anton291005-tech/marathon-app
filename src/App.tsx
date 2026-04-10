@@ -759,13 +759,14 @@ function getHeroTitle(session){
   return session.title;
 }
 
+/** Linker Tabbar-Shortcut: gleiche Session-Quelle wie Dashboard (`dashboardSession`). */
 function getHomeTabLabel(session, isPreStart){
   if(isPreStart)return "START";
   if(!session)return "HOME";
-  if(session.type === "bike")return "BIKE";
-  if(session.type === "strength")return "GYM";
-  if(session.km > 0)return `${Math.round(session.km)}KM`;
-  if(session.type === "race")return "RACE";
+  if(session.type === "bike")return TI.bike?.emoji ?? "🚴";
+  if(session.type === "strength")return TI.strength?.emoji ?? "💪";
+  if(session.km > 0)return `${Math.round(session.km)} km`;
+  if(session.type === "race")return TI.race?.emoji ?? "🏁";
   return "HOME";
 }
 
@@ -830,6 +831,7 @@ export default function App(){
     buildTrainingLoadFallbackRecommendation(localCalendarYmd()),
   );
   const swipeStartRef = useRef(null);
+  const recoveryScrollRef = useRef(null);
   const lastSwipeAtRef = useRef(0);
 
   useEffect(() => {
@@ -1216,6 +1218,8 @@ export default function App(){
     if(modal)return;
     const touch = event.touches?.[0];
     if(!touch)return;
+    const t = event.target;
+    if(recoveryScrollRef.current && t instanceof Node && recoveryScrollRef.current.contains(t))return;
     swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
   };
 
@@ -1223,6 +1227,11 @@ export default function App(){
     if(modal || !swipeStartRef.current)return;
     const touch = event.changedTouches?.[0];
     if(!touch){
+      swipeStartRef.current = null;
+      return;
+    }
+    const t = event.target;
+    if(recoveryScrollRef.current && t instanceof Node && recoveryScrollRef.current.contains(t)){
       swipeStartRef.current = null;
       return;
     }
@@ -1235,6 +1244,8 @@ export default function App(){
 
   const handleWheel = (event)=>{
     if(modal)return;
+    const el = event.target;
+    if(el instanceof Node && recoveryScrollRef.current?.contains(el))return;
     const tagName = event.target?.tagName;
     if(tagName === "INPUT" || tagName === "TEXTAREA")return;
     if(Math.abs(event.deltaX) < 40 || Math.abs(event.deltaX) <= Math.abs(event.deltaY))return;
@@ -1576,7 +1587,7 @@ export default function App(){
   const activeView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
   const safeTopPad = "env(safe-area-inset-top, 0px)";
   /** Tabbar ~72px + Abstand; zu groß = Leerraum über fixer Nav, zu klein = Content verdeckt */
-  const safeBottomContentPad = "calc(88px + env(safe-area-inset-bottom, 0px))";
+  const safeBottomContentPad = "calc(86px + env(safe-area-inset-bottom, 0px))";
   const appRootBackground = {
     backgroundColor: "#070912",
     backgroundImage: "radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",
@@ -1590,6 +1601,8 @@ export default function App(){
     WebkitOverflowScrolling: "touch",
     padding: 0,
     boxSizing: "border-box" as const,
+    display: "flex",
+    flexDirection: "column" as const,
   };
   const appleHealthRecentRunsDesc = useMemo(
     () => runningWorkoutsLast7DaysNewestFirst(healthRuns),
@@ -1696,10 +1709,10 @@ export default function App(){
       `}</style>
       <div style={mainScrollAreaStyle}>
       {activeView==="home"?(
-        <div style={{display:"flex",flexDirection:"column",overflowX:"hidden",...viewTransitionStyle}}>
+        <div style={{display:"flex",flexDirection:"column",overflowX:"hidden",flex:1,minHeight:0,...viewTransitionStyle}}>
 
           {/* ── HERO + PROGRESS RING (Hintergrund: globaler fixed Layer — kein zweiter Top-Gradient) ───── */}
-          <div style={{position:"relative",paddingTop:0,paddingBottom:0}}>
+          <div style={{position:"relative",paddingTop:0,paddingBottom:0,flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
 
             {/* status chip */}
             <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:1}}>
@@ -1748,9 +1761,9 @@ export default function App(){
               </div>
             </div>
 
-            {/* Ring + km + Done/Skip: km-Zeile symmetrisch zwischen Ring und Buttons */}
-            <div style={{display:"flex",flexDirection:"column",alignItems:"stretch",width:"100%",padding:"0 8px"}}>
-              <div style={{position:"relative",width:138,height:138,alignSelf:"center"}}>
+            {/* Ring + km + Done/Skip: km-Zeile in flexibler Mittelspalte vertikal zentriert */}
+            <div style={{display:"flex",flexDirection:"column",alignItems:"stretch",width:"100%",padding:"0 8px",flex:"1 1 0",minHeight:0}}>
+              <div style={{position:"relative",width:138,height:138,alignSelf:"center",flexShrink:0}}>
                   <svg viewBox="0 0 120 120" style={{width:"100%",height:"100%",display:"block"}}>
                     <defs>
                       <linearGradient id="prepRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1802,12 +1815,14 @@ export default function App(){
                 </div>
               <div
                 style={{
+                  flex: "1 1 0",
+                  minHeight: 0,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   width: "100%",
                   boxSizing: "border-box",
-                  padding: "7px 10px 7px",
+                  padding: "0 10px",
                 }}
               >
                 <div
@@ -1815,16 +1830,17 @@ export default function App(){
                     fontSize: 12,
                     fontWeight: 600,
                     color: "rgba(226,232,240,0.62)",
-                    textAlign: "center",
-                    lineHeight: 1.2,
+                    lineHeight: 1.15,
                     width: "100%",
                     margin: 0,
+                    textAlign: "center",
+                    transform: "translateY(-2px)",
                   }}
                 >
                   {ringKmDoneDisplay} von {ringKmPlannedDisplay} km
                 </div>
               </div>
-              <div style={{display:"flex",gap:7,padding:"0 6px 0",boxSizing:"border-box"}}>
+              <div style={{display:"flex",gap:7,padding:"0 6px 0",boxSizing:"border-box",flexShrink:0}}>
             <button
               className="dashboard-action"
               onClick={()=>dashboardSession && quickCompleteSession(dashboardSession)}
@@ -1855,7 +1871,7 @@ export default function App(){
           </div>
 
           {/* ── BELOW-FOLD CONTENT ─────────────────────────────────────── */}
-          <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 14px 0"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:12,padding:"14px 14px 0",flexShrink:0}}>
 
             {/* Daily coach decision card — kompakt, Details per Toggle */}
             <div
@@ -1864,10 +1880,10 @@ export default function App(){
                 borderRadius:18,
                 border:"1px solid rgba(56,189,248,0.22)",
                 background:"linear-gradient(160deg,rgba(12,22,36,0.92),rgba(10,16,28,0.88))",
-                padding:"5px 9px",
+                padding:"7px 11px",
                 display:"flex",
                 flexDirection:"column",
-                gap:1,
+                gap:2,
                 color:"#e2e8f0",
               }}
             >
@@ -1967,7 +1983,7 @@ export default function App(){
             </div>
 
             {/* Metrics group — cleaner, softer and less boxy */}
-            <div style={{display:"flex",flexDirection:"column",gap:3,padding:"5px 7px",borderRadius:18,background:"linear-gradient(160deg,rgba(15,23,42,0.33),rgba(12,18,34,0.2))",border:"1px solid rgba(148,163,184,0.1)"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:4,padding:"7px 9px",borderRadius:18,background:"linear-gradient(160deg,rgba(15,23,42,0.33),rgba(12,18,34,0.2))",border:"1px solid rgba(148,163,184,0.1)"}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:4}}>
                 <div style={{padding:"6px 5px",textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Recovery</div>
@@ -2331,9 +2347,25 @@ export default function App(){
 
           <SurfaceCard>
             <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:12}}>Recovery Verlauf</div>
-            <div style={{display:"flex",alignItems:"end",gap:8,overflowX:"auto",paddingBottom:4}}>
+            <div
+              ref={recoveryScrollRef}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+              style={{
+                display:"flex",
+                alignItems:"end",
+                gap:8,
+                overflowX:"auto",
+                overflowY:"hidden",
+                paddingBottom:4,
+                WebkitOverflowScrolling:"touch",
+                touchAction:"pan-x",
+                overscrollBehaviorX:"contain",
+              }}
+            >
               {recoveryHistory.map((item)=>(
-                <div key={item.label} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,minWidth:32}}>
+                <div key={item.label} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,minWidth:32,flexShrink:0}}>
                   <div style={{height:92,width:18,borderRadius:999,background:"rgba(15,23,42,0.9)",display:"flex",alignItems:"end",padding:2}}>
                     <div style={{width:"100%",height:`${Math.max(10, item.score)}%`,borderRadius:999,background:item.complete?"linear-gradient(180deg,#10b981,#38bdf8)":"linear-gradient(180deg,#f59e0b,#f87171)"}} />
                   </div>
