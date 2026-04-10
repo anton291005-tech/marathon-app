@@ -21,6 +21,7 @@ function formatPacePerKm(secondsPerKm: number): string {
 
 export default function RaceCalculator() {
   const [input, setInput] = useState("2:50:00");
+  const [expanded, setExpanded] = useState(false);
 
   const result = useMemo(() => {
     const total = parseTargetTimeToSeconds(input);
@@ -64,47 +65,86 @@ export default function RaceCalculator() {
           fontSize: 15,
           fontWeight: 700,
           boxSizing: "border-box",
-          marginBottom: 16,
+          marginBottom: result ? 10 : 16,
         }}
       />
 
       {!result ? (
         <div style={{ fontSize: 12, color: "#f87171" }}>Ungültige Zeit</div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ textAlign: "center", padding: "14px 12px", borderRadius: 16, background: "rgba(56,189,248,0.08)", border: "1px solid rgba(56,189,248,0.2)" }}>
-            <div style={{ fontSize: 11, color: "#7c8aa5", fontWeight: 700, marginBottom: 6 }}>Pace pro km</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: "#38bdf8", letterSpacing: "-0.02em" }}>{result.pacePerKm}</div>
-            <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 8 }}>Gesamt {result.totalFormatted}</div>
+        <>
+          <div
+            style={{
+              textAlign: "center",
+              padding: "12px 12px",
+              borderRadius: 16,
+              background: "rgba(56,189,248,0.08)",
+              border: "1px solid rgba(56,189,248,0.2)",
+            }}
+          >
+            <div style={{ fontSize: 11, color: "#7c8aa5", fontWeight: 700, marginBottom: 6 }}>Race Pace</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: "#38bdf8", letterSpacing: "-0.02em" }}>{result.pacePerKm}</div>
+            {expanded ? (
+              <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 8 }}>Gesamt {result.totalFormatted}</div>
+            ) : null}
           </div>
-          <div>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#7c8aa5", fontWeight: 700, marginBottom: 8 }}>Halbmarathon</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#a855f7" }}>{result.halfMarathon}</div>
-            <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>bei {HALF_KM} km</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#7c8aa5", fontWeight: 700, marginBottom: 8 }}>5-km-Splits</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {result.splits.map((row) => (
-                <div
-                  key={row.km}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: 13,
-                    color: "#cbd5e1",
-                    padding: "8px 10px",
-                    borderRadius: 10,
-                    background: "rgba(15,23,42,0.6)",
-                  }}
-                >
-                  <span style={{ color: "#94a3b8" }}>{row.km === MARATHON_KM ? "Ziel" : `${row.km} km`}</span>
-                  <span style={{ fontWeight: 700 }}>{row.cumulative}</span>
+
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            style={{
+              width: "100%",
+              marginTop: 10,
+              padding: "12px 14px",
+              minHeight: 44,
+              boxSizing: "border-box",
+              border: "1px solid rgba(56,189,248,0.22)",
+              borderRadius: 12,
+              background: "rgba(15,23,42,0.55)",
+              color: "#7dd3fc",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              textAlign: "center",
+            }}
+          >
+            {expanded ? "Weniger anzeigen" : "Mehr anzeigen"}
+          </button>
+
+          {expanded ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>
+              <div>
+                <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#7c8aa5", fontWeight: 700, marginBottom: 8 }}>
+                  Halbmarathon
                 </div>
-              ))}
+                <div style={{ fontSize: 20, fontWeight: 800, color: "#a855f7" }}>{result.halfMarathon}</div>
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>bei {HALF_KM} km</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#7c8aa5", fontWeight: 700, marginBottom: 8 }}>5-km-Splits</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {result.splits.map((row) => (
+                    <div
+                      key={row.km}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: 13,
+                        color: "#cbd5e1",
+                        padding: "8px 10px",
+                        borderRadius: 10,
+                        background: "rgba(15,23,42,0.6)",
+                      }}
+                    >
+                      <span style={{ color: "#94a3b8" }}>{row.km === MARATHON_KM ? "Ziel" : `${row.km} km`}</span>
+                      <span style={{ fontWeight: 700 }}>{row.cumulative}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          ) : null}
+        </>
       )}
     </SurfaceCard>
   );

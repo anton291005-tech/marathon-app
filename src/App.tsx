@@ -1575,7 +1575,8 @@ export default function App(){
     : { animation: `${viewMotionDir > 0 ? "viewSlideNext" : "viewSlidePrev"} .34s cubic-bezier(0.22, 1, 0.36, 1)` };
   const activeView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
   const safeTopPad = "env(safe-area-inset-top, 0px)";
-  const safeBottomContentPad = "calc(94px + env(safe-area-inset-bottom, 0px))";
+  /** Tabbar ~72px + Abstand; zu groß = Leerraum über fixer Nav, zu klein = Content verdeckt */
+  const safeBottomContentPad = "calc(88px + env(safe-area-inset-bottom, 0px))";
   const appRootBackground = {
     backgroundColor: "#070912",
     backgroundImage: "radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",
@@ -1747,10 +1748,9 @@ export default function App(){
               </div>
             </div>
 
-            {/* progress ring — Ring + km-Zeile eine zentrierte Einheit (gemeinsame Querachse) */}
-            <div style={{position:"relative",marginTop:0,marginBottom:0,padding:"0 8px",display:"flex",justifyContent:"center"}}>
-              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:0}}>
-                <div style={{position:"relative",width:138,height:138}}>
+            {/* Ring + km + Done/Skip: km-Zeile symmetrisch zwischen Ring und Buttons */}
+            <div style={{display:"flex",flexDirection:"column",alignItems:"stretch",width:"100%",padding:"0 8px"}}>
+              <div style={{position:"relative",width:138,height:138,alignSelf:"center"}}>
                   <svg viewBox="0 0 120 120" style={{width:"100%",height:"100%",display:"block"}}>
                     <defs>
                       <linearGradient id="prepRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1800,24 +1800,31 @@ export default function App(){
                   {prepProgressPct}%
                   </div>
                 </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "7px 10px 7px",
+                }}
+              >
                 <div
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
                     color: "rgba(226,232,240,0.62)",
                     textAlign: "center",
-                    marginTop: 1,
                     lineHeight: 1.2,
+                    width: "100%",
+                    margin: 0,
                   }}
                 >
                   {ringKmDoneDisplay} von {ringKmPlannedDisplay} km
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* ── ACTION BUTTONS ─────────────────────────────────────────── */}
-          <div style={{display:"flex",gap:7,padding:"0 14px 2px"}}>
+              <div style={{display:"flex",gap:7,padding:"0 6px 0",boxSizing:"border-box"}}>
             <button
               className="dashboard-action"
               onClick={()=>dashboardSession && quickCompleteSession(dashboardSession)}
@@ -1843,10 +1850,12 @@ export default function App(){
             >
               ⓘ
             </button>
+              </div>
+            </div>
           </div>
 
           {/* ── BELOW-FOLD CONTENT ─────────────────────────────────────── */}
-          <div style={{display:"flex",flexDirection:"column",gap:2,padding:"0 14px 0"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 14px 0"}}>
 
             {/* Daily coach decision card — kompakt, Details per Toggle */}
             <div
@@ -2009,19 +2018,19 @@ export default function App(){
         </div>
       ):activeView==="week"?(
         <>
-          <div style={{padding:"8px",display:"flex",flexDirection:"column",gap:4,...viewTransitionStyle}}>
-            <div style={{background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:20,padding:"8px 10px 6px",boxShadow:"0 20px 40px rgba(2,6,23,0.22)"}}>
-              <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:38,height:38,borderRadius:12,cursor:wIdx===0?"not-allowed":"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
+          <div style={{padding:"6px",display:"flex",flexDirection:"column",gap:3,...viewTransitionStyle}}>
+            <div style={{background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:18,padding:"7px 9px 5px",boxShadow:"0 20px 40px rgba(2,6,23,0.22)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===0?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
                 <div style={{flex:1,textAlign:"center",minWidth:0}}>
                   <span style={{display:"inline-block",padding:"3px 9px",borderRadius:999,fontSize:11,fontWeight:700,background:ph.bg,color:ph.col,marginBottom:4}}>{ph.emoji} {ph.label}</span>
                   <div style={{fontSize:17,fontWeight:800,color:"#fff",lineHeight:1.2}}>{w.label}</div>
                   <div style={{fontSize:12,color:"#7c8aa5",marginTop:2}}>{w.dates}</div>
                 </div>
-                <button onClick={()=>setWIdx(i=>Math.min(PLAN.length-1,i+1))} disabled={wIdx===PLAN.length-1} style={{background:wIdx===PLAN.length-1?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:38,height:38,borderRadius:12,cursor:wIdx===PLAN.length-1?"not-allowed":"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
+                <button onClick={()=>setWIdx(i=>Math.min(PLAN.length-1,i+1))} disabled={wIdx===PLAN.length-1} style={{background:wIdx===PLAN.length-1?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===PLAN.length-1?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
               </div>
 
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6,marginTop:6}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:5,marginTop:5}}>
                 <div style={{minWidth:0}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:4}}>Ziel</div>
                   <div style={{fontSize:18,fontWeight:800,color:"#38bdf8",lineHeight:1.1}}>{weekAnalysis.plannedKm} km</div>
@@ -2034,29 +2043,29 @@ export default function App(){
                 </div>
               </div>
 
-              <div style={{marginTop:6}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,fontSize:11,color:"#7c8aa5",marginBottom:3}}>
+              <div style={{marginTop:5}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,fontSize:11,color:"#7c8aa5",marginBottom:2}}>
                   <span>Wochenfortschritt</span>
                   <span style={{fontWeight:700,color:"rgba(226,232,240,0.75)",whiteSpace:"nowrap"}}>{Math.round(clampPct(weekAnalysis.plannedKm > 0 ? (weekAnalysis.actualKm / weekAnalysis.plannedKm) * 100 : 0))}%</span>
                 </div>
-                <div style={{height:7,background:"rgba(15,23,42,0.85)",borderRadius:999,overflow:"hidden"}}>
+                <div style={{height:6,background:"rgba(15,23,42,0.85)",borderRadius:999,overflow:"hidden"}}>
                   <div style={{height:"100%",background:"linear-gradient(90deg,#10b981,#38bdf8)",borderRadius:999,width:`${clampPct(weekAnalysis.plannedKm > 0 ? (weekAnalysis.actualKm / weekAnalysis.plannedKm) * 100 : 0)}%`,transition:"width .3s"}}/>
                 </div>
               </div>
 
-              <div style={{display:"flex",gap:5,marginTop:6}}>
-                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"5px 5px",borderRadius:12,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:3}}>Einheiten</div>
-                  <div style={{fontSize:16,fontWeight:800,color:"#e2e8f0",lineHeight:1.15}}>{weekAnalysis.doneSessions}/{weekAnalysis.plannedTrainSessions}</div>
+              <div style={{display:"flex",gap:4,marginTop:5}}>
+                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"4px 4px",borderRadius:11,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:2}}>Einheiten</div>
+                  <div style={{fontSize:15,fontWeight:800,color:"#e2e8f0",lineHeight:1.15}}>{weekAnalysis.doneSessions}/{weekAnalysis.plannedTrainSessions}</div>
                 </div>
-                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"5px 5px",borderRadius:12,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:3}}>Intensiv</div>
-                  <div style={{fontSize:16,fontWeight:800,color:"#fb7185",lineHeight:1.15}}>{weekAnalysis.intenseDone}/{weekAnalysis.intensePlanned}</div>
+                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"4px 4px",borderRadius:11,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:2}}>Intensiv</div>
+                  <div style={{fontSize:15,fontWeight:800,color:"#fb7185",lineHeight:1.15}}>{weekAnalysis.intenseDone}/{weekAnalysis.intensePlanned}</div>
                 </div>
               </div>
             </div>
 
-            <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:0}}>
+            <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:0}}>
               {w.s.length === 0 && (
                 <div style={{background:"rgba(11,16,28,0.94)",border:"1px solid rgba(148,163,184,0.1)",borderRadius:18,padding:18,fontSize:13,color:"#94a3b8",lineHeight:1.6}}>
                   Für diese Woche sind keine Einheiten im Plan hinterlegt.
@@ -2094,7 +2103,7 @@ export default function App(){
                     <div
                       key={session.id}
                       onClick={()=>hasHint&&openModal(session)}
-                      style={{...sessionCardShell,padding:"7px 10px 8px"}}
+                      style={{...sessionCardShell,padding:"6px 9px 7px"}}
                     >
                       <div style={{width:36,flexShrink:0,textAlign:"center"}}>
                         <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
@@ -2134,7 +2143,7 @@ export default function App(){
                   <div
                     key={session.id}
                     onClick={()=>hasHint&&openModal(session)}
-                    style={{...sessionCardShell,padding:"9px 10px 10px"}}
+                    style={{...sessionCardShell,padding:"8px 9px 9px"}}
                   >
                     <div style={{width:36,flexShrink:0,textAlign:"center"}}>
                       <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
@@ -2239,7 +2248,7 @@ export default function App(){
               })}
             </div>
 
-            <div style={{display:"flex",justifyContent:"center",gap:8,padding:"4px 2px 6px",flexWrap:"wrap"}}>
+            <div style={{display:"flex",justifyContent:"center",gap:6,padding:"2px 2px 4px",flexWrap:"wrap"}}>
               {PLAN.map((week,i)=>{
                 const weekDone=week.s.filter(session=>isSessionLogDone(logs[session.id])).length;
                 const weekSkipped=week.s.filter(session=>logs[session.id]?.skipped).length;
