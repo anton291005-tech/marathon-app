@@ -25,20 +25,28 @@ export type RunMatchResult = {
   confidence: RunMatchConfidence;
 };
 
-export type RunEvaluationStatus =
-  | "perfect"
-  | "good"
-  | "short"
-  | "long"
-  | "too_fast_easy"
-  | "too_hard"
-  | "too_easy"
+/** Eine eindeutige Coach-Kategorie nach Plan-vs-Ist-Logik */
+export type RunCoachCategory =
+  | "overload_risk"
+  | "slightly_hard"
+  | "low_stimulus"
+  | "slightly_easy"
+  | "ideal"
+  | "too_much_volume"
+  | "too_little_volume"
+  | "ideal_distance_only"
   | "no_match";
 
+/** @deprecated nutze RunCoachCategory — nur für ältere Logs / Leser */
+export type RunEvaluationStatus = string;
+
 export type RunEvaluation = {
-  status: RunEvaluationStatus;
+  category: RunCoachCategory;
   distanceDeltaKm: number;
-  paceDelta?: number;
+  /** Nur gesetzt, wenn Plan- und Ist-Tempo vergleichbar waren */
+  paceRelation?: "too_fast" | "too_slow" | "on_pace";
+  /** Nur bei overload_risk: Textvariante ohne falsche Tempo-Aussage */
+  overloadKind?: "volume_only" | "pace_or_combo";
   intensityFlag?: "low" | "ok" | "high";
 };
 

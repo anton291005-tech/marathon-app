@@ -30,7 +30,7 @@ export function decideRunningCompletion(
     };
   }
 
-  if (evaluation.status === "no_match") {
+  if (evaluation.category === "no_match") {
     return {
       shouldWrite: false,
       setDone: false,

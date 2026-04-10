@@ -83,12 +83,12 @@ export function applyAppleHealthTrainingSync(args: {
       continue;
     }
 
-    const feedback = generateRunEvaluationFeedback(evaluation);
+    const verdict = generateRunEvaluationFeedback(evaluation);
     const label = evaluationStatusLabel(evaluation);
     const evalBlock = {
-      status: evaluation.status,
+      status: verdict.category,
       label,
-      feedback,
+      feedback: verdict.text,
       distanceDeltaKm: evaluation.distanceDeltaKm,
       updatedAt: new Date().toISOString(),
     };

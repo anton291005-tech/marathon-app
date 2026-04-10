@@ -155,28 +155,37 @@ export function classifyLoad(
 ): TrainingLoadStatus {
   const pe = evalStatus(primaryRun.log);
   const pd = distanceDelta(primaryRun.log);
-
-  const primaryMild = pe === "too_fast_easy" || pe === "long";
   const se = secondaryRun ? evalStatus(secondaryRun.log) : undefined;
-  const secondaryMild = se === "too_fast_easy" || se === "long";
 
-  if (pe === "too_hard") return "red";
-  if (pe === "too_fast_easy" && pd > 1) return "red";
-  if (pe === "long" && pd > 2) return "red";
+  const intense = (s: string | undefined) =>
+    s === "overload_risk" || s === "slightly_hard" || s === "too_much_volume";
+
+  if (pe === "overload_risk") return "red";
   if (pd >= 3) return "red";
-  if (primaryMild && secondaryMild) return "red";
+  if (pe === "too_much_volume" && pd >= 2) return "red";
+  if (intense(pe) && intense(se)) return "red";
 
-  if (pe === "too_fast_easy") return "yellow";
-  if (pe === "long") return "yellow";
+  if (pe === "slightly_hard" && pd > 1) return "red";
+
+  if (pe === "slightly_hard") return "yellow";
+  if (pe === "too_much_volume") return "yellow";
+  if (pe === "slightly_easy") return "yellow";
 
   const ad = Math.abs(pd);
-  if (ad >= 0.8 && ad <= 2 && (pe === "perfect" || pe === "good" || pe === undefined)) {
+  if (ad >= 0.8 && ad <= 2 && (pe === "ideal" || pe === "ideal_distance_only" || pe === undefined)) {
     return "yellow";
   }
 
-  if (pe === "perfect" || pe === "good" || pe === undefined) return "green";
-  if (pe === "short" || pe === "too_easy") return "green";
-  if (pe === "no_match") return "green";
+  if (
+    pe === "ideal" ||
+    pe === "ideal_distance_only" ||
+    pe === "low_stimulus" ||
+    pe === "too_little_volume" ||
+    pe === "no_match" ||
+    pe === undefined
+  ) {
+    return "green";
+  }
 
   return "green";
 }

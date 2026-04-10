@@ -1,49 +1,75 @@
 /**
- * Short German copy from evaluation only (deterministic).
+ * Coach-Texte aus RunEvaluation (deterministisch, deutsch).
  */
 
-import type { RunEvaluation } from "./types";
+import type { RunCoachCategory, RunEvaluation } from "./types";
 
-export function generateRunEvaluationFeedback(evaluation: RunEvaluation): string {
-  switch (evaluation.status) {
-    case "perfect":
-      return "Einheit erfüllt.";
-    case "good":
-      return "Gut gelaufen, passt zum Plan.";
-    case "short":
-      return "Distanz unter Plan, aber okay.";
-    case "long":
-      return "Etwas mehr Distanz als geplant — passt, wenn es sich gut angefühlt hat.";
-    case "too_fast_easy":
-      return "Einheit erfüllt, aber etwas zu schnell. Morgen locker bleiben.";
-    case "too_hard":
-      return "Belastung etwas zu hoch — morgen locker bleiben.";
-    case "too_easy":
-      return "Eher ruhig unterwegs — für Easy okay, oder nächstes Mal etwas flotter.";
-    case "no_match":
-    default:
-      return "Noch kein klarer Abgleich mit der Einheit.";
+const COACH_TEXT: Record<Exclude<RunCoachCategory, "overload_risk">, string> = {
+  slightly_hard:
+    "Etwas intensiver als geplant gelaufen – achte darauf, die nächsten Einheiten nicht zu schnell zu machen.",
+  low_stimulus:
+    "Du bist kürzer und langsamer gelaufen – der Trainingsreiz war eher gering.",
+  slightly_easy:
+    "Etwas lockerer als geplant – für heute in Ordnung, aber langfristig auf Zielbereich achten.",
+  ideal: "Sehr gut – Einheit genau im geplanten Bereich umgesetzt.",
+  too_much_volume:
+    "Du bist mehr gelaufen als geplant – erhöhte Belastung, achte auf ausreichende Erholung.",
+  too_little_volume:
+    "Du bist weniger gelaufen als geplant – Trainingsreiz entsprechend reduziert.",
+  ideal_distance_only:
+    "Die Distanz liegt im geplanten Korridor; ohne belastbares Tempo aus Health bleibt die Intensität offen – nächstes Mal Zieltempo mitdenken.",
+  no_match: "Noch kein klarer Abgleich mit der Einheit.",
+};
+
+export type RunCoachVerdict = {
+  category: RunCoachCategory;
+  text: string;
+};
+
+function overloadCoachText(evaluation: RunEvaluation): string {
+  if (evaluation.overloadKind === "volume_only") {
+    return "Du bist deutlich mehr gelaufen als geplant – die Belastung ist spürbar höher. Morgen bewusst leichter trainieren und auf Erholung achten.";
   }
+  return "Du bist deutlich weiter und schneller gelaufen als geplant – die Belastung ist erhöht. Morgen besser bewusst locker trainieren.";
 }
 
-/** Compact label for chips (UI). */
+export function getRunCoachVerdict(evaluation: RunEvaluation): RunCoachVerdict {
+  const text =
+    evaluation.category === "overload_risk"
+      ? overloadCoachText(evaluation)
+      : COACH_TEXT[evaluation.category];
+  return {
+    category: evaluation.category,
+    text: text ?? COACH_TEXT.no_match,
+  };
+}
+
+/** Liefert { category, text } für Anzeige und Persistenz. */
+export function generateRunEvaluationFeedback(evaluation: RunEvaluation): RunCoachVerdict {
+  return getRunCoachVerdict(evaluation);
+}
+
+/** Kompaktes Label für Chips (UI). */
 export function evaluationStatusLabel(evaluation: RunEvaluation): string {
-  switch (evaluation.status) {
-    case "perfect":
-    case "good":
-      return "Wie geplant";
-    case "short":
-      return "Kürzer";
-    case "long":
-      return "Länger";
-    case "too_fast_easy":
-      return "Zu schnell (Easy)";
-    case "too_hard":
-      return "Zu intensiv";
-    case "too_easy":
-      return "Sehr locker";
+  switch (evaluation.category) {
+    case "overload_risk":
+      return "Belastung hoch";
+    case "slightly_hard":
+      return "Über Plan-Intensität";
+    case "low_stimulus":
+      return "Geringer Reiz";
+    case "slightly_easy":
+      return "Unter Plan-Tempo";
+    case "ideal":
+      return "Im Zielkorridor";
+    case "too_much_volume":
+      return "Mehr Volumen";
+    case "too_little_volume":
+      return "Weniger Volumen";
+    case "ideal_distance_only":
+      return "Distanz im Plan";
     case "no_match":
     default:
-      return "Kein Match";
+      return "Kein Abgleich";
   }
 }

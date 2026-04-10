@@ -204,7 +204,7 @@ export function buildTodayAppleCoachLines(input: {
 
   const norm = normalizeAppleHealthRun(best);
   const evaluation = evaluateRun(plannedSession, norm);
-  const feedback = generateRunEvaluationFeedback(evaluation);
+  const { text: feedback } = generateRunEvaluationFeedback(evaluation);
   const actualKm = Math.round(kmFromStored(best) * 10) / 10;
   const plannedLabel = plannedKm > 0 ? `${plannedKm} km` : "Plan";
   const durMin = Math.round((Number(best.duration) || 0) / 60);
