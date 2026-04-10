@@ -28,11 +28,16 @@ import { applyPlanPatches } from "./lib/ai/actions";
 import { getAiContext } from "./lib/ai/getAiContext";
 import {
   HEALTH_RUNS_STORAGE_KEY,
-  averageHeartRateBpmInWorkoutWindow,
   loadHealthRunsFromStorage,
   mergeHealthRuns,
-  workoutToStored,
 } from "./healthRuns";
+import {
+  APPLE_HEALTH_READ_TYPES,
+  healthKitFetchRunningWorkoutsLast7Days,
+  healthKitIsAvailable,
+  healthKitRequestReadAuthorization,
+} from "./appleHealth/appleHealthService";
+import { buildTodayAppleCoachLines } from "./appleHealth/todayPlanVsAppleRun";
 import { applyAppleHealthTrainingSync } from "./trainingIntelligence/applyAppleHealthSync";
 import {
   buildTrainingLoadFallbackRecommendation,
@@ -40,30 +45,11 @@ import {
 } from "./trainingLoadRecommendation";
 
 const APPLE_HEALTH_CONNECTED_KEY = "marathonAppleHealthConnected";
-/** iOS HealthKit read types (native plugin accepts strings; "workouts" is special-cased in Swift). */
-const APPLE_HEALTH_READ_TYPES = ["workouts", "distance", "heartRate", "calories"];
 
 function localCalendarYmd() {
   const now = new Date();
   const ts = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, "0")}-${String(ts.getDate()).padStart(2, "0")}`;
-}
-
-/**
- * HealthKit query range: local calendar (today − 7 days) at 00:00:00 through now (UTC instants via toISOString).
- * iOS plugin defaults to last 24h if startDate is missing or fails to parse — always send valid ISO bounds.
- */
-function appleHealthWorkoutQueryRange7DaysLocal() {
-  const endNow = new Date();
-  const startLocalMidnight = new Date(endNow.getFullYear(), endNow.getMonth(), endNow.getDate());
-  startLocalMidnight.setDate(startLocalMidnight.getDate() - 7);
-  startLocalMidnight.setHours(0, 0, 0, 0);
-  const endForNative = new Date(endNow.getTime() + 2000);
-  return {
-    startIso: startLocalMidnight.toISOString(),
-    endIsoLogical: endNow.toISOString(),
-    endIsoForQuery: endForNative.toISOString(),
-  };
 }
 
 function logHealthKit(message, ...rest) {
@@ -864,98 +850,20 @@ export default function App(){
     }
   }, [healthRuns]);
 
-  const checkHealthKitAvailableOnDevice = async () => {
-    const { Health } = await import("@capgo/capacitor-health");
-    const availability = await Health.isAvailable();
-    if (availability?.available) {
-      logHealthKit("HealthKit available");
-    } else {
-      logHealthKit("HealthKit not available", availability?.reason ?? "");
-    }
-    return !!availability?.available;
-  };
-
   const fetchRunningWorkoutsLast7Days = async () => {
     logHealthKit("Fetching workouts");
-    const { Health } = await import("@capgo/capacitor-health");
-    const { startIso, endIsoLogical, endIsoForQuery } = appleHealthWorkoutQueryRange7DaysLocal();
-
-    console.log("[HealthKit] queryWorkouts window (7 local days 00:00 → now)", {
-      startIso,
-      endIsoLogical,
-      endIsoForQuery,
-    });
-
-    const perPageLimit = 400;
-    const maxPages = 20;
-    const all = [];
-    let anchor;
-    for (let page = 0; page < maxPages; page++) {
-      const res = await Health.queryWorkouts({
-        startDate: startIso,
-        endDate: endIsoForQuery,
-        limit: perPageLimit,
-        ascending: false,
-        ...(anchor ? { anchor } : {}),
-      });
-      const batch = Array.isArray(res.workouts) ? res.workouts : [];
-      all.push(...batch);
-      if (!res.anchor || batch.length === 0) break;
-      anchor = res.anchor;
-    }
-
-    const dedupeKeys = new Set();
-    const deduped = [];
-    for (const w of all) {
-      const k = `${w.startDate}|${w.duration}|${w.workoutType}|${w.totalDistance ?? ""}|${w.platformId ?? ""}`;
-      if (dedupeKeys.has(k)) continue;
-      dedupeKeys.add(k);
-      deduped.push(w);
-    }
-
-    console.log(
-      "[HealthKit] queryWorkouts merged pages — raw rows:",
-      all.length,
-      "deduped:",
-      deduped.length,
-    );
-
-    const running = deduped
-      .filter((w) => w.workoutType === "running" || w.workoutType === "runningTreadmill")
-      .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-    console.log("[HealthKit] Workout counts — total (deduped):", deduped.length, "running after fetch:", running.length);
-    if (running.length > 0) {
-      console.log(
-        "[HealthKit] running top3 (native preview):",
-        running.slice(0, 3).map((w) => ({ platformId: w.platformId ?? null, start: w.startDate })),
-      );
-    }
-
-    let hrPoints = [];
     try {
-      const hr = await Health.readSamples({
-        dataType: "heartRate",
-        startDate: startIso,
-        endDate: endIsoForQuery,
-        limit: 8000,
-        ascending: true,
-      });
-      hrPoints = (hr.samples || []).map((s) => ({ startDate: s.startDate, value: s.value }));
-    } catch (hrErr) {
-      console.error("[HealthKit] readSamples heartRate error", hrErr);
+      const { stats, incomingStoredRuns } = await healthKitFetchRunningWorkoutsLast7Days();
+      setHealthRuns((prev) => mergeHealthRuns(prev, incomingStoredRuns));
+      setAppleHealthFetchStats({ total: stats.total, running: stats.running });
+      console.log("[HealthKit] Workouts loaded:", stats.running);
+      logHealthKit("Workout counts — total:", stats.total, "running merged:", stats.running);
+      return stats.running;
+    } catch (e) {
+      console.error("[HealthKit] fetchRunningWorkoutsLast7Days failed", e);
+      setAppleHealthFetchStats({ total: 0, running: 0 });
+      return 0;
     }
-
-    const incoming = running.map((w) =>
-      workoutToStored(
-        w,
-        averageHeartRateBpmInWorkoutWindow(w.startDate, w.endDate, hrPoints),
-      ),
-    );
-    setHealthRuns((prev) => mergeHealthRuns(prev, incoming));
-    setAppleHealthFetchStats({ total: deduped.length, running: running.length });
-    console.log("[HealthKit] Workouts loaded:", running.length);
-    logHealthKit("Workout counts logged — total:", all.length, "running merged:", running.length);
-    return running.length;
   };
 
   useEffect(() => {
@@ -963,7 +871,7 @@ export default function App(){
     let cancelled = false;
     (async () => {
       try {
-        const ok = await checkHealthKitAvailableOnDevice();
+        const ok = await healthKitIsAvailable();
         if (cancelled) return;
         setHealthKitAvailable(ok);
         if (!ok) return;
@@ -991,9 +899,8 @@ export default function App(){
     setAppleHealthConnectFeedback(null);
     setHealthAppleConnectBusy(true);
     try {
-      const { Health } = await import("@capgo/capacitor-health");
-      const availability = await Health.isAvailable();
-      if (!availability?.available) {
+      const availabilityOk = await healthKitIsAvailable();
+      if (!availabilityOk) {
         setAppleHealthConnectFeedback({
           tone: "err",
           text: "Apple Health is not available on this device.",
@@ -1001,7 +908,7 @@ export default function App(){
         return;
       }
       logHealthKit("Requesting authorization", APPLE_HEALTH_READ_TYPES);
-      await Health.requestAuthorization({ read: APPLE_HEALTH_READ_TYPES });
+      await healthKitRequestReadAuthorization();
       logHealthKit("Permission granted");
       localStorage.setItem(APPLE_HEALTH_CONNECTED_KEY, "1");
       setIsHealthConnected(true);
@@ -1035,9 +942,8 @@ export default function App(){
     setAppleHealthLoadFeedback(null);
     setHealthRunsFetchBusy(true);
     try {
-      const { Health } = await import("@capgo/capacitor-health");
-      const availability = await Health.isAvailable();
-      if (!availability?.available) {
+      const availabilityOk = await healthKitIsAvailable();
+      if (!availabilityOk) {
         setAppleHealthLoadFeedback({
           tone: "err",
           text: "Apple Health is not available.",
@@ -1572,13 +1478,47 @@ export default function App(){
   const ringRadius = 38;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const ringDashOffset = ringCircumference * (1 - (prepProgressPct / 100));
+
+  const deferAppleHealthPreview =
+    !!(dashboardLog?.assignedRun?.runId) ||
+    healthSuggestPending ||
+    !!(runIntelFeedback && String(runIntelFeedback).trim());
+
+  const todayAppleCoach = useMemo(
+    () =>
+      buildTodayAppleCoachLines({
+        platform: Capacitor.getPlatform(),
+        healthKitAvailable,
+        isHealthConnected,
+        healthRuns,
+        plannedSession: dashboardSession,
+        todaySessionMode: todayNextSession?.mode ?? null,
+        deferAppleHealthPreview,
+        todayCalendarYmd: localCalendarYmd(),
+      }),
+    [
+      healthKitAvailable,
+      isHealthConnected,
+      healthRuns,
+      dashboardSession,
+      todayNextSession?.mode,
+      deferAppleHealthPreview,
+    ],
+  );
+
   const coachAssessmentCoreLine = runIntelFeedback
     ? (runIntelFeedback.length > 90 ? `${runIntelFeedback.slice(0, 90)}…` : runIntelFeedback)
     : healthSuggestPending
       ? "Apple Health Lauf erkannt — in Einstellungen „Training wählen“ zum Zuordnen."
-      : trainingLoadRec.feedback.length > 90
-        ? `${trainingLoadRec.feedback.slice(0, 90)}…`
-        : trainingLoadRec.feedback;
+      : todayAppleCoach.kind !== "skip_non_ios" &&
+          todayAppleCoach.kind !== "defer_to_log" &&
+          todayAppleCoach.summary
+        ? todayAppleCoach.summary.length > 100
+          ? `${todayAppleCoach.summary.slice(0, 100)}…`
+          : todayAppleCoach.summary
+        : trainingLoadRec.feedback.length > 90
+          ? `${trainingLoadRec.feedback.slice(0, 90)}…`
+          : trainingLoadRec.feedback;
   const homeTabLabel = getHomeTabLabel(dashboardSession, isPreStart);
   const shareSummary = getShareSummary({ pct, week: w, nextKeySession, recoveryState, consistencyStats });
   const viewTransitionStyle = viewMotionDir === 0
@@ -1913,7 +1853,33 @@ export default function App(){
                   </span>
                 </div>
                 {!homeCoachAssessmentExpanded ? (
-                  <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.4 }}>{coachAssessmentCoreLine}</div>
+                  <>
+                    <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.4 }}>{coachAssessmentCoreLine}</div>
+                    {todayAppleCoach.showConnectHint ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigateToView("settings");
+                        }}
+                        style={{
+                          marginTop: 8,
+                          alignSelf: "flex-start",
+                          background: "rgba(56,189,248,0.14)",
+                          border: "1px solid rgba(56,189,248,0.32)",
+                          borderRadius: 10,
+                          padding: "10px 14px",
+                          minHeight: 44,
+                          color: "#7dd3fc",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Apple Health verbinden
+                      </button>
+                    ) : null}
+                  </>
                 ) : null}
                 {homeCoachAssessmentExpanded ? (
                   <>
@@ -1922,6 +1888,9 @@ export default function App(){
                     ) : null}
                     {healthSuggestPending ? (
                       <div style={{ fontSize: 11, color: "#7dd3fc", marginTop: 2 }}>Apple Health Lauf erkannt — in Einstellungen „Training wählen“ zum Zuordnen.</div>
+                    ) : null}
+                    {todayAppleCoach.detail && !runIntelFeedback && !healthSuggestPending ? (
+                      <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.45, marginTop: 6 }}>{todayAppleCoach.detail}</div>
                     ) : null}
                     <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(148,163,184,0.12)" }}>
                       <div
