@@ -189,20 +189,30 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
   };
 
   return (
-    <div style={{ padding: "16px 16px 40px", display: "flex", flexDirection: "column", gap: 12, minHeight: "calc(100vh - 160px)" }}>
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        padding: "0 0 4px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+      }}
+    >
       <div
         style={{
           background: "rgba(8,12,24,0.85)",
           border: "1px solid rgba(148,163,184,0.14)",
-          borderRadius: 18,
-          padding: "14px 14px 10px",
+          borderRadius: 16,
+          padding: "7px 10px 6px",
+          flexShrink: 0,
         }}
       >
-        <div style={{ fontSize: 17, fontWeight: 800, color: "#fff" }}>AI Coach</div>
-        <div style={{ marginTop: 6, fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>AI Coach</div>
+        <div style={{ marginTop: 2, fontSize: 11, color: "#94a3b8", lineHeight: 1.4 }}>
           Coach + Navigator. Plananpassungen werden immer erst als Action Card zur Bestaetigung gezeigt.
         </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 5, marginTop: 6, flexWrap: "wrap" }}>
           {QUICK_ACTIONS.map((chip) => (
             <button
               key={chip}
@@ -213,8 +223,8 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
                 border: "1px solid rgba(148,163,184,0.2)",
                 color: "#cbd5e1",
                 borderRadius: 999,
-                padding: "7px 11px",
-                fontSize: 12,
+                padding: "5px 8px",
+                fontSize: 11,
                 fontWeight: 700,
                 cursor: busy ? "not-allowed" : "pointer",
                 opacity: busy ? 0.7 : 1,
@@ -230,15 +240,15 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
         ref={scrollRef}
         style={{
           flex: 1,
+          minHeight: 0,
           overflowY: "auto",
           display: "flex",
           flexDirection: "column",
-          gap: 8,
+          gap: 5,
           background: "rgba(4,6,14,0.5)",
           border: "1px solid rgba(148,163,184,0.12)",
-          borderRadius: 18,
-          padding: 12,
-          minHeight: 280,
+          borderRadius: 16,
+          padding: 7,
         }}
       >
         <AiMessageList
@@ -253,7 +263,7 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
         />
       </div>
 
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "stretch" }}>
         <input
           value={input}
           onChange={(event) => setInput(event.target.value)}
@@ -267,13 +277,15 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
           placeholder="Frage deinen Coach..."
           style={{
             flex: 1,
+            minHeight: 40,
             background: "#070b16",
             border: "1px solid rgba(148,163,184,0.22)",
-            borderRadius: 12,
-            padding: "12px 12px",
+            borderRadius: 10,
+            padding: "8px 10px",
             color: "#e2e8f0",
             fontSize: 14,
             opacity: busy ? 0.65 : 1,
+            boxSizing: "border-box",
           }}
         />
         <button
@@ -283,8 +295,9 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
             background: "linear-gradient(135deg,#10b981,#3b82f6)",
             border: "none",
             color: "#fff",
-            borderRadius: 12,
-            padding: "0 14px",
+            borderRadius: 10,
+            padding: "0 12px",
+            minHeight: 40,
             fontSize: 13,
             fontWeight: 800,
             cursor: canSend ? "pointer" : "not-allowed",

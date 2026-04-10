@@ -749,21 +749,6 @@ function getRecommendedAction({ recoveryState, weeklyFatigue, nextKeySession, ph
   return "Block halten, Rhythmus konservieren und die Form nicht mit Extra-Arbeit stören.";
 }
 
-function getDashboardMetric(session){
-  if(!session)return "Ruhetag";
-  if(session.type === "bike"){
-    const match = session.desc?.match(/(\d+\s*(?:-|–)?\d*\s*min)/i);
-    return match?.[1] || "Zeit";
-  }
-  if(session.type === "strength"){
-    return "💪";
-  }
-  if(session.km > 0){
-    return `${session.km} km`;
-  }
-  return "Session";
-}
-
 function getHeroTitle(session){
   if(!session){
     return "Ruhetag";
@@ -794,27 +779,6 @@ function MetricCard({ label, value, sublabel, accent }){
   );
 }
 
-function FilterChip({ active, children, onClick }){
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        background:active?"rgba(56,189,248,0.18)":"rgba(15,23,42,0.82)",
-        color:active?"#bae6fd":"#94a3b8",
-        border:`1px solid ${active?"rgba(56,189,248,0.35)":"rgba(148,163,184,0.12)"}`,
-        borderRadius:999,
-        padding:"8px 12px",
-        cursor:"pointer",
-        fontSize:12,
-        fontWeight:700,
-        transition:"background .18s ease, border-color .18s ease, color .18s ease",
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
 function DetailBlock({ title, children }){
   return (
     <div style={{background:"rgba(9,11,26,0.92)",border:"1px solid rgba(148,163,184,0.12)",borderRadius:18,padding:16}}>
@@ -831,7 +795,8 @@ export default function App(){
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({feeling:0,actualKm:"",notes:"",done:false,skipped:false});
   const [view,setView]=useState(DEFAULT_VIEW);
-  const [overviewPhaseFilter,setOverviewPhaseFilter]=useState("all");
+  /** Übersicht „Alle Wochen“: pro Trainingsphase ein-/ausklappbar */
+  const [overviewPhaseExpandedByKey, setOverviewPhaseExpandedByKey] = useState(() => ({}));
   const [aiNavHint,setAiNavHint]=useState(null);
   const [preferences,setPreferences]=useState(() => safeParseJSON(localStorage.getItem("marathonPreferences"), {
     targetTime: "2:49:50",
@@ -1560,7 +1525,6 @@ export default function App(){
   const modalWorkout = modal ? parseWorkoutStructure(modal) : null;
   const modalFuelingHints = modal ? getFuelingHints(modal) : [];
   const recommendedAction = getRecommendedAction({ recoveryState, weeklyFatigue, nextKeySession, phaseStatus });
-  const visibleOverviewPhases = overviewPhaseFilter === "all" ? Object.keys(PI) : [overviewPhaseFilter];
   const todayNextSession = getTodayNextSession(ACTIVE_SESSIONS, logs, appNow);
   const firstTrainingSession = ACTIVE_SESSIONS[0] || null;
   const firstTrainingDate = firstTrainingSession ? parseSessionDateLabel(firstTrainingSession.date) : null;
@@ -1610,7 +1574,7 @@ export default function App(){
     ? {}
     : { animation: `${viewMotionDir > 0 ? "viewSlideNext" : "viewSlidePrev"} .34s cubic-bezier(0.22, 1, 0.36, 1)` };
   const activeView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
-  const safeTopPad = "calc(env(safe-area-inset-top, 0px) + 4px)";
+  const safeTopPad = "env(safe-area-inset-top, 0px)";
   const safeBottomContentPad = "calc(94px + env(safe-area-inset-bottom, 0px))";
   const appRootBackground = {
     backgroundColor: "#070912",
@@ -1618,7 +1582,14 @@ export default function App(){
     backgroundRepeat: "no-repeat",
     backgroundAttachment: "fixed",
   };
-  const mainScrollAreaStyle = { flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch" };
+  const mainScrollAreaStyle = {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    WebkitOverflowScrolling: "touch",
+    padding: 0,
+    boxSizing: "border-box" as const,
+  };
   const appleHealthRecentRunsDesc = useMemo(
     () => runningWorkoutsLast7DaysNewestFirst(healthRuns),
     [healthRuns],
@@ -1687,6 +1658,7 @@ export default function App(){
           display: "flex",
           flexDirection: "column",
           minHeight: 0,
+          overflow: "hidden",
           paddingTop: safeTopPad,
           paddingBottom: safeBottomContentPad,
           paddingLeft: "env(safe-area-inset-left, 0px)",
@@ -1721,14 +1693,15 @@ export default function App(){
           100% { opacity: 1; transform: translate3d(0,0,0); }
         }
       `}</style>
+      <div style={mainScrollAreaStyle}>
       {activeView==="home"?(
-        <div style={{display:"flex",flexDirection:"column",paddingBottom:4,overflowX:"hidden",...viewTransitionStyle}}>
+        <div style={{display:"flex",flexDirection:"column",overflowX:"hidden",...viewTransitionStyle}}>
 
           {/* ── HERO + PROGRESS RING (Hintergrund: globaler fixed Layer — kein zweiter Top-Gradient) ───── */}
-          <div style={{position:"relative",paddingTop:2,paddingBottom:0}}>
+          <div style={{position:"relative",paddingTop:0,paddingBottom:0}}>
 
             {/* status chip */}
-            <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:4}}>
+            <div style={{position:"relative",display:"flex",justifyContent:"center",marginBottom:1}}>
               {!firstTrainingStart ? null : !hasCalendarStarted ? (
                 <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(148,163,184,0.06)",border:"1px solid rgba(148,163,184,0.1)",borderRadius:999,padding:"4px 11px"}}>
                   <span style={{width:5,height:5,borderRadius:"50%",background:"#475569",display:"inline-block"}}/>
@@ -1743,9 +1716,9 @@ export default function App(){
             </div>
 
             {/* session title */}
-            <div style={{position:"relative",textAlign:"center",padding:"0 20px"}}>
-              <div style={{fontSize:34,lineHeight:1,marginBottom:4}}>{dashboardType.emoji}</div>
-              <div style={{fontSize:38,fontWeight:800,color:"#fff",lineHeight:1.03,letterSpacing:"-0.04em",maxWidth:320,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}>
+            <div style={{position:"relative",textAlign:"center",padding:"0 12px"}}>
+              <div style={{fontSize:24,lineHeight:1,marginBottom:1}}>{dashboardType.emoji}</div>
+              <div style={{fontSize:28,fontWeight:800,color:"#fff",lineHeight:1.03,letterSpacing:"-0.04em",maxWidth:320,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"center",gap:6,flexWrap:"wrap"}}>
                 {dashboardDone ? (
                   <span style={{fontSize:36,color:"#4ade80",lineHeight:1}} aria-hidden>✓</span>
                 ) : null}
@@ -1754,7 +1727,7 @@ export default function App(){
                   <span style={{fontSize:12,fontWeight:800,color:"#86efac",padding:"4px 10px",borderRadius:999,background:"rgba(16,185,129,0.2)",border:"1px solid rgba(16,185,129,0.35)"}}>Erledigt</span>
                 ) : null}
               </div>
-              <div style={{fontSize:13,color:"rgba(226,232,240,0.62)",fontWeight:650,marginTop:4,letterSpacing:"0.01em",lineHeight:1.45}}>
+              <div style={{fontSize:13,color:"rgba(226,232,240,0.62)",fontWeight:650,marginTop:1,letterSpacing:"0.01em",lineHeight:1.4}}>
                 {dashboardHealthDone ? (
                   <span style={{color:"#86efac",fontWeight:700}}>
                     Mit Einheit verknüpft · Apple Health{runIntelLabel ? ` · ${runIntelLabel}` : ""}
@@ -1775,9 +1748,9 @@ export default function App(){
             </div>
 
             {/* progress ring — Ring + km-Zeile eine zentrierte Einheit (gemeinsame Querachse) */}
-            <div style={{position:"relative",marginTop:0,marginBottom:0,padding:"0 10px",display:"flex",justifyContent:"center"}}>
-              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-                <div style={{position:"relative",width:204,height:204}}>
+            <div style={{position:"relative",marginTop:0,marginBottom:0,padding:"0 8px",display:"flex",justifyContent:"center"}}>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:0}}>
+                <div style={{position:"relative",width:138,height:138}}>
                   <svg viewBox="0 0 120 120" style={{width:"100%",height:"100%",display:"block"}}>
                     <defs>
                       <linearGradient id="prepRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1815,24 +1788,26 @@ export default function App(){
                       transform: "translate(-50%, -50%)",
                       margin: 0,
                       padding: 0,
-                      fontSize: 48,
-                      fontWeight: 800,
-                      color: "#f8fafc",
-                      letterSpacing: "-0.03em",
-                      whiteSpace: "nowrap",
-                      lineHeight: 1,
-                      textAlign: "center",
-                    }}
-                  >
-                    {prepProgressPct}%
+                    fontSize: 33,
+                    fontWeight: 800,
+                    color: "#f8fafc",
+                    letterSpacing: "-0.03em",
+                    whiteSpace: "nowrap",
+                    lineHeight: 1,
+                    textAlign: "center",
+                  }}
+                >
+                  {prepProgressPct}%
                   </div>
                 </div>
                 <div
                   style={{
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: 600,
                     color: "rgba(226,232,240,0.62)",
                     textAlign: "center",
+                    marginTop: 1,
+                    lineHeight: 1.2,
                   }}
                 >
                   {ringKmDoneDisplay} von {ringKmPlannedDisplay} km
@@ -1842,12 +1817,12 @@ export default function App(){
           </div>
 
           {/* ── ACTION BUTTONS ─────────────────────────────────────────── */}
-          <div style={{display:"flex",gap:10,padding:"0 16px 10px"}}>
+          <div style={{display:"flex",gap:7,padding:"0 14px 2px"}}>
             <button
               className="dashboard-action"
               onClick={()=>dashboardSession && quickCompleteSession(dashboardSession)}
               disabled={!dashboardSession}
-              style={{flex:1,background:"rgba(16,185,129,0.22)",border:"1px solid rgba(16,185,129,0.34)",color:dashboardSession ? "#d1fae5" : "#374151",borderRadius:999,padding:"14px 12px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:14,fontWeight:800,boxShadow:"0 8px 24px rgba(16,185,129,0.08)"}}
+              style={{flex:1,background:"rgba(16,185,129,0.22)",border:"1px solid rgba(16,185,129,0.34)",color:dashboardSession ? "#d1fae5" : "#374151",borderRadius:999,padding:"9px 11px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:14,fontWeight:800,boxShadow:"0 8px 24px rgba(16,185,129,0.08)"}}
             >
               ✓ Done
             </button>
@@ -1855,7 +1830,7 @@ export default function App(){
               className="dashboard-action"
               onClick={()=>dashboardSession && quickSkipSession(dashboardSession)}
               disabled={!dashboardSession}
-              style={{flex:1,background:"rgba(239,68,68,0.16)",border:"1px solid rgba(248,113,113,0.26)",color:dashboardSession ? "#fecaca" : "#374151",borderRadius:999,padding:"14px 12px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:14,fontWeight:800,boxShadow:"0 8px 24px rgba(248,113,113,0.07)"}}
+              style={{flex:1,background:"rgba(239,68,68,0.16)",border:"1px solid rgba(248,113,113,0.26)",color:dashboardSession ? "#fecaca" : "#374151",borderRadius:999,padding:"9px 11px",cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:14,fontWeight:800,boxShadow:"0 8px 24px rgba(248,113,113,0.07)"}}
             >
               Skip
             </button>
@@ -1863,7 +1838,7 @@ export default function App(){
               className="dashboard-action"
               onClick={()=>dashboardSession && openModal(dashboardSession)}
               disabled={!dashboardSession}
-              style={{width:50,height:50,flexShrink:0,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(148,163,184,0.13)",color:dashboardSession ? "#94a3b8" : "#1e293b",borderRadius:999,cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}
+              style={{width:46,height:46,flexShrink:0,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(148,163,184,0.13)",color:dashboardSession ? "#94a3b8" : "#1e293b",borderRadius:999,cursor:dashboardSession ? "pointer" : "not-allowed",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}
               aria-label="Details öffnen"
             >
               ⓘ
@@ -1871,7 +1846,7 @@ export default function App(){
           </div>
 
           {/* ── BELOW-FOLD CONTENT ─────────────────────────────────────── */}
-          <div style={{display:"flex",flexDirection:"column",gap:8,padding:"0 16px 0"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:2,padding:"0 14px 0"}}>
 
             {/* Daily coach decision card — kompakt, Details per Toggle */}
             <div
@@ -1880,10 +1855,10 @@ export default function App(){
                 borderRadius:18,
                 border:"1px solid rgba(56,189,248,0.22)",
                 background:"linear-gradient(160deg,rgba(12,22,36,0.92),rgba(10,16,28,0.88))",
-                padding:"10px 14px",
+                padding:"5px 9px",
                 display:"flex",
                 flexDirection:"column",
-                gap:4,
+                gap:1,
                 color:"#e2e8f0",
               }}
             >
@@ -1902,7 +1877,7 @@ export default function App(){
                   color:"inherit",
                   display:"flex",
                   flexDirection:"column",
-                  gap:4,
+                  gap:3,
                 }}
               >
                 <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.1em",color:"#7c8aa5",fontWeight:700}}>Heutige Einschätzung</div>
@@ -1983,25 +1958,25 @@ export default function App(){
             </div>
 
             {/* Metrics group — cleaner, softer and less boxy */}
-            <div style={{display:"flex",flexDirection:"column",gap:9,padding:"12px",borderRadius:20,background:"linear-gradient(160deg,rgba(15,23,42,0.33),rgba(12,18,34,0.2))",border:"1px solid rgba(148,163,184,0.1)"}}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8}}>
-                <div style={{padding:"10px 6px",textAlign:"center",borderRadius:14,background:"rgba(15,23,42,0.34)"}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:5}}>Recovery</div>
-                  <div style={{fontSize:16,fontWeight:800,color:recoveryState.tone,lineHeight:1}}>{recoveryState.label}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:3,padding:"5px 7px",borderRadius:18,background:"linear-gradient(160deg,rgba(15,23,42,0.33),rgba(12,18,34,0.2))",border:"1px solid rgba(148,163,184,0.1)"}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:4}}>
+                <div style={{padding:"6px 5px",textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Recovery</div>
+                  <div style={{fontSize:15,fontWeight:800,color:recoveryState.tone,lineHeight:1}}>{recoveryState.label}</div>
                 </div>
-                <div style={{padding:"10px 6px",textAlign:"center",borderRadius:14,background:"rgba(15,23,42,0.34)"}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:5}}>Last</div>
-                  <div style={{fontSize:16,fontWeight:800,color:weeklyFatigue.color,lineHeight:1}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
+                <div style={{padding:"6px 5px",textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Last</div>
+                  <div style={{fontSize:15,fontWeight:800,color:weeklyFatigue.color,lineHeight:1}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
                 </div>
-                <div style={{padding:"10px 6px",textAlign:"center",borderRadius:14,background:"rgba(15,23,42,0.34)"}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:5}}>Streak</div>
+                <div style={{padding:"6px 5px",textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Streak</div>
                   <div style={{fontSize:16,fontWeight:800,color:"#c4b5fd",lineHeight:1}}>
                     {consistencyStats.sessionStreak}<span style={{fontSize:10,color:"rgba(148,163,184,0.48)",marginLeft:2}}>×</span>
                   </div>
                 </div>
               </div>
 
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:5}}>
                 {[
                   { label: "Plan", value: `${prepProgressPct}%`, sub: `${ringKmDoneDisplay} / ${ringKmPlannedDisplay} km gesamt`, color: "#10b981" },
                   { label: "km", value: `${Math.round(loggedKm)}`, sub: `${kmPct}%`, color: "#38bdf8" },
@@ -2011,19 +1986,19 @@ export default function App(){
                   <div
                     key={m.label}
                     style={{
-                      padding: "11px 10px",
-                      borderRadius: 14,
+                      padding: "7px 7px",
+                      borderRadius: 12,
                       background: "rgba(15,23,42,0.28)",
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "center",
                       alignItems: "center",
                       textAlign: "center",
-                      gap: 5,
+                      gap: 3,
                     }}
                   >
                     <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700}}>{m.label}</div>
-                    <div style={{fontSize:17,fontWeight:800,color:m.color,lineHeight:1.05}}>{m.value}</div>
+                    <div style={{fontSize:16,fontWeight:800,color:m.color,lineHeight:1.05}}>{m.value}</div>
                     <div style={{fontSize:11,color:"rgba(148,163,184,0.5)"}}>{m.sub}</div>
                   </div>
                 ))}
@@ -2034,33 +2009,33 @@ export default function App(){
         </div>
       ):activeView==="week"?(
         <>
-          <div style={{padding:"14px",display:"flex",flexDirection:"column",gap:10,...viewTransitionStyle}}>
-            <div style={{background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:22,padding:"14px 14px 12px",boxShadow:"0 20px 40px rgba(2,6,23,0.22)"}}>
+          <div style={{padding:"8px",display:"flex",flexDirection:"column",gap:4,...viewTransitionStyle}}>
+            <div style={{background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:20,padding:"8px 10px 6px",boxShadow:"0 20px 40px rgba(2,6,23,0.22)"}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:38,height:38,borderRadius:12,cursor:wIdx===0?"not-allowed":"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
                 <div style={{flex:1,textAlign:"center",minWidth:0}}>
-                  <span style={{display:"inline-block",padding:"4px 11px",borderRadius:999,fontSize:11,fontWeight:700,background:ph.bg,color:ph.col,marginBottom:6}}>{ph.emoji} {ph.label}</span>
-                  <div style={{fontSize:18,fontWeight:800,color:"#fff",lineHeight:1.2}}>{w.label}</div>
-                  <div style={{fontSize:12,color:"#7c8aa5",marginTop:3}}>{w.dates}</div>
+                  <span style={{display:"inline-block",padding:"3px 9px",borderRadius:999,fontSize:11,fontWeight:700,background:ph.bg,color:ph.col,marginBottom:4}}>{ph.emoji} {ph.label}</span>
+                  <div style={{fontSize:17,fontWeight:800,color:"#fff",lineHeight:1.2}}>{w.label}</div>
+                  <div style={{fontSize:12,color:"#7c8aa5",marginTop:2}}>{w.dates}</div>
                 </div>
                 <button onClick={()=>setWIdx(i=>Math.min(PLAN.length-1,i+1))} disabled={wIdx===PLAN.length-1} style={{background:wIdx===PLAN.length-1?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:38,height:38,borderRadius:12,cursor:wIdx===PLAN.length-1?"not-allowed":"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
               </div>
 
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:12}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:6,marginTop:6}}>
                 <div style={{minWidth:0}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:4}}>Ziel</div>
-                  <div style={{fontSize:20,fontWeight:800,color:"#38bdf8",lineHeight:1.1}}>{weekAnalysis.plannedKm} km</div>
+                  <div style={{fontSize:18,fontWeight:800,color:"#38bdf8",lineHeight:1.1}}>{weekAnalysis.plannedKm} km</div>
                   <div style={{fontSize:11,color:"rgba(148,163,184,0.48)",marginTop:2}}>geplant</div>
                 </div>
                 <div style={{minWidth:0}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:4}}>Ist</div>
-                  <div style={{fontSize:20,fontWeight:800,color:"#10b981",lineHeight:1.1}}>{weekAnalysis.actualKm.toFixed(1)} km</div>
+                  <div style={{fontSize:18,fontWeight:800,color:"#10b981",lineHeight:1.1}}>{weekAnalysis.actualKm.toFixed(1)} km</div>
                   <div style={{fontSize:11,color:"rgba(148,163,184,0.48)",marginTop:2}}>{Math.round(clampPct(weekAnalysis.plannedKm > 0 ? (weekAnalysis.actualKm / weekAnalysis.plannedKm) * 100 : 0))}% erledigt</div>
                 </div>
               </div>
 
-              <div style={{marginTop:12}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,fontSize:11,color:"#7c8aa5",marginBottom:6}}>
+              <div style={{marginTop:6}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,fontSize:11,color:"#7c8aa5",marginBottom:3}}>
                   <span>Wochenfortschritt</span>
                   <span style={{fontWeight:700,color:"rgba(226,232,240,0.75)",whiteSpace:"nowrap"}}>{Math.round(clampPct(weekAnalysis.plannedKm > 0 ? (weekAnalysis.actualKm / weekAnalysis.plannedKm) * 100 : 0))}%</span>
                 </div>
@@ -2069,19 +2044,19 @@ export default function App(){
                 </div>
               </div>
 
-              <div style={{display:"flex",gap:8,marginTop:12}}>
-                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"7px 6px",borderRadius:12,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
+              <div style={{display:"flex",gap:5,marginTop:6}}>
+                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"5px 5px",borderRadius:12,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:3}}>Einheiten</div>
                   <div style={{fontSize:16,fontWeight:800,color:"#e2e8f0",lineHeight:1.15}}>{weekAnalysis.doneSessions}/{weekAnalysis.plannedTrainSessions}</div>
                 </div>
-                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"7px 6px",borderRadius:12,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
+                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"5px 5px",borderRadius:12,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:3}}>Intensiv</div>
                   <div style={{fontSize:16,fontWeight:800,color:"#fb7185",lineHeight:1.15}}>{weekAnalysis.intenseDone}/{weekAnalysis.intensePlanned}</div>
                 </div>
               </div>
             </div>
 
-            <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:0}}>
+            <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:0}}>
               {w.s.length === 0 && (
                 <div style={{background:"rgba(11,16,28,0.94)",border:"1px solid rgba(148,163,184,0.1)",borderRadius:18,padding:18,fontSize:13,color:"#94a3b8",lineHeight:1.6}}>
                   Für diese Woche sind keine Einheiten im Plan hinterlegt.
@@ -2105,9 +2080,9 @@ export default function App(){
                     : isSkipped
                       ?"linear-gradient(160deg,rgba(40,14,14,0.9),rgba(18,18,30,0.96))"
                       :"linear-gradient(160deg,rgba(18,18,36,0.98),rgba(11,16,28,0.94))",
-                  borderRadius:18,
+                  borderRadius:16,
                   display:"flex",
-                  gap:12,
+                  gap:8,
                   alignItems:"flex-start",
                   cursor:hasHint?"pointer":"default",
                   opacity:session.type==="rest"?0.78:1,
@@ -2119,9 +2094,9 @@ export default function App(){
                     <div
                       key={session.id}
                       onClick={()=>hasHint&&openModal(session)}
-                      style={{...sessionCardShell,padding:"11px 14px 12px"}}
+                      style={{...sessionCardShell,padding:"7px 10px 8px"}}
                     >
-                      <div style={{width:42,flexShrink:0,textAlign:"center"}}>
+                      <div style={{width:36,flexShrink:0,textAlign:"center"}}>
                         <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
                       </div>
                       <div style={{flex:1,minWidth:0}}>
@@ -2159,37 +2134,37 @@ export default function App(){
                   <div
                     key={session.id}
                     onClick={()=>hasHint&&openModal(session)}
-                    style={{...sessionCardShell,padding:"14px 14px 15px"}}
+                    style={{...sessionCardShell,padding:"9px 10px 10px"}}
                   >
-                    <div style={{width:42,flexShrink:0,textAlign:"center"}}>
+                    <div style={{width:36,flexShrink:0,textAlign:"center"}}>
                       <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
-                      <div style={{marginTop:8,width:42,height:42,borderRadius:14,background:`${ti.col}1a`,border:`1px solid ${ti.col}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{ti.emoji}</div>
+                      <div style={{marginTop:4,width:36,height:36,borderRadius:10,background:`${ti.col}1a`,border:`1px solid ${ti.col}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{ti.emoji}</div>
                     </div>
 
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start",flexWrap:"wrap"}}>
-                        <div style={{display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
-                          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                            <span style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:`${ti.col}22`,color:ti.col,fontWeight:700}}>{getSessionTypeLabel(session.type)}</span>
-                            <span style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:statusTone.background,color:statusTone.color,fontWeight:700,border:`1px solid ${statusTone.border}`}}>
+                        <div style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                            <span style={{fontSize:11,padding:"3px 8px",borderRadius:999,background:`${ti.col}22`,color:ti.col,fontWeight:700}}>{getSessionTypeLabel(session.type)}</span>
+                            <span style={{fontSize:11,padding:"3px 8px",borderRadius:999,background:statusTone.background,color:statusTone.color,fontWeight:700,border:`1px solid ${statusTone.border}`}}>
                               {getSessionStatusLabel(log)}
                             </span>
                             {log?.assignedRun?.runId ? (
-                              <span style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:"rgba(56,189,248,0.14)",color:"#7dd3fc",fontWeight:700,border:"1px solid rgba(56,189,248,0.28)"}}>
+                              <span style={{fontSize:11,padding:"3px 8px",borderRadius:999,background:"rgba(56,189,248,0.14)",color:"#7dd3fc",fontWeight:700,border:"1px solid rgba(56,189,248,0.28)"}}>
                                 {log?.runEvaluation?.label ? `${log.runEvaluation.label} · ` : ""}Mit Einheit verknüpft ✔
                               </span>
                             ) : log?.suggestedHealthRunId ? (
-                              <span style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:"rgba(251,191,36,0.14)",color:"#fcd34d",fontWeight:700,border:"1px solid rgba(251,191,36,0.28)"}}>Apple Health Lauf erkannt</span>
+                              <span style={{fontSize:11,padding:"3px 8px",borderRadius:999,background:"rgba(251,191,36,0.14)",color:"#fcd34d",fontWeight:700,border:"1px solid rgba(251,191,36,0.28)"}}>Apple Health Lauf erkannt</span>
                             ) : null}
                             {milestones.map((milestone)=>(
-                              <span key={milestone.label} style={{fontSize:11,padding:"4px 9px",borderRadius:999,background:`${milestone.color}1f`,color:milestone.color,fontWeight:700}}>
+                              <span key={milestone.label} style={{fontSize:11,padding:"3px 8px",borderRadius:999,background:`${milestone.color}1f`,color:milestone.color,fontWeight:700}}>
                                 {milestone.emoji} {milestone.label}
                               </span>
                             ))}
                           </div>
                           <div>
                             <div style={{fontSize:15,fontWeight:700,color:weekTitleColor,lineHeight:1.35}}>{session.title}</div>
-                            <div style={{fontSize:12,color:"#7c8aa5",marginTop:5}}>{session.date}</div>
+                            <div style={{fontSize:12,color:"#7c8aa5",marginTop:3}}>{session.date}</div>
                           </div>
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -2218,8 +2193,8 @@ export default function App(){
                       </div>
 
                       {sessionDescText ? (
-                        <div style={{ marginTop: 10 }}>
-                          <div style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.6 }}>{sessionDescText}</div>
+                        <div style={{ marginTop: 8 }}>
+                          <div style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.55 }}>{sessionDescText}</div>
                           <button
                             type="button"
                             onClick={(e) => {
@@ -2227,7 +2202,7 @@ export default function App(){
                               setWeekTabDescExpandedById((prev) => ({ ...prev, [session.id]: false }));
                             }}
                             style={{
-                              marginTop: 8,
+                              marginTop: 6,
                               padding: 0,
                               border: "none",
                               background: "transparent",
@@ -2243,13 +2218,13 @@ export default function App(){
                         </div>
                       ) : null}
 
-                      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
                         {session.km > 0 && <div style={{fontSize:12,color:"#38bdf8",fontWeight:700}}>{session.km} km Ziel</div>}
                         {session.pace && <div style={{fontSize:12,color:"#c084fc",fontWeight:700}}>⏱ {session.pace}</div>}
                       </div>
 
                       {log ? (
-                        <div style={{marginTop:10,padding:"8px 10px",borderRadius:12,background:"rgba(15,23,42,0.5)",border:"1px solid rgba(148,163,184,0.08)"}}>
+                        <div style={{marginTop:8,padding:"6px 8px",borderRadius:10,background:"rgba(15,23,42,0.5)",border:"1px solid rgba(148,163,184,0.08)"}}>
                           <div style={{fontSize:12,color:"#f8fafc",lineHeight:1.5}}>
                             {getSessionStatusLabel(log)}
                             {log.feeling > 0 ? ` · ${"★".repeat(log.feeling)}` : ""}
@@ -2314,7 +2289,7 @@ export default function App(){
           </SurfaceCard>
         </div>
       ):activeView==="overview"?(
-        <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14,...viewTransitionStyle}}>
+        <div style={{padding:"12px 12px 24px",display:"flex",flexDirection:"column",gap:10,...viewTransitionStyle}}>
           {doneSess === 0 && (
             <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(148,163,184,0.08)",borderRadius:18,padding:"12px 14px"}}>
               <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:4}}>Log startet hier</div>
@@ -2369,63 +2344,98 @@ export default function App(){
           </SurfaceCard>
 
           <SurfaceCard>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:6}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,flexWrap:"wrap",gap:6}}>
               <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Alle Wochen</div>
               <div style={{fontSize:11,color:"#94a3b8"}}>Längster Lauf: {LONGEST_LONG_RUN_KM} km</div>
             </div>
 
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
-              {[{ key: "all", label: "Alle Phasen" }, ...PHASE_ORDER.map((phaseKey) => ({ key: phaseKey, label: PI[phaseKey].label }))].map((item)=>(
-                <FilterChip key={item.key} active={overviewPhaseFilter===item.key} onClick={()=>setOverviewPhaseFilter(item.key)}>
-                  {item.label}
-                </FilterChip>
-              ))}
-            </div>
-
-            {visibleOverviewPhases.map(phaseKey=>{
-              const phaseWeeks=PLAN.filter(week=>week.phase===phaseKey);
-              const phase=PI[phaseKey];
-              return(
-                <div key={phaseKey} style={{marginBottom:14}}>
-                  <div style={{fontSize:13,fontWeight:800,color:phase.col,marginBottom:10}}>{phase.emoji} {phase.label}</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    {phaseWeeks.map(week=>{
-                      const idx=PLAN.indexOf(week);
-                      const weekDone=week.s.filter(session=>isSessionLogDone(logs[session.id])).length;
-                      const weekSkipped=week.s.filter(session=>logs[session.id]?.skipped).length;
-                      const weekTotal=week.s.filter(session=>session.type!=="rest").length;
-                      const weekPct=weekTotal > 0 ? Math.round((weekDone / weekTotal) * 100) : 0;
-                      const phaseHasPeak = week.km >= 90;
-                      return(
-                        <button
-                          key={week.wn}
-                          onClick={()=>{setWIdx(idx);setView("week");}}
-                          style={{background:"rgba(11,15,28,0.9)",borderRadius:16,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",border:"1px solid rgba(148,163,184,0.1)",textAlign:"left"}}
-                        >
-                          <div style={{minWidth:0}}>
-                            <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>{week.label}</div>
-                            <div style={{fontSize:11,color:"#7c8aa5",marginTop:4}}>{week.dates} · {week.km} km</div>
-                            {phaseHasPeak && <div style={{fontSize:11,color:"#10b981",marginTop:6,fontWeight:700}}>🔥 Peak Woche</div>}
-                            {weekSkipped > 0 && <div style={{fontSize:11,color:"#fca5a5",marginTop:6,fontWeight:700}}>⏭ {weekSkipped} ausgelassen</div>}
-                          </div>
-                          <div style={{display:"flex",alignItems:"center",gap:10,marginLeft:10}}>
-                            <div style={{width:64,height:6,background:"#0b0f1c",borderRadius:999,overflow:"hidden"}}>
-                              <div style={{height:"100%",background:phase.col,borderRadius:999,width:`${weekPct}%`}}/>
-                            </div>
-                            <div style={{fontSize:12,fontWeight:700,color:phase.col,minWidth:38,textAlign:"right"}}>{weekDone}/{weekTotal}</div>
-                          </div>
-                        </button>
-                      );
-                    })}
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {PHASE_ORDER.map((phaseKey)=>{
+                const phaseWeeks=PLAN.filter(week=>week.phase===phaseKey);
+                if (phaseWeeks.length === 0) return null;
+                const phase=PI[phaseKey];
+                const expanded = !!overviewPhaseExpandedByKey[phaseKey];
+                return(
+                  <div
+                    key={phaseKey}
+                    style={{
+                      borderRadius:14,
+                      border:`1px solid ${phase.col}2a`,
+                      background:"rgba(9,12,22,0.88)",
+                      overflow:"hidden",
+                    }}
+                  >
+                    <div style={{padding:"8px 10px 6px"}}>
+                      <div style={{fontSize:14,fontWeight:800,color:phase.col,lineHeight:1.25}}>{phase.emoji} {phase.label}</div>
+                      <div style={{fontSize:11,color:"#94a3b8",marginTop:3,lineHeight:1.35}}>
+                        {phaseWeeks.length} Wochen
+                        {phaseWeeks.length > 0
+                          ? ` · Woche ${phaseWeeks[0].wn}${phaseWeeks.length > 1 ? `–${phaseWeeks[phaseWeeks.length - 1].wn}` : ""}`
+                          : ""}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={()=>setOverviewPhaseExpandedByKey((prev)=>({ ...prev, [phaseKey]: !prev[phaseKey] }))}
+                        style={{
+                          width:"100%",
+                          marginTop:6,
+                          padding:"10px 12px",
+                          minHeight:44,
+                          boxSizing:"border-box",
+                          border:"1px solid rgba(56,189,248,0.22)",
+                          borderRadius:10,
+                          background:"rgba(15,23,42,0.55)",
+                          color:"#7dd3fc",
+                          fontSize:12,
+                          fontWeight:700,
+                          cursor:"pointer",
+                          textAlign:"center",
+                        }}
+                      >
+                        {expanded ? "Weniger anzeigen" : "Mehr anzeigen"}
+                      </button>
+                    </div>
+                    {expanded ? (
+                      <div style={{display:"flex",flexDirection:"column",gap:6,padding:"0 8px 8px 10px"}}>
+                        {phaseWeeks.map(week=>{
+                          const idx=PLAN.indexOf(week);
+                          const weekDone=week.s.filter(session=>isSessionLogDone(logs[session.id])).length;
+                          const weekSkipped=week.s.filter(session=>logs[session.id]?.skipped).length;
+                          const weekTotal=week.s.filter(session=>session.type!=="rest").length;
+                          const weekPct=weekTotal > 0 ? Math.round((weekDone / weekTotal) * 100) : 0;
+                          const phaseHasPeak = week.km >= 90;
+                          return(
+                            <button
+                              key={week.wn}
+                              onClick={()=>{setWIdx(idx);setView("week");}}
+                              style={{background:"rgba(11,15,28,0.9)",borderRadius:12,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",border:"1px solid rgba(148,163,184,0.1)",textAlign:"left"}}
+                            >
+                              <div style={{minWidth:0}}>
+                                <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>{week.label}</div>
+                                <div style={{fontSize:11,color:"#7c8aa5",marginTop:3}}>{week.dates} · {week.km} km</div>
+                                {phaseHasPeak ? <div style={{fontSize:11,color:"#10b981",marginTop:4,fontWeight:700}}>🔥 Peak Woche</div> : null}
+                                {weekSkipped > 0 ? <div style={{fontSize:11,color:"#fca5a5",marginTop:4,fontWeight:700}}>⏭ {weekSkipped} ausgelassen</div> : null}
+                              </div>
+                              <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:8}}>
+                                <div style={{width:56,height:5,background:"#0b0f1c",borderRadius:999,overflow:"hidden"}}>
+                                  <div style={{height:"100%",background:phase.col,borderRadius:999,width:`${weekPct}%`}}/>
+                                </div>
+                                <div style={{fontSize:12,fontWeight:700,color:phase.col,minWidth:36,textAlign:"right"}}>{weekDone}/{weekTotal}</div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </SurfaceCard>
         </div>
       ):activeView==="coach"?(
-        <div style={{display:"flex",flexDirection:"column",gap:12,...viewTransitionStyle}}>
-          <div style={{padding:"0 16px"}}>
+        <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,gap:6,...viewTransitionStyle}}>
+          <div style={{padding:"0 10px",flexShrink:0}}>
             <DailyCoachDecisionCard
               decision={dailyCoachDecision}
               onGoToCoach={() => {}}
@@ -2436,11 +2446,13 @@ export default function App(){
               }}
             />
           </div>
-          <AiCoachPanel
-            getContext={buildCurrentAiContext}
-            onApplyPlanPatches={handleAiApplyPlanPatches}
-            onNavigate={handleAiNavigate}
-          />
+          <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",padding:"0 10px"}}>
+            <AiCoachPanel
+              getContext={buildCurrentAiContext}
+              onApplyPlanPatches={handleAiApplyPlanPatches}
+              onNavigate={handleAiNavigate}
+            />
+          </div>
         </div>
       ):activeView==="settings"?(
         <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:14,...viewTransitionStyle}}>
@@ -2768,6 +2780,8 @@ export default function App(){
           </SurfaceCard>
         </div>
       ):null}
+
+      </div>
 
       </div>
 

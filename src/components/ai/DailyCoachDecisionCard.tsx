@@ -67,16 +67,16 @@ export default function DailyCoachDecisionCard({ decision, onGoToCoach, onAdjust
       style={{
         background: s.bg,
         border: `1px solid ${s.border}`,
-        borderRadius: 20,
-        padding: "16px 16px 14px",
+        borderRadius: 18,
+        padding: "9px 10px 8px",
         display: "flex",
         flexDirection: "column",
-        gap: 12,
+        gap: 6,
         boxShadow: `0 16px 36px rgba(2,6,23,0.2), 0 0 0 1px ${s.border}`,
       }}
     >
       {/* ── Header row ───────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {/* pulsing dot */}
         <div
           style={{
@@ -92,7 +92,7 @@ export default function DailyCoachDecisionCard({ decision, onGoToCoach, onAdjust
         <div style={{ flex: 1, minWidth: 0 }}>
           <span
             style={{
-              fontSize: 16,
+              fontSize: 15,
               fontWeight: 800,
               color: "#f8fafc",
               letterSpacing: "-0.02em",
@@ -124,10 +124,10 @@ export default function DailyCoachDecisionCard({ decision, onGoToCoach, onAdjust
       {/* ── Reason ───────────────────────────────────────────────────────── */}
       <div
         style={{
-          fontSize: 13,
+          fontSize: 12,
           color: "rgba(148,163,184,0.9)",
           lineHeight: 1.45,
-          paddingLeft: 19,
+          paddingLeft: 16,
         }}
       >
         {decision.reason}
@@ -138,8 +138,8 @@ export default function DailyCoachDecisionCard({ decision, onGoToCoach, onAdjust
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 6,
-          paddingLeft: 19,
+          gap: 5,
+          paddingLeft: 16,
         }}
       >
         {decision.details.map((line) => (
@@ -176,7 +176,7 @@ export default function DailyCoachDecisionCard({ decision, onGoToCoach, onAdjust
       </div>
 
       {/* ── Action buttons ───────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+      <div style={{ display: "flex", gap: 6, marginTop: 0 }}>
         <button
           onClick={onGoToCoach}
           style={{
@@ -184,9 +184,9 @@ export default function DailyCoachDecisionCard({ decision, onGoToCoach, onAdjust
             background: "rgba(56,189,248,0.12)",
             border: "1px solid rgba(56,189,248,0.26)",
             color: "#7dd3fc",
-            borderRadius: 12,
-            padding: "10px 12px",
-            fontSize: 13,
+            borderRadius: 10,
+            padding: "8px 10px",
+            fontSize: 12,
             fontWeight: 700,
             cursor: "pointer",
           }}
@@ -200,9 +200,9 @@ export default function DailyCoachDecisionCard({ decision, onGoToCoach, onAdjust
             background: `${s.chip}`,
             border: `1px solid ${s.border}`,
             color: s.chipText,
-            borderRadius: 12,
-            padding: "10px 12px",
-            fontSize: 13,
+            borderRadius: 10,
+            padding: "8px 10px",
+            fontSize: 12,
             fontWeight: 700,
             cursor: "pointer",
           }}
