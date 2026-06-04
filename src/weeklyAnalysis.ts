@@ -5,6 +5,12 @@
 import { isSessionLogDone, parseSessionDateLabel } from "./appSmartFeatures";
 import type { PlanWeek, SessionLog, PlanSession } from "./marathonPrediction";
 import { getPlannedKmEquiv, getEffectiveKm } from "./marathonPrediction";
+import { recordWeekKmMismatch } from "./distanceIntegrity";
+import {
+  formatKm,
+  getSessionPlannedDistanceKm,
+  USE_COMPUTED_WEEK_KM,
+} from "./sessionDistance";
 
 function countsTowardWeeklyRunKm(s: PlanSession): boolean {
   return s.type !== "strength" && s.type !== "bike";
@@ -148,4 +154,45 @@ export function analyzeWeek(week: PlanWeek, logs: Record<string, SessionLog>, no
     verdictTone,
     isFutureWeek,
   };
+}
+
+function countsTowardWeeklyRunningKm(s: PlanSession): boolean {
+  return s.type !== "rest" && s.type !== "strength" && s.type !== "bike";
+}
+
+/** Sum of planned running km (structured/desc-aware), rounded — recovery load SSOT. */
+export function weekPlannedRunningKm(week: PlanWeek): number {
+  const sum = week.s
+    .filter(countsTowardWeeklyRunningKm)
+    .reduce((acc, s) => acc + getSessionPlannedDistanceKm(s), 0);
+  return formatKm(sum);
+}
+
+export function getWeekRunningDistanceKm(week: PlanWeek): number {
+  return weekPlannedRunningKm(week);
+}
+
+/** Trainingsvolumen: Lauf + Rad, ohne Kraft. */
+export function getWeekPlannedLoadKm(week: PlanWeek): number {
+  const sum = week.s
+    .filter((s) => s.type !== "rest" && s.type !== "strength")
+    .reduce((acc, s) => {
+      if (s.type === "bike") return acc + getPlannedKmEquiv(s);
+      if (countsTowardWeeklyRunningKm(s)) return acc + getSessionPlannedDistanceKm(s);
+      return acc;
+    }, 0);
+  return formatKm(sum);
+}
+
+export function getWeekPlannedKmForDisplay(week: PlanWeek): number {
+  if (!USE_COMPUTED_WEEK_KM) return formatKm(week.km);
+  return weekPlannedRunningKm(week);
+}
+
+export function validateWeekDistances(week: PlanWeek): void {
+  const sumSessions = weekPlannedRunningKm(week);
+  const diff = Math.abs(sumSessions - week.km);
+  if (diff > 2) {
+    recordWeekKmMismatch(week.wn, sumSessions, week.km, diff);
+  }
 }

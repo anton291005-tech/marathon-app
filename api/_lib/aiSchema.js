@@ -1,10 +1,12 @@
 const ALLOWED_ACTIONS = [
   "adjust_plan_for_illness",
   "replace_bike_with_run",
+  "convert_workout_to_run",
   "shift_race_date",
   "shift_plan_start_date",
   "navigate_to_screen",
   "explain_feature",
+  "update_user_preferences",
 ];
 
 const PREVIEW_SCHEMA = {
@@ -57,6 +59,13 @@ const AI_RESPONSE_SCHEMA = {
                 "section",
                 "sectionLabel",
                 "topic",
+                "sessionId",
+                "targetSessionType",
+                "targetKm",
+                "targetPace",
+                "targetTitle",
+                "targetDesc",
+                "explanation",
               ],
               properties: {
                 reason: { type: ["string", "null"] },
@@ -70,6 +79,13 @@ const AI_RESPONSE_SCHEMA = {
                 section: { type: ["string", "null"] },
                 sectionLabel: { type: ["string", "null"] },
                 topic: { type: ["string", "null"] },
+                sessionId: { type: ["string", "null"] },
+                targetSessionType: { type: ["string", "null"] },
+                targetKm: { type: ["number", "null"] },
+                targetPace: { type: ["string", "null"] },
+                targetTitle: { type: ["string", "null"] },
+                targetDesc: { type: ["string", "null"] },
+                explanation: { type: ["string", "null"] },
               },
             },
             preview: {

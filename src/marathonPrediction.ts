@@ -4,6 +4,29 @@
  */
 
 import { isSessionLogDone, parseSessionDateLabel } from "./appSmartFeatures";
+import { getAppNow } from "./core/time/timeSystem";
+import { getSessionPlannedDistanceKm, type StructuredWorkoutSpec } from "./sessionDistance";
+
+export type { StructuredWorkoutSpec, ParsedWorkoutFromDesc, PlannedDistanceResolution, PlannedDistanceSource } from "./sessionDistance";
+export {
+  USE_COMPUTED_WEEK_KM,
+  computeStructuredWorkoutDistance,
+  formatKm,
+  getDisplayPlannedDistanceKm,
+  getSessionPlannedDistanceKm,
+  isDistanceBasedSession,
+  logDistanceBreakdown,
+  normalizeSessionDistance,
+  parseStructuredWorkoutSpecFromDesc,
+  peekPlannedDistanceKm,
+  resolveSessionPlannedDistanceKm,
+} from "./sessionDistance";
+export {
+  ENABLE_DISTANCE_DEBUG,
+  getDistanceSystemMetrics,
+  resetDistanceSystemMetricsForTests,
+} from "./distanceIntegrity";
+export { resetSanitizeDistanceStateForTests, sanitizeDistance } from "./sanitizeDistance";
 
 // --- Typen (an Session-Shape aus App.tsx angelehnt) ---
 
@@ -16,6 +39,8 @@ export type PlanSession = {
   km: number;
   desc?: string | null;
   pace?: string | null;
+  /** Optional explicit recipe; overrides desc parsing when present. */
+  structured?: StructuredWorkoutSpec | null;
 };
 
 export type PlanWeek = {
@@ -35,12 +60,27 @@ export type SessionLog = {
   done?: boolean;
   skipped?: boolean;
   at?: string;
-  /** Zugeordneter Apple-Health-/Workout-Lauf (runId stabil über healthRuns) */
+  /** Zugeordneter Apple-Health-Workout (runId = workoutId, stabil über healthRuns; Tageswechsel-sicher im Log). */
   assignedRun?: {
     runId: string;
+    /** Alias zu runId — generische Workout-Identität */
+    workoutId?: string;
     startDate: string;
     duration: number;
     distanceKm: number;
+    avgHeartRateBpm?: number;
+    /** Lauf vs Rennrad — bei Zuordnung gesetzt; bleibt korrekt wenn healthRuns temporär leer (Mitternacht). */
+    canonicalActivityType?: "run" | "bike" | "other";
+  };
+  /** Training Intelligence: erkanntes Health-Match ohne feste Zuordnung (niedrige Confidence) */
+  suggestedHealthRunId?: string;
+  /** Auswertung Plan vs. Health-Lauf */
+  runEvaluation?: {
+    status: string;
+    label?: string;
+    feedback?: string;
+    distanceDeltaKm?: number;
+    updatedAt?: string;
   };
 };
 
@@ -49,7 +89,7 @@ export type TrainingWindowEntry = {
   weekNumber: number;
   phase: string;
   date: Date;
-  /** Geplantes Lauf-/Volumen-Äquivalent in km (Rad/Kraft geschätzt). */
+  /** Geplantes Lauf-/Volumen-Äquivalent in km (Heuristik für Rad/Kraft). */
   plannedKmEquiv: number;
   log: SessionLog | undefined;
 };
@@ -59,6 +99,11 @@ const WINDOW_DAYS = 42;
 const MIN_DONE_SESSIONS = 8;
 const MIN_DONE_KM = 28;
 const MIN_LONG_RUNS_IN_WINDOW = 1;
+/** Strengere Kriterien — alle müssen erfüllt sein, bevor eine Zeitprognose erscheint. */
+const MIN_WEEKS_WITH_TRAINING = 4;
+const MIN_LONG_RUNS_18KM = 3;
+const MIN_STRUCTURED_WORKOUTS = 1;
+const MIN_CONSISTENCY_FOR_PREDICTION = 25;
 
 /**
  * Long Runs bleiben der Haupttreiber, aber moderater Boost — sonst überstimmen sie
@@ -150,9 +195,11 @@ export function getSessionWeight(session: PlanSession, phase: string): number {
 }
 
 export function getPlannedKmEquiv(session: PlanSession): number {
-  if (session.km > 0) return session.km;
   if (session.type === "bike") return 12;
   if (session.type === "strength") return 8;
+  if (session.type === "rest") return 0;
+  const runKm = getSessionPlannedDistanceKm(session);
+  if (runKm > 0) return runKm;
   return 0;
 }
 
@@ -164,7 +211,7 @@ export function getEffectiveKm(session: PlanSession, log: SessionLog | undefined
   }
   const parsed = parseFloat(String(log?.actualKm || "").replace(",", "."));
   if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  return session.km > 0 ? session.km : getPlannedKmEquiv(session);
+  return getPlannedKmEquiv(session);
 }
 
 /**
@@ -201,7 +248,7 @@ export function isScheduledOnOrBeforeToday(sessionDate: Date, now: Date): boolea
 export function getTrainingWindowData(
   plan: PlanWeek[],
   logs: Record<string, SessionLog>,
-  now: Date = new Date()
+  now: Date = getAppNow()
 ): TrainingWindowEntry[] {
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
@@ -293,7 +340,7 @@ function computeStreakComponents(entries: TrainingWindowEntry[], now: Date): Str
  */
 export function getConsistencyScore(
   entries: TrainingWindowEntry[],
-  now: Date = new Date()
+  now: Date = getAppNow()
 ): number {
   const { completionRate, kmAdherence, weekStreakFactor } = computeStreakComponents(entries, now);
   const raw =
@@ -325,8 +372,10 @@ export function getMarathonPrediction(args: {
   logs: Record<string, SessionLog>;
   targetSeconds?: number | null;
   now?: Date;
+  /** SSOT Home-Recovery 0–100: bei niedrigem Wert leicht konservativere (langsamere) Prognose. */
+  homeRecoveryScore0_100?: number | null;
 }): MarathonPredictionResult {
-  const now = args.now ?? new Date();
+  const now = args.now ?? getAppNow();
   const baseline = args.targetSeconds && args.targetSeconds > 0 ? args.targetSeconds : DEFAULT_TARGET_SECONDS;
 
   const entries = getTrainingWindowData(args.plan, args.logs, now);
@@ -340,6 +389,12 @@ export function getMarathonPrediction(args: {
   let longRunsDone = 0;
   /** Erledigte Long Runs mit geplanten km > 26 (Marathon-spezifisches Volumen). */
   let longRunsDeepDone = 0;
+  /** Erledigte Long Runs mit tatsächlichen km ≥ 18 (Mindestlänge für belastbare Prognose). */
+  let longRunsOver18kmDone = 0;
+  /** Erledigte tempo/interval-Einheiten (strukturiertes Training). */
+  let structuredWorkoutsDone = 0;
+  /** Kalenderwochen (Mo–So) mit mindestens einer erledigten Einheit. */
+  const trainingWeeks = new Set<string>();
   let missedTrainable = 0;
   let skippedTrainable = 0;
 
@@ -360,14 +415,28 @@ export function getMarathonPrediction(args: {
       doneSessions += 1;
       const km = getEffectiveKm(e.session, log);
       doneKm += km;
+
+      // Track calendar week for "weeks with training" gate
+      const wd = new Date(e.date);
+      const mondayOffset = (wd.getDay() + 6) % 7;
+      const monday = new Date(wd);
+      monday.setDate(wd.getDate() - mondayOffset);
+      trainingWeeks.add(monday.toISOString().slice(0, 10));
+
       if (e.session.type === "long") {
         longRunsDone += 1;
-        const plannedLong = planned > 0 ? planned : e.session.km;
+        const plannedLong = planned > 0 ? planned : getSessionPlannedDistanceKm(e.session);
         longPlanned += plannedLong;
         longActual += km;
         if (plannedLong > LONG_DEEP_KM) {
           longRunsDeepDone += 1;
         }
+        if (km >= 18) {
+          longRunsOver18kmDone += 1;
+        }
+      }
+      if (e.session.type === "tempo" || e.session.type === "interval") {
+        structuredWorkoutsDone += 1;
       }
 
       const boost = e.session.type === "long" ? LONG_RUN_SIGNAL_BOOST : 1;
@@ -415,15 +484,25 @@ export function getMarathonPrediction(args: {
   // Fehlende Einheiten + zu wenig Daten
   const consistencyScore = getConsistencyScore(entries, now);
 
-  const ready =
+  const basicReady =
     doneSessions >= MIN_DONE_SESSIONS &&
     doneKm >= MIN_DONE_KM &&
     longRunsDone >= MIN_LONG_RUNS_IN_WINDOW;
 
+  const strictReady =
+    basicReady &&
+    trainingWeeks.size >= MIN_WEEKS_WITH_TRAINING &&
+    longRunsOver18kmDone >= MIN_LONG_RUNS_18KM &&
+    structuredWorkoutsDone >= MIN_STRUCTURED_WORKOUTS &&
+    consistencyScore >= MIN_CONSISTENCY_FOR_PREDICTION;
+
+  const ready = strictReady;
+
   if (!ready) {
     return {
       ready: false,
-      message: "Noch nicht genug Daten für eine belastbare Prognose",
+      message:
+        "Zu früh im Trainingsblock – Prognose wird geladen, sobald ausreichend Daten vorliegen.",
       predictedSeconds: null,
       predictedTime: null,
       rangeLabel: null,
@@ -463,6 +542,13 @@ export function getMarathonPrediction(args: {
     (longVolumeBoost - 1);
 
   timeMultiplier *= longDepthPenalty;
+
+  if (args.homeRecoveryScore0_100 != null && Number.isFinite(args.homeRecoveryScore0_100)) {
+    const r = Math.max(0, Math.min(100, args.homeRecoveryScore0_100));
+    const recoveryFactorRaw = 1 + ((50 - r) / 50) * 0.038;
+    const recoveryFactor = Math.max(0.98, Math.min(1.05, recoveryFactorRaw));
+    timeMultiplier *= recoveryFactor;
+  }
 
   // Consistency: schlechte Konstanz weitet die erwartete Zeit nach oben
   timeMultiplier += ((100 - consistencyScore) / 100) * 0.048;

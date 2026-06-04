@@ -1,0 +1,10 @@
+{
+  "featureId": "tx-20260504T163758-f89b109-mixed",
+  "domain": "mixed",
+  "files": [
+    "scripts/featureTransaction.js",
+    "src/recovery/recoveryTypes.ts"
+  ],
+  "status": "rejected",
+  "timestamp": "2026-05-04T14:37:58.945Z"
+}

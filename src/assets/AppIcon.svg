@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!--
+    Canonical vector representation of the MyRace app icon.
+
+    Geometry source: pixel-accurate centerline derived from assets/icon-1024.png
+    via per-row white-pixel cluster analysis (64-unit coordinate grid,
+    1 unit = 16 px at 1024 px source resolution).
+
+    Key pixel measurements that drive every coordinate:
+      Route start tip      y=57  cluster [8-10]   ? (9, 57)
+      Right U-turn outer   y=39�43 right=52       ? apex x=52, arc-center=(48,41)
+      Left  U-turn leftmost y=28�30 left=8        ? apex x=8,  arc-center=(12,30)
+      Flag pole center     y=16�21 cluster [44-46] ? x=45
+      Flag right tip       y=9    cluster right=57 ? (57, 9)
+
+    Path structure � single continuous stroke from route tip to flag base:
+
+      M 9,57               route start (bottom-left tip)
+      C 20,50 44,44 47,44  band 1 � sweeps up-right, arrives horizontally
+      C 52,44 52,38 47,38  RIGHT U-TURN � horizontal entry/exit, apex at (52,41)
+      C 44,38 15,26 12,26  band 2 � sweeps up-left, arrives horizontally
+      C 8,26 8,33 12,33    LEFT U-TURN  � horizontal entry/exit, apex at (8,30)
+      C 15,33 44,21 45,21  band 3 � sweeps up-right to flag base
+
+    All C-command junctions are tangent-continuous (C1):
+      at (47,44): both adjacent CPs are on y=44  ? horizontal ?
+      at (47,38): both adjacent CPs are on y=38  ? horizontal ?
+      at (12,26): both adjacent CPs are on y=26  ? horizontal ?
+      at (12,33): both adjacent CPs are on y=33  ? horizontal ?
+
+    Flag elements (static � always visible, drawn separately):
+      pole   : x1=45 y1=4  x2=45 y2=21  stroke-width=2
+      pennant: M 45,4 L 57,9 L 45,15 Z  (right-pointing triangle, tip at x=57 y=9)
+      circle : cx=45 cy=21 r=3           (pole-base marker, matches route end)
+  -->
+
+  <!-- Flag: static, fully visible � gives the route a clear destination -->
+  <line   id="flag-pole"    x1="45" y1="4"  x2="45" y2="21" stroke="white" stroke-width="2"/>
+  <path   id="flag-pennant" d="M 45,4 L 57,9 L 45,15 Z" fill="white"/>
+  <circle id="flag-base"    cx="45" cy="21" r="3" fill="white"/>
+
+  <!-- Route: single continuous path � animated by the splash screen -->
+  <path
+    id="route"
+    d="M 9,57 C 20,50 44,44 47,44 C 52,44 52,38 47,38 C 44,38 15,26 12,26 C 8,26 8,33 12,33 C 15,33 44,21 45,21"
+    stroke="white"
+    stroke-width="5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+</svg>

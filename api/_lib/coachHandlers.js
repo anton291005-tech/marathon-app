@@ -82,121 +82,48 @@ function parseNumeric(value) {
   return Number.isFinite(num) ? num : null;
 }
 
-function pickNumber(source, paths) {
-  if (!source || typeof source !== "object") return null;
-  for (const path of paths) {
-    const value = path
-      .split(".")
-      .reduce((obj, key) => (obj && typeof obj === "object" ? obj[key] : undefined), source);
-    const numeric = parseNumeric(value);
-    if (numeric !== null) return numeric;
-  }
-  return null;
-}
-
 function includesAnyText(text, normalizedText, terms) {
   return terms.some(
     (term) => text.includes(term) || normalizedText.includes(normalizeText(term))
   );
 }
 
-// ─── Context derivation ──────────────────────────────────────────────────────
+// ─── Recovery domain only (no plan/logs/settings/planIntelligence fusion) ───
 
-function summarizeRecentLoad(context) {
-  const logs = context?.logs && typeof context.logs === "object" ? context.logs : {};
-  const planSessions = Array.isArray(context?.plan)
-    ? context.plan.flatMap((week) => (Array.isArray(week?.s) ? week.s : []))
-    : [];
-  const sessionById = new Map(planSessions.map((session) => [session.id, session]));
-  const now = new Date(context?.todayIso || Date.now());
-  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-  let doneSessions = 0;
-  let totalKm = 0;
-  let hardSessions = 0;
-  const feelings = [];
-
-  for (const [sessionId, log] of Object.entries(logs)) {
-    if (!log || typeof log !== "object") continue;
-    if (!log.done) continue;
-    const at = typeof log.at === "string" ? Date.parse(log.at) : NaN;
-    if (Number.isFinite(at) && now.getTime() - at > sevenDaysMs) continue;
-    doneSessions += 1;
-    const plannedSession = sessionById.get(sessionId);
-    const plannedKm = parseNumeric(plannedSession?.km) || 0;
-    const actualKm = parseNumeric(log.actualKm);
-    totalKm += actualKm !== null ? actualKm : plannedKm;
-    const type = normalizeText(plannedSession?.type);
-    if (["interval", "tempo", "race", "long"].includes(type)) hardSessions += 1;
-    const feeling = parseNumeric(log.feeling);
-    if (feeling !== null) feelings.push(feeling);
-  }
-
-  const avgFeeling =
-    feelings.length
-      ? feelings.reduce((sum, value) => sum + value, 0) / feelings.length
-      : null;
-  return {
-    doneSessions,
-    totalKm: Number(totalKm.toFixed(1)),
-    hardSessions,
-    avgFeeling: avgFeeling === null ? null : Number(avgFeeling.toFixed(2)),
-  };
+function pickRecoveryDomain(context) {
+  return context?.recoveryDomain && typeof context.recoveryDomain === "object"
+    ? context.recoveryDomain
+    : null;
 }
 
-function findNextKeySession(context) {
-  const sessions = Array.isArray(context?.next14Days) ? context.next14Days : [];
-  if (!sessions.length) return null;
-  const key =
-    sessions.find((session) =>
-      ["interval", "tempo", "long", "race"].includes(session?.type)
-    ) || sessions[0];
-  if (!key) return null;
-  const day = sanitizeSentence(key.day || "");
-  const date = sanitizeSentence(key.date || "");
-  const title = sanitizeSentence(key.title || key.type || "Einheit");
-  const km = parseNumeric(key.km);
-  return `${day} ${date} - ${title}${km !== null ? ` (${km} km)` : ""}`.trim();
+/** Client steers with digest + plan JSON; risk heuristics must use the real user line only. */
+function extractBareUserTurn(steeredInput) {
+  const s = typeof steeredInput === "string" ? steeredInput : "";
+  const m = /\nNutzer:\s*([\s\S]*)$/m.exec(s);
+  return m && typeof m[1] === "string" ? m[1].trim() : s.trim();
 }
 
-function deriveCoachContext(context) {
-  const settings =
-    context?.settings && typeof context.settings === "object" ? context.settings : {};
-  const recent = summarizeRecentLoad(context);
-  const readiness = pickNumber(settings, [
-    "readiness",
-    "readinessScore",
-    "metrics.readiness",
-    "signals.readiness",
-  ]);
-  const fatigue = pickNumber(settings, [
-    "fatigue",
-    "fatigueScore",
-    "metrics.fatigue",
-    "signals.fatigue",
-  ]);
-  const sleepHours = pickNumber(settings, [
-    "sleepHours",
-    "sleep.hours",
-    "metrics.sleepHours",
-    "signals.sleepHours",
-  ]);
-  return {
-    target: context?.goals?.targetTime || "sub 2:50 marathon",
-    currentPhase:
-      Array.isArray(context?.plan) && context.plan[0]?.phase
-        ? String(context.plan[0].phase)
-        : null,
-    recentLoad7d: recent,
-    readiness,
-    fatigue,
-    sleepHours,
-    nextKeySession: findNextKeySession(context),
-  };
+/** Band 0 = niedrig … 3 = frisch — aligned with `recoveryScoreBandOrdinal` (40 / 60 / 80). */
+function recoveryBandOrdinalFromDomain(domain) {
+  if (!domain || typeof domain.homeRecoveryScore0_100 !== "number") return null;
+  const s = Math.max(0, Math.min(100, domain.homeRecoveryScore0_100));
+  if (s < 40) return 0;
+  if (s < 60) return 1;
+  if (s < 80) return 2;
+  return 3;
+}
+
+function nextSchedulingHintFromDomain(domain) {
+  if (!domain) return "die nächste wichtige Einheit";
+  const t =
+    domain.insight && typeof domain.insight.text === "string" ? domain.insight.text.trim() : "";
+  if (t) return t.length > 160 ? `${t.slice(0, 157)}…` : t;
+  return "die nächste wichtige Einheit";
 }
 
 // ─── Risk detection ──────────────────────────────────────────────────────────
 
-function detectRiskProfile(userInput, contextSummary) {
+function detectRiskProfile(userInput, recoveryDomain) {
   const userMessage = typeof userInput === "string" ? userInput : "";
   const text = userMessage.toLowerCase();
   const normalizedInput = normalizeText(userMessage);
@@ -215,12 +142,14 @@ function detectRiskProfile(userInput, contextSummary) {
   const hasInjury = includesAnyText(text, normalizedInput, [
     "stechend", "stich", "knie", "schmerz", "pain", "sehne", "verletz",
   ]);
-  const hasFatigue =
-    hasFatigueByText ||
-    (contextSummary?.fatigue !== null && contextSummary?.fatigue >= 0.7) ||
-    (contextSummary?.readiness !== null && contextSummary?.readiness <= 0.45) ||
-    (contextSummary?.recentLoad7d?.avgFeeling !== null &&
-      contextSummary.recentLoad7d.avgFeeling <= 2.6);
+  const band = recoveryBandOrdinalFromDomain(recoveryDomain);
+  const trainingLabel =
+    recoveryDomain && typeof recoveryDomain.trainingRecoveryLabel === "string"
+      ? recoveryDomain.trainingRecoveryLabel
+      : "";
+  const hasFatigueFromDomain =
+    band === 0 || trainingLabel.includes("Niedrig") || trainingLabel.includes("Fatigue");
+  const hasFatigue = hasFatigueByText || hasFatigueFromDomain;
   const pushIntent = includesAnyText(text, normalizedInput, [
     "ich will", "trotzdem", "egal", "durchziehen", "pushen",
   ]);
@@ -269,19 +198,19 @@ function detectImmediateHighRiskOverride(userMessage) {
   if (hasFatigue && wantsIntervals) {
     return {
       message:
-        "Heute keine Intervalle. Du bist ermuedet und riskierst Ueberlastung. Mach stattdessen einen lockeren Lauf oder nimm einen Ruhetag.",
+        "Heute keine Intervalle. Du bist ermüdet und riskierst Überlastung. Mach stattdessen einen lockeren Lauf oder nimm einen Ruhetag.",
     };
   }
   if (hasInjury && mentionsRunning) {
     return {
       message:
-        "Kein Laufen. Das Risiko fuer eine Verletzung ist zu hoch. Pause oder alternative Belastung.",
+        "Kein Laufen. Das Risiko für eine Verletzung ist zu hoch. Pause oder alternative Belastung.",
     };
   }
   if (hasIllness && mentionsTraining) {
     return {
       message:
-        "Heute kein Training. Krankheit hat Prioritaet vor Leistung. Nimm Pause und starte erst nach klarer Symptomverbesserung wieder.",
+        "Heute kein Training. Krankheit hat Priorität vor Leistung. Nimm Pause und starte erst nach klarer Symptomverbesserung wieder.",
     };
   }
   return null;
@@ -310,7 +239,6 @@ function enforceCoachTone(text) {
   message = message
     .replace(/\s{2,}/g, " ")
     .replace(/\s+\./g, ".")
-    .replace(/\?+/g, ".")
     .replace(/\.\.+/g, ".")
     .trim();
   if (message.length > 0) {
@@ -338,6 +266,13 @@ function createDefaultPayload(overrides = {}) {
     section: null,
     sectionLabel: null,
     topic: null,
+    sessionId: null,
+    targetSessionType: null,
+    targetKm: null,
+    targetPace: null,
+    targetTitle: null,
+    targetDesc: null,
+    explanation: null,
     ...overrides,
   };
 }
@@ -356,24 +291,32 @@ function normalizePayload(rawPayload) {
     section: typeof rawPayload.section === "string" ? rawPayload.section : rawPayload.section ?? null,
     sectionLabel: typeof rawPayload.sectionLabel === "string" ? rawPayload.sectionLabel : rawPayload.sectionLabel ?? null,
     topic: typeof rawPayload.topic === "string" ? rawPayload.topic : rawPayload.topic ?? null,
+    sessionId: typeof rawPayload.sessionId === "string" ? rawPayload.sessionId : rawPayload.sessionId ?? null,
+    targetSessionType:
+      typeof rawPayload.targetSessionType === "string" ? rawPayload.targetSessionType : rawPayload.targetSessionType ?? null,
+    targetKm: parseNumeric(rawPayload.targetKm),
+    targetPace: typeof rawPayload.targetPace === "string" ? rawPayload.targetPace : rawPayload.targetPace ?? null,
+    targetTitle: typeof rawPayload.targetTitle === "string" ? rawPayload.targetTitle : rawPayload.targetTitle ?? null,
+    targetDesc: typeof rawPayload.targetDesc === "string" ? rawPayload.targetDesc : rawPayload.targetDesc ?? null,
+    explanation: typeof rawPayload.explanation === "string" ? rawPayload.explanation : rawPayload.explanation ?? null,
   });
 }
 
-function buildDefaultPreviewItems(actionType, risk, contextSummary) {
-  const nextKeySession = contextSummary?.nextKeySession || "naechste Qualitaetseinheit";
+function buildDefaultPreviewItems(actionType, risk, schedulingHint) {
+  const hint = schedulingHint || "nächste Qualitätseinheit";
   if (actionType === "adjust_plan_for_illness") {
     if (risk.hasInjury) {
       return [
         "Heute kein Lauftraining und keine intensiven Reize.",
         "Belastung 48-72h deutlich reduzieren; nur schmerzfreie, lockere Bewegung.",
-        `Vor ${nextKeySession} nur einsteigen, wenn alltags- und laufschmerzfrei.`,
+        `Vor ${hint} nur einsteigen, wenn alltags- und laufschmerzfrei.`,
       ];
     }
     if (risk.hasFatigue) {
       return [
         "Heute keine Intervalle oder Tempoeinheit.",
         "24-48h aktive Erholung mit lockerem Umfang.",
-        `Dann ${nextKeySession} nur mit frischen Beinen absolvieren.`,
+        `Dann ${hint} nur mit frischen Beinen absolvieren.`,
       ];
     }
     return [
@@ -386,34 +329,46 @@ function buildDefaultPreviewItems(actionType, risk, contextSummary) {
     return [
       "Bike-Einheit wird durch lockeren Lauf ersetzt.",
       "Dauer kurz halten und Puls niedrig lassen.",
-      "Keine Zusatzintensitaet am selben Tag.",
+      "Keine Zusatzintensität am selben Tag.",
+    ];
+  }
+  if (actionType === "convert_workout_to_run") {
+    return [
+      "Rennrad-Einheit wird in ein äquivalentes Lauftraining umgewandelt.",
+      "Dauer und Intensität werden sportwissenschaftlich angeglichen.",
+      "Volumen und Pace passen zum Zieltyp (Easy/Tempo/Intervall).",
     ];
   }
   return ["Konkrete Anpassung vorbereitet."];
 }
 
-function normalizePreview(rawPreview, actionType, risk, contextSummary) {
+function normalizePreview(rawPreview, actionType, risk, schedulingHint) {
   const title = sanitizeSentence(rawPreview?.title) || "Vorgeschlagene Anpassung";
   const items = Array.isArray(rawPreview?.items)
     ? rawPreview.items.map((item) => sanitizeSentence(item)).filter((item) => item.length > 0)
     : [];
   const safeItems =
-    items.length > 0 ? items : buildDefaultPreviewItems(actionType, risk, contextSummary);
+    items.length > 0 ? items : buildDefaultPreviewItems(actionType, risk, schedulingHint);
   return {
     title,
     items: safeItems.slice(0, 5),
-    confirmLabel: sanitizeSentence(rawPreview?.confirmLabel) || "Uebernehmen",
-    cancelLabel: sanitizeSentence(rawPreview?.cancelLabel) || "Abbrechen",
+    confirmLabel: sanitizeSentence(rawPreview?.confirmLabel) || "Ja, übernehmen",
+    cancelLabel: sanitizeSentence(rawPreview?.cancelLabel) || "Nein",
     secondaryLabel:
       sanitizeSentence(rawPreview?.secondaryLabel) ||
-      (actionType === "navigate_to_screen" ? null : "Bearbeiten"),
+      (actionType === "navigate_to_screen" ? null : "Anpassen"),
     openLabel:
       sanitizeSentence(rawPreview?.openLabel) ||
-      (actionType === "navigate_to_screen" ? "Oeffnen" : null),
+      (actionType === "navigate_to_screen" ? "Öffnen" : null),
   };
 }
 
-function inferActionType(payloadActionType, risk) {
+function inferActionType(rawAction, risk) {
+  if (rawAction === null) {
+    return null;
+  }
+  const payloadActionType =
+    rawAction && typeof rawAction === "object" ? rawAction.type : undefined;
   if (typeof payloadActionType === "string" && ALLOWED_ACTIONS.includes(payloadActionType)) {
     return payloadActionType;
   }
@@ -421,26 +376,24 @@ function inferActionType(payloadActionType, risk) {
   return null;
 }
 
-function buildFallbackCoachMessage(userInput, risk, contextSummary) {
+function buildFallbackCoachMessage(userInput, risk, recoveryDomain) {
   const seed = normalizeText(userInput);
+  const hint = nextSchedulingHintFromDomain(recoveryDomain);
   if (risk.hasInjury) {
     const intros = [
       "Stechender Schmerz ist ein Warnsignal, kein Trainingsreiz.",
-      "Mit stechendem Schmerz riskierst du eine laengere Pause.",
+      "Mit stechendem Schmerz riskierst du eine längere Pause.",
     ];
     const intro = intros[stableVariantIndex(seed, intros.length)];
-    return `${intro} Heute kein Laufen und keine Intensitaet; reduziere die Last fuer 48-72h deutlich. Wenn der Schmerz bleibt, lass es sportmedizinisch abklaeren.`;
+    return `${intro} Heute kein Laufen und keine Intensität; reduziere die Last für 48–72h deutlich. Wenn der Schmerz bleibt, lass es sportmedizinisch abklären.`;
   }
   if (risk.pushDespiteRisk || risk.hasFatigue) {
     const intros = [
-      "Muedigkeit plus harte Einheit ist heute die falsche Entscheidung.",
-      "Du gewinnst heute nichts mit Intervallen auf mueden Beinen.",
+      "Müdigkeit plus harte Einheit ist heute die falsche Entscheidung.",
+      "Du gewinnst heute nichts mit Intervallen auf müden Beinen.",
     ];
     const intro = intros[stableVariantIndex(seed, intros.length)];
-    const nextKey = contextSummary?.nextKeySession
-      ? `Schiebe die Qualitaet auf ${contextSummary.nextKeySession}.`
-      : "Schiebe die Qualitaet auf den naechsten frischen Tag.";
-    return `${intro} Heute nur locker oder kompletter Ruhetag, keine Intervalle. ${nextKey}`;
+    return `${intro} Heute nur locker oder kompletter Ruhetag, keine Intervalle. Qualität verschieben — Einordnung: ${hint}`;
   }
   if (risk.hasIllness) {
     const ask = seed.includes("ich bin krank")
@@ -448,28 +401,26 @@ function buildFallbackCoachMessage(userInput, risk, contextSummary) {
       : "";
     return `Krankheit geht vor Trainingsplan. ${ask}Heute 2-4 Tage Laufpause, nur Spaziergang oder Mobility wenn fieberfrei, danach 20-30 Min Testlauf mit 24h Kontrolle.`;
   }
-  const loadHint = contextSummary?.recentLoad7d?.doneSessions
-    ? `Die letzten 7 Tage zeigen ${contextSummary.recentLoad7d.doneSessions} Einheiten bei ${contextSummary.recentLoad7d.totalKm} km. `
-    : "";
-  return `${loadHint}Heute steuern wir konservativ und priorisieren die naechste wichtige Einheit. Halte den Reiz sauber, statt kurzfristig zu ueberziehen.`;
+  return `Recovery-Signal: ${hint} Heute konservativ steuern und die nächste wichtige Einheit sauber vorbereiten, statt kurzfristig zu überziehen.`;
 }
 
 function normalizeAiResponseForFrontend(payload, { userInput = "", context = {} } = {}) {
-  const contextSummary = deriveCoachContext(context);
-  const risk = detectRiskProfile(userInput, contextSummary);
+  const recoveryDomain = pickRecoveryDomain(context);
+  const risk = detectRiskProfile(userInput, recoveryDomain);
+  const schedulingHint = nextSchedulingHintFromDomain(recoveryDomain);
   const mode = ["coach", "navigator", "support"].includes(payload?.mode)
     ? payload.mode
     : "coach";
 
   let message = sanitizeSentence(payload?.message);
   if (!message) {
-    message = buildFallbackCoachMessage(userInput, risk, contextSummary);
+    message = buildFallbackCoachMessage(userInput, risk, recoveryDomain);
   } else if (risk.pushDespiteRisk && !hasRiskCorrectionLanguage(message)) {
-    message = `${message} Heute keine harte Einheit; wir priorisieren Erholung fuer den naechsten Qualitaetstag.`;
+    message = `${message} Heute keine harte Einheit; wir priorisieren Erholung für den nächsten Qualitätstag.`;
   }
   message = enforceCoachTone(message);
 
-  const actionType = inferActionType(payload?.action?.type, risk);
+  const actionType = inferActionType(payload?.action, risk);
   if (!actionType) {
     return { mode, message, action: null };
   }
@@ -487,7 +438,7 @@ function normalizeAiResponseForFrontend(payload, { userInput = "", context = {} 
       payloadData.severity = "moderate";
     }
   }
-  const preview = normalizePreview(payload?.action?.preview, actionType, risk, contextSummary);
+  const preview = normalizePreview(payload?.action?.preview, actionType, risk, schedulingHint);
 
   return {
     mode,
@@ -533,47 +484,84 @@ function parseModelJson(response) {
 
 function buildSystemPrompt() {
   return [
-    "You are an elite marathon coach guiding a sub-2:50 athlete.",
-    "You do not give generic advice.",
-    "You make decisions like a real coach based on context.",
-    "Always evaluate:",
-    "- current fatigue",
-    "- injury signals",
-    "- recent training load",
-    "- upcoming key sessions",
-    "- long-term goal (sub 2:50 marathon)",
-    "Rules:",
-    "- If injury signs (for example sharp knee pain) -> stop running or reduce load significantly",
-    "- If fatigue is high -> reduce intensity and prioritize recovery",
-    "- If user wants to push despite risk -> correct them clearly",
-    "- Optimize for long-term performance, not short-term ego",
-    "If the user is about to make a bad training decision, you must correct them clearly. Do not agree just to be polite.",
-    "Style: direct, decisive, confident, short, like a strict performance coach.",
-    "Do not use soft suggestions such as 'you could' or 'consider'.",
-    "If a decision is suboptimal or risky, say no and give a firm instruction.",
-    "Output intent: brief assessment, clear decision for today, short reason.",
+    "You are the in-app marathon training coach. Language: German for user-facing text in `message`.",
+    "Data channels:",
+    "- `recoveryDomain` + `recoverySummary`: authoritative for today’s readiness, fatigue bands, latent trend, uncertainty — overweight these for safety.",
+    "- `trainingPlan` (either planV2 or legacy weeks), `logsLast30Days`, `healthRunsLast30Days`, plus `raceDateIso` / goals / HR cap: personalization only — cite concrete sessions (date, weekday, title, km, type) when answering plan questions.",
+    "- `todayIso` is wall-clock. `availableScreens` is only for navigate_to_screen intents.",
+    "Athletic readiness: NEVER contradict a low-recovery signal in `recoveryDomain` with «you’re fine» based only on the plan.",
+    "`userInput` may repeat some of the structured plan in prose (client prefix) — resolve conflicts using the JSON payloads as ground truth.",
+    "Hard rules — no hallucinated state:",
+    "- NEVER state or imply that the race date, plan start, competition schedule, or any calendar field was changed unless the user clearly asked to shift/adjust it.",
+    "- Prefer `goals.targetTime` and payload `raceDateIso` when discussing goals; treat free-text mentions as secondary.",
+    "- Training science questions (e.g. road cycling in marathon training): answer with sport-science reasoning only for purely theoretical questions; set `action` to null. If the user explicitly requests a plan change (convert, replace, shift), emit the matching action — never answer with explanation-only when a concrete edit was requested.",
+    "- shift_race_date only if the user clearly wants to move the race/competition date (not generic «Marathontraining» questions).",
+    "Decision priority: (1) safety / avoid overload and injury, (2) sustainable training, (3) user-stated preferences when safe.",
+    "Plan-specific questions («what’s Tuesday next week», weekly km totals, pacing vs goal): use `trainingPlan` + logs/health slices; cite numbers. Set `action` to null unless the user wants an edit.",
+    "- Never refuse natural questions with «Ich verstehe nicht». If unclear, one short question OR a split answer.",
+    "- If the user is unclear about a concrete EDIT, set `action` to null and ask one focused question.",
+    "- Only attach `action` when the request maps clearly OR risk signals require it (illness, sharp pain, pushing hard while recoveryDomain indicates fatigue).",
+    "Actions (suggest-only; confirmation in app):",
+    "- adjust_plan_for_illness: illness, injury, overload, recovery days.",
+    "- replace_bike_with_run: bike session unavailable.",
+    "- convert_workout_to_run: User möchte eine Bike-/Rennrad-Einheit in ein äquivalentes Lauftraining umwandeln. Berechne selbstständig: Schätze die Dauer der Bike-Einheit (km ÷ Durchschnittsgeschwindigkeit je Intensität), mappe auf Run-Intensität (bike easy→run easy, medium→tempo, high→interval), berechne Lauf-km aus Dauer × Zielpace. Liefere sessionId, targetSessionType, targetKm, targetPace, targetTitle, targetDesc. Setze explanation mit sportswissenschaftlicher Begründung auf Deutsch. Trigger: «konvertiere», «ändere zu Lauf», «statt Rad lieber laufen», wenn die konkrete Einheit identifizierbar ist. Wenn unklar welche Einheit → eine kurze Frage. Kein Null-Action bei eindeutigem Convert-Request.",
+    "- shift_race_date / shift_plan_start_date: timeline shift.",
+    "- navigate_to_screen: use availableScreens.",
+    "- explain_feature: conceptual only.",
+    "Style: clear, actionable. No meta talk about APIs or schemas.",
     "Return only JSON matching the required schema.",
-    "You may use only these actions:",
+    "Allowed action types:",
     ALLOWED_ACTIONS.join(", "),
-    "Never execute changes directly; only propose structured actions.",
-    "Be conservative if uncertain. Prefer support mode over wrong actions.",
-    "For training changes, provide short, clear German messaging and practical preview items.",
   ].join("\n");
 }
 
 function buildUserPayload(input, context) {
-  const coachContext = deriveCoachContext(context);
+  const todayIso = typeof context?.todayIso === "string" ? context.todayIso : "";
+  const recoveryDomain = pickRecoveryDomain(context);
+  const availableScreens = Array.isArray(context?.availableScreens) ? context.availableScreens : [];
+  const raceDateIso = context?.raceDateIso === null || typeof context?.raceDateIso === "string" ? context.raceDateIso : null;
+  const goals = context?.goals && typeof context.goals === "object" && !Array.isArray(context.goals) ? context.goals : {};
+  const maxHeartRateBpm =
+    typeof context?.maxHeartRateBpm === "number"
+      ? context.maxHeartRateBpm
+      : context?.maxHeartRateBpm === null
+        ? null
+        : null;
+  const recoverySummary =
+    context?.recoverySummary && typeof context.recoverySummary === "object" ? context.recoverySummary : null;
+  const trainingPlan =
+    context?.trainingPlan && typeof context.trainingPlan === "object" ? context.trainingPlan : null;
+  const logsLast30Days = (() => {
+    const v = context?.logsLast30Days;
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === "object") {
+      return Object.entries(v).map(([sessionId, logEntry]) =>
+        logEntry && typeof logEntry === "object" && !Array.isArray(logEntry)
+          ? { sessionId, ...logEntry }
+          : { sessionId: String(sessionId), logEntry },
+      );
+    }
+    return [];
+  })();
+  const healthRunsLast30Days = Array.isArray(context?.healthRunsLast30Days) ? context.healthRunsLast30Days : [];
   return JSON.stringify({
     userInput: input,
-    coachContext,
-    rawContext: context,
+    todayIso,
+    raceDateIso,
+    goals,
+    maxHeartRateBpm,
+    recoveryDomain,
+    recoverySummary,
+    availableScreens,
+    trainingPlan,
+    logsLast30Days,
+    healthRunsLast30Days,
     instructions: {
       language: "German",
-      actionSafety: "suggest-only",
+      actionSafety: "suggest-only-never-auto-apply",
       structuredOutput: true,
-      targetGoal: "sub-2:50 marathon",
-      responseStyle: "direct_confident_short",
-      outputIntent: ["brief assessment", "clear decision for today", "short reason"],
+      recoverySsot:
+        "Use recoveryDomain + recoverySummary for readiness; use trainingPlan + logsLast30Days + healthRunsLast30Days for schedule/volume adherence questions.",
     },
   });
 }
@@ -611,37 +599,25 @@ async function callResponsesApi({ selectedModel, input, context, allowedActions,
 
 function buildDailyCoachSystemPrompt() {
   return [
-    "You are an elite marathon coach for a sub-2:50 athlete.",
-    "Given today's training context, provide a brief daily training recommendation.",
-    "Respond ONLY with valid JSON — no markdown, no extra text — in this exact shape:",
+    "You are an elite marathon coach.",
+    "You receive ONLY `recoveryDomain` (RecoveryDomainState). Do not assume plan details, logs, or goals that are not inside recoveryDomain.",
+    "Provide a brief daily training tone recommendation from that domain snapshot.",
+    "Respond ONLY with valid JSON — no markdown — in this exact shape:",
     '{ "level": "hard" | "easy" | "rest" | "alternative", "title": "Heute: [2-4 word label]", "reason": "[one direct sentence in German, max 15 words]", "details": ["detail 1", "detail 2", "detail 3"] }',
     "Rules:",
     "- Respond in German.",
-    "- Be direct. No soft phrases like 'vielleicht' or 'könntest du'.",
-    "- 'hard': fresh recovery, quality session planned, weekly load low/medium.",
-    "- 'rest': recovery red or rest day planned or illness/injury mentioned.",
-    "- 'alternative': cross-training or injury-adjustment.",
-    "- 'easy': everything else — moderate or recovery-focused.",
+    "- Be direct.",
+    "- 'hard': domain indicates strong recovery (fresh band / high score) and insight supports quality.",
+    "- 'rest': domain indicates fatigue band or insight warning.",
+    "- 'alternative': injury-style caution in insight or very low confidence — prefer conservative cross-training language.",
+    "- 'easy': default moderate.",
     "- Max 3 details, each max 8 words.",
     "- Title always starts with 'Heute: '.",
   ].join("\n");
 }
 
-function buildDailyCoachUserPrompt(coachContext) {
-  return JSON.stringify({
-    recoveryState: coachContext.recoveryLabel ?? "unbekannt",
-    weeklyFatigue: coachContext.weeklyFatigueLabel ?? "unbekannt",
-    recentHardSessionsOf5: coachContext.recentHardCount ?? 0,
-    avgFeelingScore:
-      coachContext.avgRecentFeeling > 0
-        ? Number(coachContext.avgRecentFeeling).toFixed(1)
-        : "keine Daten",
-    todayPlannedSession: coachContext.todaySessionType ?? "keine",
-    currentPhase: coachContext.phase ?? "unbekannt",
-    daysToNextKeySession: coachContext.daysToNextKeySession ?? "unbekannt",
-    completedSessions: coachContext.doneSessions ?? 0,
-    athleteGoal: "Sub 2:50 marathon",
-  });
+function buildDailyCoachUserPrompt(recoveryDomain) {
+  return JSON.stringify({ recoveryDomain });
 }
 
 const DAILY_COACH_VALID_LEVELS = ["hard", "easy", "rest", "alternative"];
@@ -719,11 +695,15 @@ async function handleAiCoach(rawBody) {
   if (!context || typeof context !== "object") {
     return { status: 400, body: { error: "Invalid context" } };
   }
+  if (!pickRecoveryDomain(context)) {
+    return { status: 400, body: { error: "Invalid context: recoveryDomain required" } };
+  }
 
   // Layer 1: deterministic high-risk override — always before any AI call.
-  const override = detectImmediateHighRiskOverride(input);
+  const bareUser = extractBareUserTurn(input);
+  const override = detectImmediateHighRiskOverride(bareUser);
   if (override) {
-    console.log("[api/ai] OVERRIDE TRIGGERED", input); // eslint-disable-line no-console
+    console.log("[api/ai] OVERRIDE TRIGGERED", bareUser); // eslint-disable-line no-console
     return {
       status: 200,
       body: { mode: "coach", message: override.message, override: true },
@@ -732,7 +712,7 @@ async function handleAiCoach(rawBody) {
 
   if (!client) {
     // No API key — return rule-based fallback without error noise.
-    const fallback = fallbackStructuredResponse(undefined, input, context);
+    const fallback = fallbackStructuredResponse(undefined, bareUser, context);
     return { status: 200, body: fallback };
   }
 
@@ -751,12 +731,12 @@ async function handleAiCoach(rawBody) {
     let normalized;
     try {
       const payload = parseModelJson(completion);
-      normalized = normalizeAiResponseForFrontend(payload, { userInput: input, context });
+      normalized = normalizeAiResponseForFrontend(payload, { userInput: bareUser, context });
     } catch {
-      normalized = fallbackStructuredResponse(undefined, input, context);
+      normalized = fallbackStructuredResponse(undefined, bareUser, context);
     }
     if (!normalized || !isValidAiResponse(normalized)) {
-      normalized = fallbackStructuredResponse(undefined, input, context);
+      normalized = fallbackStructuredResponse(undefined, bareUser, context);
     }
     return { status: 200, body: normalized };
   } catch (error) {
@@ -765,7 +745,7 @@ async function handleAiCoach(rawBody) {
     });
     const fallback = fallbackStructuredResponse(
       "Ich konnte die Antwort nicht sauber strukturieren.",
-      input,
+      bareUser,
       context
     );
     return { status: 200, body: fallback };
@@ -779,9 +759,9 @@ async function handleAiCoach(rawBody) {
  */
 async function handleDailyCoach(rawBody) {
   const body = ensureParsedBody(rawBody);
-  const { coachContext } = body;
-  if (!coachContext || typeof coachContext !== "object") {
-    return { status: 400, body: { error: "Invalid coachContext" } };
+  const recoveryDomain = body.recoveryDomain ?? body.coachContext?.recoveryDomain;
+  if (!recoveryDomain || typeof recoveryDomain !== "object") {
+    return { status: 400, body: { error: "Invalid recoveryDomain" } };
   }
   if (!client) {
     return { status: 200, body: { fallback: true, reason: "no_client" } };
@@ -796,7 +776,7 @@ async function handleDailyCoach(rawBody) {
         },
         {
           role: "user",
-          content: [{ type: "input_text", text: buildDailyCoachUserPrompt(coachContext) }],
+          content: [{ type: "input_text", text: buildDailyCoachUserPrompt(recoveryDomain) }],
         },
       ],
       text: { format: { type: "json_object" } },

@@ -1,5 +1,8 @@
 // @ts-nocheck
 
+import { getAppNow } from "./core/time/timeSystem";
+import { calculatePlanAwareStreak } from "./trainingIntelligence/streak";
+
 const MONTHS = {
   Jan: 0,
   Feb: 1,
@@ -87,46 +90,38 @@ export function findPlanWeekContainingDate(plan, dayStart){
   return null;
 }
 
-function formatLocalYmd(dayStart){
-  const x = normalizeCalendarDay(dayStart);
-  const y = x.getFullYear();
-  const m = String(x.getMonth() + 1).padStart(2, "0");
-  const day = String(x.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/** Lauf-Einheiten im Plan (kein Ruhe/Kraft/Rad — zählt für Streak „echter Lauf“). */
-function isStreakRunSession(session){
-  return session && session.type !== "rest" && session.type !== "strength" && session.type !== "bike";
+/**
+ * Per-day status for streak: non-rest sessions that day define "planned".
+ * Completed if any such session is logged done (Health-zuordnung zählt).
+ */
+function planDayStreakStatus(plan, logs, dayStart) {
+  const onDay = sessionsScheduledOnCalendarDay(plan, dayStart);
+  const trainingSessions = onDay.filter((s) => s.type !== "rest");
+  if (trainingSessions.length === 0) {
+    return "no_training_planned";
+  }
+  if (trainingSessions.some((s) => isSessionLogDone(logs[s.id]))) {
+    return "completed";
+  }
+  return "incomplete_planned";
 }
 
 /**
- * Streak: aufeinanderfolgende lokale Kalendertage ab heute rückwärts, an denen mindestens
- * eine geplante Lauf-Session erledigt ist (manuell done oder Apple-Health zugeordnet).
- * Mehrere Läufe am selben Tag zählen als ein Tag. Ruhetage ohne Lauf-Session brechen den Streak.
+ * Streak: erledigte Trainingstage in Folge (lokal). Geplante **Ruhetage** unterbrechen die Serie nicht.
+ * Heute mit offenem Training wird übersprungen (wie zuvor); gestern noch offen beendet die Serie.
  */
-export function getCalendarTrainingStreak(plan, logs, now = new Date()){
-  let streak = 0;
-  const streakDays = [];
-  let d = normalizeCalendarDay(now);
-  for(;;){
-    const onDay = sessionsScheduledOnCalendarDay(plan, d).filter(isStreakRunSession);
-    const hasCompletedRun = onDay.some((s) => isSessionLogDone(logs[s.id]));
-    if(!hasCompletedRun){
-      break;
-    }
-    streak += 1;
-    streakDays.push(formatLocalYmd(d));
-    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
-  }
-  console.log("streakDays:", streakDays);
-  console.log("streakValue:", streak);
+export function getCalendarTrainingStreak(plan, logs, now = getAppNow()) {
+  const streak = calculatePlanAwareStreak(now, (dayStart) => planDayStreakStatus(plan, logs, dayStart));
   return streak;
 }
 
-export function getTodayNextSession(activeSessions, logs, now = new Date()){
+/**
+ * @param planSessions — alle Kalender-Einträge inkl. Ruhetage (z. B. ALL_SESSIONS).
+ *   Nur so wird ein Ruhetag als „heute“ erkannt; sonst fiel die Logik fälschlich auf die nächste Einheit.
+ */
+export function getTodayNextSession(planSessions, logs, now = getAppNow()){
   const todayKey = now.toDateString();
-  const datedSessions = activeSessions
+  const datedSessions = planSessions
     .map((session) => ({ session, date: parseSessionDateLabel(session.date) }))
     .filter((item) => item.date);
 
@@ -137,6 +132,7 @@ export function getTodayNextSession(activeSessions, logs, now = new Date()){
 
   const nowDay = normalizeCalendarDay(now).getTime();
   const nextOpenSession = datedSessions.find((item) => {
+    if(item.session.type === "rest")return false;
     const sd = normalizeCalendarDay(item.date).getTime();
     return sd >= nowDay && !isSessionLogDone(logs[item.session.id]);
   });
@@ -147,7 +143,7 @@ export function getTodayNextSession(activeSessions, logs, now = new Date()){
   return null;
 }
 
-export function getConsistencyStats(plan, logs, now = new Date()){
+export function getConsistencyStats(plan, logs, now = getAppNow()){
   const weekCompletion = plan.map((week) => week.s.filter((session) => session.type !== "rest").every((session) => isSessionLogDone(logs[session.id])));
   let weeklyStreak = 0;
   for(let index = weekCompletion.length - 1; index >= 0; index -= 1){
@@ -185,4 +181,67 @@ export function getShareSummary({ pct, week, nextKeySession, recoveryState, cons
     `Streak: ${consistencyStats.sessionStreak} Tage in Folge`,
     `Nächster Fokus: ${nextKeySession ? nextKeySession.title : "Alles erledigt"}`,
   ].join("\n");
+}
+
+/** Heutiges Kalenderdatum als YYYY-MM-DD in Europe/Berlin */
+export function berlinWallClockYmd(now = getAppNow()) {
+  return now.toLocaleDateString("en-CA", { timeZone: "Europe/Berlin" });
+}
+
+function sessionDateLabelToYmd(label, year = 2026) {
+  if (!label) return null;
+  const match = label.match(/(\d{1,2})\.\s*([A-Za-zÄÖÜäöü]+)/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = MONTHS[match[2]];
+  if (!Number.isFinite(day) || month === undefined) return null;
+  const m = String(month + 1).padStart(2, "0");
+  const d = String(day).padStart(2, "0");
+  return `${year}-${m}-${d}`;
+}
+
+/** Frühestes Session-Datum im Plan (YYYY-MM-DD), für Plan-Start-Anchor */
+export function planEarliestSessionYmd(plan, year = 2026) {
+  let min = null;
+  for (const week of plan) {
+    for (const s of week.s) {
+      const ymd = sessionDateLabelToYmd(s.date, year);
+      if (!ymd) continue;
+      if (!min || ymd < min) min = ymd;
+    }
+  }
+  return min;
+}
+
+/** Ganzzahl-Tagesdifferenz startYmd → endYmd (Kalender, UTC-Komponenten) */
+export function calendarDaysBetweenYmd(startYmd, endYmd) {
+  const [sy, sm, sd] = startYmd.split("-").map((x) => Number.parseInt(x, 10));
+  const [ey, em, ed] = endYmd.split("-").map((x) => Number.parseInt(x, 10));
+  if (![sy, sm, sd, ey, em, ed].every((n) => Number.isFinite(n))) return NaN;
+  const s = Date.UTC(sy, sm - 1, sd);
+  const e = Date.UTC(ey, em - 1, ed);
+  return Math.round((e - s) / 86400000);
+}
+
+/**
+ * 0-basierter PLAN-Index für „aktuelle Trainingswoche“ relativ zum Planbeginn.
+ * Woche 1 = die ersten 7 Kalendertage ab frühestem Session-Datum (Europe/Berlin „heute“).
+ */
+export function resolveCurrentPlanWeekIndex(plan, now = getAppNow(), planYear = 2026) {
+  if (!plan?.length) return 0;
+  const startYmd = planEarliestSessionYmd(plan, planYear);
+  if (!startYmd) return 0;
+  const todayYmd = berlinWallClockYmd(now);
+  const days = calendarDaysBetweenYmd(startYmd, todayYmd);
+  if (!Number.isFinite(days)) return 0;
+  if (days < 0) return 0;
+  const weekNum = Math.floor(days / 7) + 1;
+  const exact = plan.findIndex((w) => w.wn === weekNum);
+  if (exact >= 0) return exact;
+  if (weekNum < plan[0].wn) return 0;
+  if (weekNum > plan[plan.length - 1].wn) return plan.length - 1;
+  for (let i = plan.length - 1; i >= 0; i--) {
+    if (plan[i].wn <= weekNum) return i;
+  }
+  return 0;
 }

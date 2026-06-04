@@ -2,11 +2,16 @@
   "name": "marathon-app",
   "version": "0.1.0",
   "private": true,
+  "homepage": ".",
+  "proxy": "http://localhost:8787",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
+    "@capacitor/app": "^8.0.0",
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",
     "@capacitor/ios": "^8.3.0",
     "@capgo/capacitor-health": "^8.4.2",
+    "@supabase/supabase-js": "^2.106.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -28,10 +33,25 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
+    "dev": "react-scripts start",
     "start": "react-scripts start",
     "start:api": "node server/index.js",
     "start:full": "concurrently \"npm run start:api\" \"npm start\"",
-    "build": "CI=false react-scripts build",
+    "build": "CI=false BUILD_PATH=dist react-scripts build",
+    "postbuild": "node -e \"if (!process.env.VERCEL) { require('child_process').execSync('npx cap sync', {stdio:'inherit'}); }\"",
+    "build:verify": "npm run build && node -e \"require('fs').existsSync('dist/index.html') || (console.error('Missing dist/index.html after build.'), process.exit(1))\"",
+    "verify:build": "node scripts/checkBuild.js",
+    "verify:transaction": "node scripts/featureTransaction.js",
+    "verify:atomic": "node scripts/enforceAtomicChange.js",
+    "verify:diff": "node scripts/checkDiffSize.js",
+    "verify:strict": "npm run verify:transaction && npm run verify:atomic && npm run verify:diff && node scripts/enforceBuildAndTest.js",
+    "commit:transaction": "npm run verify:strict && node scripts/commitTransaction.js",
+    "build:ios-safe": "rm -rf dist build && npm run build && node scripts/verify-web-build.js",
+    "verify:cap-web": "node scripts/verify-web-build.js",
+    "cap:sync": "npm run build && npm run verify:cap-web",
+    "cap:ios": "npm run build && npm run verify:cap-web && npx cap open ios",
+    "ios:prod": "npm run build:ios-safe && npx cap open ios",
+    "clean:ios": "rm -rf ios/App/DerivedData && rm -rf ios/App/build && rm -rf dist && rm -rf build && rm -rf node_modules/.cache",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
@@ -39,6 +59,55 @@
     "extends": [
       "react-app",
       "react-app/jest"
+    ],
+    "overrides": [
+      {
+        "files": [
+          "src/**/*.{ts,tsx}"
+        ],
+        "excludedFiles": [
+          "src/auxiliary/**/*.{ts,tsx}"
+        ],
+        "rules": {
+          "no-restricted-imports": [
+            "error",
+            {
+              "patterns": [
+                {
+                  "group": [
+                    "**/auxiliary/**",
+                    "**/auxiliary/*"
+                  ],
+                  "message": "SSOT-facing code must not import quarantined experimental modules under src/auxiliary."
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "files": [
+          "src/**/*.{ts,tsx}"
+        ],
+        "excludedFiles": [
+          "src/core/time/timeSystem.ts",
+          "**/*.test.ts",
+          "**/*.test.tsx"
+        ],
+        "rules": {
+          "no-restricted-syntax": [
+            "error",
+            {
+              "selector": "NewExpression[callee.name='Date'][arguments.length=0]",
+              "message": "Use getAppNow() from src/core/time/timeSystem.ts (forbidden: new Date() without arguments outside timeSystem)."
+            },
+            {
+              "selector": "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+              "message": "Use getAppNowEpochMs() from src/core/time/timeSystem.ts."
+            }
+          ]
+        }
+      }
     ]
   },
   "browserslist": {

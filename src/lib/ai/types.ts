@@ -1,12 +1,26 @@
+import type { StoredHealthRun } from "../../healthRuns";
+import type { TrainingPlanV2 } from "../../planV2/types";
+import type { RecoveryDomainState } from "../../recovery/recoveryDomainState";
+import type { RecoverySummary } from "./recoverySummary";
+
 export type AiMode = "coach" | "navigator" | "support";
 
 export type AiActionType =
   | "adjust_plan_for_illness"
   | "replace_bike_with_run"
+  | "convert_workout_to_run"
+  | "replace_workout"
   | "shift_race_date"
   | "shift_plan_start_date"
   | "navigate_to_screen"
-  | "explain_feature";
+  | "explain_feature"
+  | "adapt_plan_injury_no_run"
+  | "remove_all_bike_sessions"
+  | "boost_next_week_volume"
+  | "taper_before_race"
+  | "integrate_missed_workout"
+  | "replace_training_plan_generated"
+  | "update_user_preferences";
 
 export type SessionType =
   | "rest"
@@ -73,6 +87,7 @@ export type AiContext = {
     targetTime?: string;
   };
   plan: AiPlanWeek[];
+  planV2?: TrainingPlanV2;
   logs: Record<string, any>;
   next14Days: AiPlanSession[];
   availableScreens: Array<{
@@ -81,6 +96,10 @@ export type AiContext = {
     sections?: string[];
   }>;
   settings?: Record<string, any>;
+  healthRuns?: StoredHealthRun[];
+  maxHeartRateBpm?: number | null;
+  recoveryDomain?: RecoveryDomainState;
+  recoverySummary?: RecoverySummary;
 };
 
 export type PlanPatch = {
