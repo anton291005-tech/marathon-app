@@ -16,7 +16,7 @@ describe("applyAppleHealthTrainingSync (cycling)", () => {
         id: "bike-1",
         type: "bike",
         title: "Rennrad",
-        dateIso: "2026-05-01T12:00:00.000Z",
+        date: "1. Mai",
       },
     ];
 
@@ -43,7 +43,7 @@ describe("applyAppleHealthTrainingSync (cycling)", () => {
   test("cycling does not get written into running sessions (no misclassification)", () => {
     freezeTimeForTests(new Date("2026-05-01T12:00:00.000Z"));
     const planSessions: any[] = [
-      { id: "run-1", type: "easy", title: "Easy", dateIso: "2026-05-01T12:00:00.000Z", km: 10, pace: "5:00/km" },
+      { id: "run-1", type: "easy", title: "Easy", date: "1. Mai", km: 10, pace: "5:00/km" },
     ];
     const healthRuns: StoredHealthRun[] = [
       { runId: "hk_bike", startDate: "2026-05-01T07:10:00.000Z", duration: 3600, distanceMeters: 35_000, distanceUnknown: false, workoutType: "cycling", sourceName: "Apple Health" },
@@ -57,8 +57,8 @@ describe("applyAppleHealthTrainingSync (cycling)", () => {
     freezeTimeForTests(new Date("2026-05-01T12:00:00.000Z"));
 
     const planSessions: any[] = [
-      { id: "bike-1", type: "bike", title: "Bike A", dateIso: "2026-05-01T08:00:00.000Z" },
-      { id: "bike-2", type: "bike", title: "Bike B", dateIso: "2026-05-01T18:00:00.000Z" },
+      { id: "bike-1", type: "bike", title: "Bike A", date: "1. Mai" },
+      { id: "bike-2", type: "bike", title: "Bike B", date: "1. Mai" },
     ];
 
     const healthRuns: StoredHealthRun[] = [
@@ -81,7 +81,7 @@ describe("applyAppleHealthTrainingSync (cycling)", () => {
   test("cycling does not auto-complete if planned bike session already completed", () => {
     freezeTimeForTests(new Date("2026-05-01T12:00:00.000Z"));
 
-    const planSessions: any[] = [{ id: "bike-1", type: "bike", title: "Bike", dateIso: "2026-05-01T12:00:00.000Z" }];
+    const planSessions: any[] = [{ id: "bike-1", type: "bike", title: "Bike", date: "1. Mai" }];
     const healthRuns: StoredHealthRun[] = [
       { runId: "hk_bike", startDate: "2026-05-01T07:10:00.000Z", duration: 3600, distanceMeters: 35_000, distanceUnknown: false, workoutType: "cycling", sourceName: "Apple Health" },
     ];
@@ -98,4 +98,3 @@ describe("applyAppleHealthTrainingSync (cycling)", () => {
     expect(res.logs).toBe(logs);
   });
 });
-

@@ -1,6 +1,7 @@
 import React from "react";
 import { safeParseJSON } from "./appSmartFeatures";
 import { writeRemoteStorage } from "./storage";
+import { getAppNow } from "./core/time/timeSystem";
 
 type LogEntry = {
   feeling?: number;
@@ -21,7 +22,7 @@ export default function BackupControls({ logs, onImportSuccess }: Props) {
     try {
       const backupObject = {
         version: 1,
-        exportedAt: new Date().toISOString(),
+        exportedAt: getAppNow().toISOString(),
         data: logs,
       };
 
@@ -32,7 +33,7 @@ export default function BackupControls({ logs, onImportSuccess }: Props) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `marathon-backup-${new Date()
+      a.download = `marathon-backup-${getAppNow()
         .toISOString()
         .slice(0, 10)}.json`;
 

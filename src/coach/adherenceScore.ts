@@ -36,6 +36,9 @@ export type PlanAdherenceScoreResult = {
   band: PlanAdherenceBand;
   /** 0–100: steigt mit der Anzahl ausgewerteter Einheiten (frühe Phase = niedriger) */
   confidence: number;
+  /** Fällige Nicht-Ruhe-Einheiten bis heute (Berlin). */
+  dueCompleted: number;
+  dueTotal: number;
 };
 
 function sessionDateToYmd(s: PlanSession, year = 2026): string | null {
@@ -203,11 +206,36 @@ export function computePlanAdherenceScore(args: {
     now,
   });
   const { score, confidence } = computePlanAdherenceScoreFromHistory(history);
+  const dueTotal = history.length;
+  const dueCompleted = history.filter((s) => s.completed).length;
   return {
     score,
     band: bandFromScore(score),
     confidence,
+    dueCompleted,
+    dueTotal,
   };
+}
+
+/** Gesamtvorbereitung: alle Nicht-Ruhe-Einheiten im Plan (inkl. zukünftige Wochen). */
+export function computePlanDueSessionCounts(args: {
+  plan: PlanWeek[];
+  logs: Record<string, SessionLog | undefined>;
+  healthRuns?: StoredHealthRun[];
+  now?: Date;
+}): { completed: number; total: number } {
+  void args.healthRuns;
+  void args.now;
+  let total = 0;
+  let completed = 0;
+  for (const week of args.plan) {
+    for (const s of week.s) {
+      if (s.type === "rest") continue;
+      total += 1;
+      if (isSessionLogDone(args.logs[s.id])) completed += 1;
+    }
+  }
+  return { completed, total };
 }
 
 export function planAdherenceTextColor(band: PlanAdherenceBand): string {

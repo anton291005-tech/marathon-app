@@ -28,12 +28,13 @@ describe("normalizeAppleHealthRun type safety", () => {
     expect(norm.distanceKm).toBeGreaterThan(0);
   });
 
-  test("cycling workout → MUST NOT throw and MUST no-op", () => {
+  test("cycling workout → normalizes to NormalizedAppleRun with type bike", () => {
     const bike = storedWorkout({ workoutType: "cycling", distanceMeters: 20000, duration: 3600 });
     expect(storedHealthRunIsRunning(bike)).toBe(false);
     expect(() => normalizeAppleHealthRun(bike)).not.toThrow();
     const out = normalizeAppleHealthRun(bike);
-    expect(out).toBe(bike);
+    expect(out.type).toBe("bike");
+    expect(out.distanceKm).toBeCloseTo(20, 1);
     expect(isRunWorkout(out)).toBe(false);
   });
 });

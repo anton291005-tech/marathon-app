@@ -14,7 +14,7 @@ export type NormalizedAppleRun = {
   avgHeartRate: number | null;
   calories: number | null;
   source: "appleHealth";
-  type: "run";
+  type: "run" | "bike" | "other";
 };
 
 export type RunMatchConfidence = "high" | "medium" | "low";

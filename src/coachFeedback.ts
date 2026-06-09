@@ -5,6 +5,7 @@
 
 import { isSessionLogDone } from "./appSmartFeatures";
 import { getTrainingWindowData, isScheduledOnOrBeforeToday, getEffectiveKm, type PlanWeek, type SessionLog } from "./marathonPrediction";
+import { getAppNow } from "./core/time/timeSystem";
 
 export type ConsistencyStats = {
   weeklyStreak: number;
@@ -17,7 +18,7 @@ export function getCoachFeedback(args: {
   consistencyStats: ConsistencyStats;
   now?: Date;
 }): string[] {
-  const now = args.now ?? new Date();
+  const now = args.now ?? getAppNow();
   const entries = getTrainingWindowData(args.plan, args.logs, now);
   const hints: string[] = [];
 

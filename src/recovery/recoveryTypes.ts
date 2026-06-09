@@ -87,8 +87,13 @@ export type SemanticUncertaintyState = "lowUncertainty" | "mediumUncertainty" | 
 /** How the insight layer reasons about the signal (language + strength). */
 export type AiReasoningMode = "deterministic" | "probabilistic" | "uncertain";
 
+export type DailyRecoverySource = "physio" | "load_only";
+
 export type DailyRecoveryComputed = {
   date: string;
+  /** Optional legacy slice for AI recovery summary weighting. */
+  source?: DailyRecoverySource;
+  pointConfidence?: number;
   /** Latent physiological state R_t ∈ [0,100] — source of truth for projections. */
   latentR: number;
   /** Noisy fusion target before Kalman update (same scale as R). */

@@ -59,15 +59,23 @@ function dominantSourceByTotalConfidence(points: Array<{ source: DailyRecoverySo
 export function buildRecoverySummaryFromSeries(series: DailyRecoveryComputed[]): RecoverySummary {
   const sorted = [...(series || [])].sort((a, b) => a.date.localeCompare(b.date));
   const last7 = sorted.slice(-7);
-  const physio = last7.filter((p) => p.source === "physio");
+  const pointConfidence = (p: DailyRecoveryComputed) =>
+    typeof p.pointConfidence === "number" && Number.isFinite(p.pointConfidence)
+      ? p.pointConfidence
+      : p.recoveryConfidence?.overallConfidence ?? 0.5;
+  const pointSource = (p: DailyRecoveryComputed): DailyRecoverySource => p.source ?? "physio";
+
+  const physio = last7.filter((p) => pointSource(p) === "physio");
   const pointsForScore = physio.length ? physio : last7;
 
   const avgRecoveryRaw = confidenceWeightedAverage(
-    pointsForScore.map((p) => ({ recoveryScore: p.score, pointConfidence: p.pointConfidence })),
+    pointsForScore.map((p) => ({ recoveryScore: p.score, pointConfidence: pointConfidence(p) })),
   );
-  const avgConfidenceRaw = meanConfidence(pointsForScore.map((p) => ({ pointConfidence: p.pointConfidence })));
+  const avgConfidenceRaw = meanConfidence(pointsForScore.map((p) => ({ pointConfidence: pointConfidence(p) })));
 
-  const dominantSource = dominantSourceByTotalConfidence(last7.map((p) => ({ source: p.source, pointConfidence: p.pointConfidence })));
+  const dominantSource = dominantSourceByTotalConfidence(
+    last7.map((p) => ({ source: pointSource(p), pointConfidence: pointConfidence(p) })),
+  );
   const avgRecovery = Math.round(clamp(avgRecoveryRaw ?? 50, 0, 100));
   const avgConfidence = clamp(avgConfidenceRaw ?? 0.3, 0, 1);
   const influenceWeight = getRecoveryInfluence(1, avgConfidence); // 1*(0.3+0.7*conf) => [0.3..1.0]

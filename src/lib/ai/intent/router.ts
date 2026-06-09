@@ -21,7 +21,19 @@ export function detectCoachIntent(input: string): CoachIntent {
   const timeSwapPattern =
     /\b(heute|today)\b.*\b(morgen|tomorrow)\b|\b(morgen|tomorrow)\b.*\b(heute|today)\b/i;
 
-  if (swapKeywords.some((r) => r.test(s)) || timeSwapPattern.test(s)) {
+  // Date-based swap: "tausche das training vom 09.06 mit dem vom 10.06"
+  const dateSwapPattern1 =
+    /\b(vom\s+\d{1,2}\.\d{1,2})\b/.test(s) && /\b(tausch|swap|vertausch|mit)\b/.test(s);
+  // Two date tokens present + tausch keyword (handles "09.06 und 10.06 tauschen" etc.)
+  const dateSwapPattern2 =
+    (s.match(/\b\d{1,2}\.\d{1,2}/g) ?? []).length >= 2 && /\b(tausch|swap|vertausch)\b/.test(s);
+
+  if (
+    swapKeywords.some((r) => r.test(s)) ||
+    timeSwapPattern.test(s) ||
+    dateSwapPattern1 ||
+    dateSwapPattern2
+  ) {
     return "swapTrainingDays";
   }
 

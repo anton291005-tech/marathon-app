@@ -157,6 +157,34 @@ function hrPctBandForSessionType(type: string, week?: PlanWeek): { lo: number; h
   }
 }
 
+/** BPM band for post-workout scoring (matches interval backfill semantics). */
+export function plannedHrRangeForSessionType(
+  sessionType: string,
+  maxHrBpm?: number | null,
+): { min: number; max: number } | null {
+  const mh = typeof maxHrBpm === "number" && Number.isFinite(maxHrBpm) && maxHrBpm > 80 ? maxHrBpm : null;
+  if (!mh) return null;
+  const t = String(sessionType || "").toLowerCase();
+  if (t === "easy" || t === "long") return { min: Math.round(mh * 0.65), max: Math.round(mh * 0.78) };
+  if (t === "tempo") return { min: Math.round(mh * 0.82), max: Math.round(mh * 0.9) };
+  if (t === "interval") return { min: Math.round(mh * 0.88), max: Math.round(mh * 0.95) };
+  if (t === "race") return { min: Math.round(mh * 0.9), max: Math.round(mh * 0.97) };
+  if (t === "bike") return { min: Math.round(mh * 0.6), max: Math.round(mh * 0.78) };
+  return null;
+}
+
+/** Post-workout card: planned HR band + zone label from session type and optional HFmax. */
+export function getPostWorkoutPlannedHr(
+  session: Pick<PlanSession, "type">,
+  maxHrBpm?: number | null,
+): { hrBpm: { min: number; max: number } | null; hrZoneLabel: string | null } {
+  const stub = { type: session.type } as PlanSession;
+  return {
+    hrBpm: plannedHrRangeForSessionType(session.type, maxHrBpm),
+    hrZoneLabel: getSessionHrZoneShort(stub),
+  };
+}
+
 export function hrZoneMidBpm(session: PlanSession, maxHr: number, week?: PlanWeek): number | null {
   if (!Number.isFinite(maxHr) || maxHr <= 0) return null;
   const band = hrPctBandForSessionType(session.type, week);
@@ -208,6 +236,15 @@ export function getSessionTargetPreviewOneLiner(session: PlanSession, week?: Pla
 }
 
 /** Coach copy + optional concrete bpm range */
+/** Single HR target line for compact home/session headers. */
+export function formatSessionHrTargetLine(
+  session: PlanSession,
+  maxHrBpm?: number,
+  week?: PlanWeek,
+): string {
+  return getSessionTargetLines(session, maxHrBpm, week)?.pulseLabel ?? "";
+}
+
 export function getSessionTargetLines(
   session: PlanSession,
   maxHrBpm?: number,

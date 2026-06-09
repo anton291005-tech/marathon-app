@@ -1,4 +1,5 @@
 import { applyPlanPatches } from "../lib/ai/actions";
+import { toAiPlanWeeks } from "../lib/ai/planToAi";
 import type { AiPlanWeek } from "../lib/ai/types";
 import { toPlanWeeks } from "../planV2/toPlanWeeks";
 import type { TrainingPlanV2 } from "../planV2/types";
@@ -13,5 +14,6 @@ import type { TrainingPlanV2 } from "../planV2/types";
 export function deriveDisplayPlan(trainingPlanV2: TrainingPlanV2, patches: unknown): AiPlanWeek[] {
   const baseWeeks = toPlanWeeks(trainingPlanV2);
   const patchList = Array.isArray(patches) ? patches : [];
-  return applyPlanPatches(baseWeeks, patchList);
+  const weeks = toAiPlanWeeks(baseWeeks);
+  return applyPlanPatches(weeks, patchList);
 }

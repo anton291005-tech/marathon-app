@@ -96,6 +96,8 @@ export function resolveSessionPaceSecPerKm(args: {
   laps?: unknown[] | null;
   plannedActiveKm?: number | null;
 }): number | null {
+  if (args.sessionType === "bike") return null;
+
   const durationSec = args.durationSec;
   const distanceKm = args.distanceKm;
   if (

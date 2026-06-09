@@ -4,6 +4,7 @@
  */
 
 import type { StoredHealthRun } from "../healthRuns";
+import { classifyWorkoutType } from "../appleHealth/workoutTypeClassifier";
 import type { NormalizedAppleRun } from "./types";
 
 function localYmdFromInstant(ms: number): string {
@@ -47,6 +48,9 @@ export function normalizeAppleHealthRun(stored: StoredHealthRun, endTimeMs?: num
     avgHeartRate: hr,
     calories: null,
     source: "appleHealth",
-    type: "run",
+    type: (() => {
+      const c = classifyWorkoutType(stored.workoutType == null ? "" : String(stored.workoutType));
+      return c === "bike" ? "bike" : c === "run" ? "run" : "other";
+    })(),
   };
 }

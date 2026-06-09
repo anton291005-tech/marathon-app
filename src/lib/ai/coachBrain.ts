@@ -47,7 +47,7 @@ export function buildSteeredUserMessage(userInput: string, intent: Intent, conte
  * Zentraler Einstieg für den AI-Coach (Chat). Nutzt Cloud-API wenn konfiguriert, sonst Mock.
  */
 export async function generateCoachResponse(input: string, context: CoachContext): Promise<AiAssistantResponse> {
-  const intent = detectIntent(input, context.conversationTurns);
+  const intent = detectIntent(input);
   const config = getAiConfig();
   const steered = buildSteeredUserMessage(input, intent, context);
 
@@ -55,7 +55,7 @@ export async function generateCoachResponse(input: string, context: CoachContext
     try {
       return await openAiGenerate(steered, context, config);
     } catch {
-      const fallback = await mockBrainGenerate(input, context, intent, steered);
+      const fallback = await mockBrainGenerate(input, context);
       return {
         ...fallback,
         message: `${fallback.message} (Cloud-Antwort war nicht verfügbar, lokaler Coach aktiv.)`,
@@ -63,5 +63,5 @@ export async function generateCoachResponse(input: string, context: CoachContext
     }
   }
 
-  return mockBrainGenerate(input, context, intent, steered);
+  return mockBrainGenerate(input, context);
 }

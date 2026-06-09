@@ -60,3 +60,19 @@ export function detectIntent(input: string): Intent {
 
   return "general_question";
 }
+
+export type SymptomClassification = {
+  symptomType: "unknown" | "illness" | "fatigue" | "injury";
+  severity: "low" | "medium" | "high";
+  symptomPhrase?: string;
+  bodyPart?: string;
+  clarifyingQuestion?: string;
+};
+
+/** Lightweight wellbeing classifier for deterministic coach shortcuts. */
+export function classifySymptoms(_args: {
+  message: string;
+  turns?: Array<{ role: string; text: string }>;
+}): SymptomClassification {
+  return { symptomType: "unknown", severity: "low" };
+}

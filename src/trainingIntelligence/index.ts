@@ -7,7 +7,7 @@ export type {
   RunMatchResult,
 } from "./types";
 export { normalizeAppleHealthRun } from "./normalizeAppleHealthRun";
-export { matchRunToPlannedSession } from "./matchRunToPlannedSession";
+export { matchRunToPlannedSession, matchWorkoutToPlannedSession } from "./matchRunToPlannedSession";
 export { evaluateRun, parsePlannedPaceMinPerKm } from "./evaluateRun";
 export {
   generateRunEvaluationFeedback,

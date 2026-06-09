@@ -9,6 +9,7 @@ import type { StoredHealthRun } from "../healthRuns";
 import { normalizeAppleHealthRun } from "../trainingIntelligence/normalizeAppleHealthRun";
 import { evaluateRun } from "../trainingIntelligence/evaluateRun";
 import { generateRunEvaluationFeedback } from "../trainingIntelligence/generateRunEvaluationFeedback";
+import { classifyWorkoutType } from "./workoutTypeClassifier";
 
 const RUNNING_TYPES = new Set(["easy", "long", "interval", "tempo", "race"]);
 
@@ -142,7 +143,10 @@ export function buildTodayAppleCoachLines(input: {
   }
 
   const sameDay = healthRuns.filter((r) => localYmdFromRunStart(r.startDate) === todayCalendarYmd);
-  const candidates = sameDay.filter((r) => {
+  const sameDayRunning = sameDay.filter(
+    (r) => classifyWorkoutType(r.workoutType == null ? "" : String(r.workoutType)) === "run",
+  );
+  const candidates = sameDayRunning.filter((r) => {
     const km = kmFromStored(r);
     const dur = Number(r.duration) || 0;
     return km >= 0.4 || dur >= 300;

@@ -10,14 +10,23 @@ import {
   evaluationStatusLabel,
   generateRunEvaluationFeedback,
 } from "./generateRunEvaluationFeedback";
-import { matchRunToPlannedSession } from "./matchRunToPlannedSession";
+import { matchWorkoutToPlannedSession } from "./matchRunToPlannedSession";
 import { normalizeAppleHealthRun } from "./normalizeAppleHealthRun";
 import type { NormalizedAppleRun } from "./types";
+import { getAppNow } from "../core/time/timeSystem";
 
 export type AppleHealthSyncResult = {
   logs: Record<string, SessionLog>;
   changed: boolean;
 };
+
+type HealthSyncPair = { stored: StoredHealthRun; norm: Pick<NormalizedAppleRun, "startTime"> };
+
+export function compareHealthSyncPairByRecencyThenRunId(a: HealthSyncPair, b: HealthSyncPair): number {
+  const dt = b.norm.startTime - a.norm.startTime;
+  if (dt !== 0) return dt;
+  return a.stored.runId < b.stored.runId ? -1 : a.stored.runId > b.stored.runId ? 1 : 0;
+}
 
 function shallowLogNeedsUpdate(prev: SessionLog | undefined, next: SessionLog): boolean {
   const pa = JSON.stringify(prev ?? {});
@@ -36,7 +45,7 @@ export function applyAppleHealthTrainingSync(args: {
   now?: Date;
   maxAgeDays?: number;
 }): AppleHealthSyncResult {
-  const now = args.now ?? new Date();
+  const now = args.now ?? getAppNow();
   const maxAgeDays = args.maxAgeDays ?? 10;
   const cutoff = now.getTime() - maxAgeDays * 86400000;
 
@@ -56,12 +65,12 @@ export function applyAppleHealthTrainingSync(args: {
     console.log("Normalized run:", norm);
     pairs.push({ stored, norm });
   }
-  pairs.sort((a, b) => b.norm.startTime - a.norm.startTime);
+  pairs.sort(compareHealthSyncPairByRecencyThenRunId);
 
   const touchedSessionIds = new Set<string>();
 
   for (const { stored, norm: run } of pairs) {
-    const match = matchRunToPlannedSession(run, args.planSessions);
+    const match = matchWorkoutToPlannedSession(run, args.planSessions);
     console.log("Match:", match);
     if (!match.matched || !match.plannedSessionId) continue;
 
@@ -82,6 +91,9 @@ export function applyAppleHealthTrainingSync(args: {
     if (prev.assignedRun?.runId && prev.assignedRun.runId !== run.id) {
       continue;
     }
+    if (prev.done && prev.assignedRun?.runId === run.id) {
+      continue;
+    }
 
     const verdict = generateRunEvaluationFeedback(evaluation);
     const label = evaluationStatusLabel(evaluation);
@@ -90,7 +102,7 @@ export function applyAppleHealthTrainingSync(args: {
       label,
       feedback: verdict.text,
       distanceDeltaKm: evaluation.distanceDeltaKm,
-      updatedAt: new Date().toISOString(),
+      updatedAt: getAppNow().toISOString(),
     };
 
     let merged: SessionLog;
@@ -114,7 +126,7 @@ export function applyAppleHealthTrainingSync(args: {
           distanceKm: Math.round(km * 100) / 100,
           ...(run.avgHeartRate !== null ? { avgHeartRateBpm: run.avgHeartRate } : {}),
         },
-        ...(decision.setDone ? { done: true, skipped: false, at: new Date().toISOString() } : {}),
+        ...(decision.setDone ? { done: true, skipped: false, at: getAppNow().toISOString() } : {}),
         runEvaluation: evalBlock,
       };
     }

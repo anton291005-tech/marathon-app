@@ -1,13 +1,23 @@
 import { useMemo, useRef, useState } from "react";
 import AiMessageList, { type UiChatMessage } from "./AiMessageList";
+import SwapConfirmationCard from "./SwapConfirmationCard";
 import { executeAiAction } from "../../lib/ai/actions";
-import { generateAiResponse } from "../../lib/ai/generateAiResponse";
+import { runCoachAgent } from "../../lib/ai/coachAgent";
 import type { AiAssistantAction, AiContext, PlanPatch } from "../../lib/ai/types";
+import type { WorkoutV2 } from "../../planV2/types";
+import { getAppNowEpochMs } from "../../core/time/timeSystem";
+
+type SwapResult = { ok: boolean; message: string; warningText?: string | null } | void;
 
 type Props = {
   getContext: () => AiContext;
   onApplyPlanPatches: (message: string, action: AiAssistantAction, patches: PlanPatch[]) => void;
   onNavigate: (targetScreen: string, section?: string) => void;
+  onSwapWorkoutsV2?: (sourceId: string, targetId: string, overrideAccepted?: boolean) => SwapResult;
+  onReplaceTrainingPlanV2?: (plan: unknown) => void;
+  onApplyPreferencesPatch?: (patch: unknown) => void;
+  messages?: UiChatMessage[];
+  setMessages?: React.Dispatch<React.SetStateAction<UiChatMessage[]>>;
 };
 
 const QUICK_ACTIONS = [
@@ -19,11 +29,22 @@ const QUICK_ACTIONS = [
 ];
 
 function createId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${getAppNowEpochMs()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigate }: Props) {
-  const [messages, setMessages] = useState<UiChatMessage[]>([
+export default function AiCoachPanel({
+  getContext,
+  onApplyPlanPatches,
+  onNavigate,
+  onSwapWorkoutsV2,
+  onReplaceTrainingPlanV2: _onReplaceTrainingPlanV2,
+  onApplyPreferencesPatch: _onApplyPreferencesPatch,
+  messages: controlledMessages,
+  setMessages: setControlledMessages,
+}: Props) {
+  type PendingSwap = { workoutA: WorkoutV2; workoutB: WorkoutV2 };
+
+  const [internalMessages, setInternalMessages] = useState<UiChatMessage[]>([
     {
       id: createId(),
       role: "assistant",
@@ -31,8 +52,11 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
       text: "Ich bin dein AI Coach. Ich schlage Aenderungen erst als Vorschau vor, bevor etwas uebernommen wird.",
     },
   ]);
+  const messages = controlledMessages ?? internalMessages;
+  const setMessages = setControlledMessages ?? setInternalMessages;
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pendingSwap, setPendingSwap] = useState<PendingSwap | null>(null);
   const busyRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -56,28 +80,80 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
       const context = getContext();
       console.log("[AiCoachPanel] sending to AI, input:", userInput); // eslint-disable-line no-console
 
-      // generateAiResponse calls the real API when REACT_APP_AI_PROVIDER=openai,
-      // and automatically falls back to the local mock brain if the API fails.
-      const data = await generateAiResponse(userInput, context);
+      // Build planEngine so the coach agent can execute deterministic swaps
+      const planEngine = {
+        swapDays: (dayA: string, dayB: string): { message: string; confidence: number } => {
+          if (!onSwapWorkoutsV2) {
+            return {
+              message: "Tauschen ist in dieser Ansicht gerade nicht möglich. Ordne die Einheiten im **Woche**-Tab manuell an.",
+              confidence: 0.1,
+            };
+          }
+
+          const fmtDate = (iso: string): string => {
+            if (!iso.match(/^\d{4}-\d{2}-\d{2}/)) return iso;
+            const [, mm, dd] = iso.slice(0, 10).split("-");
+            return `${dd}.${mm}.`;
+          };
+
+          const workouts = context.planV2?.workouts ?? [];
+          const wA = workouts.find((w) => typeof w.dateIso === "string" && w.dateIso.startsWith(dayA));
+          const wB = workouts.find((w) => typeof w.dateIso === "string" && w.dateIso.startsWith(dayB));
+
+          if (!wA) {
+            return {
+              message: `Kein Training am ${fmtDate(dayA)} gefunden. Prüfe im Wochenplan ob an diesem Tag eine Einheit geplant ist.`,
+              confidence: 0.3,
+            };
+          }
+          if (!wB) {
+            return {
+              message: `Kein Training am ${fmtDate(dayB)} gefunden. Prüfe im Wochenplan ob an diesem Tag eine Einheit geplant ist.`,
+              confidence: 0.3,
+            };
+          }
+
+          // Don't execute yet — show confirmation card first
+          setPendingSwap({ workoutA: wA, workoutB: wB });
+
+          return {
+            message: `Ich tausche **${wA.title}** (${fmtDate(wA.dateIso)}) mit **${wB.title}** (${fmtDate(wB.dateIso)}). Bitte bestätige unten.`,
+            confidence: 0.95,
+          };
+        },
+        adjust: (_day: string, _intensity: string) => ({ message: "", confidence: 0 }),
+        addRestDay: (_day: string) => ({ message: "", confidence: 0 }),
+      };
+
+      const appState = {
+        todayIso: context.todayIso ?? new Date().toISOString().slice(0, 10),
+        planEngine,
+      };
+
+      const data = await runCoachAgent(userInput, appState);
 
       console.log("[AiCoachPanel] AI response:", data); // eslint-disable-line no-console
+
+      const message =
+        typeof (data as Record<string, unknown>)?.message === "string"
+          ? ((data as Record<string, unknown>).message as string).trim()
+          : "";
+      const action = (data as Record<string, unknown>)?.action as AiAssistantAction | undefined;
 
       removeMessageById(loadingId);
       pushMessage({
         id: createId(),
         role: "assistant",
         type: "text",
-        text: typeof data?.message === "string" && data.message.trim()
-          ? data.message
-          : "Keine Antwort",
+        text: message || "Keine Antwort",
       });
 
-      if (data?.action) {
+      if (action) {
         pushMessage({
           id: createId(),
           role: "assistant",
           type: "action",
-          action: data.action,
+          action,
         });
       }
     } catch (err) {
@@ -252,6 +328,18 @@ export default function AiCoachPanel({ getContext, onApplyPlanPatches, onNavigat
           }}
         />
       </div>
+
+      {pendingSwap && (
+        <SwapConfirmationCard
+          workoutA={pendingSwap.workoutA}
+          workoutB={pendingSwap.workoutB}
+          onConfirm={() => {
+            onSwapWorkoutsV2?.(pendingSwap.workoutA.id, pendingSwap.workoutB.id);
+            setPendingSwap(null);
+          }}
+          onCancel={() => setPendingSwap(null)}
+        />
+      )}
 
       <div style={{ display: "flex", gap: 8 }}>
         <input

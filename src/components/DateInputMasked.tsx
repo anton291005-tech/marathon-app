@@ -16,7 +16,7 @@ const inputStyle: CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   padding: "12px 14px",
-  fontSize: 15,
+  fontSize: 16,
   borderRadius: 12,
   border: "1px solid rgba(148, 163, 184, 0.2)",
   background: "#070b16",
@@ -232,7 +232,16 @@ export default function DateInputMasked({
         autoComplete="off"
         spellCheck={false}
         value={displayValue}
-        readOnly
+        onClick={() => inputRef.current?.focus()}
+        onChange={(e) => {
+          const newDigits = e.target.value.replace(/\D/g, "");
+          if (newDigits.length > digits.length) {
+            const added = newDigits.slice(digits.length);
+            applyDigits((digits + added).slice(0, MAX_DIGITS));
+          } else if (newDigits.length < digits.length) {
+            applyDigits(digits.slice(0, -1));
+          }
+        }}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         onBlur={runBlurValidation}

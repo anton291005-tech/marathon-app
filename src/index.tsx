@@ -1,9 +1,43 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import App from './App';
+import { AuthProvider } from './contexts/AuthContext';
+import { useAuth } from './contexts/AuthContext';
+import AppMain from './AppMain';
+import { AuthScreen } from './components/AuthScreen';
+import { SplashScreen } from './SplashScreen';
 import reportWebVitals from './reportWebVitals';
 import { registerServiceWorker } from './registerServiceWorker';
+import { Capacitor } from '@capacitor/core';
+import { Keyboard, KeyboardResize } from '@capacitor/keyboard';
+
+if (Capacitor.isNativePlatform()) {
+  void Keyboard.setResizeMode({ mode: KeyboardResize.Body });
+}
+
+function AppRoot() {
+  const [splashDone, setSplashDone] = useState(false);
+  const { user, loading } = useAuth();
+
+  if (!splashDone) {
+    return (
+      <SplashScreen
+        appReady={true}
+        onDone={() => setSplashDone(true)}
+      />
+    );
+  }
+
+  if (loading) {
+    return <div style={{ background: '#0b0b15', height: '100vh' }} />;
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  return <AppMain />;
+}
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
@@ -11,13 +45,12 @@ const root = ReactDOM.createRoot(
 
 root.render(
   <React.StrictMode>
-    <App />
+    <AuthProvider>
+      <AppRoot />
+    </AuthProvider>
   </React.StrictMode>
 );
 
 registerServiceWorker();
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 reportWebVitals();

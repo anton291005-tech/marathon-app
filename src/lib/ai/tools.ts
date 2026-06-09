@@ -109,17 +109,77 @@ function addRestDay(params: any, state: any) {
   return out;
 }
 
-function normalizeDayInput(day: string): string {
-  const d = day.toLowerCase();
+const TOOLS_WEEKDAY_MON_OFFSET: Record<string, number> = {
+  montag: 0, dienstag: 1, mittwoch: 2, donnerstag: 3,
+  freitag: 4, samstag: 5, sonntag: 6,
+};
 
-  if (d.includes("today") || d.includes("heute")) return "today";
-  if (d.includes("tomorrow") || d.includes("morgen")) return "tomorrow";
+function isValidIsoDate(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s.trim());
+}
+
+function normalizeDayInput(day: string, todayIso?: string): string {
+  const d = day.toLowerCase().trim();
+
+  // Already a valid ISO date – return as-is
+  if (isValidIsoDate(d)) return d;
+
+  // heute / today → ISO when todayIso available, else relative word
+  if (d === "heute" || d === "today") return todayIso ?? "today";
+
+  // morgen / tomorrow → ISO when todayIso available, else relative word
+  if (d === "morgen" || d === "tomorrow") {
+    if (todayIso) {
+      const dt = new Date(`${todayIso}T12:00:00Z`);
+      dt.setUTCDate(dt.getUTCDate() + 1);
+      return dt.toISOString().slice(0, 10);
+    }
+    return "tomorrow";
+  }
+
+  // Full German date: "09.06.2026" → "2026-06-09"
+  const fullMatch = d.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/);
+  if (fullMatch) {
+    const dd = fullMatch[1].padStart(2, "0");
+    const mm = fullMatch[2].padStart(2, "0");
+    const rawY = parseInt(fullMatch[3], 10);
+    const yyyy = rawY < 100 ? 2000 + rawY : rawY;
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // Short German date: "09.06" or "9.6" → "YYYY-MM-DD"
+  const shortMatch = d.match(/^(\d{1,2})\.(\d{1,2})$/);
+  if (shortMatch) {
+    const dd = shortMatch[1].padStart(2, "0");
+    const mm = shortMatch[2].padStart(2, "0");
+    const yyyy = todayIso ? todayIso.slice(0, 4) : String(new Date().getFullYear());
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // German weekday names → next occurrence (or today) relative to todayIso
+  if (todayIso) {
+    const targetMonBased = TOOLS_WEEKDAY_MON_OFFSET[d];
+    if (targetMonBased !== undefined) {
+      const today = new Date(`${todayIso}T12:00:00Z`);
+      const dow = today.getUTCDay(); // 0=Sun
+      const todayMonBased = (dow + 6) % 7; // Mon=0 … Sun=6
+      const diff = (targetMonBased - todayMonBased + 7) % 7;
+      if (diff === 0) return todayIso;
+      const result = new Date(today);
+      result.setUTCDate(result.getUTCDate() + diff);
+      return result.toISOString().slice(0, 10);
+    }
+  }
 
   return day;
 }
 
-/** Avoid false "unclear" when inputs are already canonical relative words but unchanged by substring rules. */
+/**
+ * Returns true when the string is already a resolved calendar expression.
+ * ISO date strings ("2026-06-09") are always considered resolved – no "unclear" guard needed.
+ */
 function expressesRelativeCalendarWord(s: string): boolean {
+  if (isValidIsoDate(s.trim())) return true;
   return /\b(today|tomorrow|heute|morgen)\b/i.test(String(s));
 }
 
@@ -198,8 +258,13 @@ function swapTrainingDays(params: any, state: any) {
   const rawA = String(dayA).trim();
   const rawB = String(dayB).trim();
 
-  const normalizedA = normalizeDayInput(rawA);
-  const normalizedB = normalizeDayInput(rawB);
+  const todayIso =
+    typeof (state as any)?.todayIso === "string" && (state as any).todayIso
+      ? (state as any).todayIso as string
+      : undefined;
+
+  const normalizedA = normalizeDayInput(rawA, todayIso);
+  const normalizedB = normalizeDayInput(rawB, todayIso);
 
   if (
     normalizedA === rawA &&

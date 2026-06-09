@@ -10,6 +10,7 @@
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",
     "@capacitor/ios": "^8.3.0",
+    "@capacitor/keyboard": "^8.0.3",
     "@capgo/capacitor-health": "^8.4.2",
     "@supabase/supabase-js": "^2.106.0",
     "@testing-library/dom": "^10.4.1",
@@ -50,6 +51,7 @@
     "verify:cap-web": "node scripts/verify-web-build.js",
     "cap:sync": "npm run build && npm run verify:cap-web",
     "cap:ios": "npm run build && npm run verify:cap-web && npx cap open ios",
+    "ios": "CI=false DISABLE_ESLINT_PLUGIN=true npm run build && npx cap sync ios && npx cap open ios",
     "ios:prod": "npm run build:ios-safe && npx cap open ios",
     "clean:ios": "rm -rf ios/App/DerivedData && rm -rf ios/App/build && rm -rf dist && rm -rf build && rm -rf node_modules/.cache",
     "test": "react-scripts test",
@@ -121,5 +123,9 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "ts-node": "^10.9.2"
   }
 }

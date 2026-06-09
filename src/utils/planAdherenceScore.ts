@@ -16,6 +16,12 @@ export type PlanAdherenceInputs = {
   intervalAvgPaceSecPerKm?: number | null;
   /** Interval model 0–100; when set, used as the pace component accuracy (matches summary ring). */
   intervalIntensityScore0_100?: number | null;
+  /** Session type — enables bike-specific scoring path when "bike". */
+  sessionType?: string | null;
+  /** Actual workout duration in seconds — used for bike time-accuracy scoring. */
+  actualDurationSec?: number | null;
+  /** Planned workout duration in seconds — used for bike time-accuracy scoring. */
+  plannedDurationSec?: number | null;
 };
 
 export type PlanAdherenceScoreResult = {
@@ -205,7 +211,79 @@ export function computeIntervalStructureAdherenceScore(inputs: {
   return clamp100(Math.round(paceScore * 0.6 + distScore * 0.4));
 }
 
+/** HR accuracy for bike: 100 if in range, degrades linearly outside. */
+function computeHrAccuracy(actual: number, min: number, max: number): number {
+  if (actual >= min && actual <= max) return 100;
+  const center = (min + max) / 2;
+  const range = (max - min) / 2 + 10; // etwas Toleranz
+  const diff = Math.abs(actual - center);
+  return Math.max(0, Math.round(100 - (diff / range) * 100));
+}
+
+/** Time accuracy for bike: 100 if 90–115% of plan, degrades outside. */
+function computeTimeAccuracy(actualSec: number, plannedSec: number): number {
+  if (plannedSec <= 0) return 0;
+  const ratio = actualSec / plannedSec;
+  if (ratio >= 0.9 && ratio <= 1.15) return 100;
+  if (ratio >= 0.75) return Math.round(100 - (0.9 - ratio) * 200);
+  return Math.max(0, Math.round(ratio * 80));
+}
+
+/** Status based on time ratio vs planned. */
+function timeRangeStatus(actualSec: number | null, plannedSec: number | null): MetricStatus {
+  if (!actualSec || !plannedSec || plannedSec <= 0) return "na";
+  const ratio = actualSec / plannedSec;
+  if (ratio >= 0.9 && ratio <= 1.15) return "green";
+  if (ratio >= 0.75) return "yellow";
+  return "red";
+}
+
 export function computePlanAdherenceScore(inputs: PlanAdherenceInputs): PlanAdherenceScoreResult {
+  // Bike-spezifischer Score-Pfad: HR 60% + Zeit 40%
+  if (inputs.sessionType === "bike") {
+    // Fallback A: kein HFmax gesetzt → generische Zone-2-Range (120–150 bpm) verwenden
+    const plannedHrMin = inputs.plannedHrBpm?.min ?? 120;
+    const plannedHrMax = inputs.plannedHrBpm?.max ?? 150;
+    const hasHr = inputs.actualHrBpm != null;
+    const hasTime =
+      inputs.actualDurationSec != null &&
+      inputs.plannedDurationSec != null;
+
+    let bikeScore: number;
+    const bikeComponents: PlanAdherenceScoreResult["components"] = {};
+
+    if (hasHr) {
+      bikeComponents.hrAccuracy = computeHrAccuracy(inputs.actualHrBpm!, plannedHrMin, plannedHrMax);
+    }
+    if (hasTime) {
+      bikeComponents.paceAccuracy = computeTimeAccuracy(inputs.actualDurationSec!, inputs.plannedDurationSec!);
+    }
+
+    if (hasHr && hasTime) {
+      bikeScore = Math.round(bikeComponents.hrAccuracy! * 0.6 + bikeComponents.paceAccuracy! * 0.4);
+    } else if (hasHr) {
+      bikeScore = Math.round(bikeComponents.hrAccuracy!);
+    } else if (hasTime) {
+      bikeScore = Math.round(bikeComponents.paceAccuracy!);
+    } else {
+      // Fallback B: keine Vergleichsbasis → neutral statt 0
+      bikeScore = 50;
+    }
+
+    return {
+      score: clamp100(bikeScore),
+      components: bikeComponents,
+      statuses: {
+        pace: timeRangeStatus(inputs.actualDurationSec ?? null, inputs.plannedDurationSec ?? null),
+        distance: "na",
+        hr: rangeStatus(
+          inputs.actualHrBpm ?? null,
+          inputs.plannedHrBpm ?? { min: plannedHrMin, max: plannedHrMax },
+        ),
+      },
+    };
+  }
+
   const componentValues: PlanAdherenceScoreResult["components"] = {};
 
   if (inputs.useIntervalPaceMetric) {

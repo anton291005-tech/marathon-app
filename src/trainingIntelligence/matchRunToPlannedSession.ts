@@ -1,5 +1,5 @@
 /**
- * Match one normalized run to at most one planned running session (same local day).
+ * Match one normalized workout to at most one planned session of the same type and local day.
  */
 
 import { normalizeCalendarDay, parseSessionDateLabel } from "../appSmartFeatures";
@@ -7,6 +7,7 @@ import type { PlanSession } from "../marathonPrediction";
 import type { NormalizedAppleRun, RunMatchResult } from "./types";
 
 const RUNNING_TYPES = new Set(["easy", "long", "interval", "tempo", "race"]);
+const BIKE_TYPES = new Set(["bike"]);
 
 function sessionLocalYmd(session: PlanSession): string | null {
   const pd = parseSessionDateLabel(session.date);
@@ -22,11 +23,18 @@ function isRunningSession(s: PlanSession): boolean {
   return RUNNING_TYPES.has(s.type);
 }
 
+function isBikeSession(s: PlanSession): boolean {
+  return BIKE_TYPES.has(s.type);
+}
+
 /**
- * Only running plan sessions; same local date as run.
+ * Match a workout (run or bike) to a planned session of the same type on the same local date.
  */
-export function matchRunToPlannedSession(run: NormalizedAppleRun, plannedSessions: PlanSession[]): RunMatchResult {
-  const candidates = plannedSessions.filter((s) => isRunningSession(s) && sessionLocalYmd(s) === run.date);
+export function matchWorkoutToPlannedSession(run: NormalizedAppleRun, plannedSessions: PlanSession[]): RunMatchResult {
+  const isbike = run.type === "bike";
+  const candidates = plannedSessions.filter(
+    (s) => (isbike ? isBikeSession(s) : isRunningSession(s)) && sessionLocalYmd(s) === run.date,
+  );
 
   if (candidates.length === 0) {
     return { matched: false, confidence: "low" };
@@ -81,3 +89,6 @@ export function matchRunToPlannedSession(run: NormalizedAppleRun, plannedSession
 
   return { matched: true, plannedSessionId: chosen.id, confidence };
 }
+
+/** @deprecated Use matchWorkoutToPlannedSession instead */
+export const matchRunToPlannedSession = matchWorkoutToPlannedSession;

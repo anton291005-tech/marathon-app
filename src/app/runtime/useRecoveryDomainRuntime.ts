@@ -227,7 +227,9 @@ export function useRecoveryDomainRuntime(args: RecoveryDomainRuntimeArgs) {
       hasEverComputedRecoveryScore: recoveryHasEverKpiRef.current,
       bootPhaseComplete: recoveryBootPhaseComplete,
     });
-    lastGoodRecoveryDomainRef.current = domain;
+    if (domain.domainKind === "live") {
+      lastGoodRecoveryDomainRef.current = domain;
+    }
     return domain;
   }, [
     todayCalendarYmd,
@@ -244,6 +246,20 @@ export function useRecoveryDomainRuntime(args: RecoveryDomainRuntimeArgs) {
     recoveryTimeAnchor,
     recoveryUserId,
   ]);
+
+  const isRecoveryHydrating = committedRecoveryVersion !== recoveryInputVersion;
+
+  // During the debounce window, hold the last known good (live) domain so the
+  // UI does not briefly drop to null / "insufficient" between data updates.
+  const displayDomain = useMemo(() => {
+    if (
+      recoveryDomain.domainKind === "insufficient" &&
+      lastGoodRecoveryDomainRef.current?.domainKind === "live"
+    ) {
+      return lastGoodRecoveryDomainRef.current;
+    }
+    return recoveryDomain;
+  }, [recoveryDomain]);
 
   useEffect(() => {
     if (recoveryDomain.domainKind !== "live") return;
@@ -305,16 +321,16 @@ export function useRecoveryDomainRuntime(args: RecoveryDomainRuntimeArgs) {
 
   const recoveryPresentation = useMemo(
     () =>
-      getRecoveryPresentationState(recoveryDomain, wIdx, {
+      getRecoveryPresentationState(displayDomain, wIdx, {
         trendVsYesterdayLine: recoveryTrendLinePreferred({
           todayYmd: todayCalendarYmd,
-          todayScore: recoveryDomain.homeRecoveryScore0_100,
-          isInsufficient: recoveryDomain.domainKind === "initial" || recoveryDomain.isInsufficient,
+          todayScore: displayDomain.homeRecoveryScore0_100,
+          isInsufficient: displayDomain.domainKind === "initial" || displayDomain.isInsufficient,
           readItem: (k) => localStorage.getItem(k),
           safeParseJSON: safeParseJSON,
         }),
       }),
-    [recoveryDomain, wIdx, todayCalendarYmd],
+    [displayDomain, wIdx, todayCalendarYmd],
   );
 
   // sleepStatus depends on recoveryPresentation — must be defined after it
@@ -475,5 +491,6 @@ export function useRecoveryDomainRuntime(args: RecoveryDomainRuntimeArgs) {
     uiRecoveryScore0_100,
     uiRecoveryScoreDisplay,
     recoveryState,
+    isRecoveryHydrating,
   };
 }

@@ -8,7 +8,10 @@ import {
   resolveStructuredWorkoutSpecForSession,
 } from "../sessionDistance";
 import type { PlanSession } from "../marathonPrediction";
-import { getPostWorkoutPlannedHr } from "../trainingIntelligence/sessionPlanTargets";
+import {
+  getPostWorkoutPlannedHr,
+  plannedHrRangeForSessionType,
+} from "../trainingIntelligence/sessionPlanTargets";
 import {
   computeIntervalStructureAdherenceScore,
   computePlanAdherenceScore,
@@ -29,6 +32,7 @@ import {
 } from "../ai/analysis/intervalSegmentExtractor";
 import { readMigrationFlags, writeMigrationFlags } from "../migrationFlags";
 import { MARATHON_PREFERENCES_KEY } from "../persistence/marathonLocalStorageKeys";
+import { parseBikeDurationSeconds } from "../utils/bikeDurationParser";
 
 function coerceMaxHeartRateBpm(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v) && v > 0) return Math.round(v);
@@ -84,6 +88,8 @@ export type PostWorkoutSummary = {
   actual: {
     distanceKm: number | null;
     paceSecPerKm: number | null;
+    /** Actual workout duration in seconds — used for bike Zeit-Card display and time-accuracy scoring. */
+    durationSec?: number | null;
     /** health.avgHeartRateBpm ?? log.assignedRun.avgHeartRateBpm ?? on-demand fetch (see `hrPresentation`) */
     hrBpm: number | null;
   };
@@ -185,6 +191,7 @@ export function normalizePostWorkoutSummary(
       distanceKm: actual.distanceKm ?? null,
       paceSecPerKm: actual.paceSecPerKm ?? null,
       hrBpm: actual.hrBpm ?? null,
+      durationSec: (actual as any).durationSec ?? null,
     },
     adherence: adherence ?? EMPTY_ADHERENCE,
   };
@@ -389,10 +396,10 @@ export function usePostWorkoutSummary(args: HookArgs): {
         const endMs = end.getTime();
         if (!Number.isFinite(endMs) || endMs < cutoffMs) continue;
 
-        const plannedHr = getPostWorkoutPlannedHr(
-          { type: s.type },
+        const plannedHr = plannedHrRangeForSessionType(
+          s.type,
           resolveMaxHeartRateBpm(args.maxHeartRateBpm),
-        ).hrBpm;
+        );
         const expectedHr = expectedHrFromRange(plannedHr);
 
         const durationMin = numOrNull(ar?.duration ?? (health as any)?.duration);
@@ -523,6 +530,8 @@ export function usePostWorkoutSummary(args: HookArgs): {
           null;
 
         const plannedDistanceKm = (() => {
+          // Bike: keine geplante Distanz — nur Ist-Wert anzeigen
+          if (s.type === "bike") return null;
           // SSOT: structured + parsed desc (WU, reps, recovery, easy, CD) — not the stale plan-row km alone.
           try {
             const km = getSessionPlannedDistanceKm(s as any);
@@ -552,7 +561,7 @@ export function usePostWorkoutSummary(args: HookArgs): {
             hrBpm: plannedHrFields.hrBpm,
             hrZoneLabel: plannedHrFields.hrZoneLabel,
           },
-          actual: { distanceKm: actualDistanceKm, paceSecPerKm: actualPaceSecPerKm, hrBpm: actualHrBpm },
+          actual: { distanceKm: actualDistanceKm, paceSecPerKm: actualPaceSecPerKm, hrBpm: actualHrBpm, durationSec },
           maxHeartRateBpm: effectiveMaxHeartRateBpm,
         };
         })
@@ -635,6 +644,12 @@ export function usePostWorkoutSummary(args: HookArgs): {
             baseCore.actual.distanceKm != null ? Math.round(baseCore.actual.distanceKm * 100) / 100 : null,
           plannedHrBpm: baseCore.planned.hrBpm,
           actualHrBpm: baseCore.actual.hrBpm,
+          sessionType: baseCore.session.type,
+          actualDurationSec: baseCore.actual.durationSec ?? null,
+          plannedDurationSec:
+            baseCore.session.type === "bike"
+              ? parseBikeDurationSeconds(baseCore.session.desc ?? undefined)
+              : null,
         });
         // eslint-disable-next-line no-console
         console.log("[PWS-DIAG:HR] usePostWorkoutSummary — planned HR before return (no analysis path)", {
@@ -733,8 +748,12 @@ export function usePostWorkoutSummary(args: HookArgs): {
       ) {
         // eslint-disable-next-line no-console
         const assignedRunGpsStream = logForIv?.assignedRun?.gpsStream ?? null;
+        const healthGpsStream =
+          healthForIv && Array.isArray((healthForIv as StoredHealthRun & { gpsStream?: GpsPacePoint[] }).gpsStream)
+            ? (healthForIv as StoredHealthRun & { gpsStream?: GpsPacePoint[] }).gpsStream
+            : null;
         const gpsStreamForSegments =
-          firstNonEmptyGpsStream(assignedRunGpsStream, healthForIv?.gpsStream, ivCtx.gpsStream) ?? null;
+          firstNonEmptyGpsStream(assignedRunGpsStream, healthGpsStream, ivCtx.gpsStream) ?? null;
         const parsedPlanInfo = parseIntervalPlanInfo(planDescForIv);
         const repCountForSegments = parsedPlanInfo?.repCount ?? null;
         const repDistanceMForSegments = parsedPlanInfo?.repDistance ?? null;
@@ -874,11 +893,15 @@ export function usePostWorkoutSummary(args: HookArgs): {
         // eslint-disable-next-line no-console
         console.log("[PostWorkoutSummary] Interval segment sources:", {
           sessionLaps: logForIv?.assignedRun?.laps?.length ?? 0,
-          healthLaps: healthForIv?.laps?.length ?? 0,
+          healthLaps: (healthForIv?.laps as WorkoutLap[] | undefined)?.length ?? 0,
           sessionSplits: logForIv?.assignedRun?.splits?.length ?? 0,
-          healthSplits: healthForIv?.splits?.length ?? 0,
+          healthSplits: (healthForIv?.splits as SplitEntry[] | undefined)?.length ?? 0,
           sessionGps: logForIv?.assignedRun?.gpsStream?.length ?? 0,
-          healthGps: healthForIv?.gpsStream?.length ?? 0,
+          healthGps: (
+            (healthForIv as StoredHealthRun & { gpsStream?: GpsPacePoint[] } | null)?.gpsStream as
+              | GpsPacePoint[]
+              | undefined
+          )?.length ?? 0,
           segmentFallbackPath,
           intervalAvgFromAnalysis,
           intervalAvgFromPersisted,
@@ -899,6 +922,12 @@ export function usePostWorkoutSummary(args: HookArgs): {
         useIntervalPaceMetric: runAnalyzeBecauseInterval && typeof intervalIntensityScore === "number",
         intervalIntensityScore0_100: typeof intervalIntensityScore === "number" ? intervalIntensityScore : null,
         intervalAvgPaceSecPerKm: intervalAvg,
+        sessionType: baseCore.session.type,
+        actualDurationSec: baseCore.actual.durationSec ?? null,
+        plannedDurationSec:
+          baseCore.session.type === "bike"
+            ? parseBikeDurationSeconds(baseCore.session.desc ?? undefined)
+            : null,
       });
 
       if (process.env.NODE_ENV === "development" || process.env.REACT_APP_DEBUG_AI === "1") {

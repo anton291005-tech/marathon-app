@@ -2,6 +2,7 @@ import type { StoredHealthRun } from "../../healthRuns";
 import type { TrainingPlanV2 } from "../../planV2/types";
 import type { RecoveryDomainState } from "../../recovery/recoveryDomainState";
 import type { RecoverySummary } from "./recoverySummary";
+import type { CoachRuntimeSnapshot } from "./coachRuntimeSnapshotTypes";
 
 export type AiMode = "coach" | "navigator" | "support";
 
@@ -80,6 +81,11 @@ export type AiAssistantResponse = {
   action?: AiAssistantAction;
 };
 
+export type AiCoachConversationTurn = {
+  role: "user" | "assistant";
+  text: string;
+};
+
 export type AiContext = {
   todayIso: string;
   raceDateIso: string | null;
@@ -100,6 +106,11 @@ export type AiContext = {
   maxHeartRateBpm?: number | null;
   recoveryDomain?: RecoveryDomainState;
   recoverySummary?: RecoverySummary;
+  recoveryDailyRows?: Array<{ date: string; restingHr?: number | null; sleepHours?: number | null; hrvMs?: number | null }>;
+  conversationTurns?: AiCoachConversationTurn[];
+  coachKnowledgeDigest?: string;
+  coachRuntimePromptBlock?: string;
+  coachSnapshot?: CoachRuntimeSnapshot;
 };
 
 export type PlanPatch = {

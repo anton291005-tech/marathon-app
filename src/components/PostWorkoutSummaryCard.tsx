@@ -4,6 +4,7 @@ import { normalizePostWorkoutSummary } from "../hooks/usePostWorkoutSummary";
 import { ZONE_BPM } from "../trainingIntelligence/zoneBpmDisplay";
 import { shouldUseIntervalScoring } from "../utils/workoutEvaluationGuards";
 import { compareHR, comparePace } from "../lib/training/compareActualToPlanned";
+import { fmtBikePlannedDuration } from "../utils/bikeDurationParser";
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
@@ -33,6 +34,14 @@ function fmtPaceSec(secPerKm: number | null): string {
   const mm = Math.floor(s / 60);
   const ss = String(s % 60).padStart(2, "0");
   return `${mm}:${ss}/km`;
+}
+
+function fmtDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 function fmtHrActual(bpm: number | null): string {
@@ -224,6 +233,7 @@ function MetricTile({
   status,
   extra,
   compactActual,
+  hidePlanned,
 }: {
   label: string;
   planned: string;
@@ -231,6 +241,7 @@ function MetricTile({
   status: "green" | "yellow" | "red" | "na";
   extra?: { text: string; color: string } | null;
   compactActual?: boolean;
+  hidePlanned?: boolean;
 }) {
   return (
     <div
@@ -266,28 +277,32 @@ function MetricTile({
         </span>
         <StatusDot status={status} />
       </div>
-      <div
-        style={{
-          fontSize: 10,
-          color: "rgba(148,163,184,0.55)",
-          marginBottom: 2,
-        }}
-      >
-        Geplant
-      </div>
-      <div
-        style={{
-          fontSize: 11,
-          color: "#94a3b8",
-          fontWeight: 700,
-          marginBottom: 7,
-          lineHeight: 1.35,
-          wordBreak: "break-word",
-          overflowWrap: "break-word",
-        }}
-      >
-        {planned}
-      </div>
+      {!hidePlanned && (
+        <>
+          <div
+            style={{
+              fontSize: 10,
+              color: "rgba(148,163,184,0.55)",
+              marginBottom: 2,
+            }}
+          >
+            Geplant
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              color: "#94a3b8",
+              fontWeight: 700,
+              marginBottom: 7,
+              lineHeight: 1.35,
+              wordBreak: "break-word",
+              overflowWrap: "break-word",
+            }}
+          >
+            {planned}
+          </div>
+        </>
+      )}
       <div
         style={{
           fontSize: 10,
@@ -386,6 +401,8 @@ export function PostWorkoutSummaryCard(props: {
   const sc = scoreColor(score);
   const statuses = summary.adherence.statuses;
 
+  const isBikeSession = summary.session?.type === "bike";
+
   const paceTilePlannedRaw = summaryIsInterval
     ? fmtPaceSec(summary.intervalDisplay?.targetPaceSecPerKm ?? null)
     : fmtPaceRange(summary.planned.paceSecPerKm);
@@ -393,19 +410,32 @@ export function PostWorkoutSummaryCard(props: {
     ? fmtPaceSec(summary.intervalDisplay?.avgPaceSecPerKm ?? null)
     : fmtPaceSec(summary.actual.paceSecPerKm);
 
-  const paceTilePlanned = summaryIsInterval
-    ? paceTilePlannedRaw === "—"
-      ? "—"
-      : `Ziel: ${paceTilePlannedRaw}/km`
-    : paceTilePlannedRaw;
-  const paceTileActual = summaryIsInterval ? paceTileActualRaw : fmtPaceSec(summary.actual.paceSecPerKm);
+  const paceTilePlanned = isBikeSession
+    ? fmtBikePlannedDuration(summary.session.desc ?? undefined)
+    : summaryIsInterval
+      ? paceTilePlannedRaw === "—"
+        ? "—"
+        : `Ziel: ${paceTilePlannedRaw}/km`
+      : paceTilePlannedRaw;
 
-  const deltaExtra = summaryIsInterval
-    ? intervalPaceDeltaVersusTarget(
-        summary.intervalDisplay?.avgPaceSecPerKm ?? null,
-        summary.intervalDisplay?.targetPaceSecPerKm ?? null,
-      )
-    : paceCompareExtra(summary.actual.paceSecPerKm, summary.planned.paceSecPerKm);
+  const paceTileActual = isBikeSession
+    ? (summary.actual.durationSec != null
+        ? fmtDuration(summary.actual.durationSec)
+        : "—")
+    : summaryIsInterval
+      ? paceTileActualRaw
+      : fmtPaceSec(summary.actual.paceSecPerKm);
+
+  const paceTileLabel = isBikeSession ? "ZEIT" : summaryIsInterval ? "Intervall-Pace" : "Pace";
+
+  const deltaExtra = isBikeSession
+    ? null
+    : summaryIsInterval
+      ? intervalPaceDeltaVersusTarget(
+          summary.intervalDisplay?.avgPaceSecPerKm ?? null,
+          summary.intervalDisplay?.targetPaceSecPerKm ?? null,
+        )
+      : paceCompareExtra(summary.actual.paceSecPerKm, summary.planned.paceSecPerKm);
 
   const hrPresentationBpm =
     summary.hrPresentation?.kind === "bpm" ? summary.hrPresentation.value : null;
@@ -613,18 +643,19 @@ export function PostWorkoutSummaryCard(props: {
               }}
             >
               <MetricTile
-                label={summaryIsInterval ? "Intervall-Pace" : "Pace"}
-                planned={summaryIsInterval ? paceTilePlanned : paceTilePlannedRaw}
+                label={paceTileLabel}
+                planned={paceTilePlanned}
                 actual={paceTileActual}
                 status={statuses.pace}
                 extra={deltaExtra}
-                compactActual={summaryIsInterval}
+                compactActual={summaryIsInterval && !isBikeSession}
               />
               <MetricTile
-                label="Distanz"
+                label={isBikeSession ? "Gefahren" : "Distanz"}
                 planned={fmtKm(summary.planned.distanceKm)}
                 actual={fmtKm(summary.actual.distanceKm)}
                 status={statuses.distance}
+                hidePlanned={isBikeSession}
               />
               <MetricTile
                 label="Puls"

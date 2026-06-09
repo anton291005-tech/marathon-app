@@ -14,6 +14,7 @@ import {
 } from "../healthRuns";
 import { aggregateRecoverySamples, type MinimalHealthSample } from "../recovery/aggregateRecoverySamples";
 import { finalizeRecoveryDailyRows } from "../recovery/finalizeRecoveryDailyRows";
+import type { PermissionState } from "../recovery/recoveryDisplayState";
 import type { RecoveryDailyRow } from "../recovery/recoveryTypes";
 import { loadHealthAnchors, saveHealthAnchors } from "./healthAnchorStore";
 import { appleHealthMissingCyclingDistance } from "./appleHealthPermissions";
@@ -72,6 +73,115 @@ export function appleHealthWorkoutQueryRangeLastNCalendarDaysInclusive(inclusive
 /** @deprecated Name — nutzt `appleHealthWorkoutQueryRangeFromMidnightDaysBack(7)`. */
 export function appleHealthWorkoutQueryRange7DaysLocal(now = getAppNow()) {
   return appleHealthWorkoutQueryRangeFromMidnightDaysBack(7, now);
+}
+
+export type HealthKitAuthState = {
+  sleep: PermissionState;
+  hrv: PermissionState;
+  rhr: PermissionState;
+  fullyAuthorized: boolean;
+  checkedAtEpochMs?: number;
+};
+
+export function buildHealthKitAuthState(
+  sleep: PermissionState,
+  hrv: PermissionState,
+  rhr: PermissionState,
+  checkedAtEpochMs?: number,
+): HealthKitAuthState {
+  const fullyAuthorized = sleep === "granted" && hrv === "granted" && rhr === "granted";
+  return {
+    sleep,
+    hrv,
+    rhr,
+    fullyAuthorized,
+    ...(checkedAtEpochMs != null ? { checkedAtEpochMs } : {}),
+  };
+}
+
+export function isHealthKitPermissionComplete(state: HealthKitAuthState): boolean {
+  return state.fullyAuthorized;
+}
+
+/** True when recovery read types are not all granted and HealthKit is available (triggers one session re-auth). */
+export function shouldForceFullHealthKitReauth(state: HealthKitAuthState): boolean {
+  if (state.fullyAuthorized) return false;
+  if (state.sleep === "unavailable" || state.hrv === "unavailable" || state.rhr === "unavailable") {
+    return false;
+  }
+  return true;
+}
+
+type AppleHealthPermissionType = (typeof APPLE_HEALTH_READ_TYPES)[number];
+
+export type AppleHealthHeartRateAccess = {
+  granted: boolean;
+  denied: boolean;
+  unavailable: boolean;
+};
+
+export async function appleHealthCheckHeartRateReadAccess(): Promise<AppleHealthHeartRateAccess> {
+  const result = await appleHealthCheckPermission("heartRate");
+  if (result === null) {
+    const available = await healthKitIsAvailable();
+    return { granted: false, denied: false, unavailable: !available };
+  }
+  return {
+    granted: result === true,
+    denied: result === false,
+    unavailable: false,
+  };
+}
+
+export async function appleHealthRequestHeartRateReadAuthorization(): Promise<void> {
+  const { Health } = await import("@capgo/capacitor-health");
+  await Health.requestAuthorization({ read: ["heartRate"] });
+}
+
+export async function appleHealthFetchAvgHeartRateBpmForInterval(
+  startIso: string,
+  endIso: string,
+): Promise<number | null> {
+  try {
+    const { Health } = await import("@capgo/capacitor-health");
+    const available = await Health.isAvailable();
+    if (!available?.available) return null;
+    const hr = await Health.readSamples({
+      dataType: "heartRate",
+      startDate: startIso,
+      endDate: endIso,
+      limit: 8000,
+      ascending: true,
+    });
+    const hrPoints: HeartRateSamplePoint[] = (hr.samples || []).map((s) => ({
+      startDate: s.startDate,
+      value: s.value,
+    }));
+    const avg = averageHeartRateBpmInWorkoutWindow(startIso, endIso, hrPoints);
+    return avg != null && Number.isFinite(avg) && avg > 0 ? Math.round(avg) : null;
+  } catch (e) {
+    console.warn("[appleHealthService] appleHealthFetchAvgHeartRateBpmForInterval failed", e);
+    return null;
+  }
+}
+
+export async function appleHealthCheckPermission(
+  dataType: AppleHealthPermissionType,
+): Promise<boolean | null> {
+  try {
+    const { Health } = await import("@capgo/capacitor-health");
+    const available = await Health.isAvailable();
+    if (!available?.available) return null;
+    const check = await Health.checkAuthorization({ read: [dataType] });
+    const authorized = Array.isArray(check?.readAuthorized) ? check.readAuthorized : [];
+    const denied = Array.isArray(check?.readDenied) ? check.readDenied : [];
+    if (authorized.includes(dataType)) return true;
+    if (denied.includes(dataType)) return false;
+    return null;
+  } catch (e) {
+    console.warn("[appleHealthService] appleHealthCheckPermission failed", dataType, e);
+    return null;
+  }
 }
 
 export async function healthKitIsAvailable(): Promise<boolean> {

@@ -26,6 +26,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } fr
 import RecoveryVerlaufCard from "./components/RecoveryVerlaufCard";
 import BackupControls from "./BackupControls";
 import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
 import {
   berlinWallClockYmd,
   calendarDaysBetweenYmd,
@@ -1560,6 +1561,23 @@ export default function AppMain(){
     fetchRunningWorkoutsLast7Days,
   });
 
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let lastFetchTime = 0;
+    const DEBOUNCE_MS = 30_000;
+    const listenerPromise = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (!isActive) return;
+      const now = getAppNowEpochMs();
+      if (now - lastFetchTime < DEBOUNCE_MS) return;
+      lastFetchTime = now;
+      void fetchRunningWorkoutsLast7Days();
+    });
+    return () => {
+      listenerPromise.then((l) => l.remove());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchRunningWorkoutsLast7Days stable ref from mount
+  }, []);
+
   const handleAppleHealthConnectInSettings = async () => {
     if (Capacitor.getPlatform() !== "ios") return;
     setAppleHealthConnectFeedback(null);
@@ -2096,6 +2114,7 @@ export default function AppMain(){
     uiRecoveryScore0_100,
     uiRecoveryScoreDisplay,
     recoveryState,
+    isRecoveryHydrating,
   } = useRecoveryDomainRuntime({
     displayPlan,
     wIdx,
@@ -2726,8 +2745,8 @@ export default function AppMain(){
   }, [resetOnboardingFlag]);
   const onboardingHydrationReady = planRemoteReady && prefsRemoteReady;
   const showOnboarding = useMemo(() => {
-    if (!onboardingHydrationReady) return false;
     if (onboardingForNewPlan) return true;
+    if (!onboardingHydrationReady) return false;
     return needsOnboarding({
       prefs: preferences,
       hasUserTrainingPlan,
@@ -2982,14 +3001,13 @@ export default function AppMain(){
     overscrollBehaviorY: "contain",
     touchAction: "pan-y",
   };
-  const safeTopPad = "env(safe-area-inset-top, 0px)";
+  const safeTopPad = "max(44px, env(safe-area-inset-top, 44px))";
   /** Tabbar ~72px + Abstand; zu groß = Leerraum über fixer Nav, zu klein = Content verdeckt */
   const safeBottomContentPad = "calc(86px + env(safe-area-inset-bottom, 0px))";
   const appRootBackground = {
     backgroundColor: "#070912",
     backgroundImage: "radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",
     backgroundRepeat: "no-repeat",
-    backgroundAttachment: "fixed",
   };
   const mainScrollAreaStyle = {
     flex: 1,
@@ -3127,6 +3145,10 @@ export default function AppMain(){
     if (!main || !upper) return;
     const measure = () => {
       const vh = window.visualViewport?.height ?? window.innerHeight;
+      // Ignore changes caused by keyboard open/close (>150px offset) —
+      // @capacitor/keyboard with resize:'body' handles those separately.
+      const keyboardOffset = window.innerHeight - vh;
+      if (keyboardOffset > 150) return;
       const budget = main.clientHeight;
       const upperH = upper.getBoundingClientRect().height;
       const reserveTail = 168;
@@ -3806,7 +3828,9 @@ export default function AppMain(){
                             lineHeight: 1,
                           }}
                         >
-                          {uiRecoveryScore0_100 != null ? formatScore100(uiRecoveryScoreDisplay) : "Keine Daten verfügbar"}
+                          {isRecoveryHydrating && uiRecoveryScore0_100 == null ? (
+                            <span style={{ display: "inline-block", width: 42, height: 14, borderRadius: 4, background: "rgba(255,255,255,0.08)", animation: "pulse 1.2s ease-in-out infinite", verticalAlign: "middle" }} />
+                          ) : uiRecoveryScore0_100 != null ? formatScore100(uiRecoveryScoreDisplay) : "Keine Daten verfügbar"}
                         </span>
                       </span>
                     </div>
@@ -3959,7 +3983,11 @@ export default function AppMain(){
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:4}}>
                 <div style={{padding:"6px 5px",textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Erholung</div>
-                  <div style={{fontSize:15,fontWeight:800,color:recoveryPresentation.session.toneHex,lineHeight:1.1}}>{recoveryPresentation.session.label}</div>
+                  <div style={{fontSize:15,fontWeight:800,color:recoveryPresentation.session.toneHex,lineHeight:1.1}}>
+                    {isRecoveryHydrating && recoveryPresentation.session.label === "Keine Daten"
+                      ? <span style={{ display: "inline-block", width: 30, height: 13, borderRadius: 3, background: "rgba(255,255,255,0.08)", animation: "pulse 1.2s ease-in-out infinite", verticalAlign: "middle" }} />
+                      : recoveryPresentation.session.label}
+                  </div>
                 </div>
                 <div style={{padding:"6px 5px",textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Belastung</div>
@@ -5227,7 +5255,7 @@ export default function AppMain(){
         />
       ) : null}
 
-      <div style={{position:"fixed",left:12,right:12,bottom:"calc(12px + env(safe-area-inset-bottom, 0px))",zIndex:90}}>
+      <div style={{position:"fixed",left:"calc(12px + env(safe-area-inset-left, 0px))",right:"calc(12px + env(safe-area-inset-right, 0px))",bottom:"calc(12px + env(safe-area-inset-bottom, 0px))",zIndex:90}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:6,background:"rgba(9,12,22,0.72)",border:"1px solid rgba(148,163,184,0.08)",borderRadius:24,padding:"10px 8px 11px",boxShadow:"0 20px 50px rgba(2,6,23,0.32)",backdropFilter:"blur(22px)"}}>
           {[
             { key: "home", label: homeTabLabel, icon: null },

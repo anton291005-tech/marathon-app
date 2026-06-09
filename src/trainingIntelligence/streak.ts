@@ -2,6 +2,7 @@
  * Streak from a set of completed local training days (YYYY-MM-DD).
  * Self-contained (no appSmartFeatures import — avoids circular dependency).
  */
+import { getAppNow } from "../core/time/timeSystem";
 
 function normalizeCalendarDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -19,7 +20,7 @@ function formatLocalYmd(dayStart: Date): string {
  * Consecutive calendar days with at least one completion, walking backward from today.
  * If today has no completion, skip today (yesterday still counts).
  */
-export function calculateStreak(completedDays: Set<string>, now: Date = new Date()): number {
+export function calculateStreak(completedDays: Set<string>, now: Date = getAppNow()): number {
   const todayStart = normalizeCalendarDay(now);
   let d = new Date(todayStart);
   let streak = 0;

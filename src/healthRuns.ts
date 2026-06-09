@@ -293,13 +293,27 @@ export function mergeHealthRuns(existing: StoredHealthRun[], incoming: StoredHea
   const merged = list
     .filter(storedHealthRunIsSyncedActivity)
     .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+  // Dedup by normalised identity: prefer platformId (HealthKit UUID), then
+  // runId with "hk_" prefix stripped, so that the same workout stored under
+  // two different key formats collapses to one entry.
+  // The sort above ensures the richer entry appears first and is kept.
+  const seenIds = new Set<string>();
+  const deduped = merged.filter((run) => {
+    const raw = run.platformId ?? run.runId ?? "";
+    const key = raw ? raw.replace(/^hk_/, "") : `${run.startDate}_${Math.round((run.distanceMeters ?? 0) / 100)}`;
+    if (seenIds.has(key)) return false;
+    seenIds.add(key);
+    return true;
+  });
+
   if (incoming.length > 0 && (typeof process === "undefined" || process.env?.NODE_ENV !== "test")) {
     console.log(
       "[MERGED WORKOUT TYPES]",
-      merged.map((w) => classifyWorkoutType(String(w.workoutType || ""))),
+      deduped.map((w) => classifyWorkoutType(String(w.workoutType || ""))),
     );
   }
-  return merged;
+  return deduped;
 }
 
 function migrateStoredHealthRunRow(r: StoredHealthRun): StoredHealthRun {
