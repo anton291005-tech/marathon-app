@@ -20,6 +20,8 @@ function safeDate(iso: string): Date | null {
 
 function sportFromSessionType(type: string): WorkoutSport {
   if (type === "bike") return "bike";
+  if (type === "swim") return "swim";
+  if (type === "strength") return "strength";
   if (type === "rest") return "rest";
   return "run";
 }
@@ -35,6 +37,8 @@ export function normalizeWorkoutsV2(workouts: WorkoutV2[]): WorkoutV2[] {
 export function deriveWeeksFromWorkouts(
   workouts: WorkoutV2[],
   metaByWeekStart?: Map<string, WeekV2["meta"]>,
+  /** Maps a Monday ISO date to an override week-start ISO (for mid-week plan starts). */
+  weekKeyOverrides?: Map<string, string>,
 ): WeekV2[] {
   const weeksMap = new Map<string, WeekV2>();
   const normalized = normalizeWorkoutsV2(workouts);
@@ -42,7 +46,8 @@ export function deriveWeeksFromWorkouts(
   for (const w of normalized) {
     const d = safeDate(w.dateIso);
     if (!d) continue;
-    const weekStart = ymd(startOfIsoWeekMonday(d));
+    const mondayIso = ymd(startOfIsoWeekMonday(d));
+    const weekStart = weekKeyOverrides?.get(mondayIso) ?? mondayIso;
 
     if (!weeksMap.has(weekStart)) {
       weeksMap.set(weekStart, {
@@ -68,8 +73,10 @@ export function deriveWeeksFromWorkouts(
 export function rebuildPlanFromWorkouts(args: {
   workouts: WorkoutV2[];
   metaByWeekStart?: Map<string, WeekV2["meta"]>;
+  /** Maps Monday ISO → override week-start ISO (for mid-week plan starts). */
+  weekKeyOverrides?: Map<string, string>;
 }): TrainingPlanV2 {
-  const weeks = deriveWeeksFromWorkouts(args.workouts, args.metaByWeekStart);
+  const weeks = deriveWeeksFromWorkouts(args.workouts, args.metaByWeekStart, args.weekKeyOverrides);
   return { version: 2, workouts: normalizeWorkoutsV2(args.workouts), weeks };
 }
 

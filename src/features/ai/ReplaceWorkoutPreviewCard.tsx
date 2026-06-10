@@ -16,6 +16,8 @@ type Props = {
 
 function sportGlyph(sport?: string): string {
   if (sport === "bike") return "🚴";
+  if (sport === "swim") return "🏊";
+  if (sport === "strength") return "💪";
   if (sport === "run") return "🏃";
   return "";
 }
@@ -27,6 +29,7 @@ function sessionTypeLabel(type?: string): string {
   if (type === "interval") return "Intervall";
   if (type === "long") return "Long Run";
   if (type === "bike") return "Rennrad";
+  if (type === "swim") return "Schwimmen";
   if (type === "strength") return "Kraft";
   return type;
 }

@@ -1250,7 +1250,11 @@ export default function AppMain(){
         });
       })
       .finally(() => {
-        if (!cancelled) setPrefsRemoteReady(true);
+        if (!cancelled) {
+          // eslint-disable-next-line no-console
+          console.log('[MIGRATION-DEBUG] flag set:', 'prefsRemoteReady', true);
+          setPrefsRemoteReady(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -1267,7 +1271,11 @@ export default function AppMain(){
         setLogs((prev) => ({ ...prev, ...remote }));
       })
       .finally(() => {
-        if (!cancelled) setLogsRemoteReady(true);
+        if (!cancelled) {
+          // eslint-disable-next-line no-console
+          console.log('[MIGRATION-DEBUG] flag set:', 'logsRemoteReady', true);
+          setLogsRemoteReady(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -1299,7 +1307,11 @@ export default function AppMain(){
         }
       })
       .finally(() => {
-        if (!cancelled) setPlanRemoteReady(true);
+        if (!cancelled) {
+          // eslint-disable-next-line no-console
+          console.log('[MIGRATION-DEBUG] flag set:', 'planRemoteReady', true);
+          setPlanRemoteReady(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -1375,7 +1387,11 @@ export default function AppMain(){
         if (remoteRecovery != null) setRecoveryDailyRows(remoteRecovery);
       })
       .finally(() => {
-        if (!cancelled) setHealthRemoteReady(true);
+        if (!cancelled) {
+          // eslint-disable-next-line no-console
+          console.log('[MIGRATION-DEBUG] flag set:', 'healthRemoteReady', true);
+          setHealthRemoteReady(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -1387,40 +1403,64 @@ export default function AppMain(){
   const skipRemotePatchesHydrationRef = useRef(false);
   const skipRemotePrefsHydrationRef = useRef(false);
 
+  // Änderung 1: Guard zurücksetzen wenn User ausloggt, damit nächster Login migrieren kann
   useEffect(() => {
+    if (!user?.id) {
+      localMigrationAttemptedRef.current = false;
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log('[MIGRATION-DEBUG] flags:', {
+      prefsRemoteReady,
+      logsRemoteReady,
+      planRemoteReady,
+      healthRemoteReady,
+      allReady: prefsRemoteReady && logsRemoteReady && planRemoteReady && healthRemoteReady,
+      userId: user?.id ?? null,
+      alreadyAttempted: localMigrationAttemptedRef.current,
+    });
     if (!user?.id || !prefsRemoteReady || !logsRemoteReady || !planRemoteReady || !healthRemoteReady) return;
     if (localMigrationAttemptedRef.current) return;
     localMigrationAttemptedRef.current = true;
 
     let cancelled = false;
-    void migrateLocalDataToSupabase(user.id).then((uploadedAny) => {
-      if (cancelled || !uploadedAny) return;
-      void Promise.all([
-        loadHealthWorkouts(user.id),
-        loadRecoveryDaily(user.id),
-        loadPlanPatches(user.id),
-        loadSessionLogs(user.id),
-        loadTrainingPlan(user.id),
-      ]).then(([remoteRuns, remoteRecovery, remotePatches, remoteLogs, remotePlan]) => {
-        if (cancelled) return;
-        if (remoteRuns?.length) setHealthRuns(remoteRuns);
-        if (remoteRecovery?.length) setRecoveryDailyRows(remoteRecovery);
-        if (skipRemotePatchesHydrationRef.current) {
-          skipRemotePatchesHydrationRef.current = false;
-        } else if (remotePatches?.length) {
-          setAiPlanPatches(remotePatches);
-        }
-        if (remoteLogs && Object.keys(remoteLogs).length > 0) {
-          setLogs((prev) => ({ ...prev, ...remoteLogs }));
-        }
-        if (skipRemotePlanHydrationRef.current) {
-          skipRemotePlanHydrationRef.current = false;
-        } else if (remotePlan != null && isUserTrainingPlan(remotePlan, preferences)) {
-          setHasUserTrainingPlan(true);
-          setTrainingPlanV2(remotePlan);
+    // Änderung 2: Guard bei Fehler zurücksetzen damit nächster Login es nochmal versucht
+    void migrateLocalDataToSupabase(user.id)
+      .then((uploadedAny) => {
+        if (cancelled || !uploadedAny) return;
+        void Promise.all([
+          loadHealthWorkouts(user.id),
+          loadRecoveryDaily(user.id),
+          loadPlanPatches(user.id),
+          loadSessionLogs(user.id),
+          loadTrainingPlan(user.id),
+        ]).then(([remoteRuns, remoteRecovery, remotePatches, remoteLogs, remotePlan]) => {
+          if (cancelled) return;
+          if (remoteRuns?.length) setHealthRuns(remoteRuns);
+          if (remoteRecovery?.length) setRecoveryDailyRows(remoteRecovery);
+          if (skipRemotePatchesHydrationRef.current) {
+            skipRemotePatchesHydrationRef.current = false;
+          } else if (remotePatches?.length) {
+            setAiPlanPatches(remotePatches);
+          }
+          if (remoteLogs && Object.keys(remoteLogs).length > 0) {
+            setLogs((prev) => ({ ...prev, ...remoteLogs }));
+          }
+          if (skipRemotePlanHydrationRef.current) {
+            skipRemotePlanHydrationRef.current = false;
+          } else if (remotePlan != null && isUserTrainingPlan(remotePlan, preferences)) {
+            setHasUserTrainingPlan(true);
+            setTrainingPlanV2(remotePlan);
+          }
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          localMigrationAttemptedRef.current = false;
         }
       });
-    });
 
     return () => {
       cancelled = true;

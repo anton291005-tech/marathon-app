@@ -11,7 +11,7 @@ import TimePicker, {
 } from "./TimePicker";
 import { getAppNow } from "../core/time/timeSystem";
 import {
-  fetchClaudePlanRules,
+  fetchClaudePlan,
   type PlanGenerationProfile,
 } from "../lib/ai/claudePlanService";
 import { generateMarathonPlanV2ToRace } from "../lib/ai/coachPlanMutations";
@@ -327,20 +327,23 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             userPreferences: userPreferences.filter(Boolean),
           };
 
-          const claudeResult = await fetchClaudePlanRules(profile);
+          const claudeResult = await fetchClaudePlan(profile);
 
           setIsGenerating(true);
           await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
-          plan = generateMarathonPlanV2ToRace(
-            startDay,
-            raceDay,
-            summaryPayload.raceGoal,
-            summaryPayload.raceDistanceKm,
-            summaryPayload.weeklyKmRange,
-            undefined,
-            claudeResult.rules ?? undefined,
-          );
+          if (claudeResult.plan) {
+            plan = claudeResult.plan;
+          } else {
+            plan = generateMarathonPlanV2ToRace(
+              startDay,
+              raceDay,
+              summaryPayload.raceGoal,
+              summaryPayload.raceDistanceKm,
+              summaryPayload.weeklyKmRange,
+              undefined,
+            );
+          }
 
           patches = [];
         }

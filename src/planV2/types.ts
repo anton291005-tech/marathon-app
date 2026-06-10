@@ -1,4 +1,4 @@
-export type WorkoutSport = "run" | "bike" | "rest";
+export type WorkoutSport = "run" | "bike" | "rest" | "strength" | "swim";
 export type Intensity = "low" | "medium" | "high";
 
 export type WorkoutV2 = {

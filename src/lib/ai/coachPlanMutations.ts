@@ -378,6 +378,10 @@ function formatDeDate(d: Date): string {
   return `${d.getDate()}. ${DE_MONTHS[d.getMonth()]}`;
 }
 
+function isoDateOf(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function intensityFor(sessionType: string): Intensity {
   if (sessionType === "interval" || sessionType === "tempo" || sessionType === "race") return "high";
   if (sessionType === "long") return "medium";
@@ -386,6 +390,8 @@ function intensityFor(sessionType: string): Intensity {
 
 function sportFor(sessionType: string): WorkoutSport {
   if (sessionType === "bike") return "bike";
+  if (sessionType === "swim") return "swim";
+  if (sessionType === "strength") return "strength";
   if (sessionType === "rest") return "rest";
   return "run";
 }
@@ -868,6 +874,16 @@ export function generateMarathonPlanV2ToRace(
   const workouts: WorkoutV2[] = [];
   const metaByWeekStart = new Map<string, WeekV2["meta"]>();
 
+  // Mid-week start fix: if the plan doesn't start on a Monday, use the actual
+  // start date as the first week's key so the UI doesn't show empty Mon/Tue slots.
+  const firstWeekMon = mondayOfWeekContaining(s);
+  const firstWeekMonIso = isoDateOf(firstWeekMon);
+  const firstWeekStartIso = s.getDay() !== 1 ? isoDateOf(s) : firstWeekMonIso;
+  const weekKeyOverrides =
+    firstWeekStartIso !== firstWeekMonIso
+      ? new Map([[firstWeekMonIso, firstWeekStartIso]])
+      : undefined;
+
   const day = new Date(s);
   let weekIdx = 0;
   let lastWeekKey = "";
@@ -876,7 +892,9 @@ export function generateMarathonPlanV2ToRace(
     const progress01 = totalDays > 1 ? 1 - dur / (totalDays - 1) : 1;
 
     const mon = mondayOfWeekContaining(day);
-    const startIso = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, "0")}-${String(mon.getDate()).padStart(2, "0")}`;
+    const monIso = isoDateOf(mon);
+    // Apply the first-week override so the key matches what deriveWeeksFromWorkouts will use
+    const startIso = weekKeyOverrides?.get(monIso) ?? monIso;
     if (startIso !== lastWeekKey) {
       lastWeekKey = startIso;
       weekIdx += 1;
@@ -894,12 +912,14 @@ export function generateMarathonPlanV2ToRace(
       else focus = "Aerobe Basis schaffen";
 
       const isRecoveryWeek = isRecoveryWeekInWave(weekIdx, dur);
+      // For the first week on a mid-week start, show the actual start date in the header
+      const displayDate = startIso === firstWeekStartIso && firstWeekStartIso !== firstWeekMonIso ? s : mon;
 
       metaByWeekStart.set(startIso, {
         wn: weekIdx,
         phase,
         label: isRecoveryWeek ? `${phase} W${weekIdx} ⬇️` : `${phase} W${weekIdx}`,
-        dates: `${formatDeDate(mon)} ff.`,
+        dates: `${formatDeDate(displayDate)} ff.`,
         focus: isRecoveryWeek
           ? "⬇️ Entlastungswoche – Volumen reduziert, Adaptationen festigen"
           : focus,
@@ -927,7 +947,7 @@ export function generateMarathonPlanV2ToRace(
   console.log("[PLAN-GEN] workoutForTrainingDay loop done", { workoutCount: workouts.length });
   // eslint-disable-next-line no-console
   console.log("[PLAN-GEN] calling rebuildPlanFromWorkouts", { workoutCount: workouts.length });
-  const plan = rebuildPlanFromWorkouts({ workouts, metaByWeekStart });
+  const plan = rebuildPlanFromWorkouts({ workouts, metaByWeekStart, weekKeyOverrides });
   // eslint-disable-next-line no-console
   console.log("[PLAN-GEN] done", { workoutCount: plan.workouts?.length ?? workouts.length });
   return plan;

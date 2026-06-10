@@ -162,4 +162,121 @@ async function generatePlanRulesWithClaude(profile) {
   return rules;
 }
 
-module.exports = { generatePlanRulesWithClaude };
+const FULL_PLAN_SYSTEM_PROMPT = `Du bist ein erfahrener Marathontrainer und erstellst individuelle Trainingspläne.
+Erstelle einen vollständigen Trainingsplan als JSON. Der Plan muss exakt diesem Schema entsprechen:
+{
+  "version": 2,
+  "analysis": "2-3 Sätze über diesen Läufer auf Deutsch",
+  "weeks": [
+    {
+      "weekStartIso": "YYYY-MM-DD",
+      "meta": {
+        "wn": 1,
+        "phase": "BASE",
+        "label": "Grundlagen-Block",
+        "dates": "10. Jun ff.",
+        "focus": "Aerobe Basis aufbauen, Gewöhnung an Trainingsrhythmus",
+        "isRecoveryWeek": false
+      }
+    }
+  ],
+  "workouts": [
+    {
+      "id": "w01-mo",
+      "dateIso": "YYYY-MM-DD",
+      "sport": "run",
+      "sessionType": "easy",
+      "title": "Lockerer Einstiegslauf",
+      "km": 8,
+      "desc": "Ruhiger Dauerlauf im aeroben Grundlagenbereich. Gespräch möglich.",
+      "pace": "5:30–5:50/km",
+      "intensity": "low",
+      "structured": null
+    }
+  ]
+}
+
+Erlaubte sport-Werte: "run", "bike", "swim", "strength", "rest"
+Erlaubte sessionType-Werte: "easy", "interval", "tempo", "long", "bike", "swim", "strength", "rest", "race"
+Erlaubte intensity-Werte: "low", "medium", "high"
+Erlaubte phase-Werte: "BASE", "BUILD", "DEV", "SPEC", "TAPER"
+
+WICHTIGE REGELN:
+- Jeder Tag vom Startdatum bis zum Renntag bekommt genau einen Workout-Eintrag
+- Ruhetage haben sport="rest", sessionType="rest", km=0, pace=null
+- Session-IDs Format: "w[WochenNr2stellig]-[wochentag2buchstaben]" z.B. "w01-mo", "w03-di"
+- Wochentag-Kürzel: mo=Montag, di=Dienstag, mi=Mittwoch, do=Donnerstag, fr=Freitag, sa=Samstag, so=Sonntag
+- weekStartIso ist immer ein Montag (oder das tatsächliche Startdatum falls der Plan nicht an einem Montag beginnt)
+- Entlastungswoche jede 4. Woche: isRecoveryWeek=true, Volumen ~70% der Vorwoche
+- Phasen: BASE (>10 Wochen vor Rennen), BUILD (6-10 Wochen), DEV (4-6 Wochen), SPEC (3-4 Wochen), TAPER (<3 Wochen)
+- Session-Namen sollen beschreibend und abwechslungsreich sein, z.B.: "Regenerationslauf", "Progressiver Mittellauf", "GA1-Dauerlauf", "Aerober Entwicklungslauf", "Schwellenlauf", "Fahrtspiel", "Tempodauerlauf", "Kraftausdauer-Intervalle"
+- Long Runs progressiv steigern bis Peak ~3-4 Wochen vor Rennen, dann reduzieren
+- Niemals 2 harte Einheiten (interval/tempo) an aufeinanderfolgenden Tagen
+- Präferenzen des Users vollständig berücksichtigen inkl. Schwimmen, Radfahren, Krafttraining
+
+Antworte NUR mit dem JSON-Objekt, kein Text davor oder danach.`;
+
+async function callClaudeForPlan(client, profile, extraInstruction) {
+  const userContent = extraInstruction
+    ? `${JSON.stringify(profile)}\n\n${extraInstruction}`
+    : JSON.stringify(profile);
+
+  const message = await Promise.race([
+    client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 8000,
+      temperature: 0,
+      system: FULL_PLAN_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userContent }],
+    }),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Claude timeout")), 55000),
+    ),
+  ]);
+
+  const text = message.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+
+  const clean = text.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
+  return JSON.parse(clean);
+}
+
+async function generateFullPlanWithClaude(profile) {
+  const client = getClient();
+  if (!client) {
+    // eslint-disable-next-line no-console
+    console.warn("[claude-plan] ANTHROPIC_API_KEY missing");
+    return null;
+  }
+
+  // eslint-disable-next-line no-console
+  console.log("[claude-plan] requesting full plan for:", JSON.stringify(profile));
+
+  try {
+    const plan = await callClaudeForPlan(client, profile, null);
+    // eslint-disable-next-line no-console
+    console.log("[claude-plan] plan received, workouts:", plan?.workouts?.length ?? 0);
+    return plan;
+  } catch (firstErr) {
+    // eslint-disable-next-line no-console
+    console.warn("[claude-plan] first attempt failed, retrying:", firstErr?.message ?? firstErr);
+    try {
+      const plan = await callClaudeForPlan(
+        client,
+        profile,
+        "Antworte NUR mit dem JSON-Objekt. Kein Text, keine Erklärungen, nur das JSON.",
+      );
+      // eslint-disable-next-line no-console
+      console.log("[claude-plan] retry succeeded, workouts:", plan?.workouts?.length ?? 0);
+      return plan;
+    } catch (secondErr) {
+      // eslint-disable-next-line no-console
+      console.error("[claude-plan] both attempts failed:", secondErr?.message ?? secondErr);
+      return null;
+    }
+  }
+}
+
+module.exports = { generatePlanRulesWithClaude, generateFullPlanWithClaude };
