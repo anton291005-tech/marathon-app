@@ -129,6 +129,102 @@ export async function fetchClaudePlanStructure(
 }
 
 // ---------------------------------------------------------------------------
+// fetchClaudePlanStructureDirect  (direct browser → Anthropic, bypasses Vercel)
+// ---------------------------------------------------------------------------
+
+/**
+ * Calls the Anthropic API directly from the browser, bypassing the Vercel
+ * serverless function (which has a 10 s timeout on the free plan).
+ * Requires REACT_APP_ANTHROPIC_API_KEY to be set at build time.
+ */
+export async function fetchClaudePlanStructureDirect(
+  profile: PlanGenerationProfile,
+): Promise<ClaudePlanStructureResult> {
+  const apiKey = process.env.REACT_APP_ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    // eslint-disable-next-line no-console
+    console.error("[claude-direct] REACT_APP_ANTHROPIC_API_KEY not set");
+    return { structure: null, analysis: "" };
+  }
+
+  const systemPrompt = `Du bist ein erfahrener Marathontrainer. Analysiere das Läuferprofil und gib NUR ein JSON-Objekt zurück. Kein Text außerhalb des JSON. Sei präzise und kompakt.
+
+Format:
+{
+  "analysis": "2-3 Sätze über den Läufer auf Deutsch",
+  "phases": [
+    { "name": "BASE", "weeks": 6, "label": "Aerober Grundlagenblock", "focus": "Basis aufbauen" },
+    { "name": "BUILD", "weeks": 5, "label": "Entwicklungsphase", "focus": "Volumen steigern" },
+    { "name": "SPEC", "weeks": 4, "label": "Spezifische Vorbereitung", "focus": "Rennspezifisch" },
+    { "name": "TAPER", "weeks": 2, "label": "Tapering", "focus": "Erholen und schärfen" }
+  ],
+  "sessionNames": {
+    "easy": ["Regenerationslauf", "GA1-Dauerlauf", "Lockerer Grundlagenlauf", "Aerober Entwicklungslauf", "Ruhiger Dauerlauf"],
+    "tempo": ["Tempodauerlauf", "Schwellenlauf", "Progressiver Mittellauf", "Fahrtspiel", "Kraftausdauer-Lauf"],
+    "interval": ["Bahnintervalle 1000m", "Kurze Intervalle 400m", "Bergläufe", "Tempoläufe 3x2km", "VO2max-Intervalle"],
+    "long": ["Langer Grundlagenlauf", "Progressiver Long Run", "Marathon-Pace-Long-Run", "Ausdauer-Entwicklungslauf"],
+    "bike": ["Rennrad Grundlage", "Rad Cross-Training", "Rennrad Ausdauer", "Ergometer locker"],
+    "swim": ["Grundlagen-Schwimmen", "Technik-Schwimmen", "Ausdauer-Schwimmen"],
+    "strength": ["Kraftausdauer", "Laufkraft-Training", "Core & Stabilität"],
+    "rest": ["Ruhetag", "Aktive Erholung"]
+  },
+  "rules": {
+    "restDays": [1],
+    "longRunDay": 0,
+    "intervalDay": 2,
+    "tempoDay": 4,
+    "bikeDays": [],
+    "swimDays": [],
+    "strengthDays": [],
+    "maxTrainingDaysPerWeek": 5,
+    "weeklyKmMultiplier": 1.0,
+    "recoveryWeekEvery": 4
+  }
+}`;
+
+  try {
+    // eslint-disable-next-line no-console
+    console.log("[claude-direct] starting plan structure call...");
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1500,
+        system: systemPrompt,
+        messages: [{ role: "user", content: JSON.stringify(profile) }],
+      }),
+    });
+
+    if (!response.ok) {
+      // eslint-disable-next-line no-console
+      console.error("[claude-direct] HTTP error:", response.status, await response.text());
+      return { structure: null, analysis: "" };
+    }
+
+    const data = await response.json() as { content?: Array<{ text?: string }> };
+    const rawText = data.content?.[0]?.text ?? "";
+    // eslint-disable-next-line no-console
+    console.log("[claude-direct] raw (first 300):", rawText.slice(0, 300));
+
+    const extracted = extractJson(rawText);
+    const structure = JSON.parse(extracted) as ClaudePlanStructure;
+    // eslint-disable-next-line no-console
+    console.log("[claude-direct] structure received, phases:", structure.phases?.length);
+    return { structure, analysis: structure.analysis ?? "" };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[claude-direct] error:", err);
+    return { structure: null, analysis: "" };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Legacy / deprecated
 // ---------------------------------------------------------------------------
 

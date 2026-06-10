@@ -11,7 +11,7 @@ import TimePicker, {
 } from "./TimePicker";
 import { getAppNow } from "../core/time/timeSystem";
 import {
-  fetchClaudePlanStructure,
+  fetchClaudePlanStructureDirect,
   type ClaudePlanStructure,
   type PlanGenerationProfile,
 } from "../lib/ai/claudePlanService";
@@ -414,7 +414,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             userPreferences: userPreferences.filter(Boolean),
           };
 
-          const claudeResult = await fetchClaudePlanStructure(profile);
+          const claudeResult = await fetchClaudePlanStructureDirect(profile);
 
           setIsGenerating(true);
           await new Promise<void>((resolve) => setTimeout(resolve, 50));
