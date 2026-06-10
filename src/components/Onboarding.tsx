@@ -11,7 +11,8 @@ import TimePicker, {
 } from "./TimePicker";
 import { getAppNow } from "../core/time/timeSystem";
 import {
-  fetchClaudePlan,
+  fetchClaudePlanStructure,
+  type ClaudePlanStructure,
   type PlanGenerationProfile,
 } from "../lib/ai/claudePlanService";
 import { generateMarathonPlanV2ToRace } from "../lib/ai/coachPlanMutations";
@@ -31,6 +32,92 @@ import {
   type RaceGoal,
 } from "../onboarding/marathonPreferencesOnboarding";
 import type { TrainingPlanV2 } from "../planV2/types";
+
+// ---------------------------------------------------------------------------
+// Plan-personalisation helpers (applied after deterministic generation)
+// ---------------------------------------------------------------------------
+
+/**
+ * Renames workout titles using Claude's sessionNames pool.
+ * Index is per-sessionType so names cycle evenly within each type.
+ */
+function applySessionNames(
+  plan: TrainingPlanV2,
+  sessionNames: Record<string, string[]>,
+): TrainingPlanV2 {
+  const typeCounters: Record<string, number> = {};
+  const renamedById = new Map<string, string>();
+
+  for (const w of plan.workouts) {
+    if (w.sessionType === "rest" || w.sessionType === "race") continue;
+    const names = sessionNames[w.sessionType];
+    if (!names?.length) continue;
+    const idx = typeCounters[w.sessionType] ?? 0;
+    typeCounters[w.sessionType] = idx + 1;
+    renamedById.set(w.id, names[idx % names.length]);
+  }
+
+  if (renamedById.size === 0) return plan;
+
+  const workouts = plan.workouts.map((w) => {
+    const title = renamedById.get(w.id);
+    return title ? { ...w, title } : w;
+  });
+  const weeks = plan.weeks.map((wk) => ({
+    ...wk,
+    workouts: wk.workouts.map((w) => {
+      const title = renamedById.get(w.id);
+      return title ? { ...w, title } : w;
+    }),
+  }));
+  return { ...plan, workouts, weeks };
+}
+
+/**
+ * Overrides week meta (label, focus, phase) based on Claude's phase list.
+ * Claude provides phases in order [BASE, BUILD, …, TAPER] with week counts.
+ * We map those to week numbers 1..N in the generated plan.
+ */
+function applyClaudePhases(
+  plan: TrainingPlanV2,
+  phases: ClaudePlanStructure["phases"],
+): TrainingPlanV2 {
+  if (!phases?.length) return plan;
+
+  const phaseMeta = new Map<number, { label: string; focus: string; name: string }>();
+  let offset = 0;
+  for (const p of phases) {
+    for (let i = 0; i < p.weeks; i++) {
+      phaseMeta.set(offset + i + 1, { label: p.label, focus: p.focus, name: p.name });
+    }
+    offset += p.weeks;
+  }
+
+  const weeks = plan.weeks.map((wk) => {
+    const wn = wk.meta?.wn;
+    if (!wn) return wk;
+    const pm = phaseMeta.get(wn);
+    if (!pm) return wk;
+    return {
+      ...wk,
+      meta: { ...wk.meta, label: pm.label, focus: pm.focus, phase: pm.name },
+    };
+  });
+  return { ...plan, weeks };
+}
+
+/** Applies all Claude structure overlays to a deterministically generated plan. */
+function applyClaudeStructure(
+  plan: TrainingPlanV2,
+  structure: ClaudePlanStructure,
+): TrainingPlanV2 {
+  let result = plan;
+  if (structure.sessionNames) result = applySessionNames(result, structure.sessionNames);
+  if (structure.phases?.length) result = applyClaudePhases(result, structure.phases);
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 
 const MAX_PREFERENCE_FIELDS = 10;
 const PREFERENCE_HINTS = [
@@ -327,22 +414,23 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             userPreferences: userPreferences.filter(Boolean),
           };
 
-          const claudeResult = await fetchClaudePlan(profile);
+          const claudeResult = await fetchClaudePlanStructure(profile);
 
           setIsGenerating(true);
           await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
-          if (claudeResult.plan) {
-            plan = claudeResult.plan;
-          } else {
-            plan = generateMarathonPlanV2ToRace(
-              startDay,
-              raceDay,
-              summaryPayload.raceGoal,
-              summaryPayload.raceDistanceKm,
-              summaryPayload.weeklyKmRange,
-              undefined,
-            );
+          plan = generateMarathonPlanV2ToRace(
+            startDay,
+            raceDay,
+            summaryPayload.raceGoal,
+            summaryPayload.raceDistanceKm,
+            summaryPayload.weeklyKmRange,
+            undefined,
+            claudeResult.structure?.rules ?? undefined,
+          );
+
+          if (claudeResult.structure) {
+            plan = applyClaudeStructure(plan, claudeResult.structure);
           }
 
           patches = [];

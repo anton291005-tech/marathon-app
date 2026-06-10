@@ -16,13 +16,38 @@ function extractJson(raw: string): string {
   return raw.trim();
 }
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
 export interface ClaudeRulesResult {
   rules: AiPlanRules | null;
   analysis: string;
 }
 
+/** @deprecated kept for backward compat */
 export interface ClaudePlanResult {
   plan: TrainingPlanV2 | null;
+  analysis: string;
+}
+
+export interface ClaudePhase {
+  name: string;
+  weeks: number;
+  label: string;
+  focus: string;
+}
+
+export interface ClaudePlanStructure {
+  analysis: string;
+  phases: ClaudePhase[];
+  sessionNames: Record<string, string[]>;
+  /** Maps directly onto AiPlanRules (with optional extra field recoveryWeekEvery). */
+  rules: AiPlanRules & { recoveryWeekEvery?: number };
+}
+
+export interface ClaudePlanStructureResult {
+  structure: ClaudePlanStructure | null;
   analysis: string;
 }
 
@@ -38,7 +63,76 @@ export interface PlanGenerationProfile {
   userPreferences: string[];
 }
 
-/** @deprecated Use fetchClaudePlan instead. */
+// ---------------------------------------------------------------------------
+// Shared fetch helper
+// ---------------------------------------------------------------------------
+
+async function postGeneratePlan(profile: PlanGenerationProfile, timeoutMs: number): Promise<string> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  const res = await fetch(`${getApiBaseUrl()}/api/onboarding/generate-plan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profile }),
+    signal: controller.signal,
+  });
+  clearTimeout(timeoutId);
+
+  const rawText = await res.text();
+
+  if (!res.ok) {
+    // eslint-disable-next-line no-console
+    console.error("[claude-client] HTTP error:", res.status, rawText.slice(0, 500));
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  // eslint-disable-next-line no-console
+  console.log("[claude-client] raw response (first 500 chars):", rawText.slice(0, 500));
+
+  return rawText;
+}
+
+// ---------------------------------------------------------------------------
+// fetchClaudePlanStructure  (primary, hybrid approach)
+// ---------------------------------------------------------------------------
+
+/**
+ * Requests a compact plan structure from Claude (phases + sessionNames + rules).
+ * The caller uses the deterministic generator to build the full plan and then
+ * overlays Claude's personalised names and phase labels.
+ */
+export async function fetchClaudePlanStructure(
+  profile: PlanGenerationProfile,
+): Promise<ClaudePlanStructureResult> {
+  // eslint-disable-next-line no-console
+  console.log("[claude-client] requesting plan structure...");
+
+  try {
+    const rawText = await postGeneratePlan(profile, 45000);
+    const cleaned = extractJson(rawText);
+    const data = JSON.parse(cleaned) as { structure?: ClaudePlanStructure | null; analysis?: string };
+
+    const structure = data.structure ?? null;
+    // eslint-disable-next-line no-console
+    console.log("[claude-client] structure received, phases:", structure?.phases?.length ?? 0);
+
+    return {
+      structure,
+      analysis: data.analysis ?? structure?.analysis ?? "",
+    };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[claude-client] fetchClaudePlanStructure error:", err);
+    return { structure: null, analysis: "" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Legacy / deprecated
+// ---------------------------------------------------------------------------
+
+/** @deprecated Use fetchClaudePlanStructure instead. */
 export async function fetchClaudePlanRules(
   profile: PlanGenerationProfile,
 ): Promise<ClaudeRulesResult> {
@@ -46,20 +140,9 @@ export async function fetchClaudePlanRules(
   console.log("[claude-client] requesting plan rules...");
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
-
-    const res = await fetch(`${getApiBaseUrl()}/api/onboarding/generate-plan`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-
-    if (!res.ok) return { rules: null, analysis: "" };
-
-    const data = (await res.json()) as { rules?: AiPlanRules | null; analysis?: string };
+    const rawText = await postGeneratePlan(profile, 45000);
+    const cleaned = extractJson(rawText);
+    const data = JSON.parse(cleaned) as { rules?: AiPlanRules | null; analysis?: string };
     // eslint-disable-next-line no-console
     console.log("[claude-client] rules received:", JSON.stringify(data.rules));
 
@@ -74,41 +157,15 @@ export async function fetchClaudePlanRules(
   }
 }
 
-/**
- * Requests a complete TrainingPlanV2 directly from Claude via the backend.
- * Falls back to null on network / parse errors (caller should use deterministic
- * generator as fallback).
- */
+/** @deprecated Use fetchClaudePlanStructure instead. */
 export async function fetchClaudePlan(
   profile: PlanGenerationProfile,
 ): Promise<ClaudePlanResult> {
   // eslint-disable-next-line no-console
-  console.log("[claude-client] requesting full plan...");
+  console.log("[claude-client] requesting full plan (deprecated path)...");
 
   try {
-    const controller = new AbortController();
-    // 60 s – Claude may need up to ~55 s for a long plan
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
-
-    const res = await fetch(`${getApiBaseUrl()}/api/onboarding/generate-plan`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-
-    const rawText = await res.text();
-
-    if (!res.ok) {
-      // eslint-disable-next-line no-console
-      console.error("[claude-client] HTTP error:", res.status, rawText.slice(0, 500));
-      return { plan: null, analysis: "" };
-    }
-
-    // eslint-disable-next-line no-console
-    console.log("[claude-client] raw response (first 500 chars):", rawText.slice(0, 500));
-
+    const rawText = await postGeneratePlan(profile, 60000);
     const cleaned = extractJson(rawText);
     const data = JSON.parse(cleaned) as { plan?: TrainingPlanV2 | null; analysis?: string };
     // eslint-disable-next-line no-console

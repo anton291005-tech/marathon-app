@@ -162,80 +162,62 @@ async function generatePlanRulesWithClaude(profile) {
   return rules;
 }
 
-const FULL_PLAN_SYSTEM_PROMPT = `Sei präzise und kompakt. Keine Kommentare, kein Markdown.
+const STRUCTURE_SYSTEM_PROMPT = `Du bist ein erfahrener Marathontrainer. Analysiere das Läuferprofil und gib NUR ein JSON-Objekt zurück mit: phases (Phasenstruktur), sessionNames (abwechslungsreiche Trainingsnamen pro Typ), rules (Trainingsregeln). Kein Text außerhalb des JSON. Sei präzise und kompakt.
 
-Du bist ein erfahrener Marathontrainer und erstellst individuelle Trainingspläne.
-Erstelle einen vollständigen Trainingsplan als JSON. Der Plan muss exakt diesem Schema entsprechen:
+Das JSON muss exakt diesem Schema entsprechen:
 {
-  "version": 2,
-  "analysis": "2-3 Sätze über diesen Läufer auf Deutsch",
-  "weeks": [
-    {
-      "weekStartIso": "YYYY-MM-DD",
-      "meta": {
-        "wn": 1,
-        "phase": "BASE",
-        "label": "Grundlagen-Block",
-        "dates": "10. Jun ff.",
-        "focus": "Aerobe Basis aufbauen, Gewöhnung an Trainingsrhythmus",
-        "isRecoveryWeek": false
-      }
-    }
+  "analysis": "2-3 Sätze über den Läufer auf Deutsch",
+  "phases": [
+    { "name": "BASE", "weeks": 6, "label": "Aerober Grundlagenblock", "focus": "Aerobe Basis aufbauen" },
+    { "name": "BUILD", "weeks": 5, "label": "Entwicklungsphase", "focus": "Volumen und Intensität steigern" },
+    { "name": "SPEC", "weeks": 4, "label": "Spezifische Vorbereitung", "focus": "Rennspezifische Reize setzen" },
+    { "name": "TAPER", "weeks": 2, "label": "Tapering", "focus": "Erholen und schärfen" }
   ],
-  "workouts": [
-    {
-      "id": "w01-mo",
-      "dateIso": "YYYY-MM-DD",
-      "sport": "run",
-      "sessionType": "easy",
-      "title": "Lockerer Einstiegslauf",
-      "km": 8,
-      "desc": "Ruhiger Dauerlauf im aeroben Grundlagenbereich. Gespräch möglich.",
-      "pace": "5:30–5:50/km",
-      "intensity": "low",
-      "structured": null
-    }
-  ]
+  "sessionNames": {
+    "easy": ["Regenerationslauf", "GA1-Dauerlauf", "Lockerer Grundlagenlauf", "Aerober Entwicklungslauf", "Ruhiger Dauerlauf"],
+    "tempo": ["Tempodauerlauf", "Schwellenlauf", "Progressiver Mittellauf", "Fahrtspiel", "Kraftausdauer-Lauf"],
+    "interval": ["Bahnintervalle 1000m", "Kurze Intervalle 400m", "Bergläufe", "Tempoläufe 3×2km", "VO2max-Intervalle"],
+    "long": ["Langer Grundlagenlauf", "Progressiver Long Run", "Marathon-Pace-Long-Run", "Ausdauer-Entwicklungslauf"],
+    "bike": ["Rennrad Grundlage", "Rad Cross-Training", "Rennrad Ausdauer", "Ergometer locker"],
+    "swim": ["Grundlagen-Schwimmen", "Technik-Schwimmen", "Ausdauer-Schwimmen"],
+    "strength": ["Kraftausdauer", "Laufkraft-Training", "Core & Stabilität"]
+  },
+  "rules": {
+    "restDays": [1],
+    "longRunDay": 0,
+    "intervalDay": 2,
+    "tempoDay": 4,
+    "bikeDays": [],
+    "swimDays": [],
+    "strengthDays": [],
+    "maxTrainingDaysPerWeek": 4,
+    "weeklyKmMultiplier": 1.0,
+    "recoveryWeekEvery": 4
+  }
 }
 
-Erlaubte sport-Werte: "run", "bike", "swim", "strength", "rest"
-Erlaubte sessionType-Werte: "easy", "interval", "tempo", "long", "bike", "swim", "strength", "rest", "race"
-Erlaubte intensity-Werte: "low", "medium", "high"
-Erlaubte phase-Werte: "BASE", "BUILD", "DEV", "SPEC", "TAPER"
+Tag-Zahlen für rules: 0=Sonntag, 1=Montag, 2=Dienstag, 3=Mittwoch, 4=Donnerstag, 5=Freitag, 6=Samstag
+intervalDay und tempoDay dürfen NICHT aufeinanderfolgend sein.
+Präferenzen des Läufers vollständig berücksichtigen.`;
 
-WICHTIGE REGELN:
-- Jeder Tag vom Startdatum bis zum Renntag bekommt genau einen Workout-Eintrag
-- Ruhetage haben sport="rest", sessionType="rest", km=0, pace=null
-- Session-IDs Format: "w[WochenNr2stellig]-[wochentag2buchstaben]" z.B. "w01-mo", "w03-di"
-- Wochentag-Kürzel: mo=Montag, di=Dienstag, mi=Mittwoch, do=Donnerstag, fr=Freitag, sa=Samstag, so=Sonntag
-- weekStartIso ist immer ein Montag (oder das tatsächliche Startdatum falls der Plan nicht an einem Montag beginnt)
-- Entlastungswoche jede 4. Woche: isRecoveryWeek=true, Volumen ~70% der Vorwoche
-- Phasen: BASE (>10 Wochen vor Rennen), BUILD (6-10 Wochen), DEV (4-6 Wochen), SPEC (3-4 Wochen), TAPER (<3 Wochen)
-- Session-Namen sollen beschreibend und abwechslungsreich sein, z.B.: "Regenerationslauf", "Progressiver Mittellauf", "GA1-Dauerlauf", "Aerober Entwicklungslauf", "Schwellenlauf", "Fahrtspiel", "Tempodauerlauf", "Kraftausdauer-Intervalle"
-- Long Runs progressiv steigern bis Peak ~3-4 Wochen vor Rennen, dann reduzieren
-- Niemals 2 harte Einheiten (interval/tempo) an aufeinanderfolgenden Tagen
-- Präferenzen des Users vollständig berücksichtigen inkl. Schwimmen, Radfahren, Krafttraining
-
-Antworte NUR mit dem JSON-Objekt, kein Text davor oder danach.`;
-
-async function callClaudeForPlan(client, profile, extraInstruction) {
+async function callClaudeForStructure(client, profile, extraInstruction) {
   const userContent = extraInstruction
     ? `${JSON.stringify(profile)}\n\n${extraInstruction}`
     : JSON.stringify(profile);
 
   // eslint-disable-next-line no-console
-  console.log("[claude-plan] starting Claude call, planDurationDays:", profile?.planDurationDays ?? "?", "ts:", Date.now());
+  console.log("[claude-structure] starting Claude call, planDurationDays:", profile?.planDurationDays ?? "?", "ts:", Date.now());
 
   const message = await Promise.race([
     client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 6000,
+      max_tokens: 1500,
       temperature: 0,
-      system: FULL_PLAN_SYSTEM_PROMPT,
+      system: STRUCTURE_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userContent }],
     }),
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Claude timeout")), 55000),
+      setTimeout(() => reject(new Error("Claude timeout")), 30000),
     ),
   ]);
 
@@ -244,44 +226,44 @@ async function callClaudeForPlan(client, profile, extraInstruction) {
     .map((b) => b.text)
     .join("");
 
+  // eslint-disable-next-line no-console
+  console.log("[claude-structure] response (first 500):", text.slice(0, 500));
+
   const clean = text.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
   return JSON.parse(clean);
 }
 
-async function generateFullPlanWithClaude(profile) {
+async function generatePlanStructureWithClaude(profile) {
   const client = getClient();
   if (!client) {
     // eslint-disable-next-line no-console
-    console.warn("[claude-plan] ANTHROPIC_API_KEY missing");
+    console.warn("[claude-structure] ANTHROPIC_API_KEY missing");
     return null;
   }
 
-  // eslint-disable-next-line no-console
-  console.log("[claude-plan] requesting full plan for:", JSON.stringify(profile));
-
   try {
-    const plan = await callClaudeForPlan(client, profile, null);
+    const structure = await callClaudeForStructure(client, profile, null);
     // eslint-disable-next-line no-console
-    console.log("[claude-plan] plan received, workouts:", plan?.workouts?.length ?? 0);
-    return plan;
+    console.log("[claude-structure] structure received, phases:", structure?.phases?.length ?? 0);
+    return structure;
   } catch (firstErr) {
     // eslint-disable-next-line no-console
-    console.warn("[claude-plan] first attempt failed, retrying:", firstErr?.message ?? firstErr);
+    console.warn("[claude-structure] first attempt failed, retrying:", firstErr?.message ?? firstErr);
     try {
-      const plan = await callClaudeForPlan(
+      const structure = await callClaudeForStructure(
         client,
         profile,
         "Antworte NUR mit dem JSON-Objekt. Kein Text, keine Erklärungen, nur das JSON.",
       );
       // eslint-disable-next-line no-console
-      console.log("[claude-plan] retry succeeded, workouts:", plan?.workouts?.length ?? 0);
-      return plan;
+      console.log("[claude-structure] retry succeeded");
+      return structure;
     } catch (secondErr) {
       // eslint-disable-next-line no-console
-      console.error("[claude-plan] both attempts failed:", secondErr?.message ?? secondErr);
+      console.error("[claude-structure] both attempts failed:", secondErr?.message ?? secondErr);
       return null;
     }
   }
 }
 
-module.exports = { generatePlanRulesWithClaude, generateFullPlanWithClaude };
+module.exports = { generatePlanRulesWithClaude, generatePlanStructureWithClaude };
