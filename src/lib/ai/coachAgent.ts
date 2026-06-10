@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from "../api/apiBaseUrl";
+import { getAppNow } from "../../core/time/timeSystem";
 import { aiAgentDevWarn } from "./agentDebug";
 import { onAgentFallback, recordCoachAgentCycleDev, weakAgentMessagePayload } from "./agentFallback";
 import { buildCoachContext } from "./buildCoachContext";
@@ -166,7 +167,7 @@ export async function runCoachAgent(userInput: string, appState: any) {
         const todayIso =
           typeof appState?.todayIso === "string" && appState.todayIso
             ? appState.todayIso
-            : new Date().toISOString().slice(0, 10);
+            : getAppNow().toISOString().slice(0, 10);
         const extracted = extractSwapDates(userInput, todayIso);
         if (extracted) {
           return await handleAgentResponse(

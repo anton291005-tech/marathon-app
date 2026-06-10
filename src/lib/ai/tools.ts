@@ -1,4 +1,5 @@
 import { aiAgentDevWarn } from "./agentDebug";
+import { getAppNow } from "../../core/time/timeSystem";
 import { validateToolCall } from "./validateToolCall";
 import { updateCoachMemory } from "./memory/updateCoachMemory";
 
@@ -152,7 +153,7 @@ function normalizeDayInput(day: string, todayIso?: string): string {
   if (shortMatch) {
     const dd = shortMatch[1].padStart(2, "0");
     const mm = shortMatch[2].padStart(2, "0");
-    const yyyy = todayIso ? todayIso.slice(0, 4) : String(new Date().getFullYear());
+    const yyyy = todayIso ? todayIso.slice(0, 4) : String(getAppNow().getFullYear());
     return `${yyyy}-${mm}-${dd}`;
   }
 

@@ -5,7 +5,7 @@ import { executeAiAction } from "../../lib/ai/actions";
 import { runCoachAgent } from "../../lib/ai/coachAgent";
 import type { AiAssistantAction, AiContext, PlanPatch } from "../../lib/ai/types";
 import type { WorkoutV2 } from "../../planV2/types";
-import { getAppNowEpochMs } from "../../core/time/timeSystem";
+import { getAppNow, getAppNowEpochMs } from "../../core/time/timeSystem";
 
 type SwapResult = { ok: boolean; message: string; warningText?: string | null } | void;
 
@@ -126,7 +126,7 @@ export default function AiCoachPanel({
       };
 
       const appState = {
-        todayIso: context.todayIso ?? new Date().toISOString().slice(0, 10),
+        todayIso: context.todayIso ?? getAppNow().toISOString().slice(0, 10),
         planEngine,
       };
 
