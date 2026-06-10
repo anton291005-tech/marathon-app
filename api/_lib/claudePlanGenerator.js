@@ -162,7 +162,9 @@ async function generatePlanRulesWithClaude(profile) {
   return rules;
 }
 
-const FULL_PLAN_SYSTEM_PROMPT = `Du bist ein erfahrener Marathontrainer und erstellst individuelle Trainingspläne.
+const FULL_PLAN_SYSTEM_PROMPT = `Sei präzise und kompakt. Keine Kommentare, kein Markdown.
+
+Du bist ein erfahrener Marathontrainer und erstellst individuelle Trainingspläne.
 Erstelle einen vollständigen Trainingsplan als JSON. Der Plan muss exakt diesem Schema entsprechen:
 {
   "version": 2,
@@ -221,10 +223,13 @@ async function callClaudeForPlan(client, profile, extraInstruction) {
     ? `${JSON.stringify(profile)}\n\n${extraInstruction}`
     : JSON.stringify(profile);
 
+  // eslint-disable-next-line no-console
+  console.log("[claude-plan] starting Claude call, planDurationDays:", profile?.planDurationDays ?? "?", "ts:", Date.now());
+
   const message = await Promise.race([
     client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 8000,
+      max_tokens: 6000,
       temperature: 0,
       system: FULL_PLAN_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userContent }],
