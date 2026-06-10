@@ -2,6 +2,20 @@ import { getApiBaseUrl } from "../api/apiBaseUrl";
 import type { AiPlanRules } from "./coachPlanMutations";
 import type { TrainingPlanV2 } from "../../planV2/types";
 
+/**
+ * Strips Markdown code fences and extracts the outermost JSON object from a
+ * string. Needed because some environments / proxies may wrap the API response
+ * in HTML or add fence characters.
+ */
+function extractJson(raw: string): string {
+  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) return fenceMatch[1].trim();
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start !== -1 && end !== -1) return raw.slice(start, end + 1);
+  return raw.trim();
+}
+
 export interface ClaudeRulesResult {
   rules: AiPlanRules | null;
   analysis: string;
@@ -84,9 +98,19 @@ export async function fetchClaudePlan(
     });
     clearTimeout(timeoutId);
 
-    if (!res.ok) return { plan: null, analysis: "" };
+    const rawText = await res.text();
 
-    const data = (await res.json()) as { plan?: TrainingPlanV2 | null; analysis?: string };
+    if (!res.ok) {
+      // eslint-disable-next-line no-console
+      console.error("[claude-client] HTTP error:", res.status, rawText.slice(0, 500));
+      return { plan: null, analysis: "" };
+    }
+
+    // eslint-disable-next-line no-console
+    console.log("[claude-client] raw response (first 500 chars):", rawText.slice(0, 500));
+
+    const cleaned = extractJson(rawText);
+    const data = JSON.parse(cleaned) as { plan?: TrainingPlanV2 | null; analysis?: string };
     // eslint-disable-next-line no-console
     console.log("[claude-client] plan received, workouts:", data.plan?.workouts?.length ?? 0);
 
