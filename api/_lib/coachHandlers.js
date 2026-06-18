@@ -19,7 +19,6 @@ const { extractJson } = require("./extractJson");
 const {
   AI_RESPONSE_SCHEMA,
   ALLOWED_ACTIONS,
-  isValidAiResponse,
 } = require("./aiSchema");
 
 // ─── OpenAI client ────────────────────────────────────────────────────────────
@@ -602,7 +601,7 @@ function buildSystemPrompt(context) {
     "- Auch bei Tippfehlern und unklaren Anfragen sinnvoll antworten",
     "- Motivation geben wenn der User es braucht",
     "",
-    "ACTIONS: Wenn eine Planänderung sinnvoll ist, antworte NUR mit JSON (kein Text davor/danach):",
+    "ACTIONS: Wenn eine Planänderung sinnvoll ist, antworte NUR mit dem JSON-Block — kein Text davor/danach:",
     '{ "mode": "coach", "message": "Deine Erklärung auf Deutsch", "action": { "type": "<action_type>", "payload": { ... }, "preview": { "title": "Vorschau-Titel", "items": ["Änderung 1"], "confirmLabel": "Übernehmen", "cancelLabel": "Abbrechen" } } }',
     "",
     "Verfügbare action types:",
@@ -619,7 +618,8 @@ function buildSystemPrompt(context) {
     "- update_user_preferences: payload { targetTime?: string, maxHeartRateBpm?: number }",
     "- swap_training_days: payload { dayA: string, dayB: string } (ISO-Datum YYYY-MM-DD)",
     "",
-    "Wenn KEINE Planänderung nötig ist, antworte mit reinem Text (kein JSON).",
+    "Wenn KEINE Action nötig ist: antworte mit reinem deutschen Text, KEIN JSON.",
+    "Wenn eine Action nötig ist: antworte NUR mit dem JSON-Block, kein Text davor/danach.",
     "Wenn du eine Action vorschlägst, erkläre kurz warum in message.",
     "Sei direkt, kein Smalltalk, kein Auffüllen.",
     "Nutze recoveryDomain + recoverySummary für Sicherheit; widersprich niedrigem Recovery nicht.",
@@ -690,26 +690,41 @@ async function callClaudeApi({ input, context, apiKey }) {
 }
 
 function parseClaudeCoachResponse(text, userInput, context) {
-  const trimmed = typeof text === "string" ? text.trim() : "";
-  if (!trimmed) {
-    return fallbackStructuredResponse(undefined, userInput, context);
-  }
+  const rawText = typeof text === "string" ? text : "";
 
+  let normalized;
   try {
-    const jsonStr = extractJson(trimmed);
+    const jsonStr = extractJson(rawText);
     const parsed = JSON.parse(jsonStr);
-    if (parsed && typeof parsed === "object" && typeof parsed.message === "string") {
+    if (parsed && typeof parsed === "object" && typeof parsed.message === "string" && parsed.message.trim()) {
       if (parsed.action && typeof parsed.action === "object" && parsed.action.type) {
         parsed.action.payload = normalizeClaudeActionPayload(parsed.action.type, parsed.action.payload);
       }
-      const normalized = normalizeAiResponseForFrontend(parsed, { userInput, context });
-      if (isValidAiResponse(normalized)) return normalized;
+      normalized = {
+        mode: parsed.mode || "coach",
+        message: parsed.message,
+        action: parsed.action || null,
+      };
+    } else {
+      normalized = {
+        mode: "coach",
+        message: rawText.trim(),
+        action: null,
+      };
     }
   } catch {
-    /* plain text fallback below */
+    normalized = {
+      mode: "coach",
+      message: rawText.trim(),
+      action: null,
+    };
   }
 
-  return normalizeAiResponseForFrontend({ mode: "coach", message: trimmed }, { userInput, context });
+  if (!normalized.message || normalized.message.trim().length === 0) {
+    normalized.message = "Ich bin gleich für dich da. Stell mir deine Frage.";
+  }
+
+  return normalizeAiResponseForFrontend(normalized, { userInput, context });
 }
 
 function buildUserPayload(input, context) {
@@ -917,10 +932,7 @@ async function handleAiCoach(rawBody) {
     const rawText = await callClaudeApi({ input: bareUser, context, apiKey: anthropicApiKey });
     console.log("[api/ai] Claude response (first 200 chars):", rawText.slice(0, 200)); // eslint-disable-line no-console
 
-    let normalized = parseClaudeCoachResponse(rawText, bareUser, context);
-    if (!normalized || !isValidAiResponse(normalized)) {
-      normalized = fallbackStructuredResponse(undefined, bareUser, context);
-    }
+    const normalized = parseClaudeCoachResponse(rawText, bareUser, context);
     return { status: 200, body: normalized };
   } catch (error) {
     console.error("[api/ai] Claude error", { // eslint-disable-line no-console
