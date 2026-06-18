@@ -4,6 +4,7 @@ const {
   generatePlanStructureWithClaude,
   generatePlanRulesWithClaude,
 } = require("../_lib/claudePlanGenerator");
+const { handleCorsPreflight } = require("../_lib/cors");
 
 /**
  * Vercel serverless function: POST /api/onboarding/generate-plan
@@ -13,6 +14,8 @@ const {
  * The full plan is built client-side by the deterministic generator.
  */
 module.exports = async function handler(req, res) {
+  if (handleCorsPreflight(req, res)) return;
+
   res.setHeader("Content-Type", "application/json");
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });

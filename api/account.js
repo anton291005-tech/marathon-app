@@ -1,11 +1,14 @@
 "use strict";
 
 const { handleDeleteAccount } = require("./_lib/deleteAccount");
+const { handleCorsPreflight } = require("./_lib/cors");
 
 /**
  * Vercel serverless function: DELETE /api/account
  */
 module.exports = async function handler(req, res) {
+  if (handleCorsPreflight(req, res)) return;
+
   res.setHeader("Content-Type", "application/json");
   try {
     const { status, body } = await handleDeleteAccount(req);

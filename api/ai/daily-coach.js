@@ -1,12 +1,15 @@
 "use strict";
 
 const { handleDailyCoach } = require("../_lib/coachHandlers");
+const { handleCorsPreflight } = require("../_lib/cors");
 
 /**
  * Vercel serverless function: POST /api/ai/daily-coach
  * Daily coach decision card enhancement endpoint.
  */
 module.exports = async function handler(req, res) {
+  if (handleCorsPreflight(req, res)) return;
+
   res.setHeader("Content-Type", "application/json");
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
