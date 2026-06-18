@@ -172,7 +172,7 @@ function isMarathonSpecificSession(session: PlanSession, phase: string): boolean
   if (session.type === "race") return true;
   const blob = `${session.title} ${session.desc || ""}`;
   if (/MP|mit\s*MP|Marathon-?Pace|@?\s*4:0[0-5]/i.test(blob)) return true;
-  if (phase === "SPEC" && (session.type === "tempo" || session.type === "long")) return true;
+  if ((phase === "SPEC" || phase === "peak") && (session.type === "tempo" || session.type === "long")) return true;
   return false;
 }
 

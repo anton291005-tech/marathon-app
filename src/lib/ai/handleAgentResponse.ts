@@ -1,104 +1,115 @@
 import { aiAgentDevWarn } from "./agentDebug";
-import {
-  agentFallbackOutcome,
-  hasActionableContent,
-  isWeakMessage,
-  normalizeThinEnvelope,
-  recordThinMessageWeakCheckStartedDev,
-  recordWeakMessageDetectedDev,
-} from "./agentFallback";
-import { executeTool } from "./tools";
-import { validateToolCall } from "./validateToolCall";
-import type { AiAssistantResponse } from "./types";
+import { agentFallbackOutcome, hasActionableContent, isWeakMessage } from "./agentFallback";
+import { buildActionPreview } from "./actions";
+import { coerceAiAssistantActionFromWire } from "./aiActionContract";
+import type { AiAssistantResponse, AiContext } from "./types";
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export type HandleAgentResponseResult =
-  | AiAssistantResponse
-  | ReturnType<typeof normalizeThinEnvelope>;
+export type HandleAgentResponseResult = AiAssistantResponse;
 
-/** Consumer boundary: trimmed message longer than 10 characters (strictly >10). */
-function isValidAgentMessage(text: unknown): text is string {
-  return typeof text === "string" && text.trim().length > 10;
+function coachMessage(text: unknown, mode: AiAssistantResponse["mode"] = "coach"): AiAssistantResponse {
+  const message = typeof text === "string" && text.trim() ? text.trim() : "Keine Antwort";
+  return { mode, message };
 }
 
-function isSaneToolEnvelope(x: unknown): x is { message: string; confidence: number; followUp?: string | null } {
-  if (!x || typeof x !== "object" || Array.isArray(x)) return false;
-  const o = x as Record<string, unknown>;
-  return (
-    typeof o.message === "string" &&
-    o.message.trim().length > 0 &&
-    typeof o.confidence === "number" &&
-    Number.isFinite(o.confidence)
-  );
+function normalizeLegacyResponse(res: Record<string, unknown>): AiAssistantResponse {
+  const mode = ["coach", "navigator", "support"].includes(String(res.mode))
+    ? (res.mode as AiAssistantResponse["mode"])
+    : "coach";
+  const message = typeof res.message === "string" ? res.message.trim() : "";
+  let action = coerceAiAssistantActionFromWire(res.action);
+  if (action && !action.preview) {
+    action = { ...action, preview: buildActionPreview(action, {} as AiContext) };
+  }
+  return { mode, message: message || "Keine Antwort", action: action ?? undefined };
+}
+
+/** Maps legacy tool_call envelopes onto unified { mode, message, action? }. */
+function toolCallToAssistantResponse(res: Record<string, unknown>): AiAssistantResponse | null {
+  const actionName = typeof res.action === "string" ? res.action.trim() : "";
+  const params =
+    res.parameters && typeof res.parameters === "object" && !Array.isArray(res.parameters)
+      ? (res.parameters as Record<string, unknown>)
+      : {};
+
+  if (actionName === "swapTrainingDays") {
+    const dayA = typeof params.dayA === "string" ? params.dayA : "";
+    const dayB = typeof params.dayB === "string" ? params.dayB : "";
+    if (!dayA || !dayB) return null;
+    const action = {
+      type: "swap_training_days" as const,
+      payload: { dayA, dayB },
+      preview: {
+        title: "Trainingstage tauschen",
+        items: [`${dayA} ↔ ${dayB}`],
+        confirmLabel: "Tauschen",
+        cancelLabel: "Abbrechen",
+      },
+    };
+    return {
+      mode: "coach",
+      message: `Ich tausche die Einheiten am ${dayA} und ${dayB}. Bitte bestätige.`,
+      action,
+    };
+  }
+
+  return null;
 }
 
 /**
- * Accepts either:
- * - New agent schema: { type: "tool_call" | "message", ... }
- * - Existing app schema (backend /api/ai): { mode: "coach" | ..., message, action? }
- *
- * Legacy shape is passed through untouched (no coercion, no normalization).
+ * Unified response handler: always returns `{ mode, message, action? }`.
  */
-export async function handleAgentResponse(res: unknown, state: unknown): Promise<HandleAgentResponseResult> {
+export async function handleAgentResponse(res: unknown, _state: unknown): Promise<HandleAgentResponseResult> {
   if (!isPlainRecord(res)) {
     aiAgentDevWarn("invalid-response-root", res);
-    return agentFallbackOutcome("invalid_shape");
+    // eslint-disable-next-line no-console
+    console.warn("[handleAgentResponse] FALLBACK triggered, reason:", "invalid_shape");
+    const fb = agentFallbackOutcome("invalid_shape");
+    return coachMessage(fb.message);
   }
 
-  // Backwards-compatible path: existing app-native shape — do not transform.
   if (typeof res.mode === "string" && typeof res.message === "string") {
-    return res as AiAssistantResponse;
+    return normalizeLegacyResponse(res);
+  }
+
+  if (typeof res.message === "string" && !res.type && !res.mode) {
+    return coachMessage(res.message);
   }
 
   if (res.type === "tool_call") {
-    if (typeof res.action !== "string" || !res.action.trim()) {
-      aiAgentDevWarn("tool_call-missing-action", res);
-      return agentFallbackOutcome("invalid_shape");
-    }
-    const params = res.parameters;
-    if (params === null || typeof params !== "object" || Array.isArray(params)) {
-      aiAgentDevWarn("tool_call-invalid-parameters", res);
-      return agentFallbackOutcome("invalid_shape");
-    }
-    if (!validateToolCall(res.action, params)) {
-      aiAgentDevWarn("tool_call-rejected", { action: res.action, parameters: params });
-      return agentFallbackOutcome("tool_rejected");
-    }
-
-    const rawTool = await executeTool(res, state);
-    if (!isSaneToolEnvelope(rawTool)) {
-      aiAgentDevWarn("tool-output-invalid-envelope", rawTool);
-      return agentFallbackOutcome("invalid_shape");
-    }
-
-    return normalizeThinEnvelope(rawTool.message, rawTool.confidence, rawTool.followUp);
+    const converted = toolCallToAssistantResponse(res);
+    if (converted) return converted;
+    aiAgentDevWarn("tool_call-unmapped", res);
+    // eslint-disable-next-line no-console
+    console.warn("[handleAgentResponse] FALLBACK triggered, reason:", "tool_rejected");
+    const fb = agentFallbackOutcome("tool_rejected");
+    return coachMessage(fb.message);
   }
 
   if (res.type === "message") {
-    if (!isValidAgentMessage(res.message)) {
-      aiAgentDevWarn("message-invalid-or-too-short", res);
-      return agentFallbackOutcome("weak_message");
+    const trimmed = typeof res.message === "string" ? res.message.trim() : "";
+    if (!trimmed) {
+      // eslint-disable-next-line no-console
+      console.warn("[handleAgentResponse] FALLBACK triggered, reason:", "weak_message");
+      const fb = agentFallbackOutcome("weak_message");
+      return coachMessage(fb.message);
     }
-
-    const trimmed = res.message.trim();
-
-    recordThinMessageWeakCheckStartedDev();
     if (isWeakMessage(trimmed) || !hasActionableContent(trimmed)) {
-      recordWeakMessageDetectedDev();
       aiAgentDevWarn("message-weak-or-not-actionable", { preview: trimmed.slice(0, 80) });
-      return agentFallbackOutcome("weak_message");
+      // eslint-disable-next-line no-console
+      console.warn("[handleAgentResponse] FALLBACK triggered, reason:", "weak_message");
+      const fb = agentFallbackOutcome("weak_message");
+      return coachMessage(fb.message);
     }
-
-    return normalizeThinEnvelope(
-      trimmed,
-      typeof res.confidence === "number" && Number.isFinite(res.confidence) ? res.confidence : 0.5,
-      res.follow_up_question,
-    );
+    return coachMessage(trimmed);
   }
 
   aiAgentDevWarn("unknown-response-shape", Object.keys(res));
-  return agentFallbackOutcome("invalid_shape");
+  // eslint-disable-next-line no-console
+  console.warn("[handleAgentResponse] FALLBACK triggered, reason:", "invalid_shape");
+  const fb = agentFallbackOutcome("invalid_shape");
+  return coachMessage(fb.message);
 }

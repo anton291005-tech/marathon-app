@@ -1,4 +1,11 @@
 import { parseSessionDateLabel } from "../../appSmartFeatures";
+import {
+  buildBoostNextWeekVolumePatches,
+  buildInjuryNoRunningPatches,
+  buildMissedWorkoutPatches,
+  buildRemoveAllBikePatches,
+  buildTaperWindowPatches,
+} from "./coachPlanMutations";
 import type {
   AiActionExecution,
   AiActionPreview,
@@ -189,11 +196,43 @@ function buildShiftPlanStartDatePatches(context: AiContext, payload: Record<stri
   return patches;
 }
 
+function buildConvertWorkoutPatches(action: AiAssistantAction): PlanPatch[] {
+  const { sessionId, targetSessionType, targetKm, targetPace, targetTitle } = (action.payload ?? {}) as Record<
+    string,
+    any
+  >;
+  if (!sessionId || typeof sessionId !== "string") return [];
+  const changes: Partial<AiPlanSession> = {
+    type: targetSessionType || "easy",
+  };
+  const km = Number(targetKm);
+  if (Number.isFinite(km) && km > 0) changes.km = km;
+  if (targetPace && typeof targetPace === "string") changes.pace = targetPace;
+  if (targetTitle && typeof targetTitle === "string") changes.title = targetTitle;
+  return [{ sessionId: sessionId.trim(), changes }];
+}
+
 function resolveActionPatches(action: AiAssistantAction, context: AiContext): PlanPatch[] {
   if (action.type === "adjust_plan_for_illness") return buildIllnessPatches(context);
   if (action.type === "replace_bike_with_run") return buildBikeReplacementPatches(context);
   if (action.type === "shift_race_date") return buildShiftRaceDatePatches(context, action.payload);
   if (action.type === "shift_plan_start_date") return buildShiftPlanStartDatePatches(context, action.payload);
+  if (action.type === "convert_workout_to_run") return buildConvertWorkoutPatches(action);
+  if (action.type === "adapt_plan_injury_no_run") {
+    const weeks = Number(action.payload?.weeks ?? action.payload?.injuryWeeks ?? 2);
+    return buildInjuryNoRunningPatches(context, Number.isFinite(weeks) ? weeks : 2);
+  }
+  if (action.type === "remove_all_bike_sessions") return buildRemoveAllBikePatches(context);
+  if (action.type === "boost_next_week_volume") {
+    const pct = Number(action.payload?.pct ?? action.payload?.boostPercent ?? 15);
+    return buildBoostNextWeekVolumePatches(context, Number.isFinite(pct) ? pct : 15);
+  }
+  if (action.type === "taper_before_race") {
+    const raceOverride =
+      typeof action.payload?.raceDateIsoOverride === "string" ? action.payload.raceDateIsoOverride : null;
+    return buildTaperWindowPatches(context, raceOverride).patches;
+  }
+  if (action.type === "integrate_missed_workout") return buildMissedWorkoutPatches(context);
   return [];
 }
 
@@ -224,6 +263,17 @@ export function buildActionPreview(action: AiAssistantAction, context: AiContext
     };
   }
   if (action.type === "explain_feature") return undefined;
+  if (action.type === "swap_training_days") {
+    const dayA = action.payload?.dayA || "?";
+    const dayB = action.payload?.dayB || "?";
+    return {
+      title: "Trainingstage tauschen",
+      items: [`${dayA} ↔ ${dayB}`],
+      confirmLabel: "Tauschen",
+      secondaryLabel: "Bearbeiten",
+      cancelLabel: "Abbrechen",
+    };
+  }
   if (action.type === "shift_plan_start_date") {
     const shiftDays = Number(action.payload?.requestedStartOffsetDays ?? action.payload?.shiftDays ?? 4);
     const items = [
@@ -265,6 +315,18 @@ export function executeAiAction(action: AiAssistantAction, context: AiContext): 
     return {
       mode: "support",
       message: "Ich habe nur erklaert und nichts am Plan veraendert.",
+    };
+  }
+  if (action.type === "swap_training_days") {
+    return {
+      mode: "coach",
+      message: "Tausch wird in der App ausgeführt — bitte bestätige in der Action-Karte.",
+    };
+  }
+  if (action.type === "update_user_preferences") {
+    return {
+      mode: "coach",
+      message: "Einstellungen werden aktualisiert.",
     };
   }
   const planPatches = resolveActionPatches(action, context);

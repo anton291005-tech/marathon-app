@@ -135,26 +135,39 @@ describe("getAiContext input stabilization", () => {
     const logsLate: Record<string, unknown> = { sy: { done: false }, sx: { done: true } };
     const base = minimalRecovery(now, rawPlan, logsEarly);
 
-    const sliceA = sliceLogsLast30Days(
-      getAiContext({
-        plan: planAi,
-        logs: logsEarly as any,
-        now,
-        recoveryDomain: base,
-        availableScreens: [{ key: "home", label: "Start" }],
-      }),
-    );
-    const sliceB = sliceLogsLast30Days(
-      getAiContext({
-        plan: planAi,
-        logs: logsLate as any,
-        now,
-        recoveryDomain: base,
-        availableScreens: [{ key: "home", label: "Start" }],
-      }),
-    );
+    const sliceA = sliceLogsLast30Days(logsEarly, now);
+    const sliceB = sliceLogsLast30Days(logsLate, now);
 
     expect(JSON.stringify(sliceA)).toEqual(JSON.stringify(sliceB));
+  });
+
+  it("getAiContext preserves recoveryDomain and computes recoverySummary", () => {
+    const rawPlan: PlanWeek[] = [
+      {
+        wn: 1,
+        phase: "MINI",
+        label: "W1",
+        dates: "",
+        km: 20,
+        s: [{ id: "s1", day: "Mo", date: "6. Apr", type: "easy", title: "", km: 5 }],
+      },
+    ];
+    const logs: Record<string, unknown> = {};
+    const domain = minimalRecovery(now, rawPlan, logs);
+    const planAi = toAiPlanWeeks(rawPlan);
+    const ctx = getAiContext({
+      plan: planAi,
+      logs: logs as any,
+      now,
+      recoveryDomain: domain,
+      maxHeartRateBpm: 178,
+      availableScreens: [{ key: "home", label: "Start" }],
+    });
+    expect(ctx.recoveryDomain).toBe(domain);
+    expect(ctx.recoverySummary).toBeDefined();
+    expect(typeof ctx.recoverySummary?.avgRecovery).toBe("number");
+    expect(ctx.maxHeartRateBpm).toBe(178);
+    expect(ctx.conversationTurns).toEqual([]);
   });
 
   it("summarizeAiContextForDebug matches for identical snapshots", () => {

@@ -78,10 +78,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (isEmailUnconfirmed(sessionUser)) {
         if (event === "SIGNED_IN" || event == null) {
-          setUnconfirmedEmail(sessionUser.email ?? null);
-          lastUserIdRef.current = null;
-          setUser(null);
-          void supabase.auth.signOut();
+          // Race-condition guard: nach Deep-Link-setSession kann email_confirmed_at
+          // noch nicht im JWT sein. 1.5s warten und via getUser() erneut prüfen.
+          setTimeout(async () => {
+            if (cancelled) return;
+            const { data } = await supabase.auth.getUser();
+            const freshUser = data?.user ?? null;
+            if (freshUser && freshUser.email_confirmed_at) {
+              setUnconfirmedEmail(null);
+              lastUserIdRef.current = freshUser.id;
+              setUser(freshUser);
+              return;
+            }
+            setUnconfirmedEmail(sessionUser.email ?? null);
+            lastUserIdRef.current = null;
+            setUser(null);
+            void supabase.auth.signOut();
+          }, 1500);
         }
         return;
       }
@@ -117,9 +130,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       applySessionUser(session, event);
     });
 
+    const handleNativeRecovery = () => {
+      if (!cancelled) setPasswordRecoveryPending(true);
+    };
+    window.addEventListener('myrace:passwordRecovery', handleNativeRecovery);
+
     return () => {
       cancelled = true;
       subscription.unsubscribe();
+      window.removeEventListener('myrace:passwordRecovery', handleNativeRecovery);
     };
   }, []);
 

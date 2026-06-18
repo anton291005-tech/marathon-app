@@ -12,6 +12,7 @@
  */
 
 const OpenAI = require("openai");
+const { extractJson } = require("./extractJson");
 // Deliberately use a local copy so this directory is fully self-contained.
 // Do NOT change this back to "../../server/aiSchema" — that file is not always
 // committed to git and would cause a MODULE_NOT_FOUND error on Vercel.
@@ -37,6 +38,7 @@ function readEnvTrimmed(name) {
 }
 
 const apiKey = readEnvTrimmed("OPENAI_API_KEY");
+const anthropicApiKey = readEnvTrimmed("ANTHROPIC_API_KEY");
 const project = readEnvTrimmed("OPENAI_PROJECT");
 const organization = readEnvTrimmed("OPENAI_ORG");
 const defaultModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
@@ -299,7 +301,46 @@ function normalizePayload(rawPayload) {
     targetTitle: typeof rawPayload.targetTitle === "string" ? rawPayload.targetTitle : rawPayload.targetTitle ?? null,
     targetDesc: typeof rawPayload.targetDesc === "string" ? rawPayload.targetDesc : rawPayload.targetDesc ?? null,
     explanation: typeof rawPayload.explanation === "string" ? rawPayload.explanation : rawPayload.explanation ?? null,
+    dayA: typeof rawPayload.dayA === "string" ? rawPayload.dayA : rawPayload.dayA ?? null,
+    dayB: typeof rawPayload.dayB === "string" ? rawPayload.dayB : rawPayload.dayB ?? null,
+    pct: parseNumeric(rawPayload.pct ?? rawPayload.boostPercent),
+    weeks: parseNumeric(rawPayload.weeks ?? rawPayload.injuryWeeks),
+    raceDateIsoOverride:
+      typeof rawPayload.raceDateIsoOverride === "string" ? rawPayload.raceDateIsoOverride : rawPayload.raceDateIsoOverride ?? null,
+    targetTime: typeof rawPayload.targetTime === "string" ? rawPayload.targetTime : rawPayload.targetTime ?? null,
+    maxHeartRateBpm: parseNumeric(rawPayload.maxHeartRateBpm),
   });
+}
+
+/** Maps Claude-emitted action payloads onto shapes expected by the client executor. */
+function normalizeClaudeActionPayload(actionType, rawPayload) {
+  if (!rawPayload || typeof rawPayload !== "object") return {};
+  const p = { ...rawPayload };
+  if (actionType === "adjust_plan_for_illness") {
+    if (p.severityDays != null && !p.reason) {
+      p.reason = "illness";
+      p.severity = Number(p.severityDays) >= 3 ? "high" : "moderate";
+    }
+  }
+  if (actionType === "replace_bike_with_run" && p.sessionId && !p.bikeSessionId) {
+    p.bikeSessionId = p.sessionId;
+  }
+  if (actionType === "boost_next_week_volume" && p.boostPercent != null && p.pct == null) {
+    p.pct = p.boostPercent;
+  }
+  if (actionType === "adapt_plan_injury_no_run" && p.injuryWeeks != null && p.weeks == null) {
+    p.weeks = p.injuryWeeks;
+    if (!p.reason) p.reason = "no_running_window";
+  }
+  if (actionType === "explain_feature" && p.featureKey && !p.topic) {
+    p.topic = p.featureKey;
+  }
+  if (actionType === "update_user_preferences") {
+    if (p.targetTime && !p.requestedStartDateLabel) {
+      /* keep targetTime as-is */
+    }
+  }
+  return p;
 }
 
 function buildDefaultPreviewItems(actionType, risk, schedulingHint) {
@@ -425,7 +466,9 @@ function normalizeAiResponseForFrontend(payload, { userInput = "", context = {} 
     return { mode, message, action: null };
   }
 
-  const payloadData = normalizePayload(payload?.action?.payload);
+  const payloadData = normalizePayload(
+    normalizeClaudeActionPayload(actionType, payload?.action?.payload ?? payload?.payload),
+  );
   if (actionType === "adjust_plan_for_illness" && !payloadData.reason) {
     if (risk.hasInjury) {
       payloadData.reason = "injury_signal";
@@ -482,37 +525,191 @@ function parseModelJson(response) {
 
 // ─── System prompt & user payload ────────────────────────────────────────────
 
-function buildSystemPrompt() {
+function buildContextSummary(context) {
+  const lines = [];
+  const goals = context?.goals && typeof context.goals === "object" ? context.goals : {};
+  const targetTime = goals.targetTime || "nicht gesetzt";
+  const raceDateIso = context?.raceDateIso || "unbekannt";
+  lines.push(`Rennziel: ${targetTime}, Renn-Datum: ${raceDateIso}`);
+
+  const weeks = context?.trainingPlan?.weeks;
+  if (Array.isArray(weeks) && weeks.length > 0) {
+    const w0 = weeks[0];
+    lines.push(
+      `Trainingsplan: ${weeks.length} Wochen, aktuelle Phase: ${w0?.phase || w0?.label || "?"}`,
+    );
+    const allSessions = weeks.flatMap((w) => (Array.isArray(w.s) ? w.s : []));
+    const next =
+      allSessions.find((s) => s && s.type !== "rest") ||
+      allSessions[0];
+    if (next) {
+      lines.push(`Nächste/heutige Einheit: ${next.day || ""} ${next.date || ""} — ${next.title || next.type} (${next.km ?? "?"} km)`);
+    }
+  } else {
+    lines.push("Trainingsplan: keine Wochen im Kontext");
+  }
+
+  const domain = pickRecoveryDomain(context);
+  const summary = context?.recoverySummary;
+  const score =
+    typeof domain?.homeRecoveryScore0_100 === "number"
+      ? domain.homeRecoveryScore0_100
+      : typeof summary?.avgRecovery === "number"
+        ? summary.avgRecovery
+        : null;
+  const label =
+    domain && typeof domain.trainingRecoveryLabel === "string"
+      ? domain.trainingRecoveryLabel
+      : "Recovery";
+  lines.push(
+    score != null
+      ? `Recovery: ${label} — Score ${Math.round(score)}/100.`
+      : `Recovery: ${label}.`,
+  );
+
+  const logs = Array.isArray(context?.logsLast30Days) ? context.logsLast30Days : [];
+  const done = logs
+    .filter((entry) => {
+      if (!entry || typeof entry !== "object") return false;
+      if (entry.done === true) return true;
+      if (entry.log && typeof entry.log === "object" && entry.log.done === true) return true;
+      return false;
+    })
+    .slice(-3);
+  if (done.length) {
+    lines.push(
+      `Letzte erledigte Workouts: ${done.map((e) => e.sessionId || "?").join(", ")}`,
+    );
+  } else {
+    lines.push("Letzte erledigte Workouts: keine in den letzten 30 Tagen geloggt.");
+  }
+
+  return lines.join("\n");
+}
+
+function buildSystemPrompt(context) {
+  const contextBlock = buildContextSummary(context || {});
   return [
-    "You are the in-app marathon training coach. Language: German for user-facing text in `message`.",
-    "Data channels:",
-    "- `recoveryDomain` + `recoverySummary`: authoritative for today’s readiness, fatigue bands, latent trend, uncertainty — overweight these for safety.",
-    "- `trainingPlan` (either planV2 or legacy weeks), `logsLast30Days`, `healthRunsLast30Days`, plus `raceDateIso` / goals / HR cap: personalization only — cite concrete sessions (date, weekday, title, km, type) when answering plan questions.",
-    "- `todayIso` is wall-clock. `availableScreens` is only for navigate_to_screen intents.",
-    "Athletic readiness: NEVER contradict a low-recovery signal in `recoveryDomain` with «you’re fine» based only on the plan.",
-    "`userInput` may repeat some of the structured plan in prose (client prefix) — resolve conflicts using the JSON payloads as ground truth.",
-    "Hard rules — no hallucinated state:",
-    "- NEVER state or imply that the race date, plan start, competition schedule, or any calendar field was changed unless the user clearly asked to shift/adjust it.",
-    "- Prefer `goals.targetTime` and payload `raceDateIso` when discussing goals; treat free-text mentions as secondary.",
-    "- Training science questions (e.g. road cycling in marathon training): answer with sport-science reasoning only for purely theoretical questions; set `action` to null. If the user explicitly requests a plan change (convert, replace, shift), emit the matching action — never answer with explanation-only when a concrete edit was requested.",
-    "- shift_race_date only if the user clearly wants to move the race/competition date (not generic «Marathontraining» questions).",
-    "Decision priority: (1) safety / avoid overload and injury, (2) sustainable training, (3) user-stated preferences when safe.",
-    "Plan-specific questions («what’s Tuesday next week», weekly km totals, pacing vs goal): use `trainingPlan` + logs/health slices; cite numbers. Set `action` to null unless the user wants an edit.",
-    "- Never refuse natural questions with «Ich verstehe nicht». If unclear, one short question OR a split answer.",
-    "- If the user is unclear about a concrete EDIT, set `action` to null and ask one focused question.",
-    "- Only attach `action` when the request maps clearly OR risk signals require it (illness, sharp pain, pushing hard while recoveryDomain indicates fatigue).",
-    "Actions (suggest-only; confirmation in app):",
-    "- adjust_plan_for_illness: illness, injury, overload, recovery days.",
-    "- replace_bike_with_run: bike session unavailable.",
-    "- convert_workout_to_run: User möchte eine Bike-/Rennrad-Einheit in ein äquivalentes Lauftraining umwandeln. Berechne selbstständig: Schätze die Dauer der Bike-Einheit (km ÷ Durchschnittsgeschwindigkeit je Intensität), mappe auf Run-Intensität (bike easy→run easy, medium→tempo, high→interval), berechne Lauf-km aus Dauer × Zielpace. Liefere sessionId, targetSessionType, targetKm, targetPace, targetTitle, targetDesc. Setze explanation mit sportswissenschaftlicher Begründung auf Deutsch. Trigger: «konvertiere», «ändere zu Lauf», «statt Rad lieber laufen», wenn die konkrete Einheit identifizierbar ist. Wenn unklar welche Einheit → eine kurze Frage. Kein Null-Action bei eindeutigem Convert-Request.",
-    "- shift_race_date / shift_plan_start_date: timeline shift.",
-    "- navigate_to_screen: use availableScreens.",
-    "- explain_feature: conceptual only.",
-    "Style: clear, actionable. No meta talk about APIs or schemas.",
-    "Return only JSON matching the required schema.",
-    "Allowed action types:",
-    ALLOWED_ACTIONS.join(", "),
+    "Antworte in maximal 3-4 Sätzen. Kein Fließtext, keine Aufzählungen.",
+    "Du bist ein persönlicher Marathontrainer in der MyRace App.",
+    "",
+    "Du antwortest IMMER auf Deutsch, kurz und direkt — wie ein echter Trainer, nicht wie ein Chatbot.",
+    "Du hast Zugriff auf den vollständigen Trainingsplan, Logs, Gesundheitsdaten und Recovery-Status des Users.",
+    "",
+    "DEINE AUFGABEN:",
+    "- Fragen zum Training beantworten (Pace, Volumen, Taper, Verletzung, Ernährung, etc.)",
+    "- Trainingseinheiten anpassen, verschieben, ersetzen",
+    "- Auch bei Tippfehlern und unklaren Anfragen sinnvoll antworten",
+    "- Motivation geben wenn der User es braucht",
+    "",
+    "ACTIONS: Wenn eine Planänderung sinnvoll ist, antworte NUR mit JSON (kein Text davor/danach):",
+    '{ "mode": "coach", "message": "Deine Erklärung auf Deutsch", "action": { "type": "<action_type>", "payload": { ... }, "preview": { "title": "Vorschau-Titel", "items": ["Änderung 1"], "confirmLabel": "Übernehmen", "cancelLabel": "Abbrechen" } } }',
+    "",
+    "Verfügbare action types:",
+    "- adjust_plan_for_illness: payload { severityDays: number }",
+    "- replace_bike_with_run: payload { sessionId: string }",
+    "- convert_workout_to_run: payload { sessionId, targetSessionType, targetKm, targetPace, targetTitle, targetDesc }",
+    "- shift_race_date: payload { shiftDays: number }",
+    "- shift_plan_start_date: payload { requestedStartOffsetDays: number }",
+    "- navigate_to_screen: payload { targetScreen, targetScreenLabel, section?, sectionLabel? }",
+    "- explain_feature: payload { featureKey: string }",
+    "- taper_before_race: payload { raceDateIsoOverride?: string }",
+    "- boost_next_week_volume: payload { boostPercent: number }",
+    "- adapt_plan_injury_no_run: payload { injuryWeeks: number }",
+    "- update_user_preferences: payload { targetTime?: string, maxHeartRateBpm?: number }",
+    "- swap_training_days: payload { dayA: string, dayB: string } (ISO-Datum YYYY-MM-DD)",
+    "",
+    "Wenn KEINE Planänderung nötig ist, antworte mit reinem Text (kein JSON).",
+    "Wenn du eine Action vorschlägst, erkläre kurz warum in message.",
+    "Sei direkt, kein Smalltalk, kein Auffüllen.",
+    "Nutze recoveryDomain + recoverySummary für Sicherheit; widersprich niedrigem Recovery nicht.",
+    "",
+    "KONTEXT DES USERS:",
+    contextBlock,
+    "",
+    "Strukturierte Rohdaten (JSON) folgen in den User-Nachrichten.",
   ].join("\n");
+}
+
+function buildMessagesArray(input, context) {
+  const turns = Array.isArray(context?.conversationTurns) ? context.conversationTurns : [];
+  const messages = turns
+    .filter(
+      (t) =>
+        t &&
+        (t.role === "user" || t.role === "assistant") &&
+        typeof t.text === "string" &&
+        t.text.trim(),
+    )
+    .map((t) => ({ role: t.role, content: t.text.trim() }));
+
+  const inputTrim = typeof input === "string" ? input.trim() : "";
+  const last = messages[messages.length - 1];
+  if (last?.role === "user" && last.content === inputTrim) {
+    return messages.length ? messages : inputTrim ? [{ role: "user", content: inputTrim }] : [];
+  }
+  if (inputTrim) {
+    messages.push({ role: "user", content: inputTrim });
+  }
+  return messages.length ? messages : inputTrim ? [{ role: "user", content: inputTrim }] : [];
+}
+
+async function callClaudeApi({ input, context, apiKey }) {
+  const contextJson = buildUserPayload(input, context);
+  const messages = buildMessagesArray(input, context);
+  if (messages.length === 0) {
+    messages.push({ role: "user", content: typeof input === "string" ? input.trim() : "" });
+  }
+  const lastMsg = messages[messages.length - 1];
+  if (lastMsg.role === "user" && lastMsg.content !== contextJson) {
+    lastMsg.content = `${lastMsg.content}\n\n[KONTEXT-DATEN]\n${contextJson}`;
+  }
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 800,
+      system: buildSystemPrompt(context),
+      messages,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Anthropic HTTP ${response.status}: ${errText.slice(0, 300)}`);
+  }
+
+  const data = await response.json();
+  return data.content?.[0]?.text ?? "";
+}
+
+function parseClaudeCoachResponse(text, userInput, context) {
+  const trimmed = typeof text === "string" ? text.trim() : "";
+  if (!trimmed) {
+    return fallbackStructuredResponse(undefined, userInput, context);
+  }
+
+  try {
+    const jsonStr = extractJson(trimmed);
+    const parsed = JSON.parse(jsonStr);
+    if (parsed && typeof parsed === "object" && typeof parsed.message === "string") {
+      if (parsed.action && typeof parsed.action === "object" && parsed.action.type) {
+        parsed.action.payload = normalizeClaudeActionPayload(parsed.action.type, parsed.action.payload);
+      }
+      const normalized = normalizeAiResponseForFrontend(parsed, { userInput, context });
+      if (isValidAiResponse(normalized)) return normalized;
+    }
+  } catch {
+    /* plain text fallback below */
+  }
+
+  return normalizeAiResponseForFrontend({ mode: "coach", message: trimmed }, { userInput, context });
 }
 
 function buildUserPayload(input, context) {
@@ -710,37 +907,23 @@ async function handleAiCoach(rawBody) {
     };
   }
 
-  if (!client) {
-    // No API key — return rule-based fallback without error noise.
+  if (!anthropicApiKey) {
     const fallback = fallbackStructuredResponse(undefined, bareUser, context);
     return { status: 200, body: fallback };
   }
 
   try {
-    const selectedModel =
-      typeof modelOverride === "string" && modelOverride.trim() ? modelOverride : defaultModel;
-    console.log(`[api/ai] model=${selectedModel}`); // eslint-disable-line no-console
-    const completion = await callResponsesApi({
-      selectedModel,
-      input,
-      context,
-      allowedActions,
-      responseSchemaVersion,
-    });
+    console.log("[api/ai] model=claude-sonnet-4-6"); // eslint-disable-line no-console
+    const rawText = await callClaudeApi({ input: bareUser, context, apiKey: anthropicApiKey });
+    console.log("[api/ai] Claude response (first 200 chars):", rawText.slice(0, 200)); // eslint-disable-line no-console
 
-    let normalized;
-    try {
-      const payload = parseModelJson(completion);
-      normalized = normalizeAiResponseForFrontend(payload, { userInput: bareUser, context });
-    } catch {
-      normalized = fallbackStructuredResponse(undefined, bareUser, context);
-    }
+    let normalized = parseClaudeCoachResponse(rawText, bareUser, context);
     if (!normalized || !isValidAiResponse(normalized)) {
       normalized = fallbackStructuredResponse(undefined, bareUser, context);
     }
     return { status: 200, body: normalized };
   } catch (error) {
-    console.error("[api/ai] OpenAI error", { // eslint-disable-line no-console
+    console.error("[api/ai] Claude error", { // eslint-disable-line no-console
       message: typeof error?.message === "string" ? error.message : "unknown",
     });
     const fallback = fallbackStructuredResponse(

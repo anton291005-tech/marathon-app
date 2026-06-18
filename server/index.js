@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
+const { handleAiCoach } = require("../api/_lib/coachHandlers");
 const {
   AI_RESPONSE_SCHEMA,
   ALLOWED_ACTIONS,
@@ -695,103 +696,17 @@ app.get("/api/ai/schema-check", async (_req, res) => {
 });
 
 app.post("/api/ai", async (req, res) => {
-  const { input, context, allowedActions, responseSchemaVersion, model: modelOverride } = req.body || {};
-  if (typeof input !== "string" || !input.trim()) {
-    return res.status(400).json({ error: "Invalid input" });
-  }
-  if (!context || typeof context !== "object") {
-    return res.status(400).json({ error: "Invalid context" });
-  }
-
-  const userMessage = input;
-  const override = detectImmediateHighRiskOverride(userMessage);
-  if (override) {
-    // eslint-disable-next-line no-console
-    console.log("OVERRIDE TRIGGERED", userMessage);
-    return res.status(200).json({
-      mode: "coach",
-      message: override.message,
-      override: true,
-    });
-  }
-
-  if (!client) {
-    return res.status(503).json({ error: "OPENAI_API_KEY missing" });
-  }
-
   try {
-    res.on("finish", () => {
-      // eslint-disable-next-line no-console
-      console.log(`[ai-server] response finished status=${res.statusCode}`);
+    const { status, body } = await handleAiCoach(req.body);
+    return res.status(status).json(body);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[ai-server] /api/ai unhandled error:", err?.message || err);
+    return res.status(500).json({
+      mode: "support",
+      message: "Interner Fehler. Bitte erneut versuchen.",
+      action: null,
     });
-    const selectedModel = typeof modelOverride === "string" && modelOverride.trim() ? modelOverride : defaultModel;
-    // eslint-disable-next-line no-console
-    console.log(`[ai-server] /api/ai request model=${selectedModel} key_present=${Boolean(apiKey)}`);
-    const completion = await callResponsesApi({
-      selectedModel,
-      input,
-      context,
-      allowedActions,
-      responseSchemaVersion,
-    });
-    // eslint-disable-next-line no-console
-    console.log("[ai-server] OpenAI response received", {
-      id: completion?.id || null,
-      status: completion?.status || null,
-      hasOutputParsed: Boolean(completion?.output_parsed),
-      hasOutputText: typeof completion?.output_text === "string" && completion.output_text.length > 0,
-      outputItems: Array.isArray(completion?.output) ? completion.output.length : 0,
-    });
-
-    let normalized;
-    try {
-      const payload = parseModelJson(completion);
-      // eslint-disable-next-line no-console
-      console.log("[ai-server] extracted structured output", payload);
-      normalized = normalizeAiResponseForFrontend(payload, { userInput: input, context });
-    } catch (parseError) {
-      // eslint-disable-next-line no-console
-      console.error("[ai-server] parse failure, using fallback", {
-        message: typeof parseError?.message === "string" ? parseError.message : "unknown",
-      });
-      normalized = fallbackStructuredResponse(undefined, input, context);
-    }
-
-    if (!normalized) {
-      normalized = fallbackStructuredResponse(undefined, input, context);
-    }
-
-    if (!isValidAiResponse(normalized)) {
-      // eslint-disable-next-line no-console
-      console.error("[ai-server] normalized payload invalid, using fallback");
-      normalized = fallbackStructuredResponse(undefined, input, context);
-    }
-    if (!schemaAcceptanceLogged) {
-      // eslint-disable-next-line no-console
-      console.log("[ai-server] OpenAI accepted structured schema for /api/ai");
-      schemaAcceptanceLogged = true;
-    }
-    // eslint-disable-next-line no-console
-    console.log("[ai-server] sending response payload", normalized);
-    const result = res.status(200).json(normalized);
-    // eslint-disable-next-line no-console
-    console.log("[ai-server] res.json dispatched");
-    return result;
-  } catch (error) {
-    const status = error?.status || 500;
-    // eslint-disable-next-line no-console
-    console.error("[ai-server] OpenAI error", {
-      status,
-      code: error?.code || null,
-      type: error?.type || null,
-      message: typeof error?.message === "string" ? error.message : "unknown",
-      keyPrefix: apiKey ? apiKey.slice(0, 7) : null,
-      model: typeof modelOverride === "string" && modelOverride.trim() ? modelOverride : defaultModel,
-    });
-    const fallback = fallbackStructuredResponse("Ich konnte die Antwort nicht sauber strukturieren.", input, context);
-    // eslint-disable-next-line no-console
-    console.log(`[ai-server] returning fallback due to OpenAI error status=${status}`);
-    return res.status(200).json(fallback);
   }
 });
 

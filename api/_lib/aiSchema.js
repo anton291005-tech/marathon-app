@@ -7,6 +7,12 @@ const ALLOWED_ACTIONS = [
   "navigate_to_screen",
   "explain_feature",
   "update_user_preferences",
+  "adapt_plan_injury_no_run",
+  "remove_all_bike_sessions",
+  "boost_next_week_volume",
+  "taper_before_race",
+  "integrate_missed_workout",
+  "swap_training_days",
 ];
 
 const PREVIEW_SCHEMA = {

@@ -21,7 +21,8 @@ export type AiActionType =
   | "taper_before_race"
   | "integrate_missed_workout"
   | "replace_training_plan_generated"
-  | "update_user_preferences";
+  | "update_user_preferences"
+  | "swap_training_days";
 
 export type SessionType =
   | "rest"

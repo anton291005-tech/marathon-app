@@ -18,6 +18,8 @@ export type PlanAdherenceInputs = {
   intervalIntensityScore0_100?: number | null;
   /** Session type — enables bike-specific scoring path when "bike". */
   sessionType?: string | null;
+  /** Sport field — alternative to sessionType for bike-specific scoring path. */
+  sport?: string | null;
   /** Actual workout duration in seconds — used for bike time-accuracy scoring. */
   actualDurationSec?: number | null;
   /** Planned workout duration in seconds — used for bike time-accuracy scoring. */
@@ -240,7 +242,7 @@ function timeRangeStatus(actualSec: number | null, plannedSec: number | null): M
 
 export function computePlanAdherenceScore(inputs: PlanAdherenceInputs): PlanAdherenceScoreResult {
   // Bike-spezifischer Score-Pfad: HR 60% + Zeit 40%
-  if (inputs.sessionType === "bike") {
+  if (inputs.sessionType === "bike" || inputs.sport === "bike") {
     // Fallback A: kein HFmax gesetzt → generische Zone-2-Range (120–150 bpm) verwenden
     const plannedHrMin = inputs.plannedHrBpm?.min ?? 120;
     const plannedHrMax = inputs.plannedHrBpm?.max ?? 150;
@@ -267,7 +269,7 @@ export function computePlanAdherenceScore(inputs: PlanAdherenceInputs): PlanAdhe
       bikeScore = Math.round(bikeComponents.paceAccuracy!);
     } else {
       // Fallback B: keine Vergleichsbasis → neutral statt 0
-      bikeScore = 50;
+      bikeScore = 40;
     }
 
     return {

@@ -1,5 +1,6 @@
 import type { PlanSession, PlanWeek } from "../marathonPrediction";
 import type { TrainingPlanV2, WorkoutV2, WeekV2 } from "./types";
+import { normalizeTrainingPhase } from "./trainingPhase";
 
 const DE_WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const DE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
@@ -33,7 +34,7 @@ function attachMetaFallback(
   const base = week.meta ?? {};
   return {
     wn: typeof base.wn === "number" ? base.wn : idx + 1,
-    phase: typeof base.phase === "string" && base.phase ? base.phase : "BASE",
+    phase: normalizeTrainingPhase(typeof base.phase === "string" ? base.phase : undefined),
     label: typeof base.label === "string" && base.label ? base.label : `Woche ${idx + 1}`,
     dates: typeof base.dates === "string" ? base.dates : "",
     ...(typeof base.focus === "string" && base.focus ? { focus: base.focus } : {}),

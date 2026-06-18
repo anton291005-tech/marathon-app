@@ -168,10 +168,10 @@ Das JSON muss exakt diesem Schema entsprechen:
 {
   "analysis": "2-3 Sätze über den Läufer auf Deutsch",
   "phases": [
-    { "name": "BASE", "weeks": 6, "label": "Aerober Grundlagenblock", "focus": "Aerobe Basis aufbauen" },
-    { "name": "BUILD", "weeks": 5, "label": "Entwicklungsphase", "focus": "Volumen und Intensität steigern" },
-    { "name": "SPEC", "weeks": 4, "label": "Spezifische Vorbereitung", "focus": "Rennspezifische Reize setzen" },
-    { "name": "TAPER", "weeks": 2, "label": "Tapering", "focus": "Erholen und schärfen" }
+    { "name": "base", "weeks": 6, "label": "Aerober Grundlagenblock", "focus": "Aerobe Basis aufbauen" },
+    { "name": "build", "weeks": 5, "label": "Entwicklungsphase", "focus": "Volumen und Intensität steigern" },
+    { "name": "peak", "weeks": 4, "label": "Spezifische Vorbereitung", "focus": "Rennspezifische Reize setzen" },
+    { "name": "taper", "weeks": 2, "label": "Tapering", "focus": "Erholen und schärfen" }
   ],
   "sessionNames": {
     "easy": ["Regenerationslauf", "GA1-Dauerlauf", "Lockerer Grundlagenlauf", "Aerober Entwicklungslauf", "Ruhiger Dauerlauf"],

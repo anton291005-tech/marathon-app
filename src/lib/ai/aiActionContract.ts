@@ -17,6 +17,7 @@ export const ALLOWED_AI_ACTION_TYPES: readonly AiActionType[] = [
   "integrate_missed_workout",
   "replace_training_plan_generated",
   "update_user_preferences",
+  "swap_training_days",
 ] as const;
 
 const ALLOWED_SET = new Set<string>(ALLOWED_AI_ACTION_TYPES);

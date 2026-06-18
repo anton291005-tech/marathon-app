@@ -29,7 +29,11 @@ export function resetPassword(email: string) {
 }
 
 export function resendSignupConfirmation(email: string) {
-  return supabase.auth.resend({ type: "signup", email });
+  return supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: AUTH_EMAIL_REDIRECT_TO },
+  });
 }
 
 export function updatePassword(password: string) {

@@ -45,6 +45,7 @@ import RaceCalculator from "./components/RaceCalculator";
 import SurfaceCard from "./components/SurfaceCard";
 import { AccountDeleteDialog } from "./components/AccountDeleteDialog";
 import { Onboarding } from "./components/Onboarding";
+import { AppTour, TOUR_SEEN_KEY } from "./components/AppTour";
 import {
   RESET_ONBOARDING_STORAGE_KEY,
   needsOnboarding,
@@ -120,7 +121,7 @@ import {
 } from "./persistence/marathonLocalStorageKeys";
 import { safeReadLocalStorageItem } from "./persistence/safeLocalStorage";
 import { hydrateMarathonLogsFromStorage } from "./sessionLogs/hydrateMarathonLogs";
-import type { TrainingPhase } from "./planV2/trainingPhase";
+import { trainingPhaseColor, type TrainingPhase } from "./planV2/trainingPhase";
 import { buildSwapAthleteFacingWarnings, validateSwap } from "./ai/validation/validateSwap";
 import { buildValidationContext } from "./ai/validation/buildValidationContext";
 import {
@@ -210,12 +211,18 @@ function readStoredJson(key, fallback) {
 function logHealthKit(_message, ..._rest) {}
 
 const PI = {
+  // Legacy embedded plan keys — kept for backward compat with LEGACY_EMBEDDED_PLAN_WEEKS
   MINI:  { label:"Mini-Prep",         emoji:"🔄", col:"#6366f1", bg:"rgba(99,102,241,0.12)" },
   BASE:  { label:"Basisaufbau",        emoji:"🌱", col:"#10b981", bg:"rgba(16,185,129,0.12)" },
   DEV:   { label:"Entwicklung",        emoji:"📈", col:"#3b82f6", bg:"rgba(59,130,246,0.12)" },
   BUILD: { label:"Aufbau & Peak",      emoji:"🔥", col:"#ef4444", bg:"rgba(239,68,68,0.12)" },
   SPEC:  { label:"Wettkampfspez.",     emoji:"🎯", col:"#f59e0b", bg:"rgba(245,158,11,0.12)" },
   TAPER: { label:"Taper",             emoji:"⚡", col:"#a855f7", bg:"rgba(168,85,247,0.12)" },
+  // Canonical 4-phase keys from trainingPhase.ts — used by newly generated plans
+  base:  { label:"Base",              emoji:"🌱", col:trainingPhaseColor("base"),  bg:"rgba(16,185,129,0.12)" },
+  build: { label:"Build",             emoji:"🔥", col:trainingPhaseColor("build"), bg:"rgba(59,130,246,0.12)" },
+  peak:  { label:"Peak",              emoji:"🎯", col:trainingPhaseColor("peak"),  bg:"rgba(239,68,68,0.12)" },
+  taper: { label:"Taper",             emoji:"⚡", col:trainingPhaseColor("taper"), bg:"rgba(168,85,247,0.12)" },
 };
 const DEFAULT_VIEW = "home";
 const TI = {
@@ -671,7 +678,7 @@ function getSessionWhy(session, week){
   if(session.type === "bike"){
     return "Diese Einheit liefert aeroben Reiz ohne zusätzliche Laufbelastung und unterstützt aktive Regeneration.";
   }
-  if(week.phase === "TAPER"){
+  if(week.phase === "TAPER" || week.phase === "taper"){
     return "Diese Einheit hält Spannung und Rhythmus hoch, ohne unnötige Müdigkeit aufzubauen.";
   }
   return "Diese Einheit sammelt saubere, kontrollierte Trainingsarbeit und unterstützt die Gesamtbelastung deiner Woche.";
@@ -698,7 +705,7 @@ function getCoachHint(session, week){
   if(session.type === "bike"){
     return "Halte die Intensität wirklich locker. Ziel ist Durchblutung und Zusatzvolumen, nicht Ermüdung.";
   }
-  if(week.phase === "TAPER"){
+  if(week.phase === "TAPER" || week.phase === "taper"){
     return "Weniger machen ist jetzt oft klüger. Frische ist ein Trainingsreiz.";
   }
   return "Laufe die Einheit so, dass du morgen noch qualitativ trainieren kannst.";
@@ -1122,6 +1129,12 @@ function marathonLogRecordsDiffSyncKeys(prev, next) {
 
 export default function AppMain(){
   const { user, signOut } = useAuth();
+  const [showTour, setShowTour] = useState<boolean>(false);
+  useEffect(() => {
+    if (!user) return;
+    const t = setTimeout(() => setShowTour(true), 500);
+    return () => clearTimeout(t);
+  }, [user]);
   const [accountDeleteStep, setAccountDeleteStep] = useState<0 | 1 | 2>(0);
   const [accountDeleteBusy, setAccountDeleteBusy] = useState(false);
   const [accountDeleteError, setAccountDeleteError] = useState<string | null>(null);
@@ -1159,6 +1172,7 @@ export default function AppMain(){
         const label = String(w?.meta?.label || "");
         let phase: TrainingPhase = "base";
         if (planPhase === "TAPER") phase = "taper";
+        else if (planPhase === "PEAK") phase = "peak";
         else if (label.toLowerCase().includes("peak") || label.includes("🔥")) phase = "peak";
         else if (planPhase === "BUILD" || planPhase === "SPEC" || planPhase === "DEV") phase = "build";
         else phase = "base";
@@ -1175,6 +1189,7 @@ export default function AppMain(){
       const label = String(meta?.label || "");
       let phase: TrainingPhase = "base";
       if (planPhase === "TAPER") phase = "taper";
+      else if (planPhase === "PEAK") phase = "peak";
       else if (label.toLowerCase().includes("peak") || label.includes("🔥")) phase = "peak";
       else if (planPhase === "BUILD" || planPhase === "SPEC" || planPhase === "DEV") phase = "build";
       else phase = "base";
@@ -2460,7 +2475,12 @@ export default function AppMain(){
 
   const w=displayPlan[wIdx];
   const weekHasExpandedSessionDesc = w.s.some((s) => !!weekTabDescExpandedById[s.id]);
-  const ph=PI[w.phase];
+  const ph=PI[w.phase] ?? PI["base"] ?? PI["BASE"] ?? { label:"Woche", emoji:"📅", col:"#94a3b8", bg:"rgba(148,163,184,0.12)" };
+  // Week 1 mid-week start: show greyed placeholder cells for days before plan start
+  const WEEK_DAYS_DE = ["Mo","Di","Mi","Do","Fr","Sa","So"];
+  const missingLeadingDays = wIdx === 0 && w.s.length > 0 && w.s[0].day !== "Mo"
+    ? WEEK_DAYS_DE.slice(0, WEEK_DAYS_DE.indexOf(w.s[0].day))
+    : [];
   const totalSess=ACTIVE_SESSIONS.length;
   const doneSessions = ACTIVE_SESSIONS.filter((session) => isSessionLogDone(logs[session.id]));
   const doneSess=doneSessions.length;
@@ -2865,9 +2885,10 @@ export default function AppMain(){
       clearMarathonLocalStorage();
       setAccountDeleteStep(0);
       await signOut();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Account konnte nicht gelöscht werden";
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Account konnte nicht gelöscht werden";
       setAccountDeleteError(msg);
+      try { await signOut(); } catch { /* ignore */ }
     } finally {
       setAccountDeleteBusy(false);
     }
@@ -3358,6 +3379,7 @@ export default function AppMain(){
 
             {/* Primärer Lauf-Block (flach) → Apple Health → Ring */}
             <div
+              data-tour="today-session"
               style={{
                 width: "100%",
                 minWidth: 0,
@@ -3696,6 +3718,7 @@ export default function AppMain(){
 
             {/* Daily coach decision card — Header → Plan → Performance */}
             <div
+              data-tour="recovery-card"
               style={{
                 width:"100%",
                 maxWidth:"100%",
@@ -4087,7 +4110,7 @@ export default function AppMain(){
               ...viewTransitionStyle,
             }}
           >
-            <div style={{ flexShrink: 0, background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:16,padding:"4px 6px 4px",boxShadow:"0 20px 40px rgba(2,6,23,0.22)"}}>
+            <div data-tour="week-header" style={{ flexShrink: 0, background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:16,padding:"4px 6px 4px",boxShadow:"0 20px 40px rgba(2,6,23,0.22)"}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===0?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
                 <div style={{flex:1,textAlign:"center",minWidth:0}}>
@@ -4164,6 +4187,25 @@ export default function AppMain(){
                   Für diese Woche sind keine Einheiten im Plan hinterlegt.
                 </div>
               )}
+              {missingLeadingDays.map(dayLabel=>(
+                <div key={`pre-start-${dayLabel}`} style={{flex:"1 1 0%",minHeight:0,display:"flex",flexDirection:"column"}}>
+                  <div style={{
+                    background:"rgba(11,16,28,0.55)",
+                    border:"1px solid rgba(148,163,184,0.07)",
+                    borderRadius:10,
+                    display:"flex",
+                    alignItems:"center",
+                    gap:8,
+                    padding:"4px 8px",
+                    opacity:0.45,
+                    flex:1,
+                    minHeight:0,
+                  }}>
+                    <div style={{width:34,flexShrink:0,textAlign:"center",fontSize:10,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.08em"}}>{dayLabel}</div>
+                    <div style={{fontSize:11,color:"#475569",fontStyle:"italic"}}>vor Planstart</div>
+                  </div>
+                </div>
+              ))}
               {w.s.map(session=>{
                 const ti=TI[session.type];
                 const weekTitleColor = session.type === "rest" ? "#94a3b8" : ti?.col || "#fff";
@@ -4517,7 +4559,7 @@ export default function AppMain(){
               ...viewTransitionStyle,
             }}
           >
-            <div style={{ flexShrink: 0 }}>
+            <div data-tour="performance-card" style={{ flexShrink: 0 }}>
               <MarathonPredictionCard
                 variant="full"
                 prediction={marathonPrediction}
@@ -4575,7 +4617,7 @@ export default function AppMain(){
             ...viewTransitionStyle,
           }}
         >
-          <SurfaceCard>
+          <SurfaceCard data-tour="overview-card">
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,flexWrap:"wrap",gap:6}}>
               <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>Alle Wochen</div>
               <div style={{fontSize:10,color:"#94a3b8"}}>Längster Lauf: {Math.round(longestLongRunKm)} km</div>
@@ -5311,6 +5353,7 @@ export default function AppMain(){
                 className="bottom-nav-btn"
                 key={item.key}
                 onClick={()=>navigateToView(item.key)}
+                {...(item.key === 'coach' ? {'data-tour': 'coach-tab'} : item.key === 'week' ? {'data-tour': 'week-tab'} : {})}
                 style={{
                   background:active ? "linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))" : "transparent",
                   border:"1px solid transparent",
@@ -5659,6 +5702,16 @@ export default function AppMain(){
       ))}
 
       {showOnboarding ? <Onboarding onComplete={handleOnboardingComplete} /> : null}
+
+      {!showOnboarding && showTour && user ? (
+        <AppTour
+          onComplete={() => {
+            localStorage.setItem(TOUR_SEEN_KEY, "true");
+            setShowTour(false);
+          }}
+          onTabChange={(tab) => navigateToView(tab)}
+        />
+      ) : null}
 
       {accountDeleteStep > 0 ? (
         <AccountDeleteDialog

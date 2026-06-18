@@ -345,7 +345,7 @@ export async function migrateLocalDataToSupabase(userId: string): Promise<boolea
     }
 
     const localLogsPending = Object.keys(readLocalSessionLogs()).length;
-    const maySetDoneFlag = uploadedAny && sessionLogsOk;
+    const maySetDoneFlag = !uploadedAny || (uploadedAny && sessionLogsOk);
 
     // eslint-disable-next-line no-console
     console.log("[migration] done-flag decision", {

@@ -4,6 +4,7 @@
 import { parseSessionDateLabel } from "../../appSmartFeatures";
 import { rebuildPlanFromWorkouts } from "../../core/deriveWeeksFromWorkouts";
 import type { Intensity, TrainingPlanV2, WeekV2, WorkoutSport, WorkoutV2 } from "../../planV2/types";
+import { type TrainingPhase, trainingPhaseLabelDe } from "../../planV2/trainingPhase";
 import type { AiContext, AiPlanSession, PlanPatch } from "./types";
 
 const RUNNING_TYPES = new Set(["easy", "interval", "tempo", "long", "race"]);
@@ -899,12 +900,13 @@ export function generateMarathonPlanV2ToRace(
       lastWeekKey = startIso;
       weekIdx += 1;
 
-      let phase = "BASE";
+      let phase: TrainingPhase = "base";
       let focus = "Basis-/Aufbau";
       const midDur = dur - 3;
-      if (midDur <= 21) phase = midDur <= 10 ? "TAPER" : "SPEC";
-      else if (midDur <= 56) phase = "BUILD";
-      else if (midDur <= 77) phase = "DEV";
+      if (midDur <= 10) phase = "taper";
+      else if (midDur <= 21) phase = "peak";
+      else if (midDur <= 56) phase = "build";
+      // midDur > 56 stays "base" (merges old DEV and BASE bands)
 
       if (dur <= 10) focus = "Renn-/Taper-Phase — frisch sein";
       else if (dur <= 28) focus = "Spezifikation & längere Reize kontrolliert";
@@ -915,10 +917,11 @@ export function generateMarathonPlanV2ToRace(
       // For the first week on a mid-week start, show the actual start date in the header
       const displayDate = startIso === firstWeekStartIso && firstWeekStartIso !== firstWeekMonIso ? s : mon;
 
+      const phaseLabel = trainingPhaseLabelDe(phase);
       metaByWeekStart.set(startIso, {
         wn: weekIdx,
         phase,
-        label: isRecoveryWeek ? `${phase} W${weekIdx} ⬇️` : `${phase} W${weekIdx}`,
+        label: isRecoveryWeek ? `${phaseLabel} W${weekIdx} ⬇️` : `${phaseLabel} W${weekIdx}`,
         dates: `${formatDeDate(displayDate)} ff.`,
         focus: isRecoveryWeek
           ? "⬇️ Entlastungswoche – Volumen reduziert, Adaptationen festigen"

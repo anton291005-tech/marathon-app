@@ -2,6 +2,7 @@ import type { PlanSession, PlanWeek } from "../marathonPrediction";
 import { parseSessionDateLabel } from "../appSmartFeatures";
 import { rebuildPlanFromWorkouts } from "../core/deriveWeeksFromWorkouts";
 import type { TrainingPlanV2, WeekV2, WorkoutV2 } from "./types";
+import { normalizeTrainingPhase } from "./trainingPhase";
 
 function sessionTypeToSport(type: string): WorkoutV2["sport"] {
   if (type === "bike") return "bike";
@@ -31,7 +32,7 @@ export function buildWeekMetaMapFromBasePlan(base: PlanWeek[]): Map<string, Week
     if (!startIso) continue;
     map.set(startIso, {
       wn: week.wn,
-      phase: week.phase,
+      phase: normalizeTrainingPhase(week.phase),
       label: week.label ?? "",
       dates: week.dates ?? "",
       focus: week.focus,

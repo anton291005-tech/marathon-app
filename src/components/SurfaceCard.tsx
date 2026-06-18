@@ -1,13 +1,11 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { HTMLAttributes } from "react";
 
-type Props = {
-  children: ReactNode;
-  style?: CSSProperties;
-};
+type Props = HTMLAttributes<HTMLDivElement>;
 
-export default function SurfaceCard({ children, style }: Props) {
+export default function SurfaceCard({ children, style, ...rest }: Props) {
   return (
     <div
+      {...rest}
       style={{
         background: "linear-gradient(160deg,rgba(18,18,36,0.98),rgba(11,16,28,0.94))",
         borderRadius: 20,

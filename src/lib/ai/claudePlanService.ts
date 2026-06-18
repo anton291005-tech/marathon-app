@@ -153,10 +153,10 @@ Format:
 {
   "analysis": "2-3 Sätze über den Läufer auf Deutsch",
   "phases": [
-    { "name": "BASE", "weeks": 6, "label": "Aerober Grundlagenblock", "focus": "Basis aufbauen" },
-    { "name": "BUILD", "weeks": 5, "label": "Entwicklungsphase", "focus": "Volumen steigern" },
-    { "name": "SPEC", "weeks": 4, "label": "Spezifische Vorbereitung", "focus": "Rennspezifisch" },
-    { "name": "TAPER", "weeks": 2, "label": "Tapering", "focus": "Erholen und schärfen" }
+    { "name": "base", "weeks": 6, "label": "Aerober Grundlagenblock", "focus": "Basis aufbauen" },
+    { "name": "build", "weeks": 5, "label": "Entwicklungsphase", "focus": "Volumen steigern" },
+    { "name": "peak", "weeks": 4, "label": "Spezifische Vorbereitung", "focus": "Rennspezifisch" },
+    { "name": "taper", "weeks": 2, "label": "Tapering", "focus": "Erholen und schärfen" }
   ],
   "sessionNames": {
     "easy": ["Regenerationslauf", "GA1-Dauerlauf", "Lockerer Grundlagenlauf", "Aerober Entwicklungslauf", "Ruhiger Dauerlauf"],

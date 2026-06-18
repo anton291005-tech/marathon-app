@@ -1,3 +1,5 @@
+// DEPLOYMENT: SUPABASE_SERVICE_ROLE_KEY muss als Vercel Environment Variable gesetzt sein.
+// Vercel Dashboard → Settings → Environment Variables → SUPABASE_SERVICE_ROLE_KEY (Production)
 "use strict";
 
 const { createClient } = require("@supabase/supabase-js");
@@ -13,6 +15,7 @@ const USER_DATA_TABLES = [
   "recovery_daily",
   "coach_memory",
   "profiles",
+  // TODO: add "marathon_logs" once table is created
 ];
 
 function readEnvTrimmed(name) {
@@ -89,12 +92,16 @@ async function handleDeleteAccount(req) {
   }
 
   try {
+    const deletedTables = [];
+    const failedTables = [];
     for (const table of USER_DATA_TABLES) {
       const { error } = await admin.from(table).delete().eq("user_id", userId);
       if (error) {
         // eslint-disable-next-line no-console
         console.warn(`[deleteAccount] delete from ${table} failed`, error.message);
-        return { status: 500, body: { error: `Failed to delete user data (${table})` } };
+        failedTables.push(table);
+      } else {
+        deletedTables.push(table);
       }
     }
 
@@ -102,10 +109,10 @@ async function handleDeleteAccount(req) {
     if (deleteUserError) {
       // eslint-disable-next-line no-console
       console.warn("[deleteAccount] admin.deleteUser failed", deleteUserError.message);
-      return { status: 500, body: { error: "Failed to delete auth user" } };
+      return { status: 500, body: { error: "Failed to delete auth user", deletedTables, failedTables } };
     }
 
-    return { status: 200, body: { success: true } };
+    return { status: 200, body: { success: true, deletedTables, failedTables } };
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(

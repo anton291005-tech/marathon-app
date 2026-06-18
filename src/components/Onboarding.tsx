@@ -15,6 +15,7 @@ import {
   type ClaudePlanStructure,
   type PlanGenerationProfile,
 } from "../lib/ai/claudePlanService";
+import { normalizeTrainingPhase } from "../planV2/trainingPhase";
 import { generateMarathonPlanV2ToRace } from "../lib/ai/coachPlanMutations";
 import type { PlanPatch } from "../lib/ai/types";
 import {
@@ -100,7 +101,7 @@ function applyClaudePhases(
     if (!pm) return wk;
     return {
       ...wk,
-      meta: { ...wk.meta, label: pm.label, focus: pm.focus, phase: pm.name },
+      meta: { ...wk.meta, label: pm.label, focus: pm.focus, phase: normalizeTrainingPhase(pm.name) },
     };
   });
   return { ...plan, weeks };

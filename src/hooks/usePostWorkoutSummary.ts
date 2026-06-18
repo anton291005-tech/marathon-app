@@ -166,6 +166,7 @@ export function normalizePostWorkoutSummary(
           actualDistanceKm: actual.distanceKm ?? null,
           plannedHrBpm: planned.hrBpm ?? null,
           actualHrBpm: actual.hrBpm ?? null,
+          sessionType: session?.type ?? null,
         });
 
   return {

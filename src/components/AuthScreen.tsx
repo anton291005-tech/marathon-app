@@ -54,6 +54,9 @@ export function AuthScreen() {
     unconfirmedEmail,
     clearUnconfirmedEmail,
     resendSignupConfirmation,
+    passwordRecoveryPending,
+    updatePassword,
+    completePasswordRecovery,
   } = useAuth();
   const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");
@@ -67,6 +70,10 @@ export function AuthScreen() {
   const [resendCooldownSec, setResendCooldownSec] = useState(0);
   const [resendStatus, setResendStatus] = useState<string | null>(null);
   const [resendSubmitting, setResendSubmitting] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const showConfirmationPanel =
     showEmailConfirmation || !!unconfirmedEmail || loginNeedsConfirmation;
@@ -210,6 +217,111 @@ export function AuthScreen() {
       : isSignUp
         ? "Konto erstellen"
         : "Anmelden, um fortzufahren";
+
+  if (passwordRecoveryPending) {
+    const passwordsMatch = newPassword === newPasswordConfirm;
+    const canSave = newPassword.length >= 8 && passwordsMatch && !isSaving;
+    return (
+      <div
+        style={{
+          minHeight: "100dvh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxSizing: "border-box",
+          padding: "24px 16px calc(24px + env(safe-area-inset-bottom, 0px))",
+          background: "#0a0a0a",
+          color: "#e2e8f0",
+          fontFamily:
+            "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif",
+          WebkitFontSmoothing: "antialiased",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: 400,
+            borderRadius: 16,
+            border: "1px solid rgba(148, 163, 184, 0.18)",
+            background: "rgba(15, 23, 42, 0.65)",
+            boxShadow: "0 24px 48px rgba(0, 0, 0, 0.35)",
+            padding: "28px 24px 24px",
+            boxSizing: "border-box",
+          }}
+        >
+          <h1
+            style={{
+              margin: "0 0 6px",
+              fontSize: 26,
+              fontWeight: 800,
+              letterSpacing: "-0.02em",
+              textAlign: "center",
+              color: "#f1f5f9",
+            }}
+          >
+            MyRace
+          </h1>
+          <p
+            style={{
+              margin: "0 0 22px",
+              fontSize: 13,
+              color: "#94a3b8",
+              textAlign: "center",
+              lineHeight: 1.45,
+            }}
+          >
+            Neues Passwort setzen
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <input
+              type="password"
+              placeholder="Neues Passwort (mind. 8 Zeichen)"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              style={inputStyle}
+            />
+            <input
+              type="password"
+              placeholder="Passwort bestätigen"
+              value={newPasswordConfirm}
+              onChange={(e) => setNewPasswordConfirm(e.target.value)}
+              style={inputStyle}
+            />
+            {!passwordsMatch && newPasswordConfirm.length > 0 && (
+              <p style={{ margin: 0, fontSize: 13, color: "#ef4444" }}>
+                Passwörter stimmen nicht überein.
+              </p>
+            )}
+            <button
+              disabled={!canSave}
+              style={{
+                ...primaryButtonStyle,
+                cursor: canSave ? "pointer" : "not-allowed",
+                opacity: canSave ? 1 : 0.5,
+                marginTop: 4,
+              }}
+              onClick={async () => {
+                setIsSaving(true);
+                setPasswordError(null);
+                const { error: updateError } = await updatePassword(newPassword);
+                if (updateError) {
+                  setPasswordError(updateError.message);
+                } else {
+                  completePasswordRecovery();
+                }
+                setIsSaving(false);
+              }}
+            >
+              {isSaving ? "Speichern..." : "Passwort speichern"}
+            </button>
+            {passwordError && (
+              <p style={{ margin: 0, fontSize: 13, color: "#ef4444" }}>{passwordError}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

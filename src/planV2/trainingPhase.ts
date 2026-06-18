@@ -14,3 +14,36 @@ export function trainingPhaseColor(phase: TrainingPhase): string {
   return "#a855f7";
 }
 
+/**
+ * Normalizes any phase string (including uppercase legacy / Claude-returned variants)
+ * to the canonical lowercase TrainingPhase union.
+ *
+ * Mapping:
+ *   BASE, base               → "base"
+ *   BUILD, build, DEV, SPEC  → "build"  (DEV/SPEC are closest to build intensity)
+ *   PEAK, peak               → "peak"
+ *   TAPER, taper             → "taper"
+ *   MINI, mini               → "base"   (pre-block, safest default)
+ *   unknown / empty          → "base"   (safe fallback)
+ */
+export function normalizeTrainingPhase(raw: string | undefined | null): TrainingPhase {
+  if (!raw) return "base";
+  switch (raw.toUpperCase()) {
+    case "BASE":
+    case "MINI":
+      return "base";
+    case "BUILD":
+    case "DEV":
+    case "SPEC":
+      return "build";
+    case "PEAK":
+      return "peak";
+    case "TAPER":
+      return "taper";
+    default:
+      // Already lowercase canonical — pass through if valid, else "base"
+      if (raw === "base" || raw === "build" || raw === "peak" || raw === "taper") return raw;
+      return "base";
+  }
+}
+

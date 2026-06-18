@@ -1,11 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import AiMessageList, { type UiChatMessage } from "./AiMessageList";
-import SwapConfirmationCard from "./SwapConfirmationCard";
 import { executeAiAction } from "../../lib/ai/actions";
 import { runCoachAgent } from "../../lib/ai/coachAgent";
+import { toRemoteCoachPayload } from "../../lib/ai/getAiContext";
 import type { AiAssistantAction, AiContext, PlanPatch } from "../../lib/ai/types";
-import type { WorkoutV2 } from "../../planV2/types";
-import { getAppNow, getAppNowEpochMs } from "../../core/time/timeSystem";
+import { getAppNowEpochMs } from "../../core/time/timeSystem";
 
 type SwapResult = { ok: boolean; message: string; warningText?: string | null } | void;
 
@@ -38,12 +37,10 @@ export default function AiCoachPanel({
   onNavigate,
   onSwapWorkoutsV2,
   onReplaceTrainingPlanV2: _onReplaceTrainingPlanV2,
-  onApplyPreferencesPatch: _onApplyPreferencesPatch,
+  onApplyPreferencesPatch,
   messages: controlledMessages,
   setMessages: setControlledMessages,
 }: Props) {
-  type PendingSwap = { workoutA: WorkoutV2; workoutB: WorkoutV2 };
-
   const [internalMessages, setInternalMessages] = useState<UiChatMessage[]>([
     {
       id: createId(),
@@ -56,7 +53,6 @@ export default function AiCoachPanel({
   const setMessages = setControlledMessages ?? setInternalMessages;
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [pendingSwap, setPendingSwap] = useState<PendingSwap | null>(null);
   const busyRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -80,54 +76,18 @@ export default function AiCoachPanel({
       const context = getContext();
       console.log("[AiCoachPanel] sending to AI, input:", userInput); // eslint-disable-line no-console
 
-      // Build planEngine so the coach agent can execute deterministic swaps
-      const planEngine = {
-        swapDays: (dayA: string, dayB: string): { message: string; confidence: number } => {
-          if (!onSwapWorkoutsV2) {
-            return {
-              message: "Tauschen ist in dieser Ansicht gerade nicht möglich. Ordne die Einheiten im **Woche**-Tab manuell an.",
-              confidence: 0.1,
-            };
-          }
-
-          const fmtDate = (iso: string): string => {
-            if (!iso.match(/^\d{4}-\d{2}-\d{2}/)) return iso;
-            const [, mm, dd] = iso.slice(0, 10).split("-");
-            return `${dd}.${mm}.`;
-          };
-
-          const workouts = context.planV2?.workouts ?? [];
-          const wA = workouts.find((w) => typeof w.dateIso === "string" && w.dateIso.startsWith(dayA));
-          const wB = workouts.find((w) => typeof w.dateIso === "string" && w.dateIso.startsWith(dayB));
-
-          if (!wA) {
-            return {
-              message: `Kein Training am ${fmtDate(dayA)} gefunden. Prüfe im Wochenplan ob an diesem Tag eine Einheit geplant ist.`,
-              confidence: 0.3,
-            };
-          }
-          if (!wB) {
-            return {
-              message: `Kein Training am ${fmtDate(dayB)} gefunden. Prüfe im Wochenplan ob an diesem Tag eine Einheit geplant ist.`,
-              confidence: 0.3,
-            };
-          }
-
-          // Don't execute yet — show confirmation card first
-          setPendingSwap({ workoutA: wA, workoutB: wB });
-
-          return {
-            message: `Ich tausche **${wA.title}** (${fmtDate(wA.dateIso)}) mit **${wB.title}** (${fmtDate(wB.dateIso)}). Bitte bestätige unten.`,
-            confidence: 0.95,
-          };
-        },
-        adjust: (_day: string, _intensity: string) => ({ message: "", confidence: 0 }),
-        addRestDay: (_day: string) => ({ message: "", confidence: 0 }),
-      };
+      const turns = messages
+        .filter((m) => m.type === "text" && m.text?.trim())
+        .slice(-6)
+        .map((m) => ({ role: m.role as "user" | "assistant", text: m.text!.trim() }));
 
       const appState = {
-        todayIso: context.todayIso ?? getAppNow().toISOString().slice(0, 10),
-        planEngine,
+        ...toRemoteCoachPayload({ ...context, conversationTurns: turns }),
+        goals: context.goals,
+        maxHeartRateBpm: context.maxHeartRateBpm ?? null,
+        recoverySummary: context.recoverySummary ?? null,
+        conversationTurns: turns,
+        availableScreens: context.availableScreens,
       };
 
       const data = await runCoachAgent(userInput, appState);
@@ -204,8 +164,48 @@ export default function AiCoachPanel({
   };
 
   const onConfirmAction = (messageId: string, action: AiAssistantAction) => {
-    const result = executeAiAction(action, getContext());
     removeMessageById(messageId);
+
+    if (action.type === "swap_training_days") {
+      const ctx = getContext();
+      const dayA = typeof action.payload?.dayA === "string" ? action.payload.dayA.trim() : "";
+      const dayB = typeof action.payload?.dayB === "string" ? action.payload.dayB.trim() : "";
+      const workouts = ctx.planV2?.workouts ?? [];
+      const wA = workouts.find((w) => typeof w.dateIso === "string" && w.dateIso.startsWith(dayA));
+      const wB = workouts.find((w) => typeof w.dateIso === "string" && w.dateIso.startsWith(dayB));
+
+      if (!onSwapWorkoutsV2 || !wA || !wB) {
+        pushMessage({
+          id: createId(),
+          role: "assistant",
+          type: "text",
+          text: "Tausch nicht möglich — prüfe die beiden Tage im Wochenplan oder formuliere konkrete ISO-Daten.",
+        });
+        return;
+      }
+
+      onSwapWorkoutsV2(wA.id, wB.id);
+      pushMessage({
+        id: createId(),
+        role: "assistant",
+        type: "text",
+        text: "Trainingstage getauscht.",
+      });
+      return;
+    }
+
+    if (action.type === "update_user_preferences") {
+      onApplyPreferencesPatch?.(action.payload);
+      pushMessage({
+        id: createId(),
+        role: "assistant",
+        type: "text",
+        text: "Einstellungen aktualisiert.",
+      });
+      return;
+    }
+
+    const result = executeAiAction(action, getContext());
     if (result.navigation) {
       onNavigate(result.navigation.targetScreen, result.navigation.section);
       pushMessage({
@@ -255,6 +255,8 @@ export default function AiCoachPanel({
             ? "Rennverschiebung"
             : action.type === "shift_plan_start_date"
               ? "Startverschiebung"
+              : action.type === "swap_training_days"
+                ? "Tag-Tausch"
             : "Vorschlag";
     pushMessage({
       id: createId(),
@@ -328,18 +330,6 @@ export default function AiCoachPanel({
           }}
         />
       </div>
-
-      {pendingSwap && (
-        <SwapConfirmationCard
-          workoutA={pendingSwap.workoutA}
-          workoutB={pendingSwap.workoutB}
-          onConfirm={() => {
-            onSwapWorkoutsV2?.(pendingSwap.workoutA.id, pendingSwap.workoutB.id);
-            setPendingSwap(null);
-          }}
-          onCancel={() => setPendingSwap(null)}
-        />
-      )}
 
       <div style={{ display: "flex", gap: 8 }}>
         <input

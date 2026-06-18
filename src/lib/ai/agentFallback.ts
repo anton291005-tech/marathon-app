@@ -1,6 +1,6 @@
 /** Single source of truth for weak/invalid AI output normalization (coachAgent + handleAgentResponse). */
 export const AGENT_WEAK_MESSAGE =
-  "I recommend keeping your next run easy and monitoring how you feel. Are you fatigued or fresh today?";
+  "Ich bin gleich für dich da. Stell mir deine Frage zum Training.";
 
 /** Dev-only: surface silent degradation + rough quality rates without production noise */
 let devCoachCycles = 0;

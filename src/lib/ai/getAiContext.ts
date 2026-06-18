@@ -1,7 +1,10 @@
 import { parseSessionDateLabel } from "../../appSmartFeatures";
-import type { AiContext, AiPlanSession, AiPlanWeek } from "./types";
+import type { StoredHealthRun } from "../../healthRuns";
+import type { RecoveryDomainState } from "../../recovery/recoveryDomainState";
+import type { AiCoachConversationTurn, AiContext, AiPlanSession, AiPlanWeek } from "./types";
 import type { TrainingPlanV2 } from "../../planV2/types";
 import { getAppNow } from "../../core/time/timeSystem";
+import { buildRecoverySummaryFromDomain } from "./recoverySummary";
 
 type BuildAiContextArgs = {
   plan: AiPlanWeek[];
@@ -12,7 +15,11 @@ type BuildAiContextArgs = {
   settings?: Record<string, any>;
   now?: Date;
   planV2?: TrainingPlanV2;
-  [key: string]: unknown;
+  recoveryDomain?: RecoveryDomainState;
+  recoveryDailyRows?: AiContext["recoveryDailyRows"];
+  healthRuns?: StoredHealthRun[];
+  maxHeartRateBpm?: number | null;
+  conversationTurns?: AiCoachConversationTurn[];
 };
 
 function inNext14Days(session: AiPlanSession, now: Date): boolean {
@@ -40,14 +47,18 @@ export function coachStructuredMarkdownAppendix(context: AiContext): string {
 }
 
 export function toRemoteCoachPayload(context: AiContext) {
+  const now = new Date(context.todayIso);
+  const nowDate = Number.isFinite(now.getTime()) ? now : getAppNow();
   return {
     todayIso: context.todayIso,
     raceDateIso: context.raceDateIso,
+    goals: context.goals,
+    maxHeartRateBpm: context.maxHeartRateBpm ?? null,
+    recoverySummary: context.recoverySummary ?? null,
+    availableScreens: context.availableScreens ?? [],
+    conversationTurns: context.conversationTurns ?? [],
     trainingPlan: { source: "display", weeks: context.plan },
-    logsLast30Days: Object.entries(context.logs || {}).map(([sessionId, log]) => ({
-      sessionId,
-      log,
-    })),
+    logsLast30Days: sliceLogsLast30Days(context.logs || {}, nowDate),
     healthRunsLast30Days: [...(context.healthRuns || [])],
     recoveryDomain: context.recoveryDomain ?? { domainKind: "initial" as const },
   };
@@ -90,6 +101,16 @@ export function sliceLogsLast30Days(
 export function getAiContext(args: BuildAiContextArgs): AiContext {
   const now = args.now || getAppNow();
   const next14Days = args.plan.flatMap((week) => week.s).filter((session) => inNext14Days(session, now));
+  const recoveryDomain = args.recoveryDomain;
+  const recoverySummary =
+    recoveryDomain && typeof recoveryDomain === "object"
+      ? buildRecoverySummaryFromDomain(recoveryDomain)
+      : undefined;
+  const healthRuns =
+    args.healthRuns && args.healthRuns.length > 0
+      ? sortStoredHealthRunsForAiContext(args.healthRuns)
+      : args.healthRuns;
+
   return {
     todayIso: now.toISOString(),
     raceDateIso: args.raceDateIso ?? findRaceDateIso(args.plan),
@@ -102,5 +123,11 @@ export function getAiContext(args: BuildAiContextArgs): AiContext {
     next14Days,
     availableScreens: args.availableScreens,
     settings: args.settings || {},
+    recoveryDomain,
+    recoverySummary,
+    recoveryDailyRows: args.recoveryDailyRows,
+    healthRuns,
+    maxHeartRateBpm: args.maxHeartRateBpm,
+    conversationTurns: args.conversationTurns ?? [],
   };
 }
