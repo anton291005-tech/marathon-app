@@ -96,24 +96,29 @@ export async function runCoachAgent(userInput: string, appState: any) {
       return networkFallback();
     }
 
+    const responseText = await res.text();
+    // eslint-disable-next-line no-console
+    console.log("[coachAgent] raw response text:", responseText.slice(0, 500));
+
     // eslint-disable-next-line no-console
     console.log("[coachAgent] response status:", res.status, res.ok);
 
-    let text = typeof res.text === "function" ? await res.text() : "";
     if (!res.ok) {
       // eslint-disable-next-line no-console
-      console.error("[coachAgent] API error body:", text.slice(0, 200));
+      console.error("[coachAgent] API error body:", responseText.slice(0, 200));
     }
-    let parsed: unknown;
+    let data: unknown;
     try {
-      parsed = text.trim() ? JSON.parse(text) : null;
-    } catch {
-      aiAgentDevWarn("json-parse-failed", text?.slice?.(0, 200));
+      data = responseText.trim() ? JSON.parse(responseText) : null;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[coachAgent] JSON parse failed:", e instanceof Error ? e.message : String(e));
+      aiAgentDevWarn("json-parse-failed", responseText?.slice?.(0, 200));
       onAgentFallback("invalid_json");
       return await handleAgentResponse(weakAgentMessagePayload(), appState);
     }
 
-    const normalized = normalizeFetchedAgentPayload(parsed);
+    const normalized = normalizeFetchedAgentPayload(data);
     return await handleAgentResponse(normalized, appState);
   } catch (err) {
     aiAgentDevWarn("runCoachAgent-unexpected", err);

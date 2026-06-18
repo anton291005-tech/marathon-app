@@ -63,6 +63,9 @@ function toolCallToAssistantResponse(res: Record<string, unknown>): AiAssistantR
  * Unified response handler: always returns `{ mode, message, action? }`.
  */
 export async function handleAgentResponse(res: unknown, _state: unknown): Promise<HandleAgentResponseResult> {
+  // eslint-disable-next-line no-console
+  console.log("[handleAgentResponse] raw input:", JSON.stringify(res).slice(0, 300));
+
   if (!isPlainRecord(res)) {
     aiAgentDevWarn("invalid-response-root", res);
     // eslint-disable-next-line no-console
