@@ -9,6 +9,22 @@ Marathon-/Training-App mit AI Coach, Action Cards und lokalem/mockbasiertem sowi
 - `npm run start:full` - startet Frontend + API parallel
 - `npm test` - Tests
 - `npm run build` - Produktionsbuild
+- `npm run deploy:ios` - Capacitor iOS sync + Xcode Workspace öffnen
+
+## iOS (Capacitor)
+
+Die native App lädt gebündelte Web-Assets aus `dist/` — **kein** `server.url` in `capacitor.config.ts` (kein localhost, kein Remote-Load von Vercel in der WebView).
+
+Nach jedem `npm run build` muss `npx cap sync ios` laufen, dann in Xcode neu signieren (⌘R).
+
+Typischer Ablauf:
+
+1. `CI=false npm run build` (grüner Build)
+2. `npm run deploy:ios` (oder `npx cap sync ios && open ios/App/App.xcworkspace`)
+3. In Xcode: **Signing & Capabilities** → Team `R8MHV8V5N8`, Bundle ID `com.anton.myrace`, Automatic Signing
+4. Auf dem Gerät installieren (⌘R)
+
+**Hinweis:** Free-Tier Dev-Provisioning läuft nach 7 Tagen ab. Wenn die App „nicht mehr verfügbar“ meldet, in Xcode erneut bauen und auf dem iPhone installieren.
 
 ## AI Architektur (kurz)
 

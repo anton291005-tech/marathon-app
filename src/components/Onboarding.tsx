@@ -11,11 +11,11 @@ import TimePicker, {
 } from "./TimePicker";
 import { getAppNow } from "../core/time/timeSystem";
 import {
-  fetchClaudePlanStructureDirect,
-  type ClaudePlanStructure,
+  fetchClaudePlanRules,
+  fetchFullPlanFromClaude,
   type PlanGenerationProfile,
 } from "../lib/ai/claudePlanService";
-import { normalizeTrainingPhase } from "../planV2/trainingPhase";
+import { validateTrainingPlanV2Integrity } from "../ai/validation/validateTrainingPlanV2Integrity";
 import { generateMarathonPlanV2ToRace } from "../lib/ai/coachPlanMutations";
 import type { PlanPatch } from "../lib/ai/types";
 import {
@@ -33,90 +33,6 @@ import {
   type RaceGoal,
 } from "../onboarding/marathonPreferencesOnboarding";
 import type { TrainingPlanV2 } from "../planV2/types";
-
-// ---------------------------------------------------------------------------
-// Plan-personalisation helpers (applied after deterministic generation)
-// ---------------------------------------------------------------------------
-
-/**
- * Renames workout titles using Claude's sessionNames pool.
- * Index is per-sessionType so names cycle evenly within each type.
- */
-function applySessionNames(
-  plan: TrainingPlanV2,
-  sessionNames: Record<string, string[]>,
-): TrainingPlanV2 {
-  const typeCounters: Record<string, number> = {};
-  const renamedById = new Map<string, string>();
-
-  for (const w of plan.workouts) {
-    if (w.sessionType === "rest" || w.sessionType === "race") continue;
-    const names = sessionNames[w.sessionType];
-    if (!names?.length) continue;
-    const idx = typeCounters[w.sessionType] ?? 0;
-    typeCounters[w.sessionType] = idx + 1;
-    renamedById.set(w.id, names[idx % names.length]);
-  }
-
-  if (renamedById.size === 0) return plan;
-
-  const workouts = plan.workouts.map((w) => {
-    const title = renamedById.get(w.id);
-    return title ? { ...w, title } : w;
-  });
-  const weeks = plan.weeks.map((wk) => ({
-    ...wk,
-    workouts: wk.workouts.map((w) => {
-      const title = renamedById.get(w.id);
-      return title ? { ...w, title } : w;
-    }),
-  }));
-  return { ...plan, workouts, weeks };
-}
-
-/**
- * Overrides week meta (label, focus, phase) based on Claude's phase list.
- * Claude provides phases in order [BASE, BUILD, …, TAPER] with week counts.
- * We map those to week numbers 1..N in the generated plan.
- */
-function applyClaudePhases(
-  plan: TrainingPlanV2,
-  phases: ClaudePlanStructure["phases"],
-): TrainingPlanV2 {
-  if (!phases?.length) return plan;
-
-  const phaseMeta = new Map<number, { label: string; focus: string; name: string }>();
-  let offset = 0;
-  for (const p of phases) {
-    for (let i = 0; i < p.weeks; i++) {
-      phaseMeta.set(offset + i + 1, { label: p.label, focus: p.focus, name: p.name });
-    }
-    offset += p.weeks;
-  }
-
-  const weeks = plan.weeks.map((wk) => {
-    const wn = wk.meta?.wn;
-    if (!wn) return wk;
-    const pm = phaseMeta.get(wn);
-    if (!pm) return wk;
-    return {
-      ...wk,
-      meta: { ...wk.meta, label: pm.label, focus: pm.focus, phase: normalizeTrainingPhase(pm.name) },
-    };
-  });
-  return { ...plan, weeks };
-}
-
-/** Applies all Claude structure overlays to a deterministically generated plan. */
-function applyClaudeStructure(
-  plan: TrainingPlanV2,
-  structure: ClaudePlanStructure,
-): TrainingPlanV2 {
-  let result = plan;
-  if (structure.sessionNames) result = applySessionNames(result, structure.sessionNames);
-  if (structure.phases?.length) result = applyClaudePhases(result, structure.phases);
-  return result;
-}
 
 // ---------------------------------------------------------------------------
 
@@ -253,6 +169,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [skippedPreferences, setSkippedPreferences] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPersonalizing, setIsPersonalizing] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const distance = useMemo(
     () => resolveDistanceSelection(shortcutId, customDistance),
@@ -380,9 +297,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const handleFinish = useCallback(async () => {
     if (!summaryPayload || isGenerating) return;
 
+    setGenerateError(null);
+
     try {
-      setIsPersonalizing(true);
-      setIsGenerating(false);
+      setIsGenerating(true);
+      setIsPersonalizing(false);
       // eslint-disable-next-line no-console
       console.log("[Onboarding] handleFinish start, raceDate:", summaryPayload.raceDate);
 
@@ -415,26 +334,28 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             userPreferences: userPreferences.filter(Boolean),
           };
 
-          const claudeResult = await fetchClaudePlanStructureDirect(profile);
+          const { plan: fullPlan, error: fullPlanError } = await fetchFullPlanFromClaude(profile);
 
-          setIsGenerating(true);
-          await new Promise<void>((resolve) => setTimeout(resolve, 50));
+          if (fullPlan && validateTrainingPlanV2Integrity(fullPlan)) {
+            plan = fullPlan;
+            patches = [];
+          } else {
+            // eslint-disable-next-line no-console
+            console.error("[Onboarding] Option A failed:", fullPlanError);
+            setIsPersonalizing(true);
 
-          plan = generateMarathonPlanV2ToRace(
-            startDay,
-            raceDay,
-            summaryPayload.raceGoal,
-            summaryPayload.raceDistanceKm,
-            summaryPayload.weeklyKmRange,
-            undefined,
-            claudeResult.structure?.rules ?? undefined,
-          );
-
-          if (claudeResult.structure) {
-            plan = applyClaudeStructure(plan, claudeResult.structure);
+            const claudeResult = await fetchClaudePlanRules(profile);
+            plan = generateMarathonPlanV2ToRace(
+              startDay,
+              raceDay,
+              summaryPayload.raceGoal,
+              summaryPayload.raceDistanceKm,
+              summaryPayload.weeklyKmRange,
+              parseRestDayFromPreferences(userPreferences),
+              claudeResult.rules ?? undefined,
+            );
+            patches = [];
           }
-
-          patches = [];
         }
       }
 
@@ -452,6 +373,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[Onboarding] ERROR in handleFinish:", err);
+      setGenerateError("Plan konnte nicht erstellt werden. Bitte versuche es erneut.");
     } finally {
       // eslint-disable-next-line no-console
       console.log("[Onboarding] finally – resetting loading states");
@@ -464,7 +386,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     ? "Plan wird personalisiert…"
     : isGenerating
       ? "Plan wird erstellt…"
-      : "Los geht's";
+      : generateError !== null
+        ? "Erneut versuchen"
+        : "Los geht's";
 
   return (
     <div
@@ -904,6 +828,20 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           </>
         ) : null}
 
+        {generateError !== null ? (
+          <p
+            style={{
+              margin: "0 0 12px",
+              fontSize: 13,
+              color: "#f87171",
+              textAlign: "center",
+              lineHeight: 1.4,
+            }}
+          >
+            {generateError}
+          </p>
+        ) : null}
+
         <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
           {step > 1 ? (
             <button
@@ -956,7 +894,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           ) : (
             <button
               type="button"
-              disabled={isGenerating}
+              disabled={isGenerating || isPersonalizing}
               onClick={() => void handleFinish()}
               style={{
                 flex: step > 1 ? 1.4 : 1,
@@ -965,8 +903,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 fontWeight: 700,
                 border: "none",
                 borderRadius: 14,
-                cursor: isGenerating ? "not-allowed" : "pointer",
-                opacity: isGenerating ? 0.7 : 1,
+                cursor: isGenerating || isPersonalizing ? "not-allowed" : "pointer",
+                opacity: isGenerating || isPersonalizing ? 0.7 : 1,
                 color: "#fff",
                 background: "linear-gradient(135deg, #10b981, #3b82f6)",
               }}

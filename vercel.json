@@ -5,6 +5,15 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 60
+    },
+    "api/onboarding/generate-plan-full.js": {
+      "maxDuration": 60
+    },
+    "api/onboarding/generate-plan.js": {
+      "maxDuration": 60
+    },
+    "api/ai.js": {
+      "maxDuration": 60
     }
   },
   "headers": [

@@ -28,6 +28,11 @@
 	<string>Diese App liest deine Trainingsdaten, um dein Training zu analysieren.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Diese App speichert Trainingsdaten, um deinen Fortschritt zu verbessern.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<false/>
+	</dict>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

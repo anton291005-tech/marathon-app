@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react";
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
@@ -14,6 +15,14 @@ import { App as CapApp } from '@capacitor/app';
 import { Keyboard, KeyboardResize } from '@capacitor/keyboard';
 import { supabase } from './lib/supabase/client';
 import { parseAuthTokensFromUrl } from './lib/supabase/passwordRecovery';
+import { useNetworkStatus } from './hooks/useNetworkStatus';
+
+Sentry.init({
+  dsn: process.env.REACT_APP_SENTRY_DSN || "",
+  environment: process.env.NODE_ENV,
+  enabled: process.env.NODE_ENV === "production" && Boolean(process.env.REACT_APP_SENTRY_DSN),
+  tracesSampleRate: 0,
+});
 
 if (Capacitor.isNativePlatform()) {
   void Keyboard.setResizeMode({ mode: KeyboardResize.Body });
@@ -22,6 +31,7 @@ if (Capacitor.isNativePlatform()) {
 function AppRoot() {
   const [splashDone, setSplashDone] = useState(false);
   const { user, loading, passwordRecoveryPending } = useAuth();
+  const isOnline = useNetworkStatus();
 
   if (!splashDone) {
     return (
@@ -40,7 +50,35 @@ function AppRoot() {
     return <AuthScreen />;
   }
 
-  return <AppMain />;
+  return (
+    <>
+      {!isOnline ? (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 9999,
+            background: "#1e293b",
+            borderBottom: "1px solid #f59e0b",
+            padding: "10px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            paddingTop: "calc(10px + env(safe-area-inset-top, 0px))",
+          }}
+        >
+          <span style={{ fontSize: 16 }}>📡</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "#fbbf24" }}>
+            Keine Internetverbindung
+          </span>
+        </div>
+      ) : null}
+      <AppMain />
+    </>
+  );
 }
 
 const root = ReactDOM.createRoot(

@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from "../api/apiBaseUrl";
+import { getAiConfig } from "./config";
 import type { AiPlanRules } from "./coachPlanMutations";
 import type { TrainingPlanV2 } from "../../planV2/types";
 
@@ -63,15 +63,28 @@ export interface PlanGenerationProfile {
   userPreferences: string[];
 }
 
+export interface FullPlanResult {
+  plan: TrainingPlanV2 | null;
+  error?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Shared fetch helper
 // ---------------------------------------------------------------------------
 
+const DEFAULT_PLAN_API_BASE = "https://marathon-app-alpha.vercel.app";
+
+function getPlanApiBaseUrl(): string {
+  const config = getAiConfig();
+  return config.apiBaseUrl?.replace(/\/$/, "") || DEFAULT_PLAN_API_BASE;
+}
+
 async function postGeneratePlan(profile: PlanGenerationProfile, timeoutMs: number): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const base = getPlanApiBaseUrl();
 
-  const res = await fetch(`${getApiBaseUrl()}/api/onboarding/generate-plan`, {
+  const res = await fetch(`${base}/api/onboarding/generate-plan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ profile }),
@@ -91,6 +104,45 @@ async function postGeneratePlan(profile: PlanGenerationProfile, timeoutMs: numbe
   console.log("[claude-client] raw response (first 500 chars):", rawText.slice(0, 500));
 
   return rawText;
+}
+
+// ---------------------------------------------------------------------------
+// fetchFullPlanFromClaude  (Option A — full plan from Claude)
+// ---------------------------------------------------------------------------
+
+export async function fetchFullPlanFromClaude(
+  profile: PlanGenerationProfile,
+): Promise<FullPlanResult> {
+  // eslint-disable-next-line no-console
+  console.log("[claude-client] requesting full plan (Option A)...");
+
+  const base = getPlanApiBaseUrl();
+  const url = `${base}/api/onboarding/generate-plan-full`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 58000);
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) return { plan: null, error: `HTTP ${res.status}` };
+
+    const data = (await res.json()) as { plan?: unknown; error?: string };
+    if (!data.plan) return { plan: null, error: data.error ?? "no plan returned" };
+
+    return { plan: data.plan as TrainingPlanV2 };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "unknown";
+    // eslint-disable-next-line no-console
+    console.error("[claude-client] fetchFullPlanFromClaude error:", msg);
+    return { plan: null, error: msg };
+  }
 }
 
 // ---------------------------------------------------------------------------

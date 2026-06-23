@@ -2820,6 +2820,12 @@ export default function AppMain(){
     resetOnboardingFlag,
   ]);
 
+  const showNoPlanEmptyState =
+    preferences?.onboardingComplete === true &&
+    !showOnboarding &&
+    onboardingHydrationReady &&
+    (!trainingPlanV2 || !(trainingPlanV2.weeks?.length));
+
   const refreshAllTrainingPlans = useCallback(async () => {
     if (!user?.id) return;
     const list = await loadAllTrainingPlans(user.id);
@@ -3343,6 +3349,60 @@ export default function AppMain(){
         }
       >
       {activeView==="home"?(
+        showNoPlanEmptyState ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "48px 24px",
+              textAlign: "center",
+              gap: 16,
+              flex: 1,
+              ...viewTransitionStyle,
+            }}
+          >
+            <div style={{ fontSize: 48 }}>🏃</div>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#f1f5f9" }}>
+              Kein Plan vorhanden
+            </h2>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 14,
+                color: "#94a3b8",
+                lineHeight: 1.5,
+                maxWidth: 280,
+              }}
+            >
+              Dein Trainingsplan konnte nicht erstellt werden. Starte das Onboarding neu, um einen
+              Plan zu generieren.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof localStorage !== "undefined") {
+                  localStorage.setItem(RESET_ONBOARDING_STORAGE_KEY, "1");
+                }
+                setOnboardingForNewPlan(true);
+              }}
+              style={{
+                marginTop: 8,
+                padding: "12px 24px",
+                fontSize: 15,
+                fontWeight: 700,
+                borderRadius: 14,
+                border: "none",
+                color: "#fff",
+                background: "linear-gradient(135deg, #10b981, #3b82f6)",
+                cursor: "pointer",
+              }}
+            >
+              Onboarding neu starten
+            </button>
+          </div>
+        ) : (
         <div
           ref={homeMainColumnRef}
           style={{
@@ -4096,6 +4156,7 @@ export default function AppMain(){
           </div>
           </div>
         </div>
+        )
       ):activeView==="week"?(
           <div
             style={{
