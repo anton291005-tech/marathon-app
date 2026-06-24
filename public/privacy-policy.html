@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Datenschutzerklärung – MyRace</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0f14;
+      --surface: #141720;
+      --border: #1e2230;
+      --accent: #6ee7b7;
+      --accent-dim: rgba(110, 231, 183, 0.12);
+      --text: #e8eaf0;
+      --muted: #7a7f96;
+      --heading: #ffffff;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 48px 24px 32px;
+      max-width: 720px;
+      margin: 0 auto;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .wordmark {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    .wordmark-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+    }
+
+    .wordmark-text {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    h1 {
+      font-size: clamp(26px, 5vw, 38px);
+      font-weight: 700;
+      color: var(--heading);
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+
+    .meta {
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 0.03em;
+    }
+
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    section {
+      margin-bottom: 40px;
+    }
+
+    h2 {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+
+    p {
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    p:last-child { margin-bottom: 0; }
+
+    ul {
+      padding-left: 20px;
+      margin-bottom: 12px;
+    }
+
+    li {
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .highlight-box {
+      background: var(--accent-dim);
+      border: 1px solid rgba(110, 231, 183, 0.2);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-bottom: 12px;
+    }
+
+    .highlight-box p {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 40px 0;
+    }
+
+    footer {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px 24px 48px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 480px) {
+      header, main, footer { padding-left: 16px; padding-right: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">
+    <div class="wordmark-dot"></div>
+    <span class="wordmark-text">MyRace</span>
+  </div>
+  <h1>Datenschutzerklärung</h1>
+  <p class="meta">Zuletzt aktualisiert: Juni 2026</p>
+</header>
+
+<main>
+
+  <section>
+    <h2>1. Verantwortlicher</h2>
+    <p>Verantwortlicher im Sinne der Datenschutz-Grundverordnung (DSGVO) ist:</p>
+    <div class="highlight-box">
+      <p><strong>Anton Albers</strong><br />
+      E-Mail: <a href="mailto:albers.anton291005@gmail.com">albers.anton291005@gmail.com</a></p>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Welche Daten wir erheben</h2>
+    <p>MyRace erhebt ausschließlich Daten, die für die Kernfunktion der App erforderlich sind:</p>
+    <ul>
+      <li><strong>Kontodaten:</strong> E-Mail-Adresse und Passwort (verschlüsselt) bei der Registrierung</li>
+      <li><strong>Trainingsdaten:</strong> Trainingsplan, abgeschlossene Einheiten, Distanzen und Zeiten</li>
+      <li><strong>Gesundheitsdaten:</strong> Lauf- und Raddaten aus Apple HealthKit (nur mit deiner Erlaubnis)</li>
+      <li><strong>Nutzereingaben:</strong> Renndatum, Zielzeit, Trainingspräferenzen und Coach-Chateingaben</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>3. Zweck der Verarbeitung</h2>
+    <p>Deine Daten werden ausschließlich verwendet, um:</p>
+    <ul>
+      <li>deinen persönlichen Marathontrainingsplan zu erstellen und zu aktualisieren</li>
+      <li>KI-Coaching-Antworten auf deine Anfragen zu generieren</li>
+      <li>deine Trainingsfortschritte zu speichern und anzuzeigen</li>
+      <li>deinen Account zu verwalten</li>
+    </ul>
+    <p>Es findet keine Weitergabe deiner Daten an Dritte zu Werbe- oder Marketingzwecken statt.</p>
+  </section>
+
+  <section>
+    <h2>4. Drittanbieter & Dienste</h2>
+    <p>MyRace nutzt folgende externe Dienste zur technischen Bereitstellung der App:</p>
+    <ul>
+      <li><strong>Supabase</strong> (EU-Region, Frankfurt) – Datenbankhosting und Authentifizierung</li>
+      <li><strong>Vercel</strong> – Serverless API-Hosting</li>
+      <li><strong>Anthropic Claude API</strong> – Verarbeitung von Coach-Anfragen und Plangenerierung</li>
+      <li><strong>Apple HealthKit</strong> – Zugriff auf Gesundheitsdaten (nur lokal auf deinem Gerät, mit deiner Erlaubnis)</li>
+    </ul>
+    <p>Alle Dienste verarbeiten Daten ausschließlich zur Bereitstellung der App-Funktionen.</p>
+  </section>
+
+  <section>
+    <h2>5. Apple HealthKit</h2>
+    <p>MyRace kann auf Gesundheits- und Fitnessdaten aus Apple HealthKit zugreifen, sofern du dies explizit erlaubst. Diese Daten werden:</p>
+    <ul>
+      <li>ausschließlich zur Analyse deiner Trainingseinheiten genutzt</li>
+      <li>nicht an Dritte für Werbung oder Datenhandel weitergegeben</li>
+      <li>nicht ohne deine Zustimmung verarbeitet</li>
+    </ul>
+    <p>Du kannst den HealthKit-Zugriff jederzeit in den iPhone-Einstellungen unter Datenschutz → Gesundheit widerrufen.</p>
+  </section>
+
+  <section>
+    <h2>6. Datenspeicherung & Sicherheit</h2>
+    <p>Deine Daten werden in der EU (Supabase, Region Frankfurt) gespeichert. Passwörter werden verschlüsselt gespeichert und sind für uns nicht einsehbar. Der Zugriff auf deine Daten ist durch Row Level Security (RLS) geschützt — jeder Nutzer kann ausschließlich auf seine eigenen Daten zugreifen.</p>
+  </section>
+
+  <section>
+    <h2>7. Deine Rechte</h2>
+    <p>Gemäß DSGVO hast du das Recht auf:</p>
+    <ul>
+      <li><strong>Auskunft</strong> über deine gespeicherten Daten</li>
+      <li><strong>Berichtigung</strong> unrichtiger Daten</li>
+      <li><strong>Löschung</strong> deiner Daten (Account-Deletion direkt in der App verfügbar)</li>
+      <li><strong>Einschränkung</strong> der Verarbeitung</li>
+      <li><strong>Datenübertragbarkeit</strong></li>
+      <li><strong>Widerspruch</strong> gegen die Verarbeitung</li>
+    </ul>
+    <p>Zur Ausübung deiner Rechte wende dich an: <a href="mailto:albers.anton291005@gmail.com">albers.anton291005@gmail.com</a></p>
+  </section>
+
+  <section>
+    <h2>8. Cookies & Tracking</h2>
+    <p>MyRace verwendet keine Cookies und kein Tracking zu Werbezwecken. Es werden keine Nutzerprofile für Dritte erstellt.</p>
+  </section>
+
+  <section>
+    <h2>9. Änderungen dieser Erklärung</h2>
+    <p>Bei wesentlichen Änderungen dieser Datenschutzerklärung werden Nutzer in der App informiert. Die aktuelle Version ist stets unter dieser URL abrufbar.</p>
+  </section>
+
+  <div class="divider"></div>
+
+  <section>
+    <h2>Kontakt</h2>
+    <p>Bei Fragen zum Datenschutz in MyRace:<br />
+    <a href="mailto:albers.anton291005@gmail.com">albers.anton291005@gmail.com</a></p>
+  </section>
+
+</main>
+
+<footer>
+  © 2026 MyRace · Anton Albers · <a href="mailto:albers.anton291005@gmail.com">albers.anton291005@gmail.com</a>
+</footer>
+
+</body>
+</html>

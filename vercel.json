@@ -19,6 +19,10 @@
   ],
   "rewrites": [
     {
+      "source": "/privacy-policy",
+      "destination": "/privacy-policy.html"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
