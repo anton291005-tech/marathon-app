@@ -277,6 +277,57 @@ describe("generateMarathonPlanV2ToRace distance/volume/rest", () => {
     expect(true).toBe(true);
   });
 
+  test("phase volume progression: increases base→peak then tapers (18w Claude phases)", () => {
+    const planStart = new Date(2026, 6, 6, 12, 0, 0);
+    const raceDay = new Date(2026, 10, 8, 12, 0, 0);
+    const phases = [
+      { name: "base", weeks: 5, label: "Base", focus: "Basis" },
+      { name: "build", weeks: 8, label: "Build", focus: "Aufbau" },
+      { name: "peak", weeks: 3, label: "Peak", focus: "Peak" },
+      { name: "taper", weeks: 2, label: "Taper", focus: "Taper" },
+    ];
+    const rules = {
+      restDays: [1],
+      longRunDay: 0,
+      intervalDay: 2,
+      tempoDay: 4,
+      weeklyKmMultiplier: 1,
+    };
+    const plan = generateMarathonPlanV2ToRace(
+      planStart,
+      raceDay,
+      "time",
+      42.2,
+      "60–80 km",
+      undefined,
+      rules,
+      phases,
+    );
+    const kms: number[] = [];
+    for (const w of plan.weeks) {
+      const km = trainingWeekKm(plan, w.meta?.wn ?? 0);
+      kms.push(km);
+    }
+    const w1 = kms[0] ?? 0;
+    const w7 = kms[6] ?? 0;
+    const peakWeeks = plan.weeks.filter((w) => w.meta?.phase === "peak");
+    const maxPeakKm = Math.max(...peakWeeks.map((w) => trainingWeekKm(plan, w.meta?.wn ?? 0)));
+    expect(w1).toBeLessThan(w7);
+    expect(maxPeakKm).toBeGreaterThan(w1);
+    expect(maxPeakKm).toBeGreaterThan(w7);
+    for (const tw of plan.weeks.filter((w) => w.meta?.phase === "taper")) {
+      expect(trainingWeekKm(plan, tw.meta?.wn ?? 0)).toBeLessThan(maxPeakKm);
+    }
+    // Recovery dips every 4th week (outside taper)
+    for (const recWn of [4, 8, 12]) {
+      const recKm = trainingWeekKm(plan, recWn);
+      const prevKm = trainingWeekKm(plan, recWn - 1);
+      if (recKm > 0 && prevKm > 0 && plan.weeks.find((w) => w.meta?.wn === recWn)?.meta?.isRecoveryWeek) {
+        expect(recKm).toBeLessThan(prevKm);
+      }
+    }
+  });
+
   test("recovery volume E2E: 12+ week plan has km-reduced recovery weeks at W4, W8, W12", () => {
     // start + race already give ~23 weeks (2026-01-05 to 2026-06-14 = 160 days)
     const plan = generateMarathonPlanV2ToRace(start, race, "time", 42.2);

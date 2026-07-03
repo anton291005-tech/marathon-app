@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import AiMessageList, { type UiChatMessage } from "./AiMessageList";
 import { executeAiAction } from "../../lib/ai/actions";
 import { runCoachAgent } from "../../lib/ai/coachAgent";
@@ -41,6 +42,7 @@ export default function AiCoachPanel({
   messages: controlledMessages,
   setMessages: setControlledMessages,
 }: Props) {
+  const { t } = useTranslation();
   const [internalMessages, setInternalMessages] = useState<UiChatMessage[]>([
     {
       id: createId(),
@@ -123,7 +125,7 @@ export default function AiCoachPanel({
         id: createId(),
         role: "assistant",
         type: "error",
-        text: "Coach gerade nicht erreichbar. Bitte versuche es gleich nochmal.",
+        text: t("coach.unavailable"),
         retryPrompt: userInput,
       });
     }
@@ -270,14 +272,14 @@ export default function AiCoachPanel({
     <div style={{ padding: "16px 16px 40px", display: "flex", flexDirection: "column", gap: 12, minHeight: "calc(100vh - 160px)" }}>
       <div
         style={{
-          background: "rgba(8,12,24,0.85)",
-          border: "1px solid rgba(148,163,184,0.14)",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-input)",
           borderRadius: 18,
           padding: "14px 14px 10px",
         }}
       >
-        <div style={{ fontSize: 17, fontWeight: 800, color: "#fff" }}>AI Coach</div>
-        <div style={{ marginTop: 6, fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text-primary)" }}>AI Coach</div>
+        <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
           Coach + Navigator. Plananpassungen werden immer erst als Action Card zur Bestaetigung gezeigt.
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
@@ -287,9 +289,9 @@ export default function AiCoachPanel({
               onClick={() => sendMessage(chip)}
               disabled={busy}
               style={{
-                background: "rgba(30,41,59,0.8)",
-                border: "1px solid rgba(148,163,184,0.2)",
-                color: "#cbd5e1",
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border-input)",
+                color: "var(--text-primary)",
                 borderRadius: 999,
                 padding: "7px 11px",
                 fontSize: 12,
@@ -312,8 +314,8 @@ export default function AiCoachPanel({
           display: "flex",
           flexDirection: "column",
           gap: 8,
-          background: "rgba(4,6,14,0.5)",
-          border: "1px solid rgba(148,163,184,0.12)",
+          background: "var(--bg-secondary)",
+          border: "1px solid var(--border-default)",
           borderRadius: 18,
           padding: 12,
           minHeight: 280,
@@ -342,14 +344,14 @@ export default function AiCoachPanel({
             }
           }}
           disabled={busy}
-          placeholder="Frage deinen Coach..."
+          placeholder={t("coach.placeholder")}
           style={{
             flex: 1,
-            background: "#070b16",
-            border: "1px solid rgba(148,163,184,0.22)",
+            background: "var(--bg-primary)",
+            border: "1px solid var(--border-input)",
             borderRadius: 12,
             padding: "12px 12px",
-            color: "#e2e8f0",
+            color: "var(--text-primary)",
             fontSize: 14,
             opacity: busy ? 0.65 : 1,
           }}
@@ -369,7 +371,7 @@ export default function AiCoachPanel({
             opacity: canSend ? 1 : 0.7,
           }}
         >
-          Senden
+          {t("coach.send")}
         </button>
       </div>
     </div>

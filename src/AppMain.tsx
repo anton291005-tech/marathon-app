@@ -69,6 +69,10 @@ import {
   useRecoveryDomainRuntime,
 } from "./app/runtime";
 import { useAuth } from "./contexts/AuthContext";
+import { useTheme } from "./context/ThemeContext";
+import { useLanguage } from "./context/LanguageContext";
+import { useNotifications } from "./context/NotificationContext";
+import { useTranslation } from "react-i18next";
 import {
   formatKm,
   getDisplayPlannedDistanceKm,
@@ -900,9 +904,9 @@ function getHeroTitle(session){
 
 /** Matches `TI` training-type colors (Home hero dot, badges, etc.). */
 function getSessionTypeAccentColor(type){
-  if(!type)return "#64748b";
+  if(!type)return "var(--text-muted)";
   const meta = TI[type];
-  return meta?.col ?? "#64748b";
+  return meta?.col ?? "var(--text-muted)";
 }
 
 /** Linker Tabbar-Shortcut: gleiche Lauf-Session wie Home-Held (`homeRunSession`). */
@@ -922,7 +926,7 @@ function MetricCard({ label, value, sublabel, accent }){
     <div style={{background:"rgba(13,16,33,0.86)",border:"1px solid rgba(148,163,184,0.12)",borderRadius:18,padding:14,minWidth:0,boxShadow:"0 14px 34px rgba(2,6,23,0.22)"}}>
       <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",marginBottom:8,fontWeight:700}}>{label}</div>
       <div style={{fontSize:24,fontWeight:800,color:accent || "#fff",lineHeight:1}}>{value}</div>
-      {sublabel && <div style={{fontSize:12,color:"#94a3b8",marginTop:8,lineHeight:1.4}}>{sublabel}</div>}
+      {sublabel && <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:8,lineHeight:1.4}}>{sublabel}</div>}
     </div>
   );
 }
@@ -941,9 +945,9 @@ function CollapsibleSettingsCard({ title, subtitle, expanded, onToggle, children
   return (
     <div
       style={{
-        background: "linear-gradient(160deg,rgba(18,18,36,0.98),rgba(11,16,28,0.94))",
+        background: "var(--bg-card)",
         borderRadius: 20,
-        border: "1px solid rgba(148,163,184,0.1)",
+        border: "1px solid var(--border-default)",
         overflow: "hidden",
         flexShrink: 0,
       }}
@@ -966,9 +970,9 @@ function CollapsibleSettingsCard({ title, subtitle, expanded, onToggle, children
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>{title}</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1.2 }}>{title}</div>
           {subtitle ? (
-            <div style={{ fontSize: 11, color: "#7c8aa5", marginTop: 2, lineHeight: 1.3 }}>{subtitle}</div>
+            <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2, lineHeight: 1.3 }}>{subtitle}</div>
           ) : null}
         </div>
         <span
@@ -992,7 +996,7 @@ function CollapsibleSettingsCard({ title, subtitle, expanded, onToggle, children
           transition: "max-height 0.35s ease",
         }}
       >
-        <div style={{ padding: "0 16px 16px", borderTop: "1px solid rgba(148,163,184,0.07)" }}>
+        <div style={{ padding: "0 16px 16px", borderTop: "1px solid var(--border-default)" }}>
           {children}
           <button
             type="button"
@@ -1001,7 +1005,7 @@ function CollapsibleSettingsCard({ title, subtitle, expanded, onToggle, children
               marginTop: 16,
               background: "transparent",
               border: "none",
-              color: "#64748b",
+              color: "var(--text-muted)",
               fontSize: 11,
               fontWeight: 700,
               cursor: "pointer",
@@ -1129,6 +1133,10 @@ function marathonLogRecordsDiffSyncKeys(prev, next) {
 
 export default function AppMain(){
   const { user, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const { language, setLanguage, languageLabels } = useLanguage();
+  const { settings: notificationSettings, updateSettings: updateNotificationSettings } = useNotifications();
+  const { t } = useTranslation();
   const [showTour, setShowTour] = useState<boolean>(false);
   useEffect(() => {
     if (!user) return;
@@ -2475,7 +2483,7 @@ export default function AppMain(){
 
   const w=displayPlan[wIdx];
   const weekHasExpandedSessionDesc = w.s.some((s) => !!weekTabDescExpandedById[s.id]);
-  const ph=PI[w.phase] ?? PI["base"] ?? PI["BASE"] ?? { label:"Woche", emoji:"📅", col:"#94a3b8", bg:"rgba(148,163,184,0.12)" };
+  const ph=PI[w.phase] ?? PI["base"] ?? PI["BASE"] ?? { label:"Woche", emoji:"📅", col:"var(--text-secondary)", bg:"rgba(148,163,184,0.12)" };
   // Week 1 mid-week start: show greyed placeholder cells for days before plan start
   const WEEK_DAYS_DE = ["Mo","Di","Mi","Do","Fr","Sa","So"];
   const missingLeadingDays = wIdx === 0 && w.s.length > 0 && w.s[0].day !== "Mo"
@@ -3071,11 +3079,13 @@ export default function AppMain(){
   const safeTopPad = "max(44px, env(safe-area-inset-top, 44px))";
   /** Tabbar ~72px + Abstand; zu groß = Leerraum über fixer Nav, zu klein = Content verdeckt */
   const safeBottomContentPad = "calc(86px + env(safe-area-inset-bottom, 0px))";
-  const appRootBackground = {
-    backgroundColor: "#070912",
-    backgroundImage: "radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",
-    backgroundRepeat: "no-repeat",
-  };
+  const appRootBackground = theme === "light"
+    ? { backgroundColor: "var(--bg-primary)" }
+    : {
+        backgroundColor: "#070912",
+        backgroundImage: "radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",
+        backgroundRepeat: "no-repeat",
+      };
   const mainScrollAreaStyle = {
     flex: 1,
     minHeight: 0,
@@ -3279,7 +3289,7 @@ export default function AppMain(){
         flexDirection: "column",
         position: "relative",
         backgroundColor: "#070912",
-        color: "#e2e8f0",
+        color: "var(--text-primary)",
         fontFamily: "'Segoe UI',system-ui,sans-serif",
         fontSize: 14,
         WebkitTapHighlightColor: "transparent",
@@ -3371,7 +3381,7 @@ export default function AppMain(){
               style={{
                 margin: 0,
                 fontSize: 14,
-                color: "#94a3b8",
+                color: "var(--text-secondary)",
                 lineHeight: 1.5,
                 maxWidth: 280,
               }}
@@ -3742,7 +3752,7 @@ export default function AppMain(){
                   padding: 0,
                   background: "rgba(255,255,255,0.06)",
                   border: "1px solid rgba(148,163,184,0.16)",
-                  color: homeRunSession ? "#94a3b8" : "#374151",
+                  color: homeRunSession ? "var(--text-secondary)" : "#374151",
                   borderRadius: 999,
                   cursor: homeRunSession ? "pointer" : "not-allowed",
                   fontSize: 16,
@@ -3791,7 +3801,7 @@ export default function AppMain(){
                 display:"flex",
                 flexDirection:"column",
                 gap: hs.coachCardGap,
-                color:"#e2e8f0",
+                color:"var(--text-primary)",
               }}
             >
               {/* Header + Plan-Zeile: feste 8px-Lücke, eine Zeile für Label + Score */}
@@ -4096,7 +4106,7 @@ export default function AppMain(){
                   letterSpacing:"0.02em",
                 }}
               >
-                {homeCoachAssessmentExpanded ? "Weniger anzeigen" : "Mehr anzeigen"}
+                {homeCoachAssessmentExpanded ? "Weniger anzeigen" : t("plan.show_more")}
                 <span style={{ marginLeft: 6, opacity: 0.85 }} aria-hidden>{homeCoachAssessmentExpanded ? "▴" : "▾"}</span>
               </button>
             </div>
@@ -4171,22 +4181,22 @@ export default function AppMain(){
               ...viewTransitionStyle,
             }}
           >
-            <div data-tour="week-header" style={{ flexShrink: 0, background:"linear-gradient(160deg,rgba(16,19,39,0.96),rgba(12,15,28,0.92))",border:"1px solid rgba(148,163,184,0.1)",borderRadius:16,padding:"4px 6px 4px",boxShadow:"0 20px 40px rgba(2,6,23,0.22)"}}>
+            <div data-tour="week-header" style={{ flexShrink: 0, background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:16,padding:"4px 6px 4px",boxShadow:"0 20px 40px var(--shadow)"}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===0?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
                 <div style={{flex:1,textAlign:"center",minWidth:0}}>
                   <span style={{display:"inline-block",padding:"3px 9px",borderRadius:999,fontSize:11,fontWeight:700,background:ph.bg,color:ph.col,marginBottom:4}}>{ph.emoji} {ph.label}</span>
-                  <div style={{fontSize:17,fontWeight:800,color:"#fff",lineHeight:1.2}}>{w.label}</div>
-                  <div style={{fontSize:12,color:"#7c8aa5",marginTop:2}}>{w.dates}</div>
+                  <div style={{fontSize:17,fontWeight:800,color:"var(--text-primary)",lineHeight:1.2}}>{w.label}</div>
+                  <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:2}}>{w.dates}</div>
                 </div>
                 <button onClick={()=>setWIdx(i=>Math.min(displayPlan.length-1,i+1))} disabled={wIdx===displayPlan.length-1} style={{background:wIdx===displayPlan.length-1?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===displayPlan.length-1?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
               </div>
 
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:3,marginTop:2}}>
                 <div style={{minWidth:0}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:2}}>Geplant (Lauf)</div>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:2}}>{t("plan.planned_km")}</div>
                   <div style={{fontSize:18,fontWeight:800,color:"#38bdf8",lineHeight:1.1}}>{weekAnalysis.plannedKm} km</div>
-                  <div style={{fontSize:11,color:"rgba(148,163,184,0.48)",marginTop:2}}>Woche</div>
+                  <div style={{fontSize:11,color:"rgba(148,163,184,0.48)",marginTop:2}}>{t("plan.week_label")}</div>
                   {Math.abs(weekAnalysis.plannedLoadKm - weekAnalysis.plannedKm) > 0.05 ? (
                     <div style={{ fontSize: 10, color: "rgba(148,163,184,0.4)", marginTop: 3, lineHeight: 1.2 }}>
                       Trainingsvolumen: {formatKm(weekAnalysis.plannedLoadKm)} km
@@ -4194,7 +4204,7 @@ export default function AppMain(){
                   ) : null}
                 </div>
                 <div style={{minWidth:0}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:2}}>Ist (Lauf, Health)</div>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:2}}>{t("plan.actual_km")}</div>
                   <div style={{fontSize:18,fontWeight:800,color:"#10b981",lineHeight:1.1}}>{resolveWeekDisplayRunKm(weekHealthKpi.runKm, weekAnalysis.actualKm).toFixed(1)} km</div>
                   <div style={{fontSize:11,color:"rgba(148,163,184,0.48)",marginTop:2}}>{Math.round(clampPct(weekAnalysis.plannedKm > 0 ? (resolveWeekDisplayRunKm(weekHealthKpi.runKm, weekAnalysis.actualKm) / weekAnalysis.plannedKm) * 100 : 0))}% erledigt</div>
                   {weekHealthKpi.bikeKm > 0.05 ? (
@@ -4207,7 +4217,7 @@ export default function AppMain(){
 
               <div style={{marginTop:2}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,fontSize:11,color:"#7c8aa5",marginBottom:2}}>
-                  <span>Wochenfortschritt (Lauf)</span>
+                  <span>{t("plan.progress")}</span>
                   <span style={{fontWeight:700,color:"rgba(226,232,240,0.75)",whiteSpace:"nowrap"}}>{Math.round(clampPct(weekAnalysis.plannedKm > 0 ? (resolveWeekDisplayRunKm(weekHealthKpi.runKm, weekAnalysis.actualKm) / weekAnalysis.plannedKm) * 100 : 0))}%</span>
                 </div>
                 <div style={{height:6,background:"rgba(15,23,42,0.85)",borderRadius:999,overflow:"hidden"}}>
@@ -4217,11 +4227,11 @@ export default function AppMain(){
 
               <div style={{display:"flex",gap:3,marginTop:2}}>
                 <div style={{flex:1,minWidth:0,textAlign:"center",padding:"3px 4px",borderRadius:10,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:2}}>Einheiten</div>
-                  <div style={{fontSize:15,fontWeight:800,color:"#e2e8f0",lineHeight:1.15}}>{weekAnalysis.doneSessions}/{weekAnalysis.plannedTrainSessions}</div>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:2}}>{t("plan.units")}</div>
+                  <div style={{fontSize:15,fontWeight:800,color:"var(--text-primary)",lineHeight:1.15}}>{weekAnalysis.doneSessions}/{weekAnalysis.plannedTrainSessions}</div>
                 </div>
                 <div style={{flex:1,minWidth:0,textAlign:"center",padding:"3px 4px",borderRadius:10,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:2}}>Intensiv</div>
+                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:2}}>{t("plan.intensive")}</div>
                   <div style={{fontSize:15,fontWeight:800,color:"#fb7185",lineHeight:1.15}}>{weekAnalysis.intenseDone}/{weekAnalysis.intensePlanned}</div>
                 </div>
               </div>
@@ -4244,7 +4254,7 @@ export default function AppMain(){
               }}
             >
               {w.s.length === 0 && (
-                <div style={{background:"rgba(11,16,28,0.94)",border:"1px solid rgba(148,163,184,0.1)",borderRadius:18,padding:18,fontSize:13,color:"#94a3b8",lineHeight:1.6}}>
+                <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:18,padding:18,fontSize:13,color:"var(--text-secondary)",lineHeight:1.6}}>
                   Für diese Woche sind keine Einheiten im Plan hinterlegt.
                 </div>
               )}
@@ -4262,14 +4272,14 @@ export default function AppMain(){
                     flex:1,
                     minHeight:0,
                   }}>
-                    <div style={{width:34,flexShrink:0,textAlign:"center",fontSize:10,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:"0.08em"}}>{dayLabel}</div>
+                    <div style={{width:34,flexShrink:0,textAlign:"center",fontSize:10,fontWeight:800,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.08em"}}>{dayLabel}</div>
                     <div style={{fontSize:11,color:"#475569",fontStyle:"italic"}}>vor Planstart</div>
                   </div>
                 </div>
               ))}
               {w.s.map(session=>{
                 const ti=TI[session.type];
-                const weekTitleColor = session.type === "rest" ? "#94a3b8" : ti?.col || "#fff";
+                const weekTitleColor = session.type === "rest" ? "var(--text-secondary)" : ti?.col || "#fff";
                 const log=logs[session.id];
                 const status = getSessionStatus(log);
                 const isDone=status==="done";
@@ -4322,7 +4332,7 @@ export default function AppMain(){
                       style={{...sessionCardShell,padding: weekCompact ? "3px 5px 3px" : "6px 9px 7px"}}
                     >
                       <div style={{width:34,flexShrink:0,textAlign:"center"}}>
-                        <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
+                        <div style={{fontSize:10,fontWeight:800,color:"var(--text-secondary)",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
                       </div>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{display:"flex",flexWrap:"wrap",alignItems:"baseline",gap:"4px 10px",lineHeight:1.35}}>
@@ -4337,7 +4347,7 @@ export default function AppMain(){
                           })()}
                         </div>
                         {(session.type === "rest" || hasHint) ? (
-                          <div style={{ fontSize: 10, color: "#64748b", marginTop: 4, lineHeight: 1.35, overflowWrap: "anywhere" }}>
+                          <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.35, overflowWrap: "anywhere" }}>
                             <span style={{ fontWeight: 700 }}>Trainingsziele</span>
                             <span> · {getSessionTargetPreviewOneLiner(session, w)}</span>
                           </div>
@@ -4360,7 +4370,7 @@ export default function AppMain(){
                             textAlign: "left",
                           }}
                         >
-                          Mehr anzeigen
+                          {t("plan.show_more")}
                         </button>
                       </div>
                     </div>
@@ -4374,7 +4384,7 @@ export default function AppMain(){
                     style={{...sessionCardShell,padding: weekCompact ? "4px 5px 4px" : "8px 9px 9px"}}
                   >
                     <div style={{width: weekCompact ? 28 : 36,flexShrink:0,textAlign:"center"}}>
-                      <div style={{fontSize: weekCompact ? 9 : 10,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
+                      <div style={{fontSize: weekCompact ? 9 : 10,fontWeight:800,color:"var(--text-secondary)",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
                       <div style={{marginTop: weekCompact ? 2 : 4,width: weekCompact ? 30 : 36,height: weekCompact ? 28 : 36,borderRadius:10,background:`${ti.col}1a`,border:`1px solid ${ti.col}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize: weekCompact ? 14 : 16}}>{ti.emoji}</div>
                     </div>
 
@@ -4469,7 +4479,7 @@ export default function AppMain(){
                                 paddingTop: 8,
                                 borderTop: "1px solid rgba(148,163,184,0.08)",
                                 fontSize: 11,
-                                color: "#64748b",
+                                color: "var(--text-muted)",
                                 lineHeight: 1.45,
                               }}
                             >
@@ -4487,7 +4497,7 @@ export default function AppMain(){
                               <div
                                 style={{
                                   fontSize: 11,
-                                  color: "#64748b",
+                                  color: "var(--text-muted)",
                                   lineHeight: 1.45,
                                   marginBottom: 8,
                                   overflowWrap: "anywhere",
@@ -4496,10 +4506,10 @@ export default function AppMain(){
                                 <span style={{ fontWeight: 700, color: "rgba(100,116,139,0.95)" }}>Trainingsziele</span>
                                 <span style={{ fontWeight: 600 }}> · {getSessionTargetPreviewOneLiner(session, w)}</span>
                               </div>
-                              <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.45 }}>{sessionTargets.pulseLabel}</div>
-                              <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.45 }}>{sessionTargets.paceLabel}</div>
+                              <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.45 }}>{sessionTargets.pulseLabel}</div>
+                              <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.45 }}>{sessionTargets.paceLabel}</div>
                               {sessionTargets.distanceLabel ? (
-                                <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.45 }}>{sessionTargets.distanceLabel}</div>
+                                <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.45 }}>{sessionTargets.distanceLabel}</div>
                               ) : null}
                             </div>
                           ) : null}
@@ -4543,7 +4553,7 @@ export default function AppMain(){
                           style={{
                             marginTop: 8,
                             fontSize: 11,
-                            color: "#64748b",
+                            color: "var(--text-muted)",
                             lineHeight: 1.45,
                             overflowWrap: "anywhere",
                           }}
@@ -4681,7 +4691,7 @@ export default function AppMain(){
           <SurfaceCard data-tour="overview-card">
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,flexWrap:"wrap",gap:6}}>
               <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>Alle Wochen</div>
-              <div style={{fontSize:10,color:"#94a3b8"}}>Längster Lauf: {Math.round(longestLongRunKm)} km</div>
+              <div style={{fontSize:10,color:"var(--text-secondary)"}}>Längster Lauf: {Math.round(longestLongRunKm)} km</div>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: compactScreen.cardGap }}>
@@ -4703,7 +4713,7 @@ export default function AppMain(){
                   >
                     <div style={{padding:"6px 8px 6px"}}>
                       <div style={{fontSize:13,fontWeight:800,color:phase.col,lineHeight:1.25}}>{phase.emoji} {phase.label}</div>
-                      <div style={{fontSize:10,color:"#94a3b8",marginTop:2,lineHeight:1.35}}>
+                      <div style={{fontSize:10,color:"var(--text-secondary)",marginTop:2,lineHeight:1.35}}>
                         {phaseWeeks.length} Wochen
                         {phaseWeeks.length > 0
                           ? ` · Woche ${phaseWeeks[0].wn}${phaseWeeks.length > 1 ? `–${phaseWeeks[phaseWeeks.length - 1].wn}` : ""}`
@@ -4728,7 +4738,7 @@ export default function AppMain(){
                           textAlign:"center",
                         }}
                       >
-                        {expanded ? "Weniger anzeigen" : "Mehr anzeigen"}
+                        {expanded ? "Weniger anzeigen" : t("plan.show_more")}
                       </button>
                     </div>
                     {expanded ? (
@@ -4797,11 +4807,153 @@ export default function AppMain(){
       ):activeView==="settings"?(
         <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flex:1,minHeight:0,...viewTransitionStyle}}>
           <CollapsibleSettingsCard
-            title="Einstellungen"
+            title={t("settings.title")}
             subtitle="Zielzeit, Herzfrequenz"
             expanded={settingsCards.einstellungen}
             onToggle={() => toggleSettingsCard("einstellungen")}
           >
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "16px 0",
+              borderBottom: "1px solid var(--border-default)",
+              marginTop: 12,
+            }}>
+              <div>
+                <div style={{ color: "var(--text-primary)", fontWeight: 500 }}>{t("settings.appearance")}</div>
+                <div style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 2 }}>
+                  {theme === "dark" ? t("settings.appearance_dark") : t("settings.appearance_light")}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label={theme === "dark" ? t("settings.appearance_light") : t("settings.appearance_dark")}
+                style={{
+                  width: 52,
+                  height: 30,
+                  borderRadius: 15,
+                  border: "none",
+                  background: theme === "dark" ? "#60a5fa" : "#cbd5e1",
+                  position: "relative",
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                }}
+              >
+                <div style={{
+                  position: "absolute",
+                  top: 3,
+                  left: theme === "dark" ? 24 : 3,
+                  width: 24,
+                  height: 24,
+                  borderRadius: "50%",
+                  background: "#fff",
+                  transition: "left 0.2s",
+                }} />
+              </button>
+            </div>
+            <div style={{ padding: "16px 0", borderBottom: "1px solid var(--border-default)" }}>
+              <div style={{ color: "var(--text-primary)", fontWeight: 500, marginBottom: 10 }}>
+                {t("settings.language")}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {(["de", "en", "fr", "es"] as const).map((lang) => (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => setLanguage(lang)}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: 10,
+                      border: `1px solid ${language === lang ? "#3b82f6" : "var(--border-default)"}`,
+                      background: language === lang ? "rgba(59,130,246,0.15)" : "var(--bg-card)",
+                      color: language === lang ? "#60a5fa" : "var(--text-secondary)",
+                      fontWeight: language === lang ? 600 : 400,
+                      fontSize: 14,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {languageLabels[lang]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ padding: "16px 0", borderBottom: "1px solid var(--border-default)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: notificationSettings.enabled ? 14 : 0 }}>
+                <div>
+                  <div style={{ color: "var(--text-primary)", fontWeight: 500 }}>Trainings-Erinnerung</div>
+                  <div style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 2 }}>
+                    {notificationSettings.enabled
+                      ? `Täglich um ${String(notificationSettings.hour).padStart(2, "0")}:${String(notificationSettings.minute).padStart(2, "0")} Uhr`
+                      : "Deaktiviert"}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateNotificationSettings({ enabled: !notificationSettings.enabled })}
+                  aria-label={notificationSettings.enabled ? "Trainings-Erinnerung deaktivieren" : "Trainings-Erinnerung aktivieren"}
+                  style={{
+                    width: 52,
+                    height: 30,
+                    borderRadius: 15,
+                    border: "none",
+                    background: notificationSettings.enabled ? "#3b82f6" : "var(--bg-surface)",
+                    position: "relative",
+                    cursor: "pointer",
+                    transition: "background 0.2s",
+                  }}
+                >
+                  <div style={{
+                    position: "absolute",
+                    top: 3,
+                    left: notificationSettings.enabled ? 24 : 3,
+                    width: 24,
+                    height: 24,
+                    borderRadius: "50%",
+                    background: "#fff",
+                    transition: "left 0.2s",
+                  }} />
+                </button>
+              </div>
+              {notificationSettings.enabled && (
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
+                  <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>Uhrzeit</div>
+                  <select
+                    value={notificationSettings.hour}
+                    onChange={(e) => updateNotificationSettings({ hour: Number(e.target.value) })}
+                    style={{
+                      background: "var(--bg-card)",
+                      color: "var(--text-primary)",
+                      border: "1px solid var(--border-default)",
+                      borderRadius: 8,
+                      padding: "6px 10px",
+                      fontSize: 14,
+                    }}
+                  >
+                    {Array.from({ length: 24 }, (_, i) => (
+                      <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>
+                    ))}
+                  </select>
+                  <select
+                    value={notificationSettings.minute}
+                    onChange={(e) => updateNotificationSettings({ minute: Number(e.target.value) })}
+                    style={{
+                      background: "var(--bg-card)",
+                      color: "var(--text-primary)",
+                      border: "1px solid var(--border-default)",
+                      borderRadius: 8,
+                      padding: "6px 10px",
+                      fontSize: 14,
+                    }}
+                  >
+                    {[0, 15, 30, 45].map((m) => (
+                      <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
             {aiNavHint?.screen === "settings" && (
               <div style={{fontSize:11,color:"#7dd3fc",marginBottom:10,marginTop:12,background:"rgba(56,189,248,0.12)",border:"1px solid rgba(56,189,248,0.28)",borderRadius:10,padding:"8px 10px"}}>
                 AI Navigation: {aiNavHint.section === "race_goal" ? "Rennziel" : aiNavHint.section}
@@ -4815,9 +4967,9 @@ export default function AppMain(){
               value={preferences.targetTime}
               onChange={(e)=>setPreferences((prev)=>({...prev,targetTime:e.target.value}))}
               placeholder="2:49:50"
-              style={{width:"100%",background:"#070b16",border:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "1px solid rgba(56,189,248,0.5)" : "1px solid rgba(148,163,184,0.14)",borderRadius:12,padding:"11px 12px",color:"#e2e8f0",fontSize:16,boxSizing:"border-box",marginBottom:6,boxShadow:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "0 0 0 2px rgba(56,189,248,0.2)" : "none"}}
+              style={{width:"100%",background:"var(--bg-primary)",border:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "1px solid rgba(56,189,248,0.5)" : "1px solid var(--border-input)",borderRadius:12,padding:"11px 12px",color:"var(--text-primary)",fontSize:16,boxSizing:"border-box",marginBottom:6,boxShadow:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "0 0 0 2px rgba(56,189,248,0.2)" : "none"}}
             />
-            <div style={{fontSize:11,color:"#64748b"}}>Format: hh:mm:ss</div>
+            <div style={{fontSize:11,color:"var(--text-muted)"}}>Format: hh:mm:ss</div>
 
             <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6,marginTop:14}}>
               Max. Herzfrequenz (optional)
@@ -4849,17 +5001,17 @@ export default function AppMain(){
               }}
               style={{
                 width: "100%",
-                background: "#070b16",
-                border: "1px solid rgba(148,163,184,0.14)",
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border-input)",
                 borderRadius: 12,
                 padding: "11px 12px",
-                color: "#e2e8f0",
+                color: "var(--text-primary)",
                 fontSize: 16,
                 boxSizing: "border-box",
                 marginBottom: 6,
               }}
             />
-            <div style={{fontSize:11,color:"#64748b",lineHeight:1.45}}>
+            <div style={{fontSize:11,color:"var(--text-muted)",lineHeight:1.45}}>
               Für konkrete Pulsbereiche, Trainingsziele und die Puls-Abweichung in „Plan vs. Ist“. Leer lassen, wenn unbekannt.
             </div>
           </CollapsibleSettingsCard>
@@ -4892,7 +5044,7 @@ export default function AppMain(){
             >
               Zusammenfassung kopieren
             </button>
-            {shareFeedback ? <div style={{fontSize:11,color:"#94a3b8",marginTop:8}}>{shareFeedback}</div> : null}
+            {shareFeedback ? <div style={{fontSize:11,color:"var(--text-secondary)",marginTop:8}}>{shareFeedback}</div> : null}
           </CollapsibleSettingsCard>
 
           {Capacitor.getPlatform() === "ios" ? (
@@ -4905,7 +5057,7 @@ export default function AppMain(){
               <div style={{marginTop:12}}>
               <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:10}}>Apple Health · Lauf zuordnen</div>
               {healthKitAvailable === null ? (
-                <div style={{fontSize:12,color:"#94a3b8",marginBottom:8}}>Apple Health wird geprüft …</div>
+                <div style={{fontSize:12,color:"var(--text-secondary)",marginBottom:8}}>Apple Health wird geprüft …</div>
               ) : null}
               {healthKitAvailable === false ? (
                 <div style={{fontSize:12,color:"#fca5a5",marginBottom:8}}>Apple Health ist auf diesem Gerät nicht verfügbar.</div>
@@ -4915,7 +5067,7 @@ export default function AppMain(){
                   fontSize:13,
                   fontWeight:700,
                   marginBottom:8,
-                  color:isHealthConnected ? "#86efac" : "#94a3b8",
+                  color:isHealthConnected ? "#86efac" : "var(--text-secondary)",
                   lineHeight:1.45,
                 }}
               >
@@ -4923,7 +5075,7 @@ export default function AppMain(){
               </div>
               <>
               {appleHealthFetchStats ? (
-                <div style={{fontSize:12,color:"#94a3b8",marginBottom:8,lineHeight:1.5}}>
+                <div style={{fontSize:12,color:"var(--text-secondary)",marginBottom:8,lineHeight:1.5}}>
                   <div>Gesamt (Health): {appleHealthFetchStats.fetchedTotal}</div>
                   <div>Lauf: {appleHealthFetchStats.runningCount} · Rad: {appleHealthFetchStats.cyclingCount}</div>
                   <div>Übernommen: {appleHealthFetchStats.syncedTotal}</div>
@@ -5084,13 +5236,13 @@ export default function AppMain(){
                 </div>
               ) : null}
               {!homeRunSession ? (
-                <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.5,marginBottom:10}}>
+                <div style={{fontSize:13,color:"var(--text-secondary)",lineHeight:1.5,marginBottom:10}}>
                   Heute ist keine Trainingseinheit geplant – du kannst Läufe trotzdem einer beliebigen Plan-Einheit zuordnen.
                 </div>
               ) : null}
               {healthRuns.length === 0 ? (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  <div style={{fontSize:13,color:"#e2e8f0",fontWeight:650}}>
+                  <div style={{fontSize:13,color:"var(--text-primary)",fontWeight:650}}>
                     {appleHealthFetchStats && appleHealthFetchStats.fetchedTotal === 0
                       ? "Keine Aktivitäten in den letzten 7 Tagen gefunden."
                       : appleHealthFetchStats && appleHealthFetchStats.fetchedTotal > 0 && appleHealthFetchStats.syncedTotal === 0
@@ -5102,7 +5254,7 @@ export default function AppMain(){
                 </div>
               ) : selectionOptions.length === 0 ? (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  <div style={{fontSize:13,color:"#94a3b8",lineHeight:1.5}}>
+                  <div style={{fontSize:13,color:"var(--text-secondary)",lineHeight:1.5}}>
                     Keine Lauf- oder Rennrad-Einträge im Store (nur &quot;andere&quot; Health-Typen?) — Workout-Typen prüfen.
                   </div>
                 </div>
@@ -5149,9 +5301,9 @@ export default function AppMain(){
                           gap:8,
                         }}
                       >
-                        <div style={{ fontSize: 14, fontWeight: 800, color: "#e2e8f0" }}>{kindShort}</div>
-                        <div style={{ fontSize: 13, color: "#e2e8f0" }}>{dateLabel}</div>
-                        <div style={{ fontSize: 13, color: "#94a3b8" }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>{kindShort}</div>
+                        <div style={{ fontSize: 13, color: "var(--text-primary)" }}>{dateLabel}</div>
+                        <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                           {durMin != null ? `Dauer: ca. ${durMin} Min.` : "Dauer: —"}
                         </div>
                         <div>
@@ -5161,7 +5313,7 @@ export default function AppMain(){
                           <span style={{color:"#7c8aa5"}}>Distanz:</span>{" "}
                           {kmNum != null && kmNum > 0 ? `${kmNum.toFixed(2)} km` : "—"}
                           {workout.distanceUnknown ? (
-                            <span style={{color:"#94a3b8",fontSize:11,marginLeft:6}}>(nicht von Health)</span>
+                            <span style={{color:"var(--text-secondary)",fontSize:11,marginLeft:6}}>(nicht von Health)</span>
                           ) : null}
                         </div>
                         {linkedLabel ? (
@@ -5248,7 +5400,7 @@ export default function AppMain(){
                                         border:"1px solid rgba(56,189,248,0.18)",
                                         borderRadius:10,
                                         padding:"8px 10px",
-                                        color:"#e2e8f0",
+                                        color:"var(--text-primary)",
                                         fontSize:12,
                                         fontWeight:650,
                                         cursor:"pointer",
@@ -5274,7 +5426,7 @@ export default function AppMain(){
                                 border:"1px solid rgba(148,163,184,0.25)",
                                 borderRadius:10,
                                 padding:"6px 10px",
-                                color:"#94a3b8",
+                                color:"var(--text-secondary)",
                                 fontSize:12,
                                 fontWeight:700,
                                 cursor:"pointer",
@@ -5354,7 +5506,7 @@ export default function AppMain(){
               color: "#fca5a5",
             }}
           >
-            Abmelden
+            {t("settings.logout")}
           </button>
 
           {user?.id ? (
@@ -5380,7 +5532,7 @@ export default function AppMain(){
                 color: "#f87171",
               }}
             >
-              Account löschen
+              {t("settings.delete_account")}
             </button>
           ) : null}
         </div>
@@ -5402,11 +5554,11 @@ export default function AppMain(){
         <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:6,background:"rgba(9,12,22,0.72)",border:"1px solid rgba(148,163,184,0.08)",borderRadius:24,padding:"10px 8px 11px",boxShadow:"0 20px 50px rgba(2,6,23,0.32)",backdropFilter:"blur(22px)"}}>
           {[
             { key: "home", label: homeTabLabel, icon: null },
-            { key: "week", label: "Woche", icon: "▤" },
+            { key: "week", label: t("plan.week_label"), icon: "▤" },
             { key: "performance", label: "Leistung", icon: "◔" },
             { key: "overview", label: "Übersicht", icon: "◎" },
             { key: "coach", label: "AI Coach", icon: "✦" },
-            { key: "settings", label: "Einstellungen", icon: "⚙" },
+            { key: "settings", label: t("settings.title"), icon: "⚙" },
           ].map((item)=>{
             const active = activeView === item.key;
             return (
@@ -5499,7 +5651,7 @@ export default function AppMain(){
                 <div>
                   <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.12em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Session Details</div>
                   <div style={{fontSize:24,fontWeight:800,color:"#fff",lineHeight:1.15}}>{modal.title}</div>
-                  <div style={{fontSize:12,color:"#94a3b8",marginTop:6}}>{modal.day}, {modal.date} · {modalWeek.label}</div>
+                  <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:6}}>{modal.day}, {modal.date} · {modalWeek.label}</div>
                 </div>
                 <button onClick={closeModal} style={{background:"rgba(15,23,42,0.8)",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",borderRadius:12,padding:"10px 12px",cursor:"pointer",fontSize:13}}>Schließen</button>
               </div>
@@ -5562,7 +5714,7 @@ export default function AppMain(){
                   <div
                     style={{
                       fontSize: 11,
-                      color: "#64748b",
+                      color: "var(--text-muted)",
                       marginTop: 6,
                       lineHeight: 1.45,
                       overflowWrap: "anywhere",
@@ -5589,11 +5741,11 @@ export default function AppMain(){
                       textAlign: "left",
                     }}
                   >
-                    {modalPlanTargetsExpanded ? "Weniger anzeigen" : "Mehr anzeigen"}
+                    {modalPlanTargetsExpanded ? "Weniger anzeigen" : t("plan.show_more")}
                     <span style={{ marginLeft: 6, opacity: 0.85 }} aria-hidden>
                       {modalPlanTargetsExpanded ? "▴" : "▾"}
                     </span>
-                    <span style={{ marginLeft: 6, fontWeight: 600, color: "#64748b", fontSize: 11 }}>
+                    <span style={{ marginLeft: 6, fontWeight: 600, color: "var(--text-muted)", fontSize: 11 }}>
                       (Trainingsziele)
                     </span>
                   </button>
@@ -5624,10 +5776,10 @@ export default function AppMain(){
                         if (!t) return null;
                         return (
                           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                            <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>{t.pulseLabel}</div>
-                            <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>{t.paceLabel}</div>
+                            <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>{t.pulseLabel}</div>
+                            <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>{t.paceLabel}</div>
                             {t.distanceLabel ? (
-                              <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>{t.distanceLabel}</div>
+                              <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>{t.distanceLabel}</div>
                             ) : null}
                           </div>
                         );
@@ -5638,35 +5790,35 @@ export default function AppMain(){
               ) : null}
 
               <DetailBlock title="Warum diese Einheit?">
-                <div style={{fontSize:14,color:"#e2e8f0",lineHeight:1.7}}>{getSessionWhy(modal, modalWeek)}</div>
+                <div style={{fontSize:14,color:"var(--text-primary)",lineHeight:1.7}}>{getSessionWhy(modal, modalWeek)}</div>
               </DetailBlock>
 
               <DetailBlock title="Workout-Struktur">
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
                   <div>
                     <div style={{fontSize:12,fontWeight:700,color:"#38bdf8",marginBottom:4}}>Warm-up</div>
-                    <div style={{fontSize:13,color:"#e2e8f0",lineHeight:1.6}}>{modalWorkout.warmup}</div>
+                    <div style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.6}}>{modalWorkout.warmup}</div>
                   </div>
                   <div>
                     <div style={{fontSize:12,fontWeight:700,color:"#f59e0b",marginBottom:4}}>Main Set</div>
-                    <div style={{fontSize:13,color:"#e2e8f0",lineHeight:1.6}}>{modalWorkout.mainSet}</div>
+                    <div style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.6}}>{modalWorkout.mainSet}</div>
                   </div>
                   <div>
                     <div style={{fontSize:12,fontWeight:700,color:"#10b981",marginBottom:4}}>Cool-down</div>
-                    <div style={{fontSize:13,color:"#e2e8f0",lineHeight:1.6}}>{modalWorkout.cooldown}</div>
+                    <div style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.6}}>{modalWorkout.cooldown}</div>
                   </div>
                 </div>
               </DetailBlock>
 
               <DetailBlock title="Coach-Hinweis">
-                <div style={{fontSize:14,color:"#e2e8f0",lineHeight:1.7}}>{getCoachHint(modal, modalWeek)}</div>
+                <div style={{fontSize:14,color:"var(--text-primary)",lineHeight:1.7}}>{getCoachHint(modal, modalWeek)}</div>
               </DetailBlock>
 
               {modalFuelingHints.length > 0 && (
                 <DetailBlock title="Fueling-Hinweise">
                   <div style={{display:"flex",flexDirection:"column",gap:10}}>
                     {modalFuelingHints.map((hint) => (
-                      <div key={hint} style={{fontSize:13,color:"#e2e8f0",lineHeight:1.7}}>
+                      <div key={hint} style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.7}}>
                         {hint}
                       </div>
                     ))}
@@ -5676,7 +5828,7 @@ export default function AppMain(){
 
               <DetailBlock title="Letzter gespeicherter Eintrag">
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
-                  <MetricCard label="Status" value={getSessionStatusLabel(modalLog)} sublabel={modalLog?.at ? formatLogTimestamp(modalLog.at) : "Noch nicht gespeichert"} accent={isSessionLogDone(modalLog) ? "#10b981" : modalLog?.skipped ? "#f87171" : "#94a3b8"} />
+                  <MetricCard label="Status" value={getSessionStatusLabel(modalLog)} sublabel={modalLog?.at ? formatLogTimestamp(modalLog.at) : "Noch nicht gespeichert"} accent={isSessionLogDone(modalLog) ? "#10b981" : modalLog?.skipped ? "#f87171" : "var(--text-secondary)"} />
                   <MetricCard label="Gefühl" value={modalLog?.feeling ? `${"★".repeat(modalLog.feeling)}` : "Keine"} sublabel={modalLog?.feeling ? `${modalLog.feeling}/5` : "Noch kein Rating"} accent="#f59e0b" />
                   <MetricCard
                     label="Gelaufene km"
@@ -5711,7 +5863,7 @@ export default function AppMain(){
                       placeholder={`Distanzziel: ${formatKm(displayPk).toFixed(1)} km`}
                       value={form.actualKm}
                       onChange={e=>setForm(f=>({...f,actualKm:e.target.value}))}
-                      style={{width:"100%",background:"#070b16",border:"1px solid rgba(148,163,184,0.14)",borderRadius:12,padding:"12px 14px",color:"#e2e8f0",fontSize:14,boxSizing:"border-box"}}
+                      style={{width:"100%",background:"var(--bg-primary)",border:"1px solid var(--border-input)",borderRadius:12,padding:"12px 14px",color:"var(--text-primary)",fontSize:14,boxSizing:"border-box"}}
                     />
                   </div>
                   ) : null;
@@ -5721,12 +5873,12 @@ export default function AppMain(){
                   <label style={{display:"block",fontSize:11,fontWeight:700,color:"#7c8aa5",textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>Gefühl</label>
                   <div style={{display:"flex",gap:8}}>
                     {[1,2,3,4,5].map(n=>(
-                      <button key={n} onClick={()=>setForm(f=>({...f,feeling:n}))} style={{flex:1,background:form.feeling>=n?"rgba(245,158,11,0.2)":"#070b16",border:`1px solid ${form.feeling>=n?"#f59e0b":"rgba(148,163,184,0.14)"}`,borderRadius:12,padding:"10px 0",cursor:"pointer",fontSize:18}}>
+                      <button key={n} onClick={()=>setForm(f=>({...f,feeling:n}))} style={{flex:1,background:form.feeling>=n?"rgba(245,158,11,0.2)":"var(--bg-primary)",border:`1px solid ${form.feeling>=n?"#f59e0b":"rgba(148,163,184,0.14)"}`,borderRadius:12,padding:"10px 0",cursor:"pointer",fontSize:18}}>
                         ⭐
                       </button>
                     ))}
                   </div>
-                  <div style={{fontSize:12,color:"#94a3b8",textAlign:"center",marginTop:8}}>
+                  <div style={{fontSize:12,color:"var(--text-secondary)",textAlign:"center",marginTop:8}}>
                     {["","😓 Sehr schwer","😕 Schlecht","😐 Okay","😊 Gut","🔥 Fantastisch!"][form.feeling]}
                   </div>
                 </div>
@@ -5737,15 +5889,15 @@ export default function AppMain(){
                     placeholder="Wie lief's? Besonderheiten? Stimmung?"
                     value={form.notes}
                     onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
-                    style={{width:"100%",background:"#070b16",border:"1px solid rgba(148,163,184,0.14)",borderRadius:12,padding:"12px 14px",color:"#e2e8f0",fontSize:13,boxSizing:"border-box",minHeight:92,resize:"vertical"}}
+                    style={{width:"100%",background:"var(--bg-primary)",border:"1px solid var(--border-input)",borderRadius:12,padding:"12px 14px",color:"var(--text-primary)",fontSize:13,boxSizing:"border-box",minHeight:92,resize:"vertical"}}
                   />
                 </div>
 
-                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:14,color:"#e2e8f0",marginBottom:10}}>
+                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:14,color:"var(--text-primary)",marginBottom:10}}>
                   <input type="checkbox" checked={form.done} onChange={e=>setForm(f=>({...f,done:e.target.checked,skipped:e.target.checked?false:f.skipped}))} style={{width:18,height:18,accentColor:"#10b981"}}/>
                   Als abgeschlossen markieren
                 </label>
-                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:14,color:"#e2e8f0"}}>
+                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:14,color:"var(--text-primary)"}}>
                   <input type="checkbox" checked={form.skipped} onChange={e=>setForm(f=>({...f,skipped:e.target.checked,done:e.target.checked?false:f.done}))} style={{width:18,height:18,accentColor:"#f87171"}}/>
                   Als ausgelassen markieren
                 </label>
@@ -5754,7 +5906,7 @@ export default function AppMain(){
 
             <div style={{position:"sticky",bottom:0,padding:16,background:"linear-gradient(180deg,rgba(9,13,24,0) 0%, rgba(9,13,24,0.94) 18%, rgba(9,13,24,1) 100%)",borderTop:"1px solid rgba(148,163,184,0.08)"}}>
               <div style={{display:"flex",gap:10}}>
-                <button onClick={closeModal} style={{flex:1,background:"#0b1220",border:"1px solid rgba(148,163,184,0.12)",color:"#94a3b8",borderRadius:14,padding:"13px",cursor:"pointer",fontSize:14,fontWeight:600}}>Abbrechen</button>
+                <button onClick={closeModal} style={{flex:1,background:"#0b1220",border:"1px solid rgba(148,163,184,0.12)",color:"var(--text-secondary)",borderRadius:14,padding:"13px",cursor:"pointer",fontSize:14,fontWeight:600}}>Abbrechen</button>
                 <button onClick={saveModal} style={{flex:1.4,background:"linear-gradient(135deg,#10b981,#3b82f6)",border:"none",color:"#fff",borderRadius:14,padding:"13px",cursor:"pointer",fontSize:14,fontWeight:700}}>Speichern</button>
               </div>
             </div>

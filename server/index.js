@@ -1,5 +1,11 @@
 require("dotenv").config();
 
+// ACHTUNG: iOS/Capacitor-Builds rufen Vercel direkt auf (REACT_APP_AI_API_BASE in .env.production),
+// nicht localhost:8787. POST /api/ai hier und auf Vercel laufen beide über api/_lib/coachHandlers.js
+// (Claude, Prompt Caching, getrimmter Kontext). Die OpenAI-Helfer weiter unten in dieser Datei
+// (buildSystemPrompt, callResponsesApi) sind Legacy und werden für /api/ai nicht mehr genutzt —
+// nur POST /api/ai/daily-coach bleibt OpenAI. Bewusst nicht mit coachHandlers synchron halten.
+
 const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
@@ -695,6 +701,7 @@ app.get("/api/ai/schema-check", async (_req, res) => {
   });
 });
 
+// Same Claude handler as Vercel (api/ai.js → coachHandlers.js). Not the legacy OpenAI path below.
 app.post("/api/ai", async (req, res) => {
   try {
     const { status, body } = await handleAiCoach(req.body);

@@ -4,7 +4,7 @@
 import { parseSessionDateLabel } from "../../appSmartFeatures";
 import { rebuildPlanFromWorkouts } from "../../core/deriveWeeksFromWorkouts";
 import type { Intensity, TrainingPlanV2, WeekV2, WorkoutSport, WorkoutV2 } from "../../planV2/types";
-import { type TrainingPhase, trainingPhaseLabelDe } from "../../planV2/trainingPhase";
+import { type TrainingPhase, normalizeTrainingPhase, trainingPhaseLabelDe } from "../../planV2/trainingPhase";
 import type { AiContext, AiPlanSession, PlanPatch } from "./types";
 
 const RUNNING_TYPES = new Set(["easy", "interval", "tempo", "long", "race"]);
@@ -499,6 +499,129 @@ export interface AiPlanRules {
   analysis?: string;
 }
 
+/** Claude plan structure phase block — drives week meta + volume progression when present. */
+export interface PlanPhaseSpec {
+  name: string;
+  weeks: number;
+  label: string;
+  focus: string;
+}
+
+interface WeekPhaseInfo {
+  phase: TrainingPhase;
+  label: string;
+  focus: string;
+  weekInPhase: number;
+  weeksInPhase: number;
+}
+
+function derivePhaseFromDur(dur: number): TrainingPhase {
+  const midDur = dur - 3;
+  if (midDur <= 10) return "taper";
+  if (midDur <= 21) return "peak";
+  if (midDur <= 56) return "build";
+  return "base";
+}
+
+function countWeeksInPlan(
+  start: Date,
+  end: Date,
+  weekKeyOverrides?: Map<string, string>,
+): number {
+  let weekCount = 0;
+  let lastWeekKey = "";
+  const day = new Date(start);
+  while (day.getTime() <= end.getTime()) {
+    const mon = mondayOfWeekContaining(day);
+    const monIso = isoDateOf(mon);
+    const startIso = weekKeyOverrides?.get(monIso) ?? monIso;
+    if (startIso !== lastWeekKey) {
+      weekCount += 1;
+      lastWeekKey = startIso;
+    }
+    day.setDate(day.getDate() + 1);
+  }
+  return weekCount;
+}
+
+function getPhaseProgress01(weekInPhase: number, weeksInPhase: number): number {
+  if (weeksInPhase <= 1) return 0;
+  return Math.max(0, Math.min(1, (weekInPhase - 1) / (weeksInPhase - 1)));
+}
+
+function buildWeekPhaseSchedule(
+  totalWeeks: number,
+  claudePhases: PlanPhaseSpec[],
+): WeekPhaseInfo[] {
+  const blocks = claudePhases.map((p) => ({
+    phase: normalizeTrainingPhase(p.name),
+    label: p.label?.trim() || trainingPhaseLabelDe(normalizeTrainingPhase(p.name)),
+    focus: p.focus?.trim() || "",
+    weeks: Math.max(1, Math.round(p.weeks)),
+  }));
+
+  const totalClaudeWeeks = blocks.reduce((sum, block) => sum + block.weeks, 0) || 1;
+  const schedule: WeekPhaseInfo[] = [];
+
+  for (let weekIdx = 1; weekIdx <= totalWeeks; weekIdx += 1) {
+    // Map plan weeks 1..totalWeeks linearly onto Claude phase timeline (base → taper).
+    const claudePos = ((weekIdx - 0.5) / totalWeeks) * totalClaudeWeeks;
+    let accumulated = 0;
+    let block = blocks[blocks.length - 1];
+    let weekInPhase = 1;
+
+    for (const candidate of blocks) {
+      if (claudePos <= accumulated + candidate.weeks) {
+        block = candidate;
+        weekInPhase = Math.max(1, Math.min(candidate.weeks, Math.ceil(claudePos - accumulated)));
+        break;
+      }
+      accumulated += candidate.weeks;
+    }
+
+    schedule.push({
+      phase: block.phase,
+      label: block.label,
+      focus: block.focus,
+      weekInPhase,
+      weeksInPhase: block.weeks,
+    });
+  }
+
+  return schedule;
+}
+
+function getPhaseVolumeMultiplier(
+  phase: TrainingPhase,
+  weekInPhase: number,
+  weeksInPhase: number,
+  isRecoveryWeek: boolean,
+): number {
+  const progress = getPhaseProgress01(weekInPhase, weeksInPhase);
+
+  let base: number;
+  switch (phase) {
+    case "taper":
+      base = 0.65 - progress * 0.35;
+      break;
+    case "peak":
+      base = 1.05 + progress * 0.1;
+      break;
+    case "build":
+      base = 0.92 + progress * 0.18;
+      break;
+    default:
+      base = 0.78 + progress * 0.17;
+      break;
+  }
+
+  if (isRecoveryWeek && phase !== "taper") {
+    base *= 0.72;
+  }
+
+  return base;
+}
+
 
 function scaleRunningKm(km: number, combinedScale: number): number {
   if (km <= 0 || combinedScale === 1) return km;
@@ -531,7 +654,12 @@ function isRecoveryWeekInWave(weekNumber: number, dur: number): boolean {
   return ((weekNumber - 1) % 4) + 1 === 4;
 }
 
-function phaseAwareSessionType(dow: number, dur: number, aiRules?: AiPlanRules): string {
+function phaseAwareSessionType(
+  dow: number,
+  dur: number,
+  aiRules?: AiPlanRules,
+  weekPhase?: TrainingPhase,
+): string {
   if (aiRules) {
     const longRunDay = aiRules.longRunDay ?? 0;
     const intervalDay = aiRules.intervalDay ?? 2;
@@ -542,12 +670,14 @@ function phaseAwareSessionType(dow: number, dur: number, aiRules?: AiPlanRules):
     return "easy";
   }
 
-  if (dur <= 10) {
+  const phase = weekPhase ?? derivePhaseFromDur(dur);
+
+  if (phase === "taper") {
     if (dow === 2) return "interval";
     if (dow === 0) return "long";
     return "easy";
   }
-  if (dur <= 28) {
+  if (phase === "peak") {
     if (dow === 2) return "interval";
     if (dow === 4) return "tempo";
     if (dow === 0) return "long";
@@ -555,12 +685,12 @@ function phaseAwareSessionType(dow: number, dur: number, aiRules?: AiPlanRules):
     return "easy";
   }
 
-  const inBuild = dur <= 63;
+  const inBuild = phase === "build";
   if (dow === 2) return "interval";
   if (dow === 4) return inBuild ? "tempo" : "easy";
   if (dow === 0) return "long";
-  if (dow === 5 && dur > 56) return "strength";
-  if (dow === 6 && dur > 42 && dur !== 63) return "bike";
+  if (dow === 5 && phase === "base") return "strength";
+  if (dow === 6 && phase === "base") return "bike";
   return "easy";
 }
 
@@ -575,18 +705,21 @@ function buildSessionMeta(
   sessionType: string,
   dur: number,
   weekNumber: number,
-  progress01: number,
+  sessionProgress01: number,
   finalScale: number,
   raceConfig: RaceConfig,
+  weekPhase?: TrainingPhase,
 ): TrainingSessionMeta {
   let title = "";
   let km = 10;
   let pace = "locker";
   let descSuffix = "";
 
-  if (dur <= 10) {
+  const phase = weekPhase ?? derivePhaseFromDur(dur);
+
+  if (phase === "taper") {
     if (sessionType === "interval") {
-      km = scaleRunningKm(8 + Math.round(progress01 * 3), finalScale);
+      km = scaleRunningKm(8 + Math.round(sessionProgress01 * 3), finalScale);
       pace = "frisch aber kurz";
     } else if (sessionType === "long") {
       km = scaleRunningKm(raceConfig.taperLongRunKm, finalScale);
@@ -599,17 +732,17 @@ function buildSessionMeta(
     }
     title = sessionType === "rest" ? "Ruhetag" : `${sessionType} (Taper) W${weekNumber}`;
     descSuffix = " Phase: Rennnah / Taper — Volumen runter.";
-  } else if (dur <= 28) {
+  } else if (phase === "peak") {
     if (sessionType === "bike" || sessionType === "rest") km = 0;
     else if (sessionType === "interval") {
-      km = scaleRunningKm(12 + Math.round(progress01 * 6), finalScale);
+      km = scaleRunningKm(12 + Math.round(sessionProgress01 * 6), finalScale);
     } else if (sessionType === "tempo") {
-      km = scaleRunningKm(14 + Math.round(progress01 * 5), finalScale);
+      km = scaleRunningKm(14 + Math.round(sessionProgress01 * 5), finalScale);
     } else if (sessionType === "long") {
-      const baseLong = 14 + progress01 * (raceConfig.peakLongRunKm - 14);
+      const baseLong = 14 + sessionProgress01 * (raceConfig.peakLongRunKm - 14);
       km = Math.min(raceConfig.peakLongRunKm, scaleRunningKm(Math.round(baseLong), finalScale));
     } else {
-      km = scaleRunningKm(8 + Math.round(progress01 * 5), finalScale);
+      km = scaleRunningKm(8 + Math.round(sessionProgress01 * 5), finalScale);
     }
     title =
       sessionType === "bike"
@@ -635,18 +768,18 @@ function buildSessionMeta(
               ? "aerobe Grundlage"
               : "locker";
   } else {
-    const inBuild = dur <= 63;
+    const inBuild = phase === "build";
     if (sessionType === "bike" || sessionType === "rest" || sessionType === "strength") km = 0;
     else if (sessionType === "interval") {
-      km = scaleRunningKm(10 + Math.round(progress01 * 6), finalScale);
+      km = scaleRunningKm(10 + Math.round(sessionProgress01 * 6), finalScale);
     } else if (sessionType === "tempo") {
-      km = scaleRunningKm(12 + Math.round(progress01 * 5), finalScale);
+      km = scaleRunningKm(12 + Math.round(sessionProgress01 * 5), finalScale);
     } else if (sessionType === "long") {
       const longBase = inBuild ? 12 : 10;
-      const baseLong = longBase + progress01 * (raceConfig.peakLongRunKm - longBase);
+      const baseLong = longBase + sessionProgress01 * (raceConfig.peakLongRunKm - longBase);
       km = Math.min(raceConfig.peakLongRunKm, scaleRunningKm(Math.round(baseLong), finalScale));
     } else {
-      km = scaleRunningKm(7 + Math.round(progress01 * 5), finalScale);
+      km = scaleRunningKm(7 + Math.round(sessionProgress01 * 5), finalScale);
     }
     title =
       sessionType === "bike"
@@ -758,6 +891,7 @@ function workoutForTrainingDay(
   raceConfig: RaceConfig = DEFAULT_RACE_CONFIG,
   weeklyKmScale = 1,
   aiRules?: AiPlanRules,
+  weekPhaseInfo?: WeekPhaseInfo,
 ): WorkoutV2 {
   const ymd = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
   const iso = new Date(`${ymd}T12:00:00`).toISOString();
@@ -765,8 +899,18 @@ function workoutForTrainingDay(
   const dow = day.getDay();
   const combinedScale = volumeScale * weeklyKmScale;
   const ruleKmScale = aiRules?.weeklyKmMultiplier ?? aiRules?.volumeAdjustment ?? 1;
-  const waveScale = getWeekVolumeWave(weekNumber, dur);
-  const finalScale = combinedScale * ruleKmScale * waveScale;
+  const isRecoveryWeek = weekPhaseInfo
+    ? isRecoveryWeekInWave(weekNumber, weekPhaseInfo.phase === "taper" ? 10 : 100)
+    : isRecoveryWeekInWave(weekNumber, dur);
+  const volumeWaveScale = weekPhaseInfo
+    ? getPhaseVolumeMultiplier(
+        weekPhaseInfo.phase,
+        weekPhaseInfo.weekInPhase,
+        weekPhaseInfo.weeksInPhase,
+        isRecoveryWeek,
+      )
+    : getWeekVolumeWave(weekNumber, dur);
+  const finalScale = combinedScale * ruleKmScale * volumeWaveScale;
 
   // 1. Race day always first
   if (dur === 0) {
@@ -803,14 +947,18 @@ function workoutForTrainingDay(
     }
   }
 
-  const sessionType = phaseAwareSessionType(dow, dur, aiRules);
+  const sessionType = phaseAwareSessionType(dow, dur, aiRules, weekPhaseInfo?.phase);
+  const sessionProgress01 = weekPhaseInfo
+    ? getPhaseProgress01(weekPhaseInfo.weekInPhase, weekPhaseInfo.weeksInPhase)
+    : progress01;
   const { title, km, pace, descSuffix } = buildSessionMeta(
     sessionType,
     dur,
     weekNumber,
-    progress01,
+    sessionProgress01,
     finalScale,
     raceConfig,
+    weekPhaseInfo?.phase,
   );
   const desc = `Coach-Plan (${dur} Tage bis Rennen).${descSuffix}`;
 
@@ -845,6 +993,7 @@ export function generateMarathonPlanV2ToRace(
   weeklyKmRange?: string,
   restDayDow?: number,
   aiRules?: AiPlanRules,
+  claudePhases?: PlanPhaseSpec[],
 ): TrainingPlanV2 {
   const volumeScale = goal === "finish" ? 0.8 : 1;
   const raceConfig = getRaceConfig(raceDistanceKm, goal ?? "time");
@@ -885,9 +1034,16 @@ export function generateMarathonPlanV2ToRace(
       ? new Map([[firstWeekMonIso, firstWeekStartIso]])
       : undefined;
 
+  const totalWeeks = countWeeksInPlan(s, r, weekKeyOverrides);
+  const weekPhaseSchedule =
+    claudePhases?.length && totalWeeks > 0
+      ? buildWeekPhaseSchedule(totalWeeks, claudePhases)
+      : null;
+
   const day = new Date(s);
   let weekIdx = 0;
   let lastWeekKey = "";
+  let currentWeekPhaseInfo: WeekPhaseInfo | undefined;
   while (day.getTime() <= r.getTime()) {
     const dur = Math.round((r.getTime() - day.getTime()) / 86400000);
     const progress01 = totalDays > 1 ? 1 - dur / (totalDays - 1) : 1;
@@ -899,29 +1055,33 @@ export function generateMarathonPlanV2ToRace(
     if (startIso !== lastWeekKey) {
       lastWeekKey = startIso;
       weekIdx += 1;
+      currentWeekPhaseInfo = weekPhaseSchedule?.[weekIdx - 1];
 
-      let phase: TrainingPhase = "base";
-      let focus = "Basis-/Aufbau";
-      const midDur = dur - 3;
-      if (midDur <= 10) phase = "taper";
-      else if (midDur <= 21) phase = "peak";
-      else if (midDur <= 56) phase = "build";
-      // midDur > 56 stays "base" (merges old DEV and BASE bands)
+      let phase: TrainingPhase = currentWeekPhaseInfo?.phase ?? "base";
+      let focus = currentWeekPhaseInfo?.focus || "Basis-/Aufbau";
+      if (!currentWeekPhaseInfo) {
+        const midDur = dur - 3;
+        if (midDur <= 10) phase = "taper";
+        else if (midDur <= 21) phase = "peak";
+        else if (midDur <= 56) phase = "build";
 
-      if (dur <= 10) focus = "Renn-/Taper-Phase — frisch sein";
-      else if (dur <= 28) focus = "Spezifikation & längere Reize kontrolliert";
-      else if (dur <= 56) focus = "Aufbau/Peak nach Verfügbarkeit";
-      else focus = "Aerobe Basis schaffen";
+        if (dur <= 10) focus = "Renn-/Taper-Phase — frisch sein";
+        else if (dur <= 28) focus = "Spezifikation & längere Reize kontrolliert";
+        else if (dur <= 56) focus = "Aufbau/Peak nach Verfügbarkeit";
+        else focus = "Aerobe Basis schaffen";
+      }
 
-      const isRecoveryWeek = isRecoveryWeekInWave(weekIdx, dur);
+      const isRecoveryWeek = currentWeekPhaseInfo
+        ? isRecoveryWeekInWave(weekIdx, currentWeekPhaseInfo.phase === "taper" ? 10 : 100)
+        : isRecoveryWeekInWave(weekIdx, dur);
       // For the first week on a mid-week start, show the actual start date in the header
       const displayDate = startIso === firstWeekStartIso && firstWeekStartIso !== firstWeekMonIso ? s : mon;
 
-      const phaseLabel = trainingPhaseLabelDe(phase);
+      const displayLabel = currentWeekPhaseInfo?.label ?? trainingPhaseLabelDe(phase);
       metaByWeekStart.set(startIso, {
         wn: weekIdx,
         phase,
-        label: isRecoveryWeek ? `${phaseLabel} W${weekIdx} ⬇️` : `${phaseLabel} W${weekIdx}`,
+        label: isRecoveryWeek ? `${displayLabel} W${weekIdx} ⬇️` : `${displayLabel} W${weekIdx}`,
         dates: `${formatDeDate(displayDate)} ff.`,
         focus: isRecoveryWeek
           ? "⬇️ Entlastungswoche – Volumen reduziert, Adaptationen festigen"
@@ -941,6 +1101,7 @@ export function generateMarathonPlanV2ToRace(
         raceConfig,
         weeklyKmScale,
         aiRules,
+        currentWeekPhaseInfo,
       ),
     );
     day.setDate(day.getDate() + 1);

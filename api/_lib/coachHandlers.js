@@ -524,76 +524,169 @@ function parseModelJson(response) {
 
 // ─── System prompt & user payload ────────────────────────────────────────────
 
-function buildContextSummary(context) {
-  const lines = [];
-  const goals = context?.goals && typeof context.goals === "object" ? context.goals : {};
-  const targetTime = goals.targetTime || "nicht gesetzt";
-  const raceDateIso = context?.raceDateIso || "unbekannt";
-  lines.push(`Rennziel: ${targetTime}, Renn-Datum: ${raceDateIso}`);
+const SESSION_DATE_MONTHS = {
+  Jan: 0,
+  Feb: 1,
+  Mar: 2,
+  Apr: 3,
+  Mai: 4,
+  Jun: 5,
+  Jul: 6,
+  Aug: 7,
+  Sep: 8,
+  Okt: 9,
+  Nov: 10,
+  Dez: 11,
+};
 
-  const weeks = context?.trainingPlan?.weeks;
-  if (Array.isArray(weeks) && weeks.length > 0) {
-    const w0 = weeks[0];
-    lines.push(
-      `Trainingsplan: ${weeks.length} Wochen, aktuelle Phase: ${w0?.phase || w0?.label || "?"}`,
-    );
-    const allSessions = weeks.flatMap((w) => (Array.isArray(w.s) ? w.s : []));
-    const next =
-      allSessions.find((s) => s && s.type !== "rest") ||
-      allSessions[0];
-    if (next) {
-      lines.push(`Nächste/heutige Einheit: ${next.day || ""} ${next.date || ""} — ${next.title || next.type} (${next.km ?? "?"} km)`);
-    }
-  } else {
-    lines.push("Trainingsplan: keine Wochen im Kontext");
-  }
-
-  const domain = pickRecoveryDomain(context);
-  const summary = context?.recoverySummary;
-  const score =
-    typeof domain?.homeRecoveryScore0_100 === "number"
-      ? domain.homeRecoveryScore0_100
-      : typeof summary?.avgRecovery === "number"
-        ? summary.avgRecovery
-        : null;
-  const label =
-    domain && typeof domain.trainingRecoveryLabel === "string"
-      ? domain.trainingRecoveryLabel
-      : "Recovery";
-  lines.push(
-    score != null
-      ? `Recovery: ${label} — Score ${Math.round(score)}/100.`
-      : `Recovery: ${label}.`,
-  );
-
-  const logs = Array.isArray(context?.logsLast30Days) ? context.logsLast30Days : [];
-  const done = logs
-    .filter((entry) => {
-      if (!entry || typeof entry !== "object") return false;
-      if (entry.done === true) return true;
-      if (entry.log && typeof entry.log === "object" && entry.log.done === true) return true;
-      return false;
-    })
-    .slice(-3);
-  if (done.length) {
-    lines.push(
-      `Letzte erledigte Workouts: ${done.map((e) => e.sessionId || "?").join(", ")}`,
-    );
-  } else {
-    lines.push("Letzte erledigte Workouts: keine in den letzten 30 Tagen geloggt.");
-  }
-
-  return lines.join("\n");
+function parseSessionDateLabel(label, year) {
+  if (typeof label !== "string" || !label.trim()) return null;
+  const match = label.match(/(\d{1,2})\.\s*([A-Za-zÄÖÜäöü]+)/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = SESSION_DATE_MONTHS[match[2]];
+  if (Number.isNaN(day) || month === undefined) return null;
+  return new Date(year, month, day, 12, 0, 0, 0);
 }
 
-function buildSystemPrompt(context) {
-  const contextBlock = buildContextSummary(context || {});
+function normalizeCalendarDay(d) {
+  const x = d instanceof Date ? d : new Date(d);
+  return new Date(x.getFullYear(), x.getMonth(), x.getDate());
+}
+
+function collectIncomingPlanWeeks(context) {
+  const trainingPlan =
+    context?.trainingPlan && typeof context.trainingPlan === "object" ? context.trainingPlan : null;
+  return Array.isArray(trainingPlan?.weeks) ? trainingPlan.weeks : [];
+}
+
+function toCoachSessionObject(session) {
+  return {
+    date: session?.date ?? "",
+    weekday: session?.day ?? "",
+    title: session?.title ?? "",
+    km: typeof session?.km === "number" ? session.km : 0,
+    type: session?.type ?? "",
+    pace: session?.pace ?? null,
+  };
+}
+
+function findCurrentPlanWeek(weeks, today, year) {
+  let bestWeek = null;
+  let bestDistance = Infinity;
+  for (const week of weeks) {
+    for (const session of Array.isArray(week?.s) ? week.s : []) {
+      const parsed = parseSessionDateLabel(session?.date, year);
+      if (!parsed) continue;
+      const diffMs = normalizeCalendarDay(parsed).getTime() - today.getTime();
+      if (diffMs >= 0 && diffMs < bestDistance) {
+        bestDistance = diffMs;
+        bestWeek = week;
+      }
+    }
+  }
+  return bestWeek || weeks[0] || null;
+}
+
+function computeAvgWeeklyKmRemaining(weeks, today, year) {
+  const remainingWeeks = weeks.filter((week) =>
+    (Array.isArray(week?.s) ? week.s : []).some((session) => {
+      const parsed = parseSessionDateLabel(session?.date, year);
+      return parsed && normalizeCalendarDay(parsed).getTime() >= today.getTime();
+    }),
+  );
+  if (!remainingWeeks.length) return null;
+  const totalKm = remainingWeeks.reduce(
+    (sum, week) => sum + (typeof week?.km === "number" ? week.km : 0),
+    0,
+  );
+  return Math.round((totalKm / remainingWeeks.length) * 10) / 10;
+}
+
+function buildTrimmedTrainingPlan(context) {
+  const weeks = collectIncomingPlanWeeks(context);
+  const todayIso = typeof context?.todayIso === "string" ? context.todayIso : "";
+  const now = todayIso ? new Date(todayIso) : new Date();
+  const today = normalizeCalendarDay(Number.isFinite(now.getTime()) ? now : new Date());
+  const year = today.getFullYear();
+  const goals = context?.goals && typeof context.goals === "object" ? context.goals : {};
+  const currentWeek = findCurrentPlanWeek(weeks, today, year);
+
+  const datedSessions = weeks.flatMap((week) =>
+    (Array.isArray(week?.s) ? week.s : []).map((session) => {
+      const parsed = parseSessionDateLabel(session?.date, year);
+      return {
+        session,
+        parsed,
+        diffDays:
+          parsed == null
+            ? null
+            : (normalizeCalendarDay(parsed).getTime() - today.getTime()) / 86400000,
+      };
+    }),
+  );
+
+  const next14Days = datedSessions
+    .filter((entry) => entry.diffDays != null && entry.diffDays >= 0 && entry.diffDays <= 14)
+    .sort((a, b) => a.diffDays - b.diffDays || String(a.session.id).localeCompare(String(b.session.id)))
+    .map((entry) => toCoachSessionObject(entry.session));
+
+  const last7Days = datedSessions
+    .filter((entry) => entry.diffDays != null && entry.diffDays >= -7 && entry.diffDays < 0)
+    .sort((a, b) => a.diffDays - b.diffDays || String(a.session.id).localeCompare(String(b.session.id)))
+    .map((entry) => toCoachSessionObject(entry.session));
+
+  return {
+    next14Days,
+    last7Days,
+    planSummary: {
+      totalWeeks: weeks.length,
+      currentPhase: currentWeek?.phase || currentWeek?.label || "unknown",
+      raceDateIso:
+        context?.raceDateIso === null || typeof context?.raceDateIso === "string"
+          ? context.raceDateIso
+          : null,
+      targetTime: goals.targetTime || "nicht gesetzt",
+      avgWeeklyKmRemaining: computeAvgWeeklyKmRemaining(weeks, today, year),
+    },
+  };
+}
+
+function normalizeIncomingLogs(context) {
+  const v = context?.logsLast30Days ?? context?.logsLast10Days;
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === "object") {
+    return Object.entries(v).map(([sessionId, logEntry]) =>
+      logEntry && typeof logEntry === "object" && !Array.isArray(logEntry)
+        ? { sessionId, ...logEntry }
+        : { sessionId: String(sessionId), logEntry },
+    );
+  }
+  return [];
+}
+
+function trimLogsLast10Days(context) {
+  return normalizeIncomingLogs(context).slice(-10);
+}
+
+function trimHealthRunsLast10Days(context) {
+  const runs = Array.isArray(context?.healthRunsLast30Days)
+    ? context.healthRunsLast30Days
+    : Array.isArray(context?.healthRunsLast10Days)
+      ? context.healthRunsLast10Days
+      : [];
+  return [...runs]
+    .sort((a, b) => new Date(a?.startDate).getTime() - new Date(b?.startDate).getTime())
+    .slice(-10);
+}
+
+function buildStaticCoachSystemPrompt() {
   return [
     "Antworte in maximal 3-4 Sätzen. Kein Fließtext, keine Aufzählungen.",
     "Du bist ein persönlicher Marathontrainer in der MyRace App.",
     "",
     "Du antwortest IMMER auf Deutsch, kurz und direkt — wie ein echter Trainer, nicht wie ein Chatbot.",
-    "Du hast Zugriff auf den vollständigen Trainingsplan, Logs, Gesundheitsdaten und Recovery-Status des Users.",
+    "Du hast Zugriff auf ein Trainingsplan-Fenster (nächste 14 / letzte 7 Tage), Logs, Gesundheitsdaten und Recovery-Status des Users.",
     "",
     "DEINE AUFGABEN:",
     "- Fragen zum Training beantworten (Pace, Volumen, Taper, Verletzung, Ernährung, etc.)",
@@ -623,12 +716,84 @@ function buildSystemPrompt(context) {
     "Wenn du eine Action vorschlägst, erkläre kurz warum in message.",
     "Sei direkt, kein Smalltalk, kein Auffüllen.",
     "Nutze recoveryDomain + recoverySummary für Sicherheit; widersprich niedrigem Recovery nicht.",
-    "",
+  ].join("\n");
+}
+
+function buildDynamicCoachSystemPrompt(context) {
+  const contextBlock = buildContextSummary(context || {});
+  return [
     "KONTEXT DES USERS:",
     contextBlock,
     "",
     "Strukturierte Rohdaten (JSON) folgen in den User-Nachrichten.",
   ].join("\n");
+}
+
+function buildContextSummary(context) {
+  const lines = [];
+  const goals = context?.goals && typeof context.goals === "object" ? context.goals : {};
+  const targetTime = goals.targetTime || "nicht gesetzt";
+  const raceDateIso = context?.raceDateIso || "unbekannt";
+  lines.push(`Rennziel: ${targetTime}, Renn-Datum: ${raceDateIso}`);
+
+  const trimmedPlan = buildTrimmedTrainingPlan(context);
+  const summary = trimmedPlan.planSummary;
+  if (summary.totalWeeks > 0) {
+    lines.push(
+      `Trainingsplan: ${summary.totalWeeks} Wochen gesamt, aktuelle Phase: ${summary.currentPhase}, Ø ${summary.avgWeeklyKmRemaining ?? "?"} km/Woche restlich`,
+    );
+    const next =
+      trimmedPlan.next14Days.find((s) => s && s.type !== "rest") ||
+      trimmedPlan.next14Days[0];
+    if (next) {
+      lines.push(
+        `Nächste/heutige Einheit: ${next.weekday || ""} ${next.date || ""} — ${next.title || next.type} (${next.km ?? "?"} km)`,
+      );
+    }
+  } else {
+    lines.push("Trainingsplan: keine Wochen im Kontext");
+  }
+
+  const domain = pickRecoveryDomain(context);
+  const summary = context?.recoverySummary;
+  const score =
+    typeof domain?.homeRecoveryScore0_100 === "number"
+      ? domain.homeRecoveryScore0_100
+      : typeof summary?.avgRecovery === "number"
+        ? summary.avgRecovery
+        : null;
+  const label =
+    domain && typeof domain.trainingRecoveryLabel === "string"
+      ? domain.trainingRecoveryLabel
+      : "Recovery";
+  lines.push(
+    score != null
+      ? `Recovery: ${label} — Score ${Math.round(score)}/100.`
+      : `Recovery: ${label}.`,
+  );
+
+  const logs = trimLogsLast10Days(context);
+  const done = logs
+    .filter((entry) => {
+      if (!entry || typeof entry !== "object") return false;
+      if (entry.done === true) return true;
+      if (entry.log && typeof entry.log === "object" && entry.log.done === true) return true;
+      return false;
+    })
+    .slice(-3);
+  if (done.length) {
+    lines.push(
+      `Letzte erledigte Workouts: ${done.map((e) => e.sessionId || "?").join(", ")}`,
+    );
+  } else {
+    lines.push("Letzte erledigte Workouts: keine in den letzten 10 Tagen geloggt.");
+  }
+
+  return lines.join("\n");
+}
+
+function buildSystemPrompt(context) {
+  return [buildStaticCoachSystemPrompt(), "", buildDynamicCoachSystemPrompt(context)].join("\n");
 }
 
 function buildMessagesArray(input, context) {
@@ -675,7 +840,17 @@ async function callClaudeApi({ input, context, apiKey }) {
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
       max_tokens: 800,
-      system: buildSystemPrompt(context),
+      system: [
+        {
+          type: "text",
+          text: buildStaticCoachSystemPrompt(),
+          cache_control: { type: "ephemeral" },
+        },
+        {
+          type: "text",
+          text: buildDynamicCoachSystemPrompt(context),
+        },
+      ],
       messages,
     }),
   });
@@ -741,21 +916,9 @@ function buildUserPayload(input, context) {
         : null;
   const recoverySummary =
     context?.recoverySummary && typeof context.recoverySummary === "object" ? context.recoverySummary : null;
-  const trainingPlan =
-    context?.trainingPlan && typeof context.trainingPlan === "object" ? context.trainingPlan : null;
-  const logsLast30Days = (() => {
-    const v = context?.logsLast30Days;
-    if (Array.isArray(v)) return v;
-    if (v && typeof v === "object") {
-      return Object.entries(v).map(([sessionId, logEntry]) =>
-        logEntry && typeof logEntry === "object" && !Array.isArray(logEntry)
-          ? { sessionId, ...logEntry }
-          : { sessionId: String(sessionId), logEntry },
-      );
-    }
-    return [];
-  })();
-  const healthRunsLast30Days = Array.isArray(context?.healthRunsLast30Days) ? context.healthRunsLast30Days : [];
+  const trainingPlan = buildTrimmedTrainingPlan(context);
+  const logsLast10Days = trimLogsLast10Days(context);
+  const healthRunsLast10Days = trimHealthRunsLast10Days(context);
   return JSON.stringify({
     userInput: input,
     todayIso,
@@ -766,14 +929,14 @@ function buildUserPayload(input, context) {
     recoverySummary,
     availableScreens,
     trainingPlan,
-    logsLast30Days,
-    healthRunsLast30Days,
+    logsLast10Days,
+    healthRunsLast10Days,
     instructions: {
       language: "German",
       actionSafety: "suggest-only-never-auto-apply",
       structuredOutput: true,
       recoverySsot:
-        "Use recoveryDomain + recoverySummary for readiness; use trainingPlan + logsLast30Days + healthRunsLast30Days for schedule/volume adherence questions.",
+        "Use recoveryDomain + recoverySummary for readiness; use trainingPlan (next14Days/last7Days/planSummary) + logsLast10Days + healthRunsLast10Days for schedule/volume adherence questions.",
     },
   });
 }

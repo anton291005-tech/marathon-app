@@ -32,7 +32,7 @@ module.exports = async function handler(req, res) {
 
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 6000,
+      max_tokens: 4500,
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
     });
@@ -304,3 +304,7 @@ function rebuildPlanFromWorkouts(workouts) {
 
   return { version: 2, workouts, weeks };
 }
+
+module.exports.config = {
+  maxDuration: 100,
+};

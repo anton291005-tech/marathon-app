@@ -74,6 +74,10 @@ export interface FullPlanResult {
 
 const DEFAULT_PLAN_API_BASE = "https://marathon-app-alpha.vercel.app";
 
+/** Client abort for Option A — must exceed Vercel maxDuration so slow Claude calls aren't cut off early. */
+const FULL_PLAN_CLIENT_TIMEOUT_MS = 100000;
+const STRUCTURE_PLAN_CLIENT_TIMEOUT_MS = 45000;
+
 function getPlanApiBaseUrl(): string {
   const config = getAiConfig();
   return config.apiBaseUrl?.replace(/\/$/, "") || DEFAULT_PLAN_API_BASE;
@@ -120,23 +124,43 @@ export async function fetchFullPlanFromClaude(
   const url = `${base}/api/onboarding/generate-plan-full`;
 
   try {
+    // eslint-disable-next-line no-console
+    console.log("[claude-client] full plan client timeout:", FULL_PLAN_CLIENT_TIMEOUT_MS, "ms");
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 58000);
+    const timeoutId = setTimeout(() => controller.abort(), FULL_PLAN_CLIENT_TIMEOUT_MS);
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile }),
+        signal: controller.signal,
+      });
 
-    if (!res.ok) return { plan: null, error: `HTTP ${res.status}` };
+      const rawText = await res.text();
 
-    const data = (await res.json()) as { plan?: unknown; error?: string };
-    if (!data.plan) return { plan: null, error: data.error ?? "no plan returned" };
+      if (!res.ok) {
+        // eslint-disable-next-line no-console
+        console.error("[claudePlanService] raw response on failure:", rawText);
+        return { plan: null, error: `HTTP ${res.status}` };
+      }
 
-    return { plan: data.plan as TrainingPlanV2 };
+      let data: { plan?: unknown; error?: string };
+      try {
+        data = JSON.parse(rawText) as { plan?: unknown; error?: string };
+      } catch (parseErr: unknown) {
+        // eslint-disable-next-line no-console
+        console.error("[claudePlanService] raw response on failure:", rawText);
+        const msg = parseErr instanceof Error ? parseErr.message : "JSON parse failed";
+        return { plan: null, error: msg };
+      }
+
+      if (!data.plan) return { plan: null, error: data.error ?? "no plan returned" };
+
+      return { plan: data.plan as TrainingPlanV2 };
+    } finally {
+      clearTimeout(timeoutId);
+    }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "unknown";
     // eslint-disable-next-line no-console
@@ -161,7 +185,7 @@ export async function fetchClaudePlanStructure(
   console.log("[claude-client] requesting plan structure...");
 
   try {
-    const rawText = await postGeneratePlan(profile, 45000);
+    const rawText = await postGeneratePlan(profile, STRUCTURE_PLAN_CLIENT_TIMEOUT_MS);
     const cleaned = extractJson(rawText);
     const data = JSON.parse(cleaned) as { structure?: ClaudePlanStructure | null; analysis?: string };
 
@@ -288,15 +312,27 @@ export async function fetchClaudePlanRules(
   console.log("[claude-client] requesting plan rules...");
 
   try {
-    const rawText = await postGeneratePlan(profile, 45000);
+    const rawText = await postGeneratePlan(profile, STRUCTURE_PLAN_CLIENT_TIMEOUT_MS);
     const cleaned = extractJson(rawText);
-    const data = JSON.parse(cleaned) as { rules?: AiPlanRules | null; analysis?: string };
+    const data = JSON.parse(cleaned) as {
+      structure?: ClaudePlanStructure | null;
+      rules?: AiPlanRules | null;
+      analysis?: string;
+    };
+
+    const structure = data.structure ?? null;
+    const rules = structure?.rules ?? data.rules ?? null;
     // eslint-disable-next-line no-console
-    console.log("[claude-client] rules received:", JSON.stringify(data.rules));
+    console.log(
+      "[claude-client] structure received, phases:",
+      structure?.phases?.length ?? 0,
+      "rules:",
+      JSON.stringify(rules),
+    );
 
     return {
-      rules: data.rules ?? null,
-      analysis: data.analysis ?? "",
+      rules,
+      analysis: data.analysis ?? structure?.analysis ?? "",
     };
   } catch (err) {
     // eslint-disable-next-line no-console

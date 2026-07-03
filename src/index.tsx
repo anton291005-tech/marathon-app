@@ -1,3 +1,4 @@
+import "./i18n";
 import * as Sentry from "@sentry/react";
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -16,6 +17,9 @@ import { Keyboard, KeyboardResize } from '@capacitor/keyboard';
 import { supabase } from './lib/supabase/client';
 import { parseAuthTokensFromUrl } from './lib/supabase/passwordRecovery';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
+import { ThemeProvider } from './context/ThemeContext';
+import { LanguageProvider } from './context/LanguageContext';
+import { NotificationProvider } from './context/NotificationContext';
 
 Sentry.init({
   dsn: process.env.REACT_APP_SENTRY_DSN || "",
@@ -43,7 +47,7 @@ function AppRoot() {
   }
 
   if (loading) {
-    return <div style={{ background: '#0b0b15', height: '100vh' }} />;
+    return <div style={{ background: 'var(--bg-primary)', height: '100vh' }} />;
   }
 
   if (!user || passwordRecoveryPending) {
@@ -88,11 +92,17 @@ const root = ReactDOM.createRoot(
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
-      <AuthProvider>
-        <ErrorBoundary>
-          <AppRoot />
-        </ErrorBoundary>
-      </AuthProvider>
+      <LanguageProvider>
+        <ThemeProvider>
+          <NotificationProvider>
+            <AuthProvider>
+              <ErrorBoundary>
+                <AppRoot />
+              </ErrorBoundary>
+            </AuthProvider>
+          </NotificationProvider>
+        </ThemeProvider>
+      </LanguageProvider>
     </ErrorBoundary>
   </React.StrictMode>
 );

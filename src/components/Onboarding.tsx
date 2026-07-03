@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import type { PersistedMarathonPreferences } from "../app/runtime/runtimePersistenceTypes";
 import DateInputMasked, {
   isCompleteMaskedDate,
@@ -11,7 +12,7 @@ import TimePicker, {
 } from "./TimePicker";
 import { getAppNow } from "../core/time/timeSystem";
 import {
-  fetchClaudePlanRules,
+  fetchClaudePlanStructure,
   fetchFullPlanFromClaude,
   type PlanGenerationProfile,
 } from "../lib/ai/claudePlanService";
@@ -52,9 +53,9 @@ const inputStyle: CSSProperties = {
   padding: "12px 14px",
   fontSize: 15,
   borderRadius: 12,
-  border: "1px solid rgba(148, 163, 184, 0.2)",
-  background: "#070b16",
-  color: "#e2e8f0",
+  border: "1px solid var(--border-input)",
+  background: "var(--bg-primary)",
+  color: "var(--text-primary)",
   outline: "none",
 };
 
@@ -71,13 +72,13 @@ const sectionTitleStyle: CSSProperties = {
   fontSize: 20,
   fontWeight: 800,
   letterSpacing: "-0.02em",
-  color: "#f1f5f9",
+  color: "var(--text-primary)",
 };
 
 const sectionSubtitleStyle: CSSProperties = {
   margin: "0 0 20px",
   fontSize: 13,
-  color: "#94a3b8",
+  color: "var(--text-secondary)",
   lineHeight: 1.45,
 };
 
@@ -89,9 +90,9 @@ function chipButtonStyle(active: boolean): CSSProperties {
     fontSize: 13,
     fontWeight: 600,
     borderRadius: 12,
-    border: `1px solid ${active ? "#3b82f6" : "rgba(148, 163, 184, 0.2)"}`,
-    background: active ? "rgba(59, 130, 246, 0.18)" : "#070b16",
-    color: active ? "#e2e8f0" : "#94a3b8",
+    border: `1px solid ${active ? "#3b82f6" : "var(--border-input)"}`,
+    background: active ? "rgba(59, 130, 246, 0.18)" : "var(--bg-primary)",
+    color: active ? "var(--text-primary)" : "var(--text-secondary)",
     cursor: "pointer",
     textAlign: "center",
   };
@@ -151,6 +152,7 @@ export type OnboardingProps = {
 };
 
 export function Onboarding({ onComplete }: OnboardingProps) {
+  const { t } = useTranslation();
   const [step, setStep] = useState<OnboardingStep>(1);
   const [shortcutId, setShortcutId] = useState<DistanceShortcutId | null>(null);
   const [customDistance, setCustomDistance] = useState("");
@@ -344,15 +346,42 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             console.error("[Onboarding] Option A failed:", fullPlanError);
             setIsPersonalizing(true);
 
-            const claudeResult = await fetchClaudePlanRules(profile);
+            const claudeResult = await fetchClaudePlanStructure(profile);
+            const structure = claudeResult.structure;
+            const rules = structure?.rules;
+            const hasStructure =
+              structure != null &&
+              Array.isArray(structure.phases) &&
+              structure.phases.length > 0 &&
+              rules != null &&
+              typeof rules === "object";
+            // eslint-disable-next-line no-console
+            console.log("[Onboarding] Claude structure before generateMarathonPlanV2ToRace:", {
+              hasStructure,
+              phaseCount: structure?.phases?.length ?? 0,
+              phaseNames: structure?.phases?.map((p) => p.name) ?? [],
+              rulesRestDays: rules?.restDays ?? null,
+              rulesLongRunDay: rules?.longRunDay,
+              rulesIntervalDay: rules?.intervalDay,
+              rulesTempoDay: rules?.tempoDay,
+              rulesStrengthDays: rules?.strengthDays ?? null,
+              rulesBikeDays: rules?.bikeDays ?? null,
+            });
+            if (!hasStructure) {
+              // eslint-disable-next-line no-console
+              console.warn(
+                "[Onboarding] Claude structure missing or empty — fallback plan may ignore preferences",
+              );
+            }
             plan = generateMarathonPlanV2ToRace(
               startDay,
               raceDay,
               summaryPayload.raceGoal,
               summaryPayload.raceDistanceKm,
               summaryPayload.weeklyKmRange,
-              parseRestDayFromPreferences(userPreferences),
-              claudeResult.rules ?? undefined,
+              rules?.restDays?.length ? undefined : parseRestDayFromPreferences(userPreferences),
+              rules ?? undefined,
+              structure?.phases,
             );
             patches = [];
           }
@@ -385,10 +414,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const finishButtonLabel = isPersonalizing
     ? "Plan wird personalisiert…"
     : isGenerating
-      ? "Plan wird erstellt…"
+      ? t("onboarding.generating")
       : generateError !== null
         ? "Erneut versuchen"
-        : "Los geht's";
+        : t("onboarding.finish");
 
   return (
     <div
@@ -401,8 +430,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         justifyContent: "center",
         boxSizing: "border-box",
         padding: "24px 16px calc(24px + env(safe-area-inset-bottom, 0px))",
-        background: "#0a0a0a",
-        color: "#e2e8f0",
+        background: "var(--bg-primary)",
+        color: "var(--text-primary)",
         fontFamily:
           "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif",
         WebkitFontSmoothing: "antialiased",
@@ -415,9 +444,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           maxHeight: "min(92dvh, 720px)",
           overflowY: "auto",
           borderRadius: 16,
-          border: "1px solid rgba(148, 163, 184, 0.18)",
-          background: "rgba(15, 23, 42, 0.65)",
-          boxShadow: "0 24px 48px rgba(0, 0, 0, 0.35)",
+          border: "1px solid var(--border-input)",
+          background: "var(--bg-card)",
+          boxShadow: "0 24px 48px var(--shadow)",
           padding: "28px 24px 24px",
           boxSizing: "border-box",
         }}
@@ -445,8 +474,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
         {step === 1 ? (
           <>
-            <h2 style={sectionTitleStyle}>Distanz & Ziel</h2>
-            <p style={sectionSubtitleStyle}>Wähle deine Renndistanz und dein Ziel.</p>
+            <h2 style={sectionTitleStyle}>{t("onboarding.step1_title")}</h2>
+            <p style={sectionSubtitleStyle}>{t("onboarding.step1_subtitle")}</p>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
               {DISTANCE_SHORTCUTS.map((sc) => (
@@ -465,39 +494,39 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             </div>
 
             <label htmlFor="onboard-custom-distance" style={labelStyle}>
-              Oder eigene Distanz eingeben
+              {t("onboarding.custom_distance_label")}
             </label>
             <input
               id="onboard-custom-distance"
               type="text"
               value={customDistance}
               onChange={(e) => handleCustomDistanceChange(e.target.value)}
-              placeholder="z.B. 50 km, 100 Meilen, Leadville 100"
+              placeholder={t("onboarding.custom_distance_placeholder")}
               style={{ ...inputStyle, marginBottom: distance ? 20 : 0 }}
             />
 
             {distance ? (
               <div style={{ marginTop: 20 }}>
-                <div style={{ ...labelStyle, marginBottom: 8 }}>Dein Ziel</div>
+                <div style={{ ...labelStyle, marginBottom: 8 }}>{t("onboarding.goal_label")}</div>
                 <div style={{ display: "flex", gap: 8, marginBottom: raceGoal === "time" ? 14 : 0 }}>
                   <button
                     type="button"
                     onClick={() => setRaceGoal("finish")}
                     style={chipButtonStyle(raceGoal === "finish")}
                   >
-                    Nur finishen
+                    {t("onboarding.goal_finish")}
                   </button>
                   <button
                     type="button"
                     onClick={() => setRaceGoal("time")}
                     style={chipButtonStyle(raceGoal === "time")}
                   >
-                    Unter einer Zielzeit
+                    {t("onboarding.goal_time")}
                   </button>
                 </div>
                 {raceGoal === "time" ? (
                   <>
-                    <div style={{ ...labelStyle, marginBottom: 10 }}>Zielzeit</div>
+                    <div style={{ ...labelStyle, marginBottom: 10 }}>{t("onboarding.goal_time_label")}</div>
                     <TimePicker value={timePickerValue} onChange={setTimePickerValue} />
                   </>
                 ) : null}
@@ -508,10 +537,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
         {step === 2 ? (
           <>
-            <h2 style={sectionTitleStyle}>Erfahrung & Rennen</h2>
-            <p style={sectionSubtitleStyle}>Damit wir deinen Plan passend aufbauen können.</p>
+            <h2 style={sectionTitleStyle}>{t("onboarding.step2_title")}</h2>
+            <p style={sectionSubtitleStyle}>{t("onboarding.step2_subtitle")}</p>
 
-            <div style={{ ...labelStyle, marginBottom: 8 }}>Wöchentlicher Umfang</div>
+            <div style={{ ...labelStyle, marginBottom: 8 }}>{t("onboarding.weekly_km_label")}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
               {WEEKLY_KM_RANGES.map((range) => (
                 <button
@@ -531,7 +560,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
             <DateInputMasked
               id="onboard-race-date"
-              label="Wann ist dein Rennen?"
+              label={t("onboarding.race_date_label")}
               value={raceDate}
               onChange={setRaceDate}
               minDate={planStartResolved.date ?? startOfLocalDay(getAppNow())}
@@ -541,34 +570,34 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               style={{ marginBottom: 0 }}
             />
 
-            <div style={{ ...labelStyle, marginBottom: 8, marginTop: 4 }}>Wann soll dein Training starten?</div>
+            <div style={{ ...labelStyle, marginBottom: 8, marginTop: 4 }}>{t("onboarding.plan_start_label")}</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: planStartChoice === "custom" ? 12 : 20 }}>
               <button
                 type="button"
                 onClick={() => setPlanStartChoice("today")}
                 style={chipButtonStyle(planStartChoice === "today")}
               >
-                Heute
+                {t("onboarding.plan_start_today")}
               </button>
               <button
                 type="button"
                 onClick={() => setPlanStartChoice("nextMonday")}
                 style={chipButtonStyle(planStartChoice === "nextMonday")}
               >
-                Nächsten Montag
+                {t("onboarding.plan_start_next_monday")}
               </button>
               <button
                 type="button"
                 onClick={() => setPlanStartChoice("custom")}
                 style={chipButtonStyle(planStartChoice === "custom")}
               >
-                Eigenes Datum
+                {t("onboarding.plan_start_custom")}
               </button>
             </div>
             {planStartChoice === "custom" ? (
               <DateInputMasked
                 id="onboard-plan-start-date"
-                label="Startdatum"
+                label={t("onboarding.plan_start_custom_label")}
                 value={planStartCustomDate}
                 onChange={setPlanStartCustomDate}
                 minDate={startOfLocalDay(getAppNow())}
@@ -578,14 +607,14 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             ) : null}
 
             <label htmlFor="onboard-race-name" style={labelStyle}>
-              Welches Rennen läufst du?
+              {t("onboarding.race_name_label")}
             </label>
             <input
               id="onboard-race-name"
               type="text"
               value={raceName}
               onChange={(e) => setRaceName(e.target.value)}
-              placeholder="z.B. Berlin Marathon, Leadville 100, Moab 240"
+              placeholder={t("onboarding.race_name_placeholder")}
               style={inputStyle}
             />
           </>
@@ -593,9 +622,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
         {step === 3 ? (
           <>
-            <h2 style={sectionTitleStyle}>Deine Trainings-Präferenzen</h2>
+            <h2 style={sectionTitleStyle}>{t("onboarding.step3_title")}</h2>
             <p style={sectionSubtitleStyle}>
-              Optional — je mehr du angibst, desto individueller dein Plan
+              {t("onboarding.step3_subtitle")}
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
@@ -605,7 +634,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     type="text"
                     value={value}
                     onChange={(e) => handlePreferenceChange(index, e.target.value)}
-                    placeholder="z.B. Kein Training am Dienstag"
+                    placeholder={t("onboarding.preference_placeholder")}
                     style={{ ...inputStyle, flex: 1 }}
                     aria-label={`Präferenz ${index + 1}`}
                   />
@@ -613,7 +642,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     <button
                       type="button"
                       onClick={() => handleRemovePreferenceField(index)}
-                      aria-label="Präferenz entfernen"
+                      aria-label={t("onboarding.preference_remove")}
                       style={{
                         flexShrink: 0,
                         width: 36,
@@ -621,7 +650,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                         borderRadius: 10,
                         border: "1px solid rgba(148, 163, 184, 0.2)",
                         background: "#0b1220",
-                        color: "#94a3b8",
+                        color: "var(--text-secondary)",
                         fontSize: 18,
                         lineHeight: 1,
                         cursor: "pointer",
@@ -647,11 +676,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   borderRadius: 12,
                   border: "1px dashed rgba(148, 163, 184, 0.35)",
                   background: "transparent",
-                  color: "#94a3b8",
+                  color: "var(--text-secondary)",
                   cursor: "pointer",
                 }}
               >
-                + Weitere Präferenz hinzufügen
+                + {t("onboarding.preference_add")}
               </button>
             ) : null}
 
@@ -663,7 +692,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 display: "grid",
                 gap: 6,
                 fontSize: 12,
-                color: "#64748b",
+                color: "var(--text-muted)",
               }}
             >
               {PREFERENCE_HINTS.map((hint) => (
@@ -679,7 +708,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 padding: 0,
                 border: "none",
                 background: "none",
-                color: "#64748b",
+                color: "var(--text-muted)",
                 fontSize: 13,
                 textDecoration: "underline",
                 cursor: "pointer",
@@ -692,8 +721,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
         {step === 4 && summaryPayload && distance ? (
           <>
-            <h2 style={sectionTitleStyle}>Zusammenfassung</h2>
-            <p style={sectionSubtitleStyle}>Stimmt alles? Dann legen wir los.</p>
+            <h2 style={sectionTitleStyle}>{t("onboarding.step4_title")}</h2>
+            <p style={sectionSubtitleStyle}>{t("onboarding.step4_subtitle")}</p>
 
             <dl
               style={{
@@ -718,7 +747,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 >
                   Distanz
                 </dt>
-                <dd style={{ margin: "4px 0 0", color: "#e2e8f0" }}>
+                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
                   {summaryPayload.raceDistanceLabel}
                 </dd>
               </div>
@@ -735,7 +764,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 >
                   Ziel
                 </dt>
-                <dd style={{ margin: "4px 0 0", color: "#e2e8f0" }}>
+                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
                   {formatGoalSummary(summaryPayload.raceGoal, summaryPayload.raceTargetTime)}
                 </dd>
               </div>
@@ -752,7 +781,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 >
                   Wöchentlicher Umfang
                 </dt>
-                <dd style={{ margin: "4px 0 0", color: "#e2e8f0" }}>
+                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
                   {summaryPayload.weeklyKmRange}
                 </dd>
               </div>
@@ -769,7 +798,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 >
                   Renndatum
                 </dt>
-                <dd style={{ margin: "4px 0 0", color: "#e2e8f0" }}>
+                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
                   {summaryPayload.raceDate || "—"}
                 </dd>
               </div>
@@ -786,7 +815,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 >
                   Trainingsstart
                 </dt>
-                <dd style={{ margin: "4px 0 0", color: "#e2e8f0" }}>
+                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
                   {summaryPayload.planStartDate || "—"}
                 </dd>
               </div>
@@ -803,7 +832,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 >
                   Rennen
                 </dt>
-                <dd style={{ margin: "4px 0 0", color: "#e2e8f0" }}>
+                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
                   {summaryPayload.raceName || "—"}
                 </dd>
               </div>
@@ -820,7 +849,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 >
                   Deine Präferenzen
                 </dt>
-                <dd style={{ margin: "4px 0 0", color: "#e2e8f0" }}>
+                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
                   {preferencesSummaryLabel}
                 </dd>
               </div>
@@ -856,12 +885,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 borderRadius: 14,
                 border: "1px solid rgba(148, 163, 184, 0.2)",
                 background: "#0b1220",
-                color: "#94a3b8",
+                color: "var(--text-secondary)",
                 cursor: isGenerating ? "not-allowed" : "pointer",
                 opacity: isGenerating ? 0.6 : 1,
               }}
             >
-              Zurück
+              {t("onboarding.back")}
             </button>
           ) : null}
 
@@ -889,7 +918,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 background: "linear-gradient(135deg, #10b981, #3b82f6)",
               }}
             >
-              Weiter
+              {t("onboarding.next")}
             </button>
           ) : (
             <button
