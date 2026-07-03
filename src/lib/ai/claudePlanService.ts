@@ -74,8 +74,8 @@ export interface FullPlanResult {
 
 const DEFAULT_PLAN_API_BASE = "https://marathon-app-alpha.vercel.app";
 
-/** Client abort for Option A — must exceed Vercel maxDuration so slow Claude calls aren't cut off early. */
-const FULL_PLAN_CLIENT_TIMEOUT_MS = 100000;
+/** Client abort for Option A — must exceed Vercel maxDuration (240s) so the server responds first. */
+const FULL_PLAN_CLIENT_TIMEOUT_MS = 280000;
 const STRUCTURE_PLAN_CLIENT_TIMEOUT_MS = 45000;
 
 function getPlanApiBaseUrl(): string {
