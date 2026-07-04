@@ -275,8 +275,10 @@ async function generateFullPlanByPhases(client, profile) {
     );
 
     process.stdout.write(`[phased-plan] PHASE ${phaseNum} START ${new Date().toISOString()}\n`);
+    let rawResponseText = "";
     try {
       const { text, responseLength: len } = await callClaudeForPhase(client, profile, phaseSpec, context);
+      rawResponseText = text;
       responseLength = len;
       const parsed = parseClaudeJson(text);
       phaseWorkouts = normalizeWorkouts(parsed, profile).filter((w) => w.dateIso);
@@ -284,6 +286,9 @@ async function generateFullPlanByPhases(client, profile) {
         throw new Error("no valid workouts after parse");
       }
     } catch (err) {
+      const errorPos = parseInt(err.message.match(/position (\d+)/)?.[1] || "0", 10);
+      const snippet = rawResponseText.slice(Math.max(0, errorPos - 150), errorPos + 150);
+      process.stdout.write(`[phased-plan] PARSE ERROR CONTEXT: ${JSON.stringify(snippet)}\n`);
       status = "fallback";
       errorMessage = err?.message ?? "unknown";
       console.warn(
