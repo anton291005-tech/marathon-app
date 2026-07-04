@@ -182,8 +182,9 @@ async function callClaudeForPhase(client, profile, phaseSpec, context) {
 }
 
 async function generateFullPlanByPhases(client, profile) {
+  process.stdout.write(`[phased-plan] REQUEST START ${new Date().toISOString()}\n`);
   const planStartTs = Date.now();
-  console.log(`[phased-plan] START ts=${planStartTs}`);
+  process.stdout.write(`[phased-plan] START ${JSON.stringify({ ts: planStartTs })}\n`);
 
   const startDay = parseOnboardingRaceDate(profile.planStartDate);
   const raceDay = parseOnboardingRaceDate(profile.raceDate);
@@ -191,8 +192,10 @@ async function generateFullPlanByPhases(client, profile) {
     throw new Error("Invalid planStartDate or raceDate");
   }
 
-  console.log("[phased-plan] fetching structure...");
+  process.stdout.write(`[phased-plan] fetching structure ${JSON.stringify({})}\n`);
+  process.stdout.write(`[phased-plan] PHASE STRUCTURE START ${new Date().toISOString()}\n`);
   let structure = await generatePlanStructureWithClaude(profile);
+  process.stdout.write(`[phased-plan] PHASE STRUCTURE DONE ${new Date().toISOString()}\n`);
   const { weekStarts, weekKeyOverrides, totalWeeks } = computeWeekStartDates(startDay, raceDay);
 
   if (!structure?.phases?.length) {
@@ -204,7 +207,9 @@ async function generateFullPlanByPhases(client, profile) {
   const weekPhaseSchedule = buildWeekPhaseSchedule(totalWeeks, structure.phases);
   const orderedPhases = orderPhases(structure.phases);
 
-  console.log("[phased-plan] totalWeeks:", totalWeeks, "phases:", orderedPhases.map((p) => p.name).join(", "));
+  process.stdout.write(
+    `[phased-plan] totalWeeks ${JSON.stringify({ totalWeeks, phases: orderedPhases.map((p) => p.name) })}\n`,
+  );
 
   let deterministicFallbackPlan = null;
   const getDeterministicPlan = () => {
@@ -230,11 +235,14 @@ async function generateFullPlanByPhases(client, profile) {
     const phaseName = normalizeTrainingPhase(phaseSpec.name);
     const phaseWeekNumbers = getPhaseWeekNumbers(weekPhaseSchedule, phaseName);
     if (phaseWeekNumbers.length === 0) {
-      console.log(`[phased-plan] phase ${phaseName}: skipped (0 weeks)`);
+      process.stdout.write(
+        `[phased-plan] phase skipped ${JSON.stringify({ phase: phaseName, reason: "0 weeks" })}\n`,
+      );
       phaseDiagnostics.push({ phase: phaseName, status: "skipped", reason: "no weeks mapped" });
       continue;
     }
 
+    const phaseNum = PHASE_ORDER.indexOf(phaseName) + 1;
     const phaseStartTs = Date.now();
     const startWeekIndex = phaseWeekNumbers[0];
     // Always derive from workouts actually generated so far (Claude or fallback).
@@ -254,13 +262,19 @@ async function generateFullPlanByPhases(client, profile) {
     let continuityScale = null;
     let phaseWorkouts = [];
 
-    console.log(
-      `[phased-plan] phase ${phaseName}: START ts=${phaseStartTs} weeks=${phaseWeekNumbers.join(",")} startWeek=${startWeekIndex}` +
-        (previousPhaseSummary
-          ? ` prevWeekKm=${previousPhaseSummary.lastWeekTotalKm} prevWeekEnd=${previousPhaseSummary.lastWeekEndIso}`
-          : ""),
+    process.stdout.write(
+      `[phased-plan] phase START ${JSON.stringify({
+        phase: phaseName,
+        phaseNum,
+        ts: phaseStartTs,
+        weeks: phaseWeekNumbers,
+        startWeek: startWeekIndex,
+        prevWeekKm: previousPhaseSummary?.lastWeekTotalKm ?? null,
+        prevWeekEnd: previousPhaseSummary?.lastWeekEndIso ?? null,
+      })}\n`,
     );
 
+    process.stdout.write(`[phased-plan] PHASE ${phaseNum} START ${new Date().toISOString()}\n`);
     try {
       const { text, responseLength: len } = await callClaudeForPhase(client, profile, phaseSpec, context);
       responseLength = len;
@@ -288,6 +302,10 @@ async function generateFullPlanByPhases(client, profile) {
         deterministicReferenceKm,
       );
 
+      if (previousPhaseSummary) {
+        process.stdout.write(`[phased-plan] PHASE ${phaseNum} FALLBACK USED\n`);
+      }
+
       if (previousPhaseSummary && rawFallback.length > 0) {
         const rawWeeks = groupWorkoutsByWeekStart(rawFallback);
         const adjWeeks = groupWorkoutsByWeekStart(phaseWorkouts);
@@ -296,20 +314,29 @@ async function generateFullPlanByPhases(client, profile) {
         if (rawFirstWeekKm > 0 && adjustedFirstWeekKm > 0) {
           continuityScale = Math.round((adjustedFirstWeekKm / rawFirstWeekKm) * 100) / 100;
         }
-        console.log(
-          `[phased-plan] phase ${phaseName}: fallback continuity` +
-            ` prevActualKm=${previousPhaseSummary.lastWeekTotalKm}` +
-            ` detRefKm=${deterministicReferenceKm ?? "n/a"}` +
-            ` scale=${continuityScale ?? 1}`,
+        process.stdout.write(
+          `[phased-plan] fallback continuity ${JSON.stringify({
+            phase: phaseName,
+            prevActualKm: previousPhaseSummary.lastWeekTotalKm,
+            detRefKm: deterministicReferenceKm ?? "n/a",
+            scale: continuityScale ?? 1,
+          })}\n`,
         );
       }
     }
+    process.stdout.write(`[phased-plan] PHASE ${phaseNum} DONE ${new Date().toISOString()}\n`);
 
     const phaseEndTs = Date.now();
     const phaseDurationMs = phaseEndTs - phaseStartTs;
-    console.log(
-      `[phased-plan] phase ${phaseName}: END ts=${phaseEndTs} durationMs=${phaseDurationMs} status=${status}` +
-        ` workouts=${phaseWorkouts.length} responseLength=${responseLength}`,
+    process.stdout.write(
+      `[phased-plan] phase END ${JSON.stringify({
+        phase: phaseName,
+        ts: phaseEndTs,
+        durationMs: phaseDurationMs,
+        status,
+        workouts: phaseWorkouts.length,
+        responseLength,
+      })}\n`,
     );
 
     allWorkouts.push(...phaseWorkouts);
@@ -337,20 +364,22 @@ async function generateFullPlanByPhases(client, profile) {
 
   const plan = rebuildPlanFromWorkouts(allWorkouts, undefined, weekKeyOverrides);
   const totalDurationMs = Date.now() - planStartTs;
-  console.log(
-    `[phased-plan] END ts=${Date.now()} totalDurationMs=${totalDurationMs}` +
-      (totalDurationMs > 180000 ? " WARNING: total duration exceeds 3 minutes" : ""),
+  process.stdout.write(
+    `[phased-plan] END ${JSON.stringify({
+      ts: Date.now(),
+      totalDurationMs,
+      warning: totalDurationMs > 180000 ? "total duration exceeds 3 minutes" : null,
+    })}\n`,
   );
-  console.log(
-    "[phased-plan] merged plan:",
-    "workouts=",
-    plan.workouts?.length ?? 0,
-    "weeks=",
-    plan.weeks?.length ?? 0,
-    "diagnostics=",
-    JSON.stringify(phaseDiagnostics),
+  process.stdout.write(
+    `[phased-plan] merged plan ${JSON.stringify({
+      workouts: plan.workouts?.length ?? 0,
+      weeks: plan.weeks?.length ?? 0,
+      diagnostics: phaseDiagnostics,
+    })}\n`,
   );
 
+  process.stdout.write(`[phased-plan] REQUEST DONE ${new Date().toISOString()}\n`);
   return { plan, diagnostics: phaseDiagnostics, totalDurationMs };
 }
 
