@@ -24,8 +24,15 @@ const {
 } = require("./planWorkoutUtils");
 
 const PHASE_ORDER = ["base", "build", "peak", "taper"];
-const PHASE_MAX_TOKENS = 4000;
+const TOKENS_PER_WEEK = 700;
+const BASE_OVERHEAD = 500;
+const MAX_TOKENS_CAP = 8192;
 const PHASE_CALL_TIMEOUT_MS = 90000;
+
+function calculateMaxTokensForPhase(weekCount) {
+  const calculated = BASE_OVERHEAD + weekCount * TOKENS_PER_WEEK;
+  return Math.min(calculated, MAX_TOKENS_CAP);
+}
 
 function buildPhaseSystemPrompt(phaseName) {
   const phaseUpper = phaseName.toUpperCase();
@@ -157,14 +164,14 @@ function orderPhases(structurePhases) {
   return ordered;
 }
 
-async function callClaudeForPhase(client, profile, phaseSpec, context) {
+async function callClaudeForPhase(client, profile, phaseSpec, context, maxTokens) {
   const systemPrompt = buildPhaseSystemPrompt(normalizeTrainingPhase(phaseSpec.name));
   const userMessage = buildPhaseUserMessage(profile, phaseSpec, context);
 
   const message = await Promise.race([
     client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: PHASE_MAX_TOKENS,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
     }),
@@ -275,9 +282,26 @@ async function generateFullPlanByPhases(client, profile) {
     );
 
     process.stdout.write(`[phased-plan] PHASE ${phaseNum} START ${new Date().toISOString()}\n`);
+    const weekCount = phaseWeekNumbers.length;
+    const calculatedValue = calculateMaxTokensForPhase(weekCount);
+    const singleCallMaxWeeks = (MAX_TOKENS_CAP - BASE_OVERHEAD) / TOKENS_PER_WEEK;
+    if (weekCount > singleCallMaxWeeks) {
+      process.stdout.write(
+        `[phased-plan] PHASE ${phaseNum} exceeds single-call capacity (${weekCount} weeks), consider splitting\n`,
+      );
+    }
+    process.stdout.write(
+      `[phased-plan] PHASE ${phaseNum} weeks: ${weekCount}, max_tokens: ${calculatedValue}\n`,
+    );
     let rawResponseText = "";
     try {
-      const { text, responseLength: len } = await callClaudeForPhase(client, profile, phaseSpec, context);
+      const { text, responseLength: len } = await callClaudeForPhase(
+        client,
+        profile,
+        phaseSpec,
+        context,
+        calculatedValue,
+      );
       rawResponseText = text;
       responseLength = len;
       const parsed = parseClaudeJson(text);
