@@ -8,7 +8,6 @@ const {
   buildWeekPhaseSchedule,
   computeWeekStartDates,
   generateMarathonPlanV2ToRace,
-  extractWorkoutsForPhase,
   getWeekTotalKmFromPlan,
   defaultStructureForWeeks,
   formatDeDate,
@@ -24,14 +23,33 @@ const {
 } = require("./planWorkoutUtils");
 
 const PHASE_ORDER = ["base", "build", "peak", "taper"];
-const TOKENS_PER_WEEK = 700;
-const BASE_OVERHEAD = 500;
+const TOKENS_PER_WEEK = 1100;
+const BASE_OVERHEAD = 600;
 const MAX_TOKENS_CAP = 8192;
 const PHASE_CALL_TIMEOUT_MS = 90000;
 
 function calculateMaxTokensForPhase(weekCount) {
   const calculated = BASE_OVERHEAD + weekCount * TOKENS_PER_WEEK;
   return Math.min(calculated, MAX_TOKENS_CAP);
+}
+
+function splitWeekNumbersIntoChunks(weekNumbers, maxWeeksPerCall) {
+  const chunks = [];
+  for (let i = 0; i < weekNumbers.length; i += maxWeeksPerCall) {
+    chunks.push(weekNumbers.slice(i, i + maxWeeksPerCall));
+  }
+  return chunks;
+}
+
+function extractWorkoutsForWeekNumbers(fullPlan, weekNumbers) {
+  const targetWns = new Set(weekNumbers);
+  const workouts = [];
+  for (const week of fullPlan.weeks ?? []) {
+    if (targetWns.has(week.meta?.wn)) {
+      workouts.push(...week.workouts);
+    }
+  }
+  return workouts;
 }
 
 function buildPhaseSystemPrompt(phaseName) {
@@ -254,14 +272,6 @@ async function generateFullPlanByPhases(client, profile) {
     const startWeekIndex = phaseWeekNumbers[0];
     // Always derive from workouts actually generated so far (Claude or fallback).
     const previousPhaseSummary = getPreviousPhaseSummary(allWorkouts);
-    const context = {
-      rules,
-      weekStarts,
-      weekPhaseSchedule,
-      phaseWeekNumbers,
-      startWeekIndex,
-      previousPhaseSummary,
-    };
 
     let status = "claude";
     let responseLength = 0;
@@ -282,76 +292,98 @@ async function generateFullPlanByPhases(client, profile) {
     );
 
     process.stdout.write(`[phased-plan] PHASE ${phaseNum} START ${new Date().toISOString()}\n`);
-    const weekCount = phaseWeekNumbers.length;
-    const calculatedValue = calculateMaxTokensForPhase(weekCount);
-    const singleCallMaxWeeks = (MAX_TOKENS_CAP - BASE_OVERHEAD) / TOKENS_PER_WEEK;
-    if (weekCount > singleCallMaxWeeks) {
+    const maxWeeksPerCall = Math.floor((MAX_TOKENS_CAP - BASE_OVERHEAD) / TOKENS_PER_WEEK);
+    const phaseChunks =
+      phaseWeekNumbers.length <= maxWeeksPerCall
+        ? [phaseWeekNumbers]
+        : splitWeekNumbersIntoChunks(phaseWeekNumbers, maxWeeksPerCall);
+    const totalChunks = phaseChunks.length;
+    let chunkPreviousSummary = previousPhaseSummary;
+
+    for (let chunkIndex = 0; chunkIndex < phaseChunks.length; chunkIndex++) {
+      const chunkWeekNumbers = phaseChunks[chunkIndex];
+      const chunkNum = chunkIndex + 1;
+      const maxTokens = calculateMaxTokensForPhase(chunkWeekNumbers.length);
       process.stdout.write(
-        `[phased-plan] PHASE ${phaseNum} exceeds single-call capacity (${weekCount} weeks), consider splitting\n`,
-      );
-    }
-    process.stdout.write(
-      `[phased-plan] PHASE ${phaseNum} weeks: ${weekCount}, max_tokens: ${calculatedValue}\n`,
-    );
-    let rawResponseText = "";
-    try {
-      const { text, responseLength: len } = await callClaudeForPhase(
-        client,
-        profile,
-        phaseSpec,
-        context,
-        calculatedValue,
-      );
-      rawResponseText = text;
-      responseLength = len;
-      const parsed = parseClaudeJson(text);
-      phaseWorkouts = normalizeWorkouts(parsed, profile).filter((w) => w.dateIso);
-      if (phaseWorkouts.length === 0) {
-        throw new Error("no valid workouts after parse");
-      }
-    } catch (err) {
-      const errorPos = parseInt(err.message.match(/position (\d+)/)?.[1] || "0", 10);
-      const snippet = rawResponseText.slice(Math.max(0, errorPos - 150), errorPos + 150);
-      process.stdout.write(`[phased-plan] PARSE ERROR CONTEXT: ${JSON.stringify(snippet)}\n`);
-      status = "fallback";
-      errorMessage = err?.message ?? "unknown";
-      console.warn(
-        `[phased-plan] phase ${phaseName}: Claude failed (${errorMessage}), using deterministic fallback`,
+        `[phased-plan] PHASE ${phaseNum} CHUNK ${chunkNum}/${totalChunks} weeks: ${chunkWeekNumbers.length}, max_tokens: ${maxTokens}\n`,
       );
 
-      const deterministicPlan = getDeterministicPlan();
-      const transitionWeek = startWeekIndex > 1 ? startWeekIndex - 1 : null;
-      const deterministicReferenceKm =
-        transitionWeek != null ? getWeekTotalKmFromPlan(deterministicPlan, transitionWeek) : null;
+      const chunkContext = {
+        rules,
+        weekStarts,
+        weekPhaseSchedule,
+        phaseWeekNumbers: chunkWeekNumbers,
+        startWeekIndex: chunkWeekNumbers[0],
+        previousPhaseSummary: chunkPreviousSummary,
+      };
 
-      const rawFallback = extractWorkoutsForPhase(deterministicPlan, weekPhaseSchedule, phaseName);
-      phaseWorkouts = scalePhaseWorkoutsForContinuity(
-        rawFallback,
-        previousPhaseSummary,
-        deterministicReferenceKm,
-      );
-
-      if (previousPhaseSummary) {
-        process.stdout.write(`[phased-plan] PHASE ${phaseNum} FALLBACK USED\n`);
-      }
-
-      if (previousPhaseSummary && rawFallback.length > 0) {
-        const rawWeeks = groupWorkoutsByWeekStart(rawFallback);
-        const adjWeeks = groupWorkoutsByWeekStart(phaseWorkouts);
-        const rawFirstWeekKm = rawWeeks.length > 0 ? sumWeekKm(rawWeeks[0][1]) : 0;
-        const adjustedFirstWeekKm = adjWeeks.length > 0 ? sumWeekKm(adjWeeks[0][1]) : 0;
-        if (rawFirstWeekKm > 0 && adjustedFirstWeekKm > 0) {
-          continuityScale = Math.round((adjustedFirstWeekKm / rawFirstWeekKm) * 100) / 100;
-        }
-        process.stdout.write(
-          `[phased-plan] fallback continuity ${JSON.stringify({
-            phase: phaseName,
-            prevActualKm: previousPhaseSummary.lastWeekTotalKm,
-            detRefKm: deterministicReferenceKm ?? "n/a",
-            scale: continuityScale ?? 1,
-          })}\n`,
+      let rawResponseText = "";
+      try {
+        const { text, responseLength: len } = await callClaudeForPhase(
+          client,
+          profile,
+          phaseSpec,
+          chunkContext,
+          maxTokens,
         );
+        rawResponseText = text;
+        responseLength += len;
+        const parsed = parseClaudeJson(text);
+        const chunkWorkouts = normalizeWorkouts(parsed, profile).filter((w) => w.dateIso);
+        if (chunkWorkouts.length === 0) {
+          throw new Error("no valid workouts after parse");
+        }
+        phaseWorkouts.push(...chunkWorkouts);
+      } catch (err) {
+        const errorPos = parseInt(err.message.match(/position (\d+)/)?.[1] || "0", 10);
+        const snippet = rawResponseText.slice(Math.max(0, errorPos - 150), errorPos + 150);
+        process.stdout.write(`[phased-plan] PARSE ERROR CONTEXT: ${JSON.stringify(snippet)}\n`);
+        status = "fallback";
+        errorMessage = err?.message ?? "unknown";
+        console.warn(
+          `[phased-plan] phase ${phaseName} chunk ${chunkNum}/${totalChunks}: Claude failed (${errorMessage}), using deterministic fallback`,
+        );
+
+        const deterministicPlan = getDeterministicPlan();
+        const chunkStartWeek = chunkWeekNumbers[0];
+        const transitionWeek = chunkStartWeek > 1 ? chunkStartWeek - 1 : null;
+        const deterministicReferenceKm =
+          transitionWeek != null ? getWeekTotalKmFromPlan(deterministicPlan, transitionWeek) : null;
+
+        const rawFallback = extractWorkoutsForWeekNumbers(deterministicPlan, chunkWeekNumbers);
+        const chunkWorkouts = scalePhaseWorkoutsForContinuity(
+          rawFallback,
+          chunkPreviousSummary,
+          deterministicReferenceKm,
+        );
+
+        if (chunkPreviousSummary) {
+          process.stdout.write(`[phased-plan] PHASE ${phaseNum} FALLBACK USED\n`);
+        }
+
+        if (chunkPreviousSummary && rawFallback.length > 0) {
+          const rawWeeks = groupWorkoutsByWeekStart(rawFallback);
+          const adjWeeks = groupWorkoutsByWeekStart(chunkWorkouts);
+          const rawFirstWeekKm = rawWeeks.length > 0 ? sumWeekKm(rawWeeks[0][1]) : 0;
+          const adjustedFirstWeekKm = adjWeeks.length > 0 ? sumWeekKm(adjWeeks[0][1]) : 0;
+          if (rawFirstWeekKm > 0 && adjustedFirstWeekKm > 0) {
+            continuityScale = Math.round((adjustedFirstWeekKm / rawFirstWeekKm) * 100) / 100;
+          }
+          process.stdout.write(
+            `[phased-plan] fallback continuity ${JSON.stringify({
+              phase: phaseName,
+              chunk: `${chunkNum}/${totalChunks}`,
+              prevActualKm: chunkPreviousSummary.lastWeekTotalKm,
+              detRefKm: deterministicReferenceKm ?? "n/a",
+              scale: continuityScale ?? 1,
+            })}\n`,
+          );
+        }
+
+        phaseWorkouts.push(...chunkWorkouts);
       }
+
+      chunkPreviousSummary = getPreviousPhaseSummary(phaseWorkouts);
     }
     process.stdout.write(`[phased-plan] PHASE ${phaseNum} DONE ${new Date().toISOString()}\n`);
 
