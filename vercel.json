@@ -4,9 +4,6 @@
   "outputDirectory": "dist",
   "functions": {
     "api/**/*.js": {
-      "maxDuration": 100
-    },
-    "api/onboarding/generate-plan-full.js": {
       "maxDuration": 240
     }
   },
