@@ -2570,11 +2570,11 @@ export default function AppMain(){
     };
   const appNow = getAppNow();
   const personalBestSeconds = useMemo(() => {
-    const raw = (preferences as { personalBestTime?: string | null }).personalBestTime;
+    const raw = preferences.personalBestTime;
     if (raw == null || String(raw).trim() === "") return null;
     const sec = parseTargetTimeToSeconds(String(raw));
     return sec != null && Number.isFinite(sec) && sec > 0 ? sec : null;
-  }, [preferences]);
+  }, [preferences.personalBestTime]);
   const marathonPrediction = useMemo(
     () =>
       getMarathonPrediction({
@@ -4808,7 +4808,7 @@ export default function AppMain(){
         <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flex:1,minHeight:0,...viewTransitionStyle}}>
           <CollapsibleSettingsCard
             title={t("settings.title")}
-            subtitle="Zielzeit, Herzfrequenz"
+            subtitle="Zielzeit, Marathon-PR, Herzfrequenz"
             expanded={settingsCards.einstellungen}
             onToggle={() => toggleSettingsCard("einstellungen")}
           >
@@ -4969,7 +4969,39 @@ export default function AppMain(){
               placeholder="2:49:50"
               style={{width:"100%",background:"var(--bg-primary)",border:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "1px solid rgba(56,189,248,0.5)" : "1px solid var(--border-input)",borderRadius:12,padding:"11px 12px",color:"var(--text-primary)",fontSize:16,boxSizing:"border-box",marginBottom:6,boxShadow:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "0 0 0 2px rgba(56,189,248,0.2)" : "none"}}
             />
-            <div style={{fontSize:11,color:"var(--text-muted)"}}>Format: hh:mm:ss</div>
+            <div style={{fontSize:11,color:"var(--text-muted)"}}>Format: hh:mm:ss — dein angestrebtes Rennziel für den Plan.</div>
+
+            <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6,marginTop:14}}>
+              Bisheriger Marathon-PR (optional)
+            </div>
+            <input
+              type="text"
+              lang="de-DE"
+              inputMode="text"
+              value={preferences.personalBestTime ?? ""}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setPreferences((prev) => ({
+                  ...prev,
+                  personalBestTime: raw.trim() === "" ? null : raw,
+                }));
+              }}
+              placeholder="3:00:00"
+              style={{
+                width: "100%",
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border-input)",
+                borderRadius: 12,
+                padding: "11px 12px",
+                color: "var(--text-primary)",
+                fontSize: 16,
+                boxSizing: "border-box",
+                marginBottom: 6,
+              }}
+            />
+            <div style={{fontSize:11,color:"var(--text-muted)"}}>
+              Format: hh:mm:ss — dein bisher bester Marathon. Verankert die Prognose (nicht dasselbe wie Zielzeit).
+            </div>
 
             <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6,marginTop:14}}>
               Max. Herzfrequenz (optional)

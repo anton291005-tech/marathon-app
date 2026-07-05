@@ -19,6 +19,8 @@ export type RaceGoalPreference = "finish" | "time";
 export type PersistedMarathonPreferences = Readonly<
   Partial<{
     targetTime: string | null;
+    /** Historical marathon PR (hh:mm:ss) — anchors race prediction, separate from targetTime. */
+    personalBestTime: string | null;
     maxHeartRateBpm: number | null;
     onboardingComplete: boolean;
     raceDistanceLabel: string;
