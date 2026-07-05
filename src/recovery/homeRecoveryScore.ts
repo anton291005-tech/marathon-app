@@ -133,6 +133,28 @@ function rollingPlanExecutionRatio(args: {
   return { ratio: done / due, weight: Math.min(1, due / 5) };
 }
 
+/** Same load units as Home-Recovery-Score (`buildDailyTrainingLoadByDate`). */
+export type RecoveryLoadSnapshot = {
+  todayLoad: number;
+  /** Acute (7d) vs prior 7d ratio minus 1 — identical to Home score load nudge input. */
+  acuteChronicDelta: number;
+};
+
+/** Load context for recovery insight copy — shared with Home KPI penalties. */
+export function computeRecoveryLoadSnapshot(args: {
+  plan: PlanWeek[];
+  logs: Record<string, SessionLog>;
+  now?: Date;
+}): RecoveryLoadSnapshot {
+  const now = args.now ?? getAppNow();
+  const loads = buildDailyTrainingLoadByDate(args.plan, args.logs);
+  const todayYmd = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  return {
+    todayLoad: loads.get(todayYmd) ?? 0,
+    acuteChronicDelta: acuteChronicLoadDelta(loads, now),
+  };
+}
+
 /**
  * Acute (last 7d) vs chronic (prior 7d) total training stress — same units as `buildDailyTrainingLoadByDate`.
  */
