@@ -22,6 +22,7 @@ const {
   sumWeekKm,
 } = require("./planWorkoutUtils");
 const { getRecommendedVolume } = require("./raceVolumeReference");
+const { computeWeeklyVolumeTargets } = require("./weeklyVolumeProgression");
 
 const PHASE_ORDER = ["base", "build", "peak", "taper"];
 const TOKENS_PER_WEEK = 1100;
@@ -85,11 +86,8 @@ WICHTIG — NUR DIESE PHASE:
 - Ruhetage: type "rest", km: 0
 
 VOLUMEN (KRITISCH):
-- Wochenvolumen MUSS zum Athleten-Niveau passen (weeklyKmRange aus User-Prompt)
-- Steigerung max. 10% gegenüber Vorwoche / vorheriger Phase
-- Jede 4. Woche: Entlastungswoche (-25 bis -30% Volumen)
+- Das exakte Ziel-Wochenvolumen für jede Woche steht im User-Prompt (ZIEL-WOCHENVOLUMEN) — das ist bereits fachlich korrekt berechnet inkl. Progression und Entlastungswochen. Halte dich daran (±5% Toleranz), erfinde keine eigene Progression.
 - totalKm in weeks[] muss zur Summe der Lauf-km passen
-- Die FACHLICHE VOLUMEN-REFERENZ im User-Prompt ist die primäre Zielgröße für die Peak-Woche, weeklyKmRange beschreibt nur das aktuelle Niveau für die Progression.
 - Long Run darf MAXIMAL 30% des Wochenvolumens ausmachen (bei sehr hohem Gesamtvolumen in Peak-Wochen max. 33%). Das ist eine harte Grenze, keine Empfehlung.
 
 EINHEITEN-ROTATION:
@@ -109,13 +107,7 @@ function buildPhaseUserMessage(profile, phaseSpec, context) {
   const goalText = isTimeGoal
     ? `Zeitziel: ${profile.raceTargetTime}`
     : "Ziel: Finisher — Fokus auf Ausdauer";
-  const weeklyTarget = parseWeeklyKmTarget(profile.weeklyKmRange);
-
-  const volumeRef = getRecommendedVolume(profile.raceDistanceKm, profile.raceTargetTime, profile.raceGoal);
-  const volumeGapWarning = weeklyTarget < volumeRef.baseKm[0] * 0.6;
-  const effectivePeakKm = volumeGapWarning
-    ? Math.round(Math.min(volumeRef.peakKm[1], weeklyTarget * 1.6))
-    : volumeRef.peakKm[1];
+  const { weeklyTarget, volumeRef, volumeGapWarning, effectivePeakKm, weeklyKmTargets } = context;
 
   const weekLines = context.phaseWeekNumbers
     .map((wn) => {
@@ -128,8 +120,12 @@ function buildPhaseUserMessage(profile, phaseSpec, context) {
     .join("\n");
 
   const prevSummaryText = context.previousPhaseSummary
-    ? `VORHERIGE PHASE endete mit ${context.previousPhaseSummary.lastWeekTotalKm} km Gesamtvolumen in der letzten Woche (Ende: ${context.previousPhaseSummary.lastWeekEndIso ?? context.previousPhaseSummary.lastWeekStartIso}) — baue progressiv darauf auf (+max 10%).`
+    ? `VORHERIGE PHASE endete mit ${context.previousPhaseSummary.lastWeekTotalKm} km Gesamtvolumen in der letzten Woche (Ende: ${context.previousPhaseSummary.lastWeekEndIso ?? context.previousPhaseSummary.lastWeekStartIso}) — das ZIEL-WOCHENVOLUMEN unten ist bereits darauf abgestimmt.`
     : "Dies ist die erste Phase — starte beim Athleten-Niveau (weeklyKmRange), nicht darüber.";
+
+  const volumeTargetLines = context.phaseWeekNumbers
+    .map((wn) => `- Woche ${wn}: ${weeklyKmTargets[wn - 1]} km`)
+    .join("\n");
 
   const rules = context.rules ?? {};
   const rulesText = JSON.stringify(rules, null, 2);
@@ -162,6 +158,11 @@ PHASE:
 WOCHEN DIE DU GENERIEREN SOLLST (GLOBALE NUMMERIERUNG):
 ${weekLines}
 
+ZIEL-WOCHENVOLUMEN (verbindlich, bereits berechnet — NICHT selbst neu berechnen oder von der Vorwoche ableiten):
+${volumeTargetLines}
+
+Toleranz: ±5% pro Woche erlaubt. Verteile dieses Volumen sinnvoll auf die Trainingstage (Long Run max. 30% davon, siehe Long-Run-Regel).
+
 ${prevSummaryText}
 
 GLOBALE TRAININGSREGELN (strikt einhalten):
@@ -191,6 +192,26 @@ function checkLongRunGuardrail(weekGroups, weekStarts) {
           `[longrun-check] WARNING: single run ${runKm}km is ${percent}% of week totalKm ${totalKmRounded}km (week ${weekNumber}) — exceeds 30% guardrail\n`,
         );
       }
+    }
+  }
+}
+
+function checkWeeklyVolumeGuardrail(weekGroups, weekStarts, weeklyKmTargets) {
+  const weekNumberByStartIso = new Map(
+    Object.entries(weekStarts ?? {}).map(([wn, startIso]) => [startIso, Number(wn)]),
+  );
+  for (const [weekStartIso, weekWorkouts] of weekGroups) {
+    const wn = weekNumberByStartIso.get(weekStartIso);
+    if (!wn) continue;
+    const target = weeklyKmTargets?.[wn - 1];
+    if (!(target > 0)) continue;
+    const totalKm = sumWeekKm(weekWorkouts);
+    const totalKmRounded = Math.round(totalKm * 10) / 10;
+    const percent = Math.round(((totalKmRounded - target) / target) * 100);
+    if (Math.abs(percent) > 10) {
+      process.stdout.write(
+        `[volume-check] WARNING: week ${wn} totalKm ${totalKmRounded}km deviates from target ${target}km by ${percent}%\n`,
+      );
     }
   }
 }
@@ -272,6 +293,21 @@ async function generateFullPlanByPhases(client, profile) {
   const volumeRef = getRecommendedVolume(profile.raceDistanceKm, profile.raceTargetTime, profile.raceGoal);
   const weekPhaseSchedule = buildWeekPhaseSchedule(totalWeeks, structure.phases);
   const orderedPhases = orderPhases(structure.phases);
+
+  const weeklyTarget = parseWeeklyKmTarget(profile.weeklyKmRange);
+  const volumeGapWarning = weeklyTarget < volumeRef.baseKm[0] * 0.6;
+  const effectivePeakKm = volumeGapWarning
+    ? Math.round(Math.min(volumeRef.peakKm[1], weeklyTarget * 1.6))
+    : volumeRef.peakKm[1];
+  const weeklyKmTargets = computeWeeklyVolumeTargets({
+    totalWeeks,
+    phaseSchedule: weekPhaseSchedule,
+    startWeeklyKm: weeklyTarget,
+    peakTargetKm: effectivePeakKm,
+  });
+  process.stdout.write(
+    `[phased-plan] weeklyKmTargets ${JSON.stringify({ weeklyTarget, effectivePeakKm, weeklyKmTargets })}\n`,
+  );
 
   process.stdout.write(
     `[phased-plan] totalWeeks ${JSON.stringify({ totalWeeks, phases: orderedPhases.map((p) => p.name) })}\n`,
@@ -356,6 +392,11 @@ async function generateFullPlanByPhases(client, profile) {
         phaseWeekNumbers: chunkWeekNumbers,
         startWeekIndex: chunkWeekNumbers[0],
         previousPhaseSummary: chunkPreviousSummary,
+        weeklyTarget,
+        volumeRef,
+        volumeGapWarning,
+        effectivePeakKm,
+        weeklyKmTargets,
       };
 
       let rawResponseText = "";
@@ -378,20 +419,7 @@ async function generateFullPlanByPhases(client, profile) {
 
         const chunkWeeks = groupWorkoutsByWeekStart(chunkWorkouts);
         checkLongRunGuardrail(chunkWeeks, weekStarts);
-
-        const isLastChunkOfPhase = chunkIndex === phaseChunks.length - 1;
-        if (phaseName === "peak" && isLastChunkOfPhase) {
-          const lastWeek = chunkWeeks[chunkWeeks.length - 1];
-          if (lastWeek) {
-            const totalKm = sumWeekKm(lastWeek[1]);
-            const [minRef, maxRef] = volumeRef.peakKm;
-            const lowerBound = minRef * 0.75;
-            const upperBound = maxRef * 1.25;
-            if (totalKm < lowerBound || totalKm > upperBound) {
-              process.stdout.write(`[volume-check] WARNING: peak week ${totalKm}km outside reference ${JSON.stringify(volumeRef.peakKm)} for ${profile.raceTargetTime} ${profile.raceDistanceLabel}\n`);
-            }
-          }
-        }
+        checkWeeklyVolumeGuardrail(chunkWeeks, weekStarts, weeklyKmTargets);
       } catch (err) {
         const errorPos = parseInt(err.message.match(/position (\d+)/)?.[1] || "0", 10);
         const snippet = rawResponseText.slice(Math.max(0, errorPos - 150), errorPos + 150);
