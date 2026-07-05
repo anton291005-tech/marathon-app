@@ -5,14 +5,21 @@ import { supabase } from "../client";
 
 type ProfileRow = {
   target_time_seconds: number | null;
+  personal_best_seconds: number | null;
   max_heart_rate_bpm: number | null;
   onboarding_complete: boolean | null;
 };
 
+function parsePreferenceTimeToSeconds(raw: string | null | undefined): number | null {
+  if (raw == null || String(raw).trim() === "") return null;
+  const sec = parseTargetTimeToSeconds(String(raw));
+  return sec != null && Number.isFinite(sec) && sec > 0 ? Math.round(sec) : null;
+}
+
 export async function loadProfile(userId: string): Promise<PersistedMarathonPreferences | null> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("target_time_seconds, max_heart_rate_bpm, onboarding_complete")
+    .select("target_time_seconds, personal_best_seconds, max_heart_rate_bpm, onboarding_complete")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -33,6 +40,12 @@ export async function loadProfile(userId: string): Promise<PersistedMarathonPref
     out.targetTime = formatRaceClockGerman(Math.round(Number(row.target_time_seconds)));
   }
 
+  if (row.personal_best_seconds != null && Number.isFinite(Number(row.personal_best_seconds))) {
+    out.personalBestTime = formatRaceClockGerman(Math.round(Number(row.personal_best_seconds)));
+  } else if (row.personal_best_seconds === null) {
+    out.personalBestTime = null;
+  }
+
   if (row.max_heart_rate_bpm != null && Number.isFinite(Number(row.max_heart_rate_bpm))) {
     out.maxHeartRateBpm = Math.round(Number(row.max_heart_rate_bpm));
   } else if (row.max_heart_rate_bpm === null) {
@@ -47,12 +60,8 @@ export async function loadProfile(userId: string): Promise<PersistedMarathonPref
 }
 
 export async function saveProfile(userId: string, prefs: PersistedMarathonPreferences): Promise<void> {
-  const tt = prefs.targetTime;
-  let target_time_seconds: number | null = null;
-  if (tt != null && String(tt).trim() !== "") {
-    const sec = parseTargetTimeToSeconds(String(tt));
-    target_time_seconds = sec != null && Number.isFinite(sec) ? Math.round(sec) : null;
-  }
+  const target_time_seconds = parsePreferenceTimeToSeconds(prefs.targetTime);
+  const personal_best_seconds = parsePreferenceTimeToSeconds(prefs.personalBestTime);
 
   let max_heart_rate_bpm: number | null = null;
   if (prefs.maxHeartRateBpm != null && Number.isFinite(prefs.maxHeartRateBpm)) {
@@ -65,6 +74,7 @@ export async function saveProfile(userId: string, prefs: PersistedMarathonPrefer
     {
       user_id: userId,
       target_time_seconds,
+      personal_best_seconds,
       max_heart_rate_bpm,
       onboarding_complete,
     },
