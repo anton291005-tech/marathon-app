@@ -20,6 +20,7 @@ import {
 import { last7CalendarDays, ymd } from "./recoveryCalendarUtils";
 import type { PlanWeek, SessionLog } from "../marathonPrediction";
 import { getAppNow } from "../core/time/timeSystem";
+import { computeRecoveryLoadSnapshot, type RecoveryLoadSnapshot } from "./homeRecoveryScore";
 
 function mean(nums: number[]): number | null {
   if (nums.length === 0) return null;
@@ -74,27 +75,113 @@ export function detectRecoveryWarnings(
   return { hrvDown3Plus, sleepDeficit2Nights, rhrElevatedPersistent, stressCombo };
 }
 
+/** Thresholds aligned with Home score load nudges (`homeRecoveryScore.ts`). */
+const ACUTE_CHRONIC_HIGH = 0.12;
+const ACUTE_CHRONIC_LOW = -0.1;
+const TODAY_LOAD_HEAVY = 10;
+
+function sleepTrendSentence(args: {
+  avgSleep: number | null;
+  baselineSleep: number | null;
+  nightsWithData: number;
+  sparseData: boolean;
+}): string | null {
+  const { avgSleep, baselineSleep, nightsWithData, sparseData } = args;
+  if (nightsWithData === 0) return null;
+  if (nightsWithData < 3) {
+    return sparseData
+      ? "Schlaf der letzten Woche ist nur teilweise erfasst."
+      : null;
+  }
+  if (avgSleep === null || !baselineSleep) return null;
+  const diff = avgSleep - baselineSleep;
+  if (diff < -0.35) {
+    return sparseData
+      ? "Schlaf wirkt tendenziell unter deinem üblichen Niveau."
+      : "Schlaf der letzten sieben Tage liegt unter deinem üblichen Niveau.";
+  }
+  if (diff > 0.35) {
+    return sparseData
+      ? "Schlaf wirkt tendenziell über deinem Mittel."
+      : "Schlaf der letzten sieben Tage liegt über deinem Mittel.";
+  }
+  return sparseData
+    ? "Schlaf wirkt nahe deinem üblichen Niveau."
+    : "Schlaf der letzten sieben Tage ist nahe deinem üblichen Niveau.";
+}
+
+function hrvTrendSentence(args: {
+  avgHrv: number | null;
+  baselineHrv: number | null;
+  daysWithData: number;
+  sparseData: boolean;
+}): string | null {
+  const { avgHrv, baselineHrv, daysWithData, sparseData } = args;
+  if (daysWithData < 3 || avgHrv === null || !baselineHrv) return null;
+  const ratio = avgHrv / baselineHrv;
+  if (ratio <= 0.94) {
+    return sparseData
+      ? "HRV wirkt tendenziell unter deiner üblichen Bandbreite."
+      : "HRV liegt unter deiner üblichen Bandbreite.";
+  }
+  if (ratio >= 1.03) {
+    return sparseData
+      ? "HRV wirkt tendenziell in einem freundlichen Bereich."
+      : "HRV liegt in einem freundlichen Bereich.";
+  }
+  return sparseData
+    ? "HRV wirkt nahe deiner üblichen Bandbreite."
+    : "HRV bewegt sich in vertrauter Bandbreite.";
+}
+
+function loadTrendSentence(load: RecoveryLoadSnapshot, warnings: RecoveryWarningFlags): string | null {
+  const acuteHigh = load.acuteChronicDelta > ACUTE_CHRONIC_HIGH;
+  const todayHeavy = load.todayLoad >= TODAY_LOAD_HEAVY;
+
+  if (acuteHigh && todayHeavy) {
+    return "Trainingslast ist erhöht — diese Woche mehr als die Vorwoche und heute bereits spürbar.";
+  }
+  if (acuteHigh) {
+    return "Trainingslast der letzten sieben Tage liegt über der Vorwoche.";
+  }
+  if (todayHeavy) {
+    return "Heute liegt spürbare Trainingslast an — Erholung einplanen.";
+  }
+  if (warnings.stressCombo || (warnings.hrvDown3Plus && warnings.sleepDeficit2Nights)) {
+    return "Schlaf und HRV signalisieren zusammen erhöhte Belastung.";
+  }
+  if (warnings.hrvDown3Plus) {
+    return "HRV war an mehreren Tagen niedriger als üblich.";
+  }
+  if (warnings.sleepDeficit2Nights) {
+    return "An mehreren Nächten war der Schlaf kürzer als üblich.";
+  }
+  if (load.acuteChronicDelta < ACUTE_CHRONIC_LOW && load.todayLoad < 3) {
+    return "Trainingslast ist gegenüber der Vorwoche eher niedrig.";
+  }
+  return null;
+}
+
 export function buildRecoveryInsightText(args: {
-  /** Last 7 calendar days of latent R_t (sole driver for tone / level). */
-  last7LatentR: number[];
   dailyRows: RecoveryDailyRow[];
   warnings: RecoveryWarningFlags;
   baselineSleep: number | null;
   baselineHrv: number | null;
-  loadStressIdx: number;
+  loadSnapshot: RecoveryLoadSnapshot;
   now?: Date;
   dataMode: RecoveryInsightDataMode;
   recoveryConfidence: RecoveryConfidenceModel | null;
   semanticUncertaintyState: SemanticUncertaintyState | null;
   aiReasoningMode: AiReasoningMode | null;
+  /** When false, emit a short fallback instead of an empty string. */
+  hasRecoverySeries?: boolean;
 }): RecoveryInsight {
   const {
-    last7LatentR,
     dailyRows,
     warnings,
     baselineSleep,
     baselineHrv,
-    loadStressIdx,
+    loadSnapshot,
     dataMode,
     recoveryConfidence,
     semanticUncertaintyState,
@@ -103,8 +190,16 @@ export function buildRecoveryInsightText(args: {
   const now = args.now ?? getAppNow();
   const rowsByDate = new Map(dailyRows.map((r) => [r.date, r]));
   const last7dates = last7CalendarDays(now);
+  const sparseData = dataMode === "low" || semanticUncertaintyState === "highUncertainty";
 
-  if (last7LatentR.length === 0) {
+  const shouldWarn =
+    warnings.stressCombo ||
+    (warnings.hrvDown3Plus && warnings.sleepDeficit2Nights) ||
+    (warnings.rhrElevatedPersistent && warnings.hrvDown3Plus) ||
+    loadSnapshot.acuteChronicDelta > ACUTE_CHRONIC_HIGH ||
+    loadSnapshot.todayLoad >= TODAY_LOAD_HEAVY;
+
+  if (args.hasRecoverySeries === false) {
     return {
       text:
         "Zu wenig Daten für eine stabile Recovery-Aussage. Sobald Schlaf- und Vitaldaten vorliegen, wird der Verlauf aussagekräftiger.",
@@ -116,182 +211,33 @@ export function buildRecoveryInsightText(args: {
     };
   }
 
-  const mode = aiReasoningMode ?? "probabilistic";
-
-  const avgR = mean(last7LatentR);
-  const tone =
-    avgR === null
-      ? "moderat"
-      : avgR >= 85
-        ? "exzellent"
-        : avgR >= 70
-          ? "gut"
-          : avgR >= 50
-            ? "moderat"
-            : "eingeschränkt";
-
-  const sleepHours = last7dates.map((d) => rowsByDate.get(d)?.sleepHours).filter((v): v is number => typeof v === "number");
-  const avgSleep = mean(sleepHours);
-  let sleepClause = "";
-  if (mode === "deterministic") {
-    if (avgSleep !== null && baselineSleep) {
-      const diff = avgSleep - baselineSleep;
-      if (diff < -0.35) sleepClause = ` Schlafdauer klar unter deinem üblichen Niveau.`;
-      else if (diff > 0.35) sleepClause = ` Schlafdauer klar über deinem Mittel.`;
-      else sleepClause = ` Schlafdauer liegt nah an deinem persönlichen Mittel.`;
-    } else if (sleepHours.length < 3) {
-      sleepClause = ` Schlaf ist nur teilweise erfasst — klarer Schluss auf die Nächte allein geht nicht.`;
-    }
-  } else if (mode === "probabilistic") {
-    if (avgSleep !== null && baselineSleep) {
-      const diff = avgSleep - baselineSleep;
-      if (diff < -0.35)
-        sleepClause = ` Schlafdauer liegt wahrscheinlich unter deinem Mittel; leichte Unsicherheit durch mögliche Erfassungslücken.`;
-      else if (diff > 0.35)
-        sleepClause = ` Schlafdauer liegt vermutlich über deinem Mittel; Bandbreite ist nicht exakt fixierbar.`;
-      else sleepClause = ` Schlafdauer bewegt sich plausibel nahe deinem Mittel, mit Restunsicherheit.`;
-    } else if (sleepHours.length < 3) {
-      sleepClause = ` Schlafdaten sind lückenhaft — Trend zur Schlafdauer nur vorsichtig ableitbar.`;
-    }
-  } else {
-    if (sleepHours.length >= 4 && baselineSleep && avgSleep !== null) {
-      const diff = avgSleep - baselineSleep;
-      if (diff < -0.5) sleepClause = ` Richtung eher weniger Schlaf als üblich — keine feste Aussage zur absoluten Qualität.`;
-      else if (diff > 0.5) sleepClause = ` Richtung eher mehr Schlaf als üblich — Details unsicher.`;
-      else sleepClause = ` Kein klarer Schlaf-Trend ableitbar bei dieser Datenlage.`;
-    } else {
-      sleepClause = ` Schlaf-Trend nicht belastbar genug für konkrete Aussagen — nur grobe Richtung möglich.`;
-    }
-  }
-
+  const sleepHours = last7dates
+    .map((d) => rowsByDate.get(d)?.sleepHours)
+    .filter((v): v is number => typeof v === "number");
   const hrvVals = last7dates.map((d) => rowsByDate.get(d)?.hrvMs).filter((v): v is number => typeof v === "number");
-  const avgHrv = mean(hrvVals);
-  let hrvClause = "";
-  if (mode === "deterministic") {
-    if (avgHrv !== null && baselineHrv) {
-      const ratio = avgHrv / baselineHrv;
-      if (ratio >= 1.03) hrvClause = " HRV ist stabil bis freundlich — ANS wirkt entspannt.";
-      else if (ratio <= 0.94) hrvClause = " HRV liegt unter deiner typischen Bandbreite; Belastung möglich, aber nicht allein beweisend.";
-      else hrvClause = " HRV liegt in vertrauter Bandbreite.";
-    } else if (hrvVals.length < 3) {
-      hrvClause = " HRV zu lückenhaft für eine feste Aussage.";
-    }
-  } else if (mode === "probabilistic") {
-    if (avgHrv !== null && baselineHrv) {
-      const ratio = avgHrv / baselineHrv;
-      if (ratio >= 1.03)
-        hrvClause =
-          " HRV steht wahrscheinlich im freundlichen Bereich; leichte Unsicherheit bleibt durch Tages- und Messvarianz.";
-      else if (ratio <= 0.94)
-        hrvClause =
-          " HRV liegt vermutlich unter deiner Norm; das spricht mit mittlerer Sicherheit für mehr Stress/Last, ohne Diagnosecharakter.";
-      else hrvClause = " HRV wirkt plausibel normal, mit typischer Messunsicherheit.";
-    } else if (hrvVals.length < 3) {
-      hrvClause = " HRV nur teilweise sichtbar — Interpretation bleibt probabilistisch.";
-    }
-  } else {
-    if (hrvVals.length >= 4 && avgHrv !== null && baselineHrv) {
-      const ratio = avgHrv / baselineHrv;
-      if (ratio < 0.96) hrvClause = " Grobe Richtung: HRV eher nach unten — keine präzise Lageangabe.";
-      else if (ratio > 1.02) hrvClause = " Grobe Richtung: HRV eher freundlich — keine feste Einordnung.";
-      else hrvClause = " HRV-Trend nicht eindeutig bei dieser Datenlage.";
-    } else {
-      hrvClause = " HRV nicht ausreichend, um mehr als eine vage Richtung zu nennen.";
-    }
-  }
 
-  let trainClause = "";
-  if (mode === "deterministic") {
-    trainClause = " Trainingslast wird nichtlinear aus Last und aktuellem Vital-Kontext abgeleitet; sie kann Recovery nicht nach oben rechnen.";
-    if (avgR !== null && loadStressIdx >= 3.8 && avgR >= 72) {
-      trainClause =
-        " Höhere Blocklast trifft auf noch tragfähige Vitalzeichen — das spricht für eine funktionierende Adaptation.";
-    } else if (avgR !== null && loadStressIdx >= 3.8 && avgR < 58) {
-      trainClause = " Hohe Last ist spürbar im Modell; Konstanz bei Schlaf und leichte Tage sind sinnvoll.";
-    }
-  } else if (mode === "probabilistic") {
-    trainClause =
-      " Trainings-Stress im Modell wahrscheinlich moderat bis spürbar; genaue Wechselwirkung mit Recovery ist unscharf — keine scharfen Steuerungsbefehle nur aus der Last.";
-  } else {
-    trainClause =
-      " Trainingslast lässt sich bei dieser Unsicherheit nicht zuverlässig mit Recovery koppeln — nur qualitative Richtung, keine feste Empfehlung.";
-  }
+  const sentences = [
+    sleepTrendSentence({
+      avgSleep: mean(sleepHours),
+      baselineSleep,
+      nightsWithData: sleepHours.length,
+      sparseData,
+    }),
+    hrvTrendSentence({
+      avgHrv: mean(hrvVals),
+      baselineHrv,
+      daysWithData: hrvVals.length,
+      sparseData,
+    }),
+    loadTrendSentence(loadSnapshot, warnings),
+  ].filter((s): s is string => !!s);
 
-  let warn = "";
-  const shouldWarn =
-    warnings.stressCombo ||
-    (warnings.hrvDown3Plus && warnings.sleepDeficit2Nights) ||
-    (warnings.rhrElevatedPersistent && warnings.hrvDown3Plus);
-  if (mode === "deterministic") {
-    if (shouldWarn) {
-      warn =
-        " Mehrere Stresssignale überlagern sich — das rechtfertigt mehr Aufmerksamkeit auf Regeneration, ohne sofortigen Planbruch.";
-    } else if (warnings.hrvDown3Plus || warnings.sleepDeficit2Nights) {
-      warn = " Einzelne Vital-Linien sind angespannt; kurzfristig beobachten.";
-    }
-  } else if (mode === "probabilistic") {
-    if (shouldWarn) {
-      warn =
-        " Es gibt Hinweise auf überlappende Stresssignale; Wahrscheinlichkeit erhöhter Ermüdung ist erhöht, aber nicht sicher.";
-    } else if (warnings.hrvDown3Plus || warnings.sleepDeficit2Nights) {
-      warn = " Einige Signale sind wahrscheinlich belastet — keine harte Schlussfolgerung.";
-    }
-  } else if (shouldWarn || warnings.hrvDown3Plus || warnings.sleepDeficit2Nights) {
-    warn = " Mögliche Belastungstrends, aber Datenlage zu dünn für verbindliche Warnungen.";
-  }
-
-  let intro = "";
-  if (mode === "deterministic") {
-    intro =
-      tone === "exzellent"
-        ? "Latenter Recovery-Zustand R der letzten 7 Tage liegt stabil im sehr guten Bereich."
-        : tone === "gut"
-          ? "Latenter Recovery-Zustand R der letzten 7 Tage liegt stabil im guten Bereich."
-          : tone === "moderat"
-            ? "Latenter Recovery-Zustand R der letzten 7 Tage ist stabil moderat."
-            : "Latenter Recovery-Zustand R der letzten 7 Tage ist stabil eher begrenzt.";
-  } else if (mode === "probabilistic") {
-    intro =
-      tone === "exzellent"
-        ? "R liegt wahrscheinlich im sehr guten Bereich; Restunsicherheit durch Mess- und Tagesvarianz."
-        : tone === "gut"
-          ? "R liegt vermutlich im guten Bereich, mit leichter Unsicherheit."
-          : tone === "moderat"
-            ? "R ist wahrscheinlich moderat — keine extreme Einordnung möglich."
-            : "R ist vermutlich eher begrenzt; Bandbreite bleibt unscharf.";
-  } else {
-    intro =
-      "Hohe Unsicherheit im physiologischen Zustand — R̂ bleibt unscharf; verlässlich sind vor allem Richtungstrends, keine festen Zustandsaussagen.";
-  }
-
-  let close = "";
-  if (mode === "deterministic") {
-    close =
-      shouldWarn || (avgR !== null && avgR < 52)
-        ? " Kein sicherer Hinweis auf akute Überlastung ohne Symptome — subjektives Befinden mitentscheidend."
-        : " Kein sicherer Hinweis auf akute Überlastung bei stabiler Datenlage.";
-  } else if (mode === "probabilistic") {
-    close =
-      " Unter Unsicherheit: keine präzisen Grenzwerte — subjektives Befinden und Verlauf wiegen stärker.";
-  } else {
-    close = " Bei hoher Unsicherheit keine festen Handlungsschritte nur aus einer Zahl ableiten — R ist hier unscharf.";
-  }
-
-  const semanticNote =
-    semanticUncertaintyState === "highUncertainty"
-      ? " Reasoning-Modus: unsicher (nur Trends)."
-      : semanticUncertaintyState === "mediumUncertainty"
-        ? " Reasoning-Modus: probabilistisch."
-        : " Reasoning-Modus: regelbasiert.";
-
-  const confNote =
-    recoveryConfidence && recoveryConfidence.overallConfidence < 0.55 && mode !== "uncertain"
-      ? ` Quantitative Modell-Konfidenz eher niedrig (${Math.round(recoveryConfidence.overallConfidence * 100)} %).`
-      : "";
-
-  const text = `${intro}${sleepClause}${hrvClause}${trainClause}${warn}${close} ${semanticNote}${confNote}`
-    .replace(/\s+/g, " ")
-    .trim();
+  const text =
+    sentences.length > 0
+      ? sentences.slice(0, 3).join(" ")
+      : sparseData
+        ? "Recovery-Verlauf der letzten Woche ist noch dünn datiert — mehr Schlaf- und Vitaldaten machen die Einordnung klarer."
+        : "Recovery-Signale der letzten Woche sind insgesamt ausgeglichen.";
 
   return {
     text,
@@ -308,7 +254,8 @@ export function buildLast7InsightFromState(args: {
   plan: PlanWeek[];
   logs: Record<string, SessionLog>;
   now?: Date;
-  loadStressIdx: number;
+  /** @deprecated Insight text uses `computeRecoveryLoadSnapshot` (todayLoad + acute/chronic). Kept for callers. */
+  loadStressIdx?: number;
   precomputedSeries?: DailyRecoveryComputed[];
 }): RecoveryInsight {
   const now = args.now ?? getAppNow();
@@ -324,9 +271,6 @@ export function buildLast7InsightFromState(args: {
   const rowsByDate = new Map(args.dailyRows.map((r) => [r.date, r]));
   const todayYmd = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
   const last7dates = last7CalendarDays(now);
-  const last7LatentR = last7dates
-    .map((d) => series.find((s) => s.date === d)?.latentR)
-    .filter((v): v is number => typeof v === "number");
 
   const last7Series = last7dates
     .map((d) => series.find((s) => s.date === d))
@@ -352,18 +296,19 @@ export function buildLast7InsightFromState(args: {
   const baselineRhr = median(baselineValues(rowsByDate, todayYmd, 42, (r) => r.restingHr));
 
   const warnings = detectRecoveryWarnings(rowsByDate, baselineHrv, baselineSleep, baselineRhr, now);
+  const loadSnapshot = computeRecoveryLoadSnapshot({ plan: args.plan, logs: args.logs, now });
 
   return buildRecoveryInsightText({
-    last7LatentR,
     dailyRows: args.dailyRows,
     warnings,
     baselineSleep,
     baselineHrv,
-    loadStressIdx: args.loadStressIdx,
+    loadSnapshot,
     now,
     dataMode,
     recoveryConfidence,
     semanticUncertaintyState,
     aiReasoningMode,
+    hasRecoverySeries: last7Series.length > 0,
   });
 }
