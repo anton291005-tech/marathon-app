@@ -21,6 +21,7 @@ const {
   groupWorkoutsByWeekStart,
   sumWeekKm,
 } = require("./planWorkoutUtils");
+const { getRecommendedVolume } = require("./raceVolumeReference");
 
 const PHASE_ORDER = ["base", "build", "peak", "taper"];
 const TOKENS_PER_WEEK = 1100;
@@ -88,6 +89,7 @@ VOLUMEN (KRITISCH):
 - Steigerung max. 10% gegenüber Vorwoche / vorheriger Phase
 - Jede 4. Woche: Entlastungswoche (-25 bis -30% Volumen)
 - totalKm in weeks[] muss zur Summe der Lauf-km passen
+- Die FACHLICHE VOLUMEN-REFERENZ im User-Prompt ist die primäre Zielgröße für die Peak-Woche, weeklyKmRange beschreibt nur das aktuelle Niveau für die Progression.
 
 EINHEITEN-ROTATION:
 - Intervalle, Tempo, Long Runs und Easy Runs variieren — keine repetitiven Wochen
@@ -107,6 +109,12 @@ function buildPhaseUserMessage(profile, phaseSpec, context) {
     ? `Zeitziel: ${profile.raceTargetTime}`
     : "Ziel: Finisher — Fokus auf Ausdauer";
   const weeklyTarget = parseWeeklyKmTarget(profile.weeklyKmRange);
+
+  const volumeRef = getRecommendedVolume(profile.raceDistanceKm, profile.raceTargetTime, profile.raceGoal);
+  const volumeGapWarning = weeklyTarget < volumeRef.baseKm[0] * 0.6;
+  const effectivePeakKm = volumeGapWarning
+    ? Math.round(Math.min(volumeRef.peakKm[1], weeklyTarget * 1.6))
+    : volumeRef.peakKm[1];
 
   const weekLines = context.phaseWeekNumbers
     .map((wn) => {
@@ -133,6 +141,15 @@ ATHLET:
 - ${goalText}
 - Planstart: ${profile.planStartDate}
 - Renndatum: ${profile.raceDate}
+
+FACHLICHE VOLUMEN-REFERENZ (verbindlich für die Peak-Woche):
+- Empfohlenes Peak-Wochenvolumen für dieses Zielzeit-Niveau: ${volumeRef.peakKm[0]}-${effectivePeakKm} km
+- Empfohlenes Basis-Wochenvolumen: ${volumeRef.baseKm[0]}-${volumeRef.baseKm[1]} km
+- Empfohlener längster Lauf in der Peak-Phase: ~${volumeRef.peakLongRunKm} km
+- Trainingstage/Woche: ~${volumeRef.sessionsPerWeek}
+${volumeGapWarning ? "- HINWEIS: Zielzeit erfordert langfristig mehr Basisvolumen als aktuell vorhanden. Dieser Plan bringt den Athleten näher ans Ziel, erreicht es aber realistisch nicht in einem Zyklus. Peak-Woche daher konservativ auf " + effectivePeakKm + " km begrenzt statt volle Referenz." : ""}
+
+Diese Referenz ist die primäre Zielgröße für die Peak-Woche. weeklyKmRange beschreibt nur das aktuelle Niveau für die Progression über die Wochen.
 
 PHASE:
 - Name: ${phaseSpec.name}
@@ -229,6 +246,7 @@ async function generateFullPlanByPhases(client, profile) {
   }
 
   const rules = structure.rules ?? defaultStructureForWeeks(totalWeeks).rules;
+  const volumeRef = getRecommendedVolume(profile.raceDistanceKm, profile.raceTargetTime, profile.raceGoal);
   const weekPhaseSchedule = buildWeekPhaseSchedule(totalWeeks, structure.phases);
   const orderedPhases = orderPhases(structure.phases);
 
@@ -334,6 +352,21 @@ async function generateFullPlanByPhases(client, profile) {
           throw new Error("no valid workouts after parse");
         }
         phaseWorkouts.push(...chunkWorkouts);
+
+        const isLastChunkOfPhase = chunkIndex === phaseChunks.length - 1;
+        if (phaseName === "peak" && isLastChunkOfPhase) {
+          const chunkWeeks = groupWorkoutsByWeekStart(chunkWorkouts);
+          const lastWeek = chunkWeeks[chunkWeeks.length - 1];
+          if (lastWeek) {
+            const totalKm = sumWeekKm(lastWeek[1]);
+            const [minRef, maxRef] = volumeRef.peakKm;
+            const lowerBound = minRef * 0.75;
+            const upperBound = maxRef * 1.25;
+            if (totalKm < lowerBound || totalKm > upperBound) {
+              process.stdout.write(`[volume-check] WARNING: peak week ${totalKm}km outside reference ${JSON.stringify(volumeRef.peakKm)} for ${profile.raceTargetTime} ${profile.raceDistanceLabel}\n`);
+            }
+          }
+        }
       } catch (err) {
         const errorPos = parseInt(err.message.match(/position (\d+)/)?.[1] || "0", 10);
         const snippet = rawResponseText.slice(Math.max(0, errorPos - 150), errorPos + 150);
