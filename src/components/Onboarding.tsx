@@ -12,6 +12,10 @@ import TimePicker, {
 } from "./TimePicker";
 import { getAppNow } from "../core/time/timeSystem";
 import {
+  PlanGenerationLoadingScreen,
+  PLAN_GENERATION_SUCCESS_ANIMATION_MS,
+} from "./PlanGenerationLoadingScreen";
+import {
   fetchClaudePlanStructure,
   fetchFullPlanFromClaude,
   type PlanGenerationProfile,
@@ -169,9 +173,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [planStartCustomDate, setPlanStartCustomDate] = useState("");
   const [preferenceInputs, setPreferenceInputs] = useState<string[]>(["", ""]);
   const [skippedPreferences, setSkippedPreferences] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isPersonalizing, setIsPersonalizing] = useState(false);
+  const [planGenPhase, setPlanGenPhase] = useState<"idle" | "loading" | "success" | "error">(
+    "idle",
+  );
+  const [planGenWeekCount, setPlanGenWeekCount] = useState(12);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const isGenerating = planGenPhase === "loading" || planGenPhase === "success";
 
   const distance = useMemo(
     () => resolveDistanceSelection(shortcutId, customDistance),
@@ -300,10 +307,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     if (!summaryPayload || isGenerating) return;
 
     setGenerateError(null);
+    setPlanGenPhase("loading");
 
     try {
-      setIsGenerating(true);
-      setIsPersonalizing(false);
       // eslint-disable-next-line no-console
       console.log("[Onboarding] handleFinish start, raceDate:", summaryPayload.raceDate);
 
@@ -323,6 +329,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           const planDurationDays = Math.round(
             (raceDay.getTime() - startDay.getTime()) / 86400000,
           );
+          setPlanGenWeekCount(Math.max(1, Math.round(planDurationDays / 7)));
 
           const profile: PlanGenerationProfile = {
             raceDistanceKm: summaryPayload.raceDistanceKm,
@@ -344,7 +351,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           } else {
             // eslint-disable-next-line no-console
             console.error("[Onboarding] Option A failed:", fullPlanError);
-            setIsPersonalizing(true);
 
             const claudeResult = await fetchClaudePlanStructure(profile);
             const structure = claudeResult.structure;
@@ -396,28 +402,39 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         .filter(Boolean)
         .join(" – ");
 
+      // Real response arrived — play the ring's 92%→100% + checkmark animation
+      // before handing off, so the transition never feels abrupt.
+      setPlanGenPhase("success");
+      await new Promise<void>((resolve) => setTimeout(resolve, PLAN_GENERATION_SUCCESS_ANIMATION_MS));
+
       await onComplete(prefs, plan, patches, planName || undefined);
       // eslint-disable-next-line no-console
       console.log("[Onboarding] onComplete done");
+      setPlanGenPhase("idle");
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[Onboarding] ERROR in handleFinish:", err);
       setGenerateError("Plan konnte nicht erstellt werden. Bitte versuche es erneut.");
-    } finally {
-      // eslint-disable-next-line no-console
-      console.log("[Onboarding] finally – resetting loading states");
-      setIsGenerating(false);
-      setIsPersonalizing(false);
+      setPlanGenPhase("error");
     }
   }, [summaryPayload, isGenerating, onComplete, userPreferences]);
 
-  const finishButtonLabel = isPersonalizing
-    ? "Plan wird personalisiert…"
-    : isGenerating
-      ? t("onboarding.generating")
-      : generateError !== null
-        ? "Erneut versuchen"
-        : t("onboarding.finish");
+  const finishButtonLabel = isGenerating
+    ? t("onboarding.generating")
+    : generateError !== null
+      ? "Erneut versuchen"
+      : t("onboarding.finish");
+
+  if (planGenPhase !== "idle") {
+    return (
+      <PlanGenerationLoadingScreen
+        weekCount={planGenWeekCount}
+        phase={planGenPhase}
+        errorMessage={generateError}
+        onRetry={() => void handleFinish()}
+      />
+    );
+  }
 
   return (
     <div
@@ -923,7 +940,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           ) : (
             <button
               type="button"
-              disabled={isGenerating || isPersonalizing}
+              disabled={isGenerating}
               onClick={() => void handleFinish()}
               style={{
                 flex: step > 1 ? 1.4 : 1,
@@ -932,8 +949,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 fontWeight: 700,
                 border: "none",
                 borderRadius: 14,
-                cursor: isGenerating || isPersonalizing ? "not-allowed" : "pointer",
-                opacity: isGenerating || isPersonalizing ? 0.7 : 1,
+                cursor: isGenerating ? "not-allowed" : "pointer",
+                opacity: isGenerating ? 0.7 : 1,
                 color: "#fff",
                 background: "linear-gradient(135deg, #10b981, #3b82f6)",
               }}
