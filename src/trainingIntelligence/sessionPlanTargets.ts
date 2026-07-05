@@ -211,6 +211,34 @@ export function getSessionHrZoneShort(session: PlanSession, week?: PlanWeek): st
   }
 }
 
+/** %HFmax-Bänder je Zonen-Label — einzige Quelle der Wahrheit, von getSessionTargetLines() und getHrRangeForZone() geteilt. */
+const HR_ZONE_PCT_BANDS: Record<string, { lo: number; hi: number }> = {
+  "Zone 1": { lo: 0.5, hi: 0.6 },
+  "Zone 2": { lo: 0.6, hi: 0.75 },
+  "Zone 3–4": { lo: 0.76, hi: 0.88 },
+  "Zone 4–5": { lo: 0.8, hi: 0.95 },
+};
+
+/**
+ * Konkrete BPM-Range für ein Zonen-Label (z. B. „Zone 2“) + `maxHeartRateBpm`.
+ * Liefert `null`, wenn die Zone unbekannt ist oder `maxHeartRateBpm` fehlt/ungültig ist
+ * (kein Fake-Wert — die Zone wird dann ohne BPM-Range angezeigt).
+ */
+export function getHrRangeForZone(
+  zoneLabel: string | null | undefined,
+  maxHeartRateBpm?: number | null,
+): { min: number; max: number } | null {
+  if (!zoneLabel) return null;
+  const band = HR_ZONE_PCT_BANDS[zoneLabel];
+  if (!band) return null;
+  const mh =
+    typeof maxHeartRateBpm === "number" && Number.isFinite(maxHeartRateBpm) && maxHeartRateBpm > 0
+      ? maxHeartRateBpm
+      : null;
+  if (!mh) return null;
+  return { min: Math.round(band.lo * mh), max: Math.round(band.hi * mh) };
+}
+
 /**
  * Eine kompakte Vorschau: HF-Zone bevorzugt, sonst Tempo-Spanne / Freitext aus Plan.
  */
@@ -256,38 +284,38 @@ export function getSessionTargetLines(
     typeof maxHrBpm === "number" && Number.isFinite(maxHrBpm) && maxHrBpm > 0 ? maxHrBpm : undefined;
   const easyRecovery = session.type === "easy" && isRecoveryWeek(week);
 
+  /** Rendert „Zone X (min–max bpm, lo–hi% HFmax)“ aus der geteilten Band-Tabelle — identisch zur bisherigen fest codierten Formatierung. */
+  const zoneBandLabel = (zoneLabel: string, fallbackWhenNoMh: string): string => {
+    const band = HR_ZONE_PCT_BANDS[zoneLabel];
+    if (!band) return fallbackWhenNoMh;
+    const loPct = Math.round(band.lo * 100);
+    const hiPct = Math.round(band.hi * 100);
+    const range = getHrRangeForZone(zoneLabel, mh);
+    return range
+      ? `Herzfrequenzbereich: ${zoneLabel} (${range.min}–${range.max} bpm, ${loPct}–${hiPct}% HFmax)`
+      : fallbackWhenNoMh;
+  };
+
   let pulseLabel = "";
   switch (session.type) {
     case "easy":
       if (easyRecovery) {
-        pulseLabel = mh
-          ? `Herzfrequenzbereich: Zone 1 (${Math.round(0.5 * mh)}–${Math.round(0.6 * mh)} bpm, 50–60% HFmax)`
-          : "Herzfrequenzbereich: Zone 1 · sehr niedrige Intensität";
+        pulseLabel = zoneBandLabel("Zone 1", "Herzfrequenzbereich: Zone 1 · sehr niedrige Intensität");
       } else {
-        pulseLabel = mh
-          ? `Herzfrequenzbereich: Zone 2 (${Math.round(0.6 * mh)}–${Math.round(0.75 * mh)} bpm, 60–75% HFmax)`
-          : "Herzfrequenzbereich: Zone 2 (60–75% HFmax)";
+        pulseLabel = zoneBandLabel("Zone 2", "Herzfrequenzbereich: Zone 2 (60–75% HFmax)");
       }
       break;
     case "long":
-      pulseLabel = mh
-        ? `Herzfrequenzbereich: Zone 2 (${Math.round(0.6 * mh)}–${Math.round(0.75 * mh)} bpm, 60–75% HFmax)`
-        : "Herzfrequenzbereich: Zone 2 (60–75% HFmax)";
+      pulseLabel = zoneBandLabel("Zone 2", "Herzfrequenzbereich: Zone 2 (60–75% HFmax)");
       break;
     case "interval":
-      pulseLabel = mh
-        ? `Herzfrequenzbereich: Zone 4–5 (${Math.round(0.8 * mh)}–${Math.round(0.95 * mh)} bpm, 80–95% HFmax)`
-        : "Herzfrequenzbereich: Zone 4–5 (80–95% HFmax)";
+      pulseLabel = zoneBandLabel("Zone 4–5", "Herzfrequenzbereich: Zone 4–5 (80–95% HFmax)");
       break;
     case "tempo":
-      pulseLabel = mh
-        ? `Herzfrequenzbereich: Zone 3–4 (${Math.round(0.76 * mh)}–${Math.round(0.88 * mh)} bpm, 76–88% HFmax)`
-        : "Herzfrequenzbereich: Zone 3–4 (76–88% HFmax)";
+      pulseLabel = zoneBandLabel("Zone 3–4", "Herzfrequenzbereich: Zone 3–4 (76–88% HFmax)");
       break;
     case "race":
-      pulseLabel = mh
-        ? `Herzfrequenzbereich: Zone 4–5 (${Math.round(0.8 * mh)}–${Math.round(0.95 * mh)} bpm, 80–95% HFmax)`
-        : "Herzfrequenzbereich: Zone 4–5 (Rennen, 80–95% HFmax)";
+      pulseLabel = zoneBandLabel("Zone 4–5", "Herzfrequenzbereich: Zone 4–5 (Rennen, 80–95% HFmax)");
       break;
     case "strength":
       pulseLabel = "Herzfrequenzbereich: moderat / nicht primär relevant";
