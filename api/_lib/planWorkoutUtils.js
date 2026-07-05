@@ -29,6 +29,15 @@ function startOfIsoWeekMonday(date) {
   return d;
 }
 
+function normalizePhaseValue(raw) {
+  const upper = String(raw ?? "").toUpperCase();
+  if (upper === "BASE") return "base";
+  if (upper === "BUILD") return "build";
+  if (upper === "PEAK") return "peak";
+  if (upper === "TAPER") return "taper";
+  return undefined;
+}
+
 function sportFromSessionType(type) {
   if (type === "bike") return "bike";
   if (type === "swim") return "swim";
@@ -101,6 +110,7 @@ function normalizeWorkouts(parsed, profile) {
     pace: w.pace ?? null,
     structured: w.structured ?? null,
     intensity: w.intensity ?? undefined,
+    phase: typeof w.phase === "string" && w.phase ? w.phase : undefined,
   }));
 }
 
@@ -130,6 +140,13 @@ function deriveWeeksFromWorkouts(workouts, metaByWeekStart, weekKeyOverrides) {
     const week = weeksMap.get(weekStart);
     week.workouts.push(w);
     if (w.sport !== "rest" && w.km) week.totalKm += w.km;
+
+    // Fallback/cross-check: if metaByWeekStart has no entry for this week (e.g. gap in
+    // schedule mapping), derive a minimal meta from the phase Claude attached to the workout.
+    if (!week.meta) {
+      const fallbackPhase = normalizePhaseValue(w.phase);
+      if (fallbackPhase) week.meta = { phase: fallbackPhase };
+    }
   }
 
   const weeks = Array.from(weeksMap.values()).sort((a, b) =>

@@ -90,6 +90,7 @@ VOLUMEN (KRITISCH):
 - Jede 4. Woche: Entlastungswoche (-25 bis -30% Volumen)
 - totalKm in weeks[] muss zur Summe der Lauf-km passen
 - Die FACHLICHE VOLUMEN-REFERENZ im User-Prompt ist die primäre Zielgröße für die Peak-Woche, weeklyKmRange beschreibt nur das aktuelle Niveau für die Progression.
+- Long Run darf MAXIMAL 30% des Wochenvolumens ausmachen (bei sehr hohem Gesamtvolumen in Peak-Wochen max. 33%). Das ist eine harte Grenze, keine Empfehlung.
 
 EINHEITEN-ROTATION:
 - Intervalle, Tempo, Long Runs und Easy Runs variieren — keine repetitiven Wochen
@@ -145,7 +146,7 @@ ATHLET:
 FACHLICHE VOLUMEN-REFERENZ (verbindlich für die Peak-Woche):
 - Empfohlenes Peak-Wochenvolumen für dieses Zielzeit-Niveau: ${volumeRef.peakKm[0]}-${effectivePeakKm} km
 - Empfohlenes Basis-Wochenvolumen: ${volumeRef.baseKm[0]}-${volumeRef.baseKm[1]} km
-- Empfohlener längster Lauf in der Peak-Phase: ~${volumeRef.peakLongRunKm} km
+- Längster Lauf (KRITISCH, harte Obergrenze): max. ${volumeRef.peakLongRunKm} km ODER 30% des jeweiligen Wochenvolumens, je nachdem was niedriger ist — gilt für JEDE Woche, nicht nur Peak.
 - Trainingstage/Woche: ~${volumeRef.sessionsPerWeek}
 ${volumeGapWarning ? "- HINWEIS: Zielzeit erfordert langfristig mehr Basisvolumen als aktuell vorhanden. Dieser Plan bringt den Athleten näher ans Ziel, erreicht es aber realistisch nicht in einem Zyklus. Peak-Woche daher konservativ auf " + effectivePeakKm + " km begrenzt statt volle Referenz." : ""}
 
@@ -170,6 +171,28 @@ PERSÖNLICHE WÜNSCHE:
 ${prefsText}
 
 Gib NUR das JSON zurück — weeks + workouts für diese Phase, mit globalen w{n}-IDs.`;
+}
+
+function checkLongRunGuardrail(weekGroups, weekStarts) {
+  const weekNumberByStartIso = new Map(
+    Object.entries(weekStarts ?? {}).map(([wn, startIso]) => [startIso, wn]),
+  );
+  for (const [weekStartIso, weekWorkouts] of weekGroups) {
+    const totalKm = sumWeekKm(weekWorkouts);
+    if (totalKm <= 0) continue;
+    const weekNumber = weekNumberByStartIso.get(weekStartIso) ?? weekStartIso;
+    for (const w of weekWorkouts) {
+      if (w.sport === "rest" || !(w.km > 0)) continue;
+      const runKm = w.km;
+      const percent = Math.round((runKm / totalKm) * 100);
+      const totalKmRounded = Math.round(totalKm * 10) / 10;
+      if (percent > 30) {
+        process.stdout.write(
+          `[longrun-check] WARNING: single run ${runKm}km is ${percent}% of week totalKm ${totalKmRounded}km (week ${weekNumber}) — exceeds 30% guardrail\n`,
+        );
+      }
+    }
+  }
 }
 
 function getPhaseWeekNumbers(weekPhaseSchedule, phaseName) {
@@ -353,9 +376,11 @@ async function generateFullPlanByPhases(client, profile) {
         }
         phaseWorkouts.push(...chunkWorkouts);
 
+        const chunkWeeks = groupWorkoutsByWeekStart(chunkWorkouts);
+        checkLongRunGuardrail(chunkWeeks, weekStarts);
+
         const isLastChunkOfPhase = chunkIndex === phaseChunks.length - 1;
         if (phaseName === "peak" && isLastChunkOfPhase) {
-          const chunkWeeks = groupWorkoutsByWeekStart(chunkWorkouts);
           const lastWeek = chunkWeeks[chunkWeeks.length - 1];
           if (lastWeek) {
             const totalKm = sumWeekKm(lastWeek[1]);
@@ -456,7 +481,20 @@ async function generateFullPlanByPhases(client, profile) {
     throw new Error("No workouts generated for any phase");
   }
 
-  const plan = rebuildPlanFromWorkouts(allWorkouts, undefined, weekKeyOverrides);
+  const metaByWeekStart = new Map();
+  weekPhaseSchedule.forEach((entry, idx) => {
+    const weekNumber = idx + 1;
+    const startIso = weekStarts[weekNumber];
+    if (!startIso) return;
+    metaByWeekStart.set(startIso, {
+      wn: weekNumber,
+      phase: entry.phase,
+      label: entry.label,
+      focus: entry.focus,
+    });
+  });
+
+  const plan = rebuildPlanFromWorkouts(allWorkouts, metaByWeekStart, weekKeyOverrides);
   const totalDurationMs = Date.now() - planStartTs;
   process.stdout.write(
     `[phased-plan] END ${JSON.stringify({
