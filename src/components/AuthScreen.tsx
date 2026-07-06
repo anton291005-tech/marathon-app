@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { clearMarathonLocalStorage } from "../persistence/clearMarathonLocalStorage";
 
 type AuthMode = "signin" | "signup" | "reset";
 
@@ -195,6 +196,7 @@ export function AuthScreen() {
           } else if (data.user?.email_confirmed_at) {
             // Dev / auto-confirm: session handled by AuthContext
           } else {
+            clearMarathonLocalStorage();
             await signOut();
             setShowEmailConfirmation(true);
             setResendStatus(null);

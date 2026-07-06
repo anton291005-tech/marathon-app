@@ -22,6 +22,7 @@ import {
   clearPasswordRecoveryHash,
   isPasswordRecoveryFromUrl,
 } from "../lib/supabase/passwordRecovery";
+import { clearMarathonLocalStorage } from "../persistence/clearMarathonLocalStorage";
 
 function isEmailUnconfirmed(user: User): boolean {
   return user.email_confirmed_at == null;
@@ -102,6 +103,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUnconfirmedEmail(null);
       const nextId = sessionUser.id ?? null;
       if (nextId !== lastUserIdRef.current) {
+        if (lastUserIdRef.current != null) {
+          clearMarathonLocalStorage();
+        }
         lastUserIdRef.current = nextId;
         setUser(sessionUser);
       }

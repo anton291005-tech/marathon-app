@@ -5259,6 +5259,7 @@ export default function AppMain(){
           <button
             type="button"
             onClick={() => {
+              clearMarathonLocalStorage();
               void signOut();
             }}
             style={{
