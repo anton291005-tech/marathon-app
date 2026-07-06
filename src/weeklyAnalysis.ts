@@ -33,7 +33,7 @@ function weeklyKmSource(
 function weekDateBounds(week: PlanWeek): { first: Date | null; last: Date | null } {
   let first: Date | null = null;
   let last: Date | null = null;
-  for (const s of week.s) {
+  for (const s of week.s ?? []) {
     const d = parseSessionDateLabel(s.date);
     if (!d) continue;
     if (!first || d < first) first = d;
@@ -131,7 +131,7 @@ export function analyzeWeek(
   const { first, last } = weekDateBounds(week);
   const isFutureWeek = !!(first && first.getTime() > todayStart.getTime());
 
-  const trainable = week.s.filter((s) => s.type !== "rest");
+  const trainable = (week.s ?? []).filter((s) => s.type !== "rest");
   const plannedTrainSessions = trainable.length;
 
   const plannedKm = week.km;
@@ -234,7 +234,7 @@ function countsTowardWeeklyRunningKm(s: PlanSession): boolean {
 
 /** Sum of planned running km (structured/desc-aware), rounded — recovery load SSOT. */
 export function weekPlannedRunningKm(week: PlanWeek): number {
-  const sum = week.s
+  const sum = (week.s ?? [])
     .filter(countsTowardWeeklyRunningKm)
     .reduce((acc, s) => acc + getSessionPlannedDistanceKm(s), 0);
   return formatKm(sum);
@@ -246,7 +246,7 @@ export function getWeekRunningDistanceKm(week: PlanWeek): number {
 
 /** Trainingsvolumen: Lauf + Rad, ohne Kraft. */
 export function getWeekPlannedLoadKm(week: PlanWeek): number {
-  const sum = week.s
+  const sum = (week.s ?? [])
     .filter((s) => s.type !== "rest" && s.type !== "strength")
     .reduce((acc, s) => {
       if (s.type === "bike") return acc + getPlannedKmEquiv(s);

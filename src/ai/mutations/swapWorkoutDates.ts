@@ -1,6 +1,7 @@
 import { deepClone } from "../../core/deepClone";
 import type { TrainingPlanV2 } from "../../planV2/types";
 import { rebuildPlanFromWorkouts } from "../../core/deriveWeeksFromWorkouts";
+import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 
 export function swapWorkoutDates(plan: TrainingPlanV2, aId: string, bId: string): TrainingPlanV2 {
   const clone = deepClone(plan);
@@ -15,6 +16,8 @@ export function swapWorkoutDates(plan: TrainingPlanV2, aId: string, bId: string)
 
   // Structural truth is workouts => always rebuild derived weeks.
   const metaByWeekStart = new Map(clone.weeks.map((w) => [w.startIso, w.meta] as const));
-  return rebuildPlanFromWorkouts({ workouts: clone.workouts, metaByWeekStart });
+  return normalizeTrainingPlan(
+    rebuildPlanFromWorkouts({ workouts: clone.workouts, metaByWeekStart }),
+  );
 }
 

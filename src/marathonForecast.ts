@@ -156,7 +156,7 @@ function collectPaceRunSamples(
   const out: PaceRunSample[] = [];
 
   for (const week of plan) {
-    for (const session of week.s) {
+    for (const session of week.s ?? []) {
       if (!isRunningSession(session)) continue;
       const dt = parseSessionDateLabel(session.date, year);
       if (!dt) continue;
@@ -203,7 +203,7 @@ function computeMaxLongRunKm(
   let maxKm: number | null = null;
 
   for (const week of plan) {
-    for (const session of week.s) {
+    for (const session of week.s ?? []) {
       if (session.type !== "long") continue;
       const dt = parseSessionDateLabel(session.date, year);
       if (!dt) continue;
@@ -242,7 +242,7 @@ function computeWeeklyVolumeAdherence(
   let actual = 0;
 
   for (const week of plan) {
-    for (const session of week.s) {
+    for (const session of week.s ?? []) {
       if (!isRunningSession(session)) continue;
       const dt = parseSessionDateLabel(session.date, year);
       if (!dt) continue;

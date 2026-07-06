@@ -112,6 +112,7 @@ import { clearMarathonLocalStorage } from "./persistence/clearMarathonLocalStora
 import { migrateLocalDataToSupabase } from "./lib/supabase/migrations/migrateLocalDataToSupabase";
 import { configureCoachMemoryRemoteSync, setCoachMemory } from "./lib/ai/memory/coachMemory";
 import { buildTrainingPlanV2FromBasePlan, buildWeekMetaMapFromBasePlan } from "./planV2/fromBasePlan";
+import { normalizeTrainingPlan } from "./planV2/normalizeTrainingPlan";
 import { isUserTrainingPlan } from "./planV2/isUserTrainingPlan";
 import { validateTrainingPlanV2Integrity } from "./ai/validation/validateTrainingPlanV2Integrity";
 import { applyConversionToPlan } from "./ai/validation/validateConversion";
@@ -527,7 +528,7 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
 ];
 const BASE_PLAN = LEGACY_EMBEDDED_PLAN_WEEKS;
 
-const ALL_SESSIONS = LEGACY_EMBEDDED_PLAN_WEEKS.flatMap((week) => week.s);
+const ALL_SESSIONS = LEGACY_EMBEDDED_PLAN_WEEKS.flatMap((week) => getWeekSessionList(week));
 /** Plan-Einheiten (Lauf + Rennrad-Zeilen), die mit einem Apple-Health-Workout verknüpft werden dürfen; Zielauswahl ist aktivitätsspezifisch. */
 const HEALTH_LINKABLE_PLAN_SESSIONS = buildHealthLinkableSessionPool(ALL_SESSIONS);
 const ACTIVE_SESSIONS = ALL_SESSIONS.filter((session) => session.type !== "rest");
@@ -783,16 +784,22 @@ function getTrendLabel(predictedSeconds, targetSeconds){
   return "Noch Aufbau, aber klar auf dem Weg";
 }
 
+function getWeekSessionList(week) {
+  return Array.isArray(week?.s) ? week.s : [];
+}
+
 function getWeeklyFatigue(week){
-  const hardCount = week.s.filter((session) => ["interval","tempo","race"].includes(session.type)).length;
-  const longestRun = week.s.reduce(
+  const weekSessions = getWeekSessionList(week);
+  const hardCount = weekSessions.filter((session) => ["interval","tempo","race"].includes(session.type)).length;
+  const longestRun = weekSessions.reduce(
     (max, session) => Math.max(max, session.type === "long" ? getSessionPlannedDistanceKm(session) : 0),
     0,
   );
   let score = 0;
   // WARNING: week.km is legacy and may not equal sum of sessions — intentional for volume / fatigue heuristic.
-  if(week.km >= 80)score += 2;
-  else if(week.km >= 60)score += 1;
+  const weekKm = week?.km ?? 0;
+  if(weekKm >= 80)score += 2;
+  else if(weekKm >= 60)score += 1;
   if(hardCount >= 2)score += 1.5;
   else if(hardCount === 1)score += 0.75;
   if(longestRun >= 30)score += 1.5;
@@ -1054,7 +1061,7 @@ function sumLoggedKmCalendarWeek(plan, logs, healthById, anchorDate, weekOffset)
   const endExclusiveMs = weekEndExclusive.getTime();
   let sum = 0;
   for (const week of plan || []) {
-    for (const s of week.s || []) {
+    for (const s of getWeekSessionList(week)) {
       if (s.type === "rest") continue;
       const dt = parseSessionDateLabel(s.date, anchorDate.getFullYear());
       if (!dt || !Number.isFinite(dt.getTime())) continue;
@@ -1076,7 +1083,7 @@ function longRunPaceLastFourWeeksSnapshot(plan, logs, healthById, nowDate) {
   const oldHalf = [];
   const LONG_MIN_KM = 14;
   for (const week of plan || []) {
-    for (const s of week.s || []) {
+    for (const s of getWeekSessionList(week)) {
       if (s.type !== "long") continue;
       if (!(getSessionPlannedDistanceKm(s) >= LONG_MIN_KM)) continue;
       const d = parseSessionDateLabel(s.date, yearGuess);
@@ -1148,7 +1155,7 @@ export default function AppMain(){
   const [accountDeleteError, setAccountDeleteError] = useState<string | null>(null);
   beginAppFrame();
   // const appFrameMs = getAppNowEpochMs(); // unused (removed)
-  const [wIdx,setWIdx]=useState(() => resolveCurrentPlanWeekIndex(BASE_PLAN, getAppNow()));
+  const [wIdx,setWIdx]=useState(0);
   const [logs, setLogs] = useState(() =>
     hydrateMarathonLogsFromStorage(readStoredJson(MARATHON_LOGS_KEY, {})),
   );
@@ -1163,9 +1170,9 @@ export default function AppMain(){
   });
   const [trainingPlanV2, setTrainingPlanV2] = useState(() => {
     const raw = readStoredJson(TRAINING_PLAN_V2_STORAGE_KEY, null);
-    if (raw && validateTrainingPlanV2Integrity(raw)) return raw;
-    const built = buildTrainingPlanV2FromBasePlan(BASE_PLAN);
-    return built;
+    const normalized = normalizeTrainingPlan(raw);
+    if (normalized.workouts.length > 0) return normalized;
+    return buildTrainingPlanV2FromBasePlan(BASE_PLAN);
   });
 
   const weekPhaseMap = useMemo(() => {
@@ -2066,7 +2073,7 @@ export default function AppMain(){
   };
 
   const displayPlan = useDisplayPlanFromTrainingState(trainingPlanV2, aiPlanPatches);
-  const ALL_SESSIONS = displayPlan.flatMap((week) => week.s);
+  const ALL_SESSIONS = displayPlan.flatMap((week) => getWeekSessionList(week));
   const ACTIVE_SESSIONS = ALL_SESSIONS.filter((session) => session.type !== "rest");
   const DISPLAY_PLAN_RUNNING_SESSIONS = ACTIVE_SESSIONS.filter(
     (session) => session.type !== "strength" && session.type !== "bike",
@@ -2146,12 +2153,27 @@ export default function AppMain(){
   );
   const HEALTH_LINKABLE_PLAN_SESSIONS = useMemo(() => buildHealthLinkableSessionPool(ALL_SESSIONS), [ALL_SESSIONS]);
 
+  const displayPlanLength = displayPlan.length;
+  const displayPlanReadyRef = useRef(false);
   useEffect(() => {
+    displayPlanReadyRef.current = false;
+  }, [trainingPlanV2]);
+  useEffect(() => {
+    if (displayPlanLength <= 0) {
+      displayPlanReadyRef.current = false;
+      setWIdx(0);
+      return;
+    }
     setWIdx((prev) => {
-      const max = Math.max(0, (displayPlan?.length || 1) - 1);
-      return Math.max(0, Math.min(prev, max));
+      const max = displayPlanLength - 1;
+      if (!displayPlanReadyRef.current) {
+        displayPlanReadyRef.current = true;
+        const current = resolveCurrentPlanWeekIndex(displayPlan, getAppNow());
+        return Math.min(current, max);
+      }
+      return Math.min(Math.max(0, prev), max);
     });
-  }, [displayPlan?.length]);
+  }, [displayPlan, displayPlanLength]);
 
   const planAdherence = useMemo(
     () =>
@@ -2308,15 +2330,17 @@ export default function AppMain(){
 
         setTrainingPlanV2((prev) => {
           if (!prev?.workouts?.length) return prev;
-          const next = applyConversionToPlan(prev, sessionId, {
-            sport: "run",
-            sessionType: targetSessionType,
-            intensity: targetIntensity,
-            km: Number.isFinite(targetKm) && targetKm > 0 ? targetKm : undefined,
-            pace: targetPace,
-            title: targetTitle,
-            desc: targetDesc,
-          });
+          const next = normalizeTrainingPlan(
+            applyConversionToPlan(prev, sessionId, {
+              sport: "run",
+              sessionType: targetSessionType,
+              intensity: targetIntensity,
+              km: Number.isFinite(targetKm) && targetKm > 0 ? targetKm : undefined,
+              pace: targetPace,
+              title: targetTitle,
+              desc: targetDesc,
+            }),
+          );
           if (!validateTrainingPlanV2Integrity(next)) return prev;
           if (user?.id && planRemoteReady) {
             void saveTrainingPlan(user.id, next);
@@ -2337,14 +2361,15 @@ export default function AppMain(){
 
   const handleAiReplaceTrainingPlanV2 = (_message, plan, clearPatches)=>{
     if(!plan)return;
-    if(!validateTrainingPlanV2Integrity(plan))return;
+    const normalized = normalizeTrainingPlan(plan);
+    if(!validateTrainingPlanV2Integrity(normalized) || normalized.workouts.length === 0)return;
     if(clearPatches){
       localStorage.removeItem(MARATHON_AI_PLAN_PATCHES_KEY);
       setAiPlanPatches([]);
     }
-    setTrainingPlanV2(plan);
+    setTrainingPlanV2(normalized);
     if (user?.id && planRemoteReady) {
-      void saveTrainingPlan(user.id, plan);
+      void saveTrainingPlan(user.id, normalized);
     }
   };
 
@@ -2354,7 +2379,7 @@ export default function AppMain(){
     }
     if(targetScreen === "week"){
       const now = getAppNow();
-      const todaySession = displayPlan.find((week)=>week.s.some((session)=>{
+      const todaySession = displayPlan.find((week)=>getWeekSessionList(week).some((session)=>{
         const parsed = parseSessionDateLabel(session.date);
         if(!parsed)return false;
         const normalized = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
@@ -2419,9 +2444,9 @@ export default function AppMain(){
         ? [...new Set(mergedWarnings)].join("\n\n")
         : null;
 
-    setTrainingPlanV2(after);
+    setTrainingPlanV2(normalizeTrainingPlan(after));
     if (user?.id && planRemoteReady) {
-      void saveTrainingPlan(user.id, after);
+      void saveTrainingPlan(user.id, normalizeTrainingPlan(after));
     }
     return { ok: true, message: "Tausch übernommen.", warningText };
   };
@@ -2481,13 +2506,15 @@ export default function AppMain(){
     });
   };
 
-  const w=displayPlan[wIdx];
-  const weekHasExpandedSessionDesc = w.s.some((s) => !!weekTabDescExpandedById[s.id]);
-  const ph=PI[w.phase] ?? PI["base"] ?? PI["BASE"] ?? { label:"Woche", emoji:"📅", col:"var(--text-secondary)", bg:"rgba(148,163,184,0.12)" };
+  const safeWIdx = displayPlan.length > 0 ? Math.min(wIdx, displayPlan.length - 1) : 0;
+  const w = displayPlan.length > 0 ? displayPlan[safeWIdx] : null;
+  const wSessions = getWeekSessionList(w);
+  const weekHasExpandedSessionDesc = wSessions.some((s) => !!weekTabDescExpandedById[s.id]);
+  const ph=PI[w?.phase ?? ""] ?? PI["base"] ?? PI["BASE"] ?? { label:"Woche", emoji:"📅", col:"var(--text-secondary)", bg:"rgba(148,163,184,0.12)" };
   // Week 1 mid-week start: show greyed placeholder cells for days before plan start
   const WEEK_DAYS_DE = ["Mo","Di","Mi","Do","Fr","Sa","So"];
-  const missingLeadingDays = wIdx === 0 && w.s.length > 0 && w.s[0].day !== "Mo"
-    ? WEEK_DAYS_DE.slice(0, WEEK_DAYS_DE.indexOf(w.s[0].day))
+  const missingLeadingDays = wIdx === 0 && wSessions.length > 0 && wSessions[0].day !== "Mo"
+    ? WEEK_DAYS_DE.slice(0, WEEK_DAYS_DE.indexOf(wSessions[0].day))
     : [];
   const totalSess=ACTIVE_SESSIONS.length;
   const doneSessions = ACTIVE_SESSIONS.filter((session) => isSessionLogDone(logs[session.id]));
@@ -2655,8 +2682,23 @@ export default function AppMain(){
   ]);
   const consistencyStats = getConsistencyStats(displayPlan, logs, appNow);
   const coachHints = getCoachFeedback({ plan: displayPlan, logs, consistencyStats, now: appNow });
-  const weekAnalysis = analyzeWeek(w, logs, appNow, healthRunById);
-  const weekBoundsForHealthKpi = getPlanWeekTimeBoundsMs(w);
+  const weekAnalysis = w ? analyzeWeek(w, logs, appNow, healthRunById) : {
+    plannedKm: 0,
+    actualKm: 0,
+    actualBikeSessionKm: 0,
+    actualTotalTrainingKm: 0,
+    doneSessions: 0,
+    plannedTrainSessions: 0,
+    longRunPlanned: false,
+    longRunDone: false,
+    longRunKmPlanned: 0,
+    intensePlanned: 0,
+    intenseDone: 0,
+    verdict: "Keine Planwoche",
+    verdictTone: "neutral",
+    isFutureWeek: false,
+  };
+  const weekBoundsForHealthKpi = w ? getPlanWeekTimeBoundsMs(w) : null;
   const weekHealthKpi = weekBoundsForHealthKpi
     ? sumRunBikeTotalKmFromHealthInRange(healthRuns, weekBoundsForHealthKpi.startMs, weekBoundsForHealthKpi.endMs)
     : { runKm: 0, bikeKm: 0, totalKm: 0 };
@@ -2666,7 +2708,7 @@ export default function AppMain(){
       return;
     }
     logWorkoutSanityCheckDev(healthRuns);
-    const b = getPlanWeekTimeBoundsMs(w);
+    const b = w ? getPlanWeekTimeBoundsMs(w) : null;
     if (b) {
       logRunBikeTotalFromHealthDev(healthRuns, b.startMs, b.endMs);
       sumRunBikeTotalKmFromHealthInRange(healthRuns, b.startMs, b.endMs);
@@ -2679,12 +2721,12 @@ export default function AppMain(){
       ? performancePrediction.confidence
       : "Datenbasis wächst"
     : null;
-  const nextKeySession = ACTIVE_SESSIONS.find((session) => getSessionStatus(logs[session.id]) === "open" && getSessionMilestones(session, displayPlan.find((week) => week.s.some((item) => item.id === session.id)) || w, milestoneMeta).length > 0)
-    || ACTIVE_SESSIONS.find((session) => getSessionStatus(logs[session.id]) === "open");
+  const nextKeySession = ACTIVE_SESSIONS.find((session) => getSessionStatus(logs[session.id]) === "open" && getSessionMilestones(session, displayPlan.find((week) => getWeekSessionList(week).some((item) => item.id === session.id)) || w, milestoneMeta).length > 0)
+  || ACTIVE_SESSIONS.find((session) => getSessionStatus(logs[session.id]) === "open");
   // phaseStatus / nextKeyDate computed previously; not needed in production UI currently
   // ────────────────────────────────────────────────────────────────────────────
   const modalLog = modal ? logs[modal.id] : null;
-  const modalWeek = modal ? displayPlan.find((week) => week.s.some((session) => session.id === modal.id)) : null;
+  const modalWeek = modal ? displayPlan.find((week) => getWeekSessionList(week).some((session) => session.id === modal.id)) : null;
   const modalMilestones = modal && modalWeek ? getSessionMilestones(modal, modalWeek, milestoneMeta) : [];
   const modalWorkout = modal ? parseWorkoutStructure(modal) : null;
   const modalFuelingHints = modal ? getFuelingHints(modal) : [];
@@ -2927,8 +2969,11 @@ export default function AppMain(){
           localStorage.setItem(MARATHON_AI_PLAN_PATCHES_KEY, JSON.stringify([]));
           localStorage.setItem(MARATHON_PREFERENCES_KEY, JSON.stringify(isolatedPrefs));
           localStorage.setItem(MARATHON_LOGS_KEY, JSON.stringify(detachedLogs));
-          if (plan && validateTrainingPlanV2Integrity(plan)) {
-            localStorage.setItem(TRAINING_PLAN_V2_STORAGE_KEY, JSON.stringify(plan));
+          if (plan && validateTrainingPlanV2Integrity(normalizeTrainingPlan(plan))) {
+            localStorage.setItem(
+              TRAINING_PLAN_V2_STORAGE_KEY,
+              JSON.stringify(normalizeTrainingPlan(plan)),
+            );
           }
         }
 
@@ -2940,8 +2985,9 @@ export default function AppMain(){
         }
 
         if (plan) {
-          if (validateTrainingPlanV2Integrity(plan)) {
-            setTrainingPlanV2(plan);
+          const normalizedPlan = normalizeTrainingPlan(plan);
+          if (validateTrainingPlanV2Integrity(normalizedPlan) && normalizedPlan.workouts.length > 0) {
+            setTrainingPlanV2(normalizedPlan);
             setHasUserTrainingPlan(true);
             if (user?.id) {
               const label =
@@ -2949,7 +2995,7 @@ export default function AppMain(){
                 [patch?.raceDistanceLabel ?? "Marathon", patch?.raceName, patch?.raceDate]
                   .filter(Boolean)
                   .join(" – ");
-              await saveTrainingPlan(user.id, plan, label || undefined);
+              await saveTrainingPlan(user.id, normalizedPlan, label || undefined);
               await refreshAllTrainingPlans();
             }
             // eslint-disable-next-line no-console
@@ -4186,8 +4232,8 @@ export default function AppMain(){
                 <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===0?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
                 <div style={{flex:1,textAlign:"center",minWidth:0}}>
                   <span style={{display:"inline-block",padding:"3px 9px",borderRadius:999,fontSize:11,fontWeight:700,background:ph.bg,color:ph.col,marginBottom:4}}>{ph.emoji} {ph.label}</span>
-                  <div style={{fontSize:17,fontWeight:800,color:"var(--text-primary)",lineHeight:1.2}}>{w.label}</div>
-                  <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:2}}>{w.dates}</div>
+                  <div style={{fontSize:17,fontWeight:800,color:"var(--text-primary)",lineHeight:1.2}}>{w?.label ?? ""}</div>
+                  <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:2}}>{w?.dates ?? ""}</div>
                 </div>
                 <button onClick={()=>setWIdx(i=>Math.min(displayPlan.length-1,i+1))} disabled={wIdx===displayPlan.length-1} style={{background:wIdx===displayPlan.length-1?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===displayPlan.length-1?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
               </div>
@@ -4253,7 +4299,7 @@ export default function AppMain(){
                 overscrollBehaviorY: "contain",
               }}
             >
-              {w.s.length === 0 && (
+              {wSessions.length === 0 && (
                 <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:18,padding:18,fontSize:13,color:"var(--text-secondary)",lineHeight:1.6}}>
                   Für diese Woche sind keine Einheiten im Plan hinterlegt.
                 </div>
@@ -4277,7 +4323,7 @@ export default function AppMain(){
                   </div>
                 </div>
               ))}
-              {w.s.map(session=>{
+              {wSessions.map(session=>{
                 const ti=TI[session.type];
                 const weekTitleColor = session.type === "rest" ? "var(--text-secondary)" : ti?.col || "#fff";
                 const log=logs[session.id];
@@ -4604,9 +4650,10 @@ export default function AppMain(){
               }}
             >
               {displayPlan.map((week,i)=>{
-                const weekDone=week.s.filter(session=>isSessionLogDone(logs[session.id])).length;
-                const weekSkipped=week.s.filter(session=>logs[session.id]?.skipped).length;
-                const weekTotal=week.s.filter(session=>session.type!=="rest").length;
+                const weekSessions=getWeekSessionList(week);
+                const weekDone=weekSessions.filter(session=>isSessionLogDone(logs[session.id])).length;
+                const weekSkipped=weekSessions.filter(session=>logs[session.id]?.skipped).length;
+                const weekTotal=weekSessions.filter(session=>session.type!=="rest").length;
                 const full=weekTotal>0&&weekDone===weekTotal;
                 return(
                   <button key={week.wn} onClick={()=>setWIdx(i)} style={{width:i===wIdx?28:10,height:10,borderRadius:999,cursor:"pointer",background:i===wIdx?"#f8fafc":full?"#10b981":weekSkipped>0?"#f87171":weekDone>0?"#38bdf8":"#1e293b",border:"none",transition:"all .2s"}} aria-label={`Woche ${week.wn} öffnen`} />
@@ -4745,9 +4792,10 @@ export default function AppMain(){
                       <div style={{display:"flex",flexDirection:"column",gap:8,padding:"0 6px 0 8px"}}>
                         {phaseWeeks.map(week=>{
                           const idx=displayPlan.indexOf(week);
-                          const weekDone=week.s.filter(session=>isSessionLogDone(logs[session.id])).length;
-                          const weekSkipped=week.s.filter(session=>logs[session.id]?.skipped).length;
-                          const weekTotal=week.s.filter(session=>session.type!=="rest").length;
+                          const phaseWeekSessions=getWeekSessionList(week);
+                          const weekDone=phaseWeekSessions.filter(session=>isSessionLogDone(logs[session.id])).length;
+                          const weekSkipped=phaseWeekSessions.filter(session=>logs[session.id]?.skipped).length;
+                          const weekTotal=phaseWeekSessions.filter(session=>session.type!=="rest").length;
                           const weekPct=weekTotal > 0 ? Math.round((weekDone / weekTotal) * 100) : 0;
                           const weekRunKm = getWeekRunningDistanceKm(week);
                           const weekLoadKm = getWeekPlannedLoadKm(week);

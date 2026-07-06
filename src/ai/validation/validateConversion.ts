@@ -1,4 +1,5 @@
 import { rebuildPlanFromWorkouts } from "../../core/deriveWeeksFromWorkouts";
+import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 import { deepClone } from "../../core/deepClone";
 import type { TrainingPlanV2, WeekV2, WorkoutV2 } from "../../planV2/types";
 import { toPlanWeeks } from "../../planV2/toPlanWeeks";
@@ -54,7 +55,9 @@ export function applyConversionToPlan(
         }
       : w,
   );
-  return rebuildPlanFromWorkouts({ workouts: updatedWorkouts, metaByWeekStart });
+  return normalizeTrainingPlan(
+    rebuildPlanFromWorkouts({ workouts: updatedWorkouts, metaByWeekStart }),
+  );
 }
 
 export type ConversionLoadWarning = {

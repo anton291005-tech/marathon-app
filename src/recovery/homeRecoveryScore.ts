@@ -121,7 +121,7 @@ function rollingPlanExecutionRatio(args: {
   let due = 0;
   let done = 0;
   for (const w of args.plan) {
-    for (const s of w.s) {
+    for (const s of w.s ?? []) {
       if (s.type === "rest") continue;
       const d = sessionToYmd(s);
       if (!d || !set.has(d)) continue;

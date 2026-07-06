@@ -23,9 +23,10 @@ export function buildDailyTrainingLoadByDate(plan: PlanWeek[], logs: Record<stri
   const m = new Map<string, number>();
   const rolling = { value: 8 };
   for (const week of plan) {
+    const weekSessions = week.s ?? [];
     const wk = weekPlannedRunningKm(week);
-    const weeklyAvgKm = wk > 0 ? wk / Math.max(1, week.s.filter((s) => s.type !== "rest").length) : wk;
-    for (const session of week.s) {
+    const weeklyAvgKm = wk > 0 ? wk / Math.max(1, weekSessions.filter((s) => s.type !== "rest").length) : wk;
+    for (const session of weekSessions) {
       if (session.type === "rest") continue;
       const d = parseSessionDateLabel(session.date);
       if (!d) continue;

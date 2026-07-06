@@ -60,11 +60,24 @@ export function isSessionLogDone(log){
   return false;
 }
 
+/** Display-plan weeks only — skips null entries (e.g. before hydration). */
+function safePlanWeeks(plan) {
+  if (!Array.isArray(plan)) return [];
+  return plan.filter((week) => week != null && typeof week === "object");
+}
+
+export function safePlanWeekLabel(week, fallback = "Keine Planwoche") {
+  if (!week || typeof week !== "object") return fallback;
+  if (typeof week.label === "string" && week.label.trim()) return week.label.trim();
+  if (typeof week.wn === "number" && Number.isFinite(week.wn)) return `Woche ${week.wn}`;
+  return fallback;
+}
+
 export function sessionsScheduledOnCalendarDay(plan, dayStart){
   const key = normalizeCalendarDay(dayStart).getTime();
   const out = [];
-  for(const week of plan){
-    for(const session of week.s){
+  for(const week of safePlanWeeks(plan)){
+    for (const session of week.s ?? []) {
       const pd = parseSessionDateLabel(session.date);
       if(!pd)continue;
       if(normalizeCalendarDay(pd).getTime() === key){
@@ -78,8 +91,8 @@ export function sessionsScheduledOnCalendarDay(plan, dayStart){
 /** Plan-Woche, die den Kalendertag enthält (Trainingstag), sonst null */
 export function findPlanWeekContainingDate(plan, dayStart){
   const t = normalizeCalendarDay(dayStart).getTime();
-  for(const week of plan){
-    for(const session of week.s){
+  for(const week of safePlanWeeks(plan)){
+    for (const session of week.s ?? []) {
       const pd = parseSessionDateLabel(session.date);
       if(!pd)continue;
       if(normalizeCalendarDay(pd).getTime() === t){
@@ -144,7 +157,8 @@ export function getTodayNextSession(planSessions, logs, now = getAppNow()){
 }
 
 export function getConsistencyStats(plan, logs, now = getAppNow()){
-  const weekCompletion = plan.map((week) => week.s.filter((session) => session.type !== "rest").every((session) => isSessionLogDone(logs[session.id])));
+  const weeks = safePlanWeeks(plan);
+  const weekCompletion = weeks.map((week) => (week.s ?? []).filter((session) => session.type !== "rest").every((session) => isSessionLogDone(logs[session.id])));
   let weeklyStreak = 0;
   for(let index = weekCompletion.length - 1; index >= 0; index -= 1){
     if(!weekCompletion[index])break;
@@ -173,13 +187,18 @@ export function getPredictionReadiness({ doneSessionsCount, loggedKm, doneLongRu
 }
 
 export function getShareSummary({ pct, week, nextKeySession, recoveryState, consistencyStats }){
+  const streak = consistencyStats?.sessionStreak ?? 0;
+  const nextTitle =
+    nextKeySession && typeof nextKeySession.title === "string" && nextKeySession.title.trim()
+      ? nextKeySession.title.trim()
+      : "Alles erledigt";
   return [
     "MyRace Snapshot",
-    `Fortschritt: ${pct}%`,
-    `Aktuelle Woche: ${week.label}`,
-    `Recovery: ${recoveryState.label}`,
-    `Streak: ${consistencyStats.sessionStreak} Tage in Folge`,
-    `Nächster Fokus: ${nextKeySession ? nextKeySession.title : "Alles erledigt"}`,
+    `Fortschritt: ${pct ?? 0}%`,
+    `Aktuelle Woche: ${safePlanWeekLabel(week)}`,
+    `Recovery: ${recoveryState?.label ?? "—"}`,
+    `Streak: ${streak} Tage in Folge`,
+    `Nächster Fokus: ${nextTitle}`,
   ].join("\n");
 }
 
@@ -203,8 +222,8 @@ function sessionDateLabelToYmd(label, year = 2026) {
 /** Frühestes Session-Datum im Plan (YYYY-MM-DD), für Plan-Start-Anchor */
 export function planEarliestSessionYmd(plan, year = 2026) {
   let min = null;
-  for (const week of plan) {
-    for (const s of week.s) {
+  for (const week of safePlanWeeks(plan)) {
+    for (const s of week.s ?? []) {
       const ymd = sessionDateLabelToYmd(s.date, year);
       if (!ymd) continue;
       if (!min || ymd < min) min = ymd;
@@ -228,20 +247,24 @@ export function calendarDaysBetweenYmd(startYmd, endYmd) {
  * Woche 1 = die ersten 7 Kalendertage ab frühestem Session-Datum (Europe/Berlin „heute“).
  */
 export function resolveCurrentPlanWeekIndex(plan, now = getAppNow(), planYear = 2026) {
-  if (!plan?.length) return 0;
-  const startYmd = planEarliestSessionYmd(plan, planYear);
+  const weeks = safePlanWeeks(plan);
+  if (!weeks.length) return 0;
+  const startYmd = planEarliestSessionYmd(weeks, planYear);
   if (!startYmd) return 0;
   const todayYmd = berlinWallClockYmd(now);
   const days = calendarDaysBetweenYmd(startYmd, todayYmd);
   if (!Number.isFinite(days)) return 0;
   if (days < 0) return 0;
   const weekNum = Math.floor(days / 7) + 1;
-  const exact = plan.findIndex((w) => w.wn === weekNum);
+  const exact = weeks.findIndex((w) => w.wn === weekNum);
   if (exact >= 0) return exact;
-  if (weekNum < plan[0].wn) return 0;
-  if (weekNum > plan[plan.length - 1].wn) return plan.length - 1;
-  for (let i = plan.length - 1; i >= 0; i--) {
-    if (plan[i].wn <= weekNum) return i;
+  const firstWn = weeks[0]?.wn;
+  const lastWn = weeks[weeks.length - 1]?.wn;
+  if (typeof firstWn === "number" && weekNum < firstWn) return 0;
+  if (typeof lastWn === "number" && weekNum > lastWn) return weeks.length - 1;
+  for (let i = weeks.length - 1; i >= 0; i -= 1) {
+    const wn = weeks[i]?.wn;
+    if (typeof wn === "number" && wn <= weekNum) return i;
   }
   return 0;
 }

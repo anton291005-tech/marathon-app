@@ -20,7 +20,7 @@ export function buildCompletedTrainingLocalDates(
 ): Set<string> {
   const set = new Set<string>();
   for (const week of plan) {
-    for (const s of week.s) {
+    for (const s of week.s ?? []) {
       if (s.type === "rest") continue;
       if (!isSessionLogDone(logs[s.id])) continue;
       const pd = parseSessionDateLabel(s.date);

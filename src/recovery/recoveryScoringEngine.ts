@@ -60,7 +60,7 @@ function activityLoadAdjustmentFromEnergyKcal(activeKcal: number | undefined, ba
 function weekDateBounds(week: PlanWeek): { first: Date | null; last: Date | null } {
   let first: Date | null = null;
   let last: Date | null = null;
-  for (const s of week.s) {
+  for (const s of week.s ?? []) {
     const d = parseSessionDateLabel(s.date);
     if (!d) continue;
     if (!first || d < first) first = d;
@@ -72,7 +72,7 @@ function weekDateBounds(week: PlanWeek): { first: Date | null; last: Date | null
 function earliestPlanSessionDate(plan: PlanWeek[]): Date | null {
   let best: Date | null = null;
   for (const w of plan) {
-    for (const s of w.s) {
+    for (const s of w.s ?? []) {
       const d = parseSessionDateLabel(s.date);
       if (!d) continue;
       if (!best || d < best) best = d;

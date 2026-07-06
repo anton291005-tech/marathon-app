@@ -24,8 +24,14 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     this.setState({ errorInfo });
+    // Log explicit strings — Error objects don't serialize over the Capacitor native
+    // bridge and show up as "{}" in the Xcode console.
     // eslint-disable-next-line no-console
-    console.error("[ErrorBoundary] Uncaught render error:", error, errorInfo);
+    console.error("[ErrorBoundary] message:", error?.message);
+    // eslint-disable-next-line no-console
+    console.error("[ErrorBoundary] stack:", error?.stack);
+    // eslint-disable-next-line no-console
+    console.error("[ErrorBoundary] componentStack:", errorInfo?.componentStack);
   }
 
   handleReset = () => {

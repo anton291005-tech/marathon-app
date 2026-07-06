@@ -1,6 +1,7 @@
 import type { PlanSession, PlanWeek } from "../marathonPrediction";
 import { parseSessionDateLabel } from "../appSmartFeatures";
 import { rebuildPlanFromWorkouts } from "../core/deriveWeeksFromWorkouts";
+import { normalizeTrainingPlan } from "../planV2/normalizeTrainingPlan";
 import type { TrainingPlanV2, WeekV2, WorkoutV2 } from "./types";
 import { normalizeTrainingPhase } from "./trainingPhase";
 
@@ -11,6 +12,7 @@ function sessionTypeToSport(type: string): WorkoutV2["sport"] {
 }
 
 function weekStartIsoFromWeek(week: PlanWeek): string | null {
+  if (!week.s || !Array.isArray(week.s)) return null;
   // Use first parseable session date in this week to compute Monday start.
   const dates = week.s
     .map((s) => parseSessionDateLabel(s.date))
@@ -60,7 +62,10 @@ function toWorkout(session: PlanSession): WorkoutV2 | null {
 
 export function buildTrainingPlanV2FromBasePlan(base: PlanWeek[]): TrainingPlanV2 {
   const metaByWeekStart = buildWeekMetaMapFromBasePlan(base);
-  const workouts: WorkoutV2[] = base.flatMap((w) => w.s).map(toWorkout).filter((w): w is WorkoutV2 => !!w);
-  return rebuildPlanFromWorkouts({ workouts, metaByWeekStart });
+  const workouts: WorkoutV2[] = base
+    .flatMap((w) => (Array.isArray(w.s) ? w.s : []))
+    .map(toWorkout)
+    .filter((w): w is WorkoutV2 => !!w);
+  return normalizeTrainingPlan(rebuildPlanFromWorkouts({ workouts, metaByWeekStart }));
 }
 

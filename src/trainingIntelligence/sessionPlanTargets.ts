@@ -406,7 +406,7 @@ export function findMostRecentCompletedRunSession(input: {
 }): { session: PlanSession; log: SessionLog; stored: StoredHealthRun | null; week: PlanWeek | null } | null {
   const candidates: { session: PlanSession; log: SessionLog; t: number; week: PlanWeek | null }[] = [];
   for (const week of input.plan) {
-    for (const session of week.s) {
+    for (const session of week.s ?? []) {
       if (!RUNNING_TYPES.has(session.type)) continue;
       const log = input.logs[session.id];
       if (!log || !isSessionLogDone(log)) continue;

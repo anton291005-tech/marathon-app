@@ -260,7 +260,7 @@ export function getTrainingWindowData(
   const out: TrainingWindowEntry[] = [];
 
   for (const week of plan) {
-    for (const session of week.s) {
+    for (const session of week.s ?? []) {
       const d = parseSessionDateLabel(session.date);
       if (!d || d < start || d > end) continue;
       out.push({

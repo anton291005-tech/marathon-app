@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { validateTrainingPlanV2Integrity } from "../../ai/validation/validateTrainingPlanV2Integrity";
+import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 import { HEALTH_RUNS_STORAGE_KEY } from "../../healthRuns";
 import {
   MARATHON_AI_PLAN_PATCHES_KEY,
@@ -83,8 +84,9 @@ export function useAppCorePersistenceEffects(slices: AppCorePersistenceSlices): 
 
   useEffect(() => {
     try {
-      if (!validateTrainingPlanV2Integrity(trainingPlanV2)) return;
-      localStorage.setItem(TRAINING_PLAN_V2_STORAGE_KEY, JSON.stringify(trainingPlanV2));
+      const normalized = normalizeTrainingPlan(trainingPlanV2);
+      if (!validateTrainingPlanV2Integrity(normalized)) return;
+      localStorage.setItem(TRAINING_PLAN_V2_STORAGE_KEY, JSON.stringify(normalized));
     } catch {
       // ignore quota errors
     }

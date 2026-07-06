@@ -27,7 +27,7 @@ function mean(nums: number[]): number | null {
 function weekDateBounds(week: PlanWeek): { first: Date | null; last: Date | null } {
   let first: Date | null = null;
   let last: Date | null = null;
-  for (const s of week.s) {
+  for (const s of week.s ?? []) {
     const d = parseSessionDateLabel(s.date);
     if (!d) continue;
     if (!first || d < first) first = d;

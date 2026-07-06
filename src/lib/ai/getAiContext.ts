@@ -32,7 +32,7 @@ function inNext14Days(session: AiPlanSession, now: Date): boolean {
 
 function findRaceDateIso(plan: AiPlanWeek[]): string | null {
   const races = plan
-    .flatMap((week) => week.s)
+    .flatMap((week) => week.s ?? [])
     .filter((session) => session.type === "race")
     .map((session) => parseSessionDateLabel(session.date))
     .filter((date): date is Date => !!date)
@@ -42,7 +42,7 @@ function findRaceDateIso(plan: AiPlanWeek[]): string | null {
 
 export function coachStructuredMarkdownAppendix(context: AiContext): string {
   const weeks = context.plan?.length ?? 0;
-  const sessions = context.plan?.reduce((n, w) => n + w.s.length, 0) ?? 0;
+  const sessions = context.plan?.reduce((n, w) => n + (w.s?.length ?? 0), 0) ?? 0;
   return `Plan: ${weeks} Wochen, ${sessions} Einheiten. Nächste 14 Tage: ${context.next14Days.length} Sessions.`;
 }
 

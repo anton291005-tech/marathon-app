@@ -10,7 +10,7 @@ export function swapWorkouts(plan: AiPlanWeek[], sourceId: string, targetId: str
   let targetRef: SessionRef | null = null;
 
   for (const week of clone) {
-    for (const session of week.s) {
+    for (const session of week.s ?? []) {
       if (session.id === sourceId) sourceRef = { session };
       if (session.id === targetId) targetRef = { session };
     }

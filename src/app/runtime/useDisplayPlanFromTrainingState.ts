@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { deriveDisplayPlan } from "../../displayPlan/deriveDisplayPlan";
+import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 import type { TrainingPlanV2 } from "../../planV2/types";
 
 import type { RuntimeDisplayPlan } from "./runtimeDisplayPlanTypes";
@@ -12,7 +13,8 @@ export function useDisplayPlanFromTrainingState(
   aiPlanPatches: unknown,
 ): RuntimeDisplayPlan {
   return useMemo(() => {
-    const plan = deriveDisplayPlan(trainingPlanV2, aiPlanPatches);
+    const normalizedPlan = normalizeTrainingPlan(trainingPlanV2);
+    const plan = deriveDisplayPlan(normalizedPlan, aiPlanPatches);
     if (typeof process !== "undefined" && process.env.NODE_ENV === "development") {
       Object.freeze(plan);
     }

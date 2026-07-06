@@ -3,6 +3,7 @@
  */
 import { parseSessionDateLabel } from "../../appSmartFeatures";
 import { rebuildPlanFromWorkouts } from "../../core/deriveWeeksFromWorkouts";
+import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 import type { Intensity, TrainingPlanV2, WeekV2, WorkoutSport, WorkoutV2 } from "../../planV2/types";
 import { type TrainingPhase, normalizeTrainingPhase, trainingPhaseLabelDe } from "../../planV2/trainingPhase";
 import type { AiContext, AiPlanSession, PlanPatch } from "./types";
@@ -1114,5 +1115,5 @@ export function generateMarathonPlanV2ToRace(
   const plan = rebuildPlanFromWorkouts({ workouts, metaByWeekStart, weekKeyOverrides });
   // eslint-disable-next-line no-console
   console.log("[PLAN-GEN] done", { workoutCount: plan.workouts?.length ?? workouts.length });
-  return plan;
+  return normalizeTrainingPlan(plan);
 }

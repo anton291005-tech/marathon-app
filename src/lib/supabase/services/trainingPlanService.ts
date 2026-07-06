@@ -1,14 +1,11 @@
 import { validateTrainingPlanV2Integrity } from "../../../ai/validation/validateTrainingPlanV2Integrity";
+import { normalizeTrainingPlan } from "../../../planV2/normalizeTrainingPlan";
 import type { TrainingPlanV2 } from "../../../planV2/types";
 import { supabase } from "../client";
 
 /** Strip stray persistence fields before writing the jsonb `data` column. */
 export function sanitizeTrainingPlanRemoteData(plan: TrainingPlanV2): TrainingPlanV2 {
-  return {
-    version: 2,
-    workouts: plan.workouts,
-    weeks: plan.weeks,
-  };
+  return normalizeTrainingPlan(plan);
 }
 
 export type TrainingPlanListItem = {
@@ -46,9 +43,11 @@ export async function loadTrainingPlan(userId: string): Promise<TrainingPlanV2 |
   if (!data || typeof data !== "object" || !("data" in data)) return null;
 
   const raw = (data as { data: unknown }).data;
-  if (!validateTrainingPlanV2Integrity(raw as TrainingPlanV2)) return null;
+  const normalized = normalizeTrainingPlan(raw);
+  if (!validateTrainingPlanV2Integrity(normalized)) return null;
+  if (normalized.workouts.length === 0) return null;
 
-  return raw as TrainingPlanV2;
+  return normalized;
 }
 
 export async function loadAllTrainingPlans(userId: string): Promise<TrainingPlanListItem[]> {

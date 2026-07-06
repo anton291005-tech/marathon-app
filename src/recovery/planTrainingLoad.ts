@@ -6,10 +6,11 @@ import { weekPlannedRunningKm } from "../weeklyAnalysis";
  * Normalized training stress index (higher = more load). Used only as 10% recovery context.
  */
 export function weeklyTrainingStressIndex(week: PlanWeek): number {
-  const hardCount = week.s.filter((session) => ["interval", "tempo", "race"].includes(session.type)).length;
+  const sessions = week.s ?? [];
+  const hardCount = sessions.filter((session) => ["interval", "tempo", "race"].includes(session.type)).length;
   const weekVol = weekPlannedRunningKm(week);
   const longestRun = sanitizeDistance(
-    week.s.reduce(
+    sessions.reduce(
       (max, session) => Math.max(max, session.type === "long" ? getSessionPlannedDistanceKm(session) : 0),
       0,
     ),

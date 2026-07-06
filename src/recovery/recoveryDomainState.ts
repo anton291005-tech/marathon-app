@@ -234,7 +234,7 @@ function computeHasMinData(args: GetRecoveryDomainStateArgs): boolean {
 
   let recentRuns = 0;
   for (const week of args.plan) {
-    for (const session of week.s) {
+    for (const session of week.s ?? []) {
       if (session.type === "rest") continue;
       const log = args.logs[session.id];
       if (!isSessionLogDone(log)) continue;

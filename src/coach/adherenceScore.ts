@@ -159,7 +159,7 @@ function buildTrainingHistoryFromPlan(args: {
 
   const out: TrainingSession[] = [];
   for (const week of args.plan) {
-    for (const s of week.s) {
+    for (const s of week.s ?? []) {
       if (s.type === "rest") continue;
       const ymd = sessionDateToYmd(s);
       if (!ymd || ymd > todayYmd) continue;
@@ -229,7 +229,7 @@ export function computePlanDueSessionCounts(args: {
   let total = 0;
   let completed = 0;
   for (const week of args.plan) {
-    for (const s of week.s) {
+    for (const s of week.s ?? []) {
       if (s.type === "rest") continue;
       total += 1;
       if (isSessionLogDone(args.logs[s.id])) completed += 1;

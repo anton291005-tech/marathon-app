@@ -215,7 +215,7 @@ export function getLoadFeedback(
 export function isRunningRestDay(plan: PlanWeek[], todayYmd: string): boolean {
   const onDay: PlanSession[] = [];
   for (const week of plan) {
-    for (const s of week.s) {
+    for (const s of week.s ?? []) {
       const ymd = planSessionLocalYmd(s);
       if (ymd === todayYmd) onDay.push(s);
     }
@@ -251,7 +251,7 @@ export function getTrainingLoadRecommendation(
   params: GetTrainingLoadRecommendationParams,
 ): TrainingLoadRecommendation {
   // no console logging in production path
-  const planSessions = params.plan.flatMap((w) => w.s);
+  const planSessions = params.plan.flatMap((w) => w.s ?? []);
   const recent = getRecentRelevantRuns(planSessions, params.logs, params.today);
   if (!recent) {
     const fallback = buildTrainingLoadFallbackRecommendation(params.today);

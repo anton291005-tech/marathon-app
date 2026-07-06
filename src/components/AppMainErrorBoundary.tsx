@@ -22,8 +22,15 @@ export class AppMainErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(err: unknown, info: React.ErrorInfo) {
+    // Log explicit strings — Error objects don't serialize over the Capacitor native
+    // bridge and show up as "{}" in the Xcode console.
+    const error = err instanceof Error ? err : null;
     // eslint-disable-next-line no-console
-    console.error("[AppMainErrorBoundary]", formatError(err), info.componentStack);
+    console.error("[AppMainErrorBoundary] message:", error?.message ?? formatError(err));
+    // eslint-disable-next-line no-console
+    console.error("[AppMainErrorBoundary] stack:", error?.stack);
+    // eslint-disable-next-line no-console
+    console.error("[AppMainErrorBoundary] componentStack:", info?.componentStack);
   }
 
   private handleReload = () => {

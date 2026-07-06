@@ -1,4 +1,5 @@
 import { validateTrainingPlanV2Integrity } from "../../../ai/validation/validateTrainingPlanV2Integrity";
+import { normalizeTrainingPlan } from "../../../planV2/normalizeTrainingPlan";
 import type { PersistedMarathonPreferences } from "../../../app/runtime/runtimePersistenceTypes";
 import { HEALTH_RUNS_STORAGE_KEY, loadHealthRunsFromStorage } from "../../../healthRuns";
 import { getCoachMemory } from "../../../lib/ai/memory/coachMemory";
@@ -73,8 +74,10 @@ function readLocalTrainingPlan(): TrainingPlanV2 | null {
   const raw = readLocalStorageRaw(TRAINING_PLAN_V2_STORAGE_KEY);
   if (!raw) return null;
   const plan = safeParseJSON<unknown>(raw, null);
-  if (!plan || !validateTrainingPlanV2Integrity(plan as TrainingPlanV2)) return null;
-  return plan as TrainingPlanV2;
+  const normalized = normalizeTrainingPlan(plan);
+  if (!validateTrainingPlanV2Integrity(normalized)) return null;
+  if (normalized.workouts.length === 0) return null;
+  return normalized;
 }
 
 function readLocalSessionLogs(): Record<string, SessionLog> {

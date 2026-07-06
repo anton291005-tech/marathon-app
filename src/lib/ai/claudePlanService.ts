@@ -1,6 +1,7 @@
 import { getAiConfig } from "./config";
 import type { AiPlanRules } from "./coachPlanMutations";
 import type { TrainingPlanV2 } from "../../planV2/types";
+import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 
 /**
  * Strips Markdown code fences and extracts the outermost JSON object from a
@@ -157,7 +158,12 @@ export async function fetchFullPlanFromClaude(
 
       if (!data.plan) return { plan: null, error: data.error ?? "no plan returned" };
 
-      return { plan: data.plan as TrainingPlanV2 };
+      const normalized = normalizeTrainingPlan(data.plan);
+      if (normalized.workouts.length === 0) {
+        return { plan: null, error: data.error ?? "plan normalization yielded empty plan" };
+      }
+
+      return { plan: normalized };
     } finally {
       clearTimeout(timeoutId);
     }

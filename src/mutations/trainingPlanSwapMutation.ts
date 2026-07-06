@@ -1,5 +1,6 @@
 import { swapWorkoutDates } from "../ai/mutations/swapWorkoutDates";
 import { validateTrainingPlanV2Integrity } from "../ai/validation/validateTrainingPlanV2Integrity";
+import { normalizeTrainingPlan } from "../planV2/normalizeTrainingPlan";
 import type { TrainingPlanV2 } from "../planV2/types";
 
 export type SwapPlanV2Result =
@@ -23,8 +24,9 @@ export function trySwapWorkoutDatesInPlan(
   const hasB = before?.workouts?.some((w) => w.id === t);
   if (!hasA || !hasB) return { ok: false, reason: "missing_ids" };
 
-  const after = swapWorkoutDates(before, s, t);
-  if (after === before) return { ok: false, reason: "swap_noop" };
+  const swapped = swapWorkoutDates(before, s, t);
+  if (swapped === before) return { ok: false, reason: "swap_noop" };
+  const after = normalizeTrainingPlan(swapped);
   if (!validateTrainingPlanV2Integrity(after)) return { ok: false, reason: "integrity_failed" };
 
   return { ok: true, after };

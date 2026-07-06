@@ -81,7 +81,7 @@ export function computeWeekPlanCompletionPercent(context: AiContext, now: Date =
   let due = 0;
   let done = 0;
   for (const w of context.plan as PlanWeek[]) {
-    for (const s of w.s) {
+    for (const s of w.s ?? []) {
       if (s.type === "rest") continue;
       const dt = parseSessionDateLabel(s.date, year);
       if (!dt) continue;
@@ -190,7 +190,7 @@ function collectSamples(
   const out: CompletedRunSample[] = [];
 
   for (const w of context.plan as PlanWeek[]) {
-    for (const s of w.s) {
+    for (const s of w.s ?? []) {
       const dt = parseSessionDateLabel(s.date, year);
       if (!dt) continue;
       const ymd = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;

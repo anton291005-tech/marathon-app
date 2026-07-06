@@ -348,7 +348,7 @@ export function applyPlanPatches(plan: AiPlanWeek[], patches: PlanPatch[]): AiPl
   const patchById = new Map(patches.map((patch) => [patch.sessionId, patch.changes]));
   return plan.map((week) => ({
     ...week,
-    s: week.s.map((session) => {
+    s: (week.s ?? []).map((session) => {
       const changes = patchById.get(session.id);
       if (!changes) return session;
       return { ...session, ...changes };
