@@ -177,9 +177,10 @@ import { normalizeAppleHealthRun } from "./trainingIntelligence/normalizeAppleHe
 import {
   getHomeCoachAssessmentFixedCopy,
   formatSessionHrTargetLine,
-  getSessionTargetLines,
-  getSessionTargetPreviewOneLiner,
-  getWeekLinkedRunFixedPrefix,
+  formatPaceMinPerKmLabel,
+  getHrRangeForZone,
+  getSessionHrZoneShort,
+  parsePlannedPaceRangeMinPerKm,
 } from "./trainingIntelligence/sessionPlanTargets";
 import { computeTrainingProgressPct } from "./selectors/trainingProgress";
 import {
@@ -187,7 +188,6 @@ import {
   getTrainingLoadRecommendation,
 } from "./trainingLoadRecommendation";
 import {
-  LAYOUT_BUDGET,
   LAYOUT_SPACING,
   getCompactScreenSpacing,
   getHomeSpacing,
@@ -206,7 +206,6 @@ import {
   productionMarkOncePerFrame,
   sanitizeOneSentence,
 } from "./ui/productionGuards";
-import { shouldUseIntervalScoring } from "./utils/workoutEvaluationGuards";
 const APPLE_HEALTH_CONNECTED_KEY = MARATHON_APPLE_HEALTH_CONNECTED_KEY;
 
 function readStoredJson(key, fallback) {
@@ -240,6 +239,9 @@ const TI = {
   bike:     { label:"Rennrad",      emoji:"🚴", col:"#06b6d4" },
   race:     { label:"Rennen",       emoji:"🏁", col:"#fbbf24" },
 };
+
+/** Session-Detail: Workout-Struktur (Warm-up/Main Set/Cool-down) nur für strukturierte, intensive Einheiten. */
+const MODAL_STRUCTURED_WORKOUT_TYPES = new Set(["interval", "tempo", "race"]);
 
 const s=(id,day,date,type,title,km,desc,pace)=>({id,day,date,type,title,km,desc,pace});
 
@@ -632,10 +634,6 @@ function getLoggedKm(session, log, healthById){
   return getSessionPlannedDistanceKm(session);
 }
 
-function getSessionTypeLabel(type){
-  return TI[type]?.label || "Einheit";
-}
-
 function getSessionMilestones(session, week, meta){
   const milestones = [];
 
@@ -660,60 +658,6 @@ function getSessionMilestones(session, week, meta){
   }
 
   return milestones;
-}
-
-function getSessionWhy(session, week){
-  if(session.type === "long"){
-    return "Diese Einheit baut die marathonrelevante Ausdauer auf, trainiert Energie-Management und macht dich mental belastbarer.";
-  }
-  if(session.type === "interval"){
-    return "Diese Einheit schärft VO2max, Laufökonomie und Tempohärte, damit sich Marathonpace später kontrollierter anfühlt.";
-  }
-  if(session.type === "tempo"){
-    return "Diese Einheit verschiebt deine Schwelle und macht längere schnelle Abschnitte effizienter und ruhiger.";
-  }
-  if(session.type === "race"){
-    return getSessionPlannedDistanceKm(session) >= 42
-      ? "Das ist dein Hauptziel. Hier soll die gesamte Vorbereitung zusammenlaufen."
-      : "Diese Einheit ist ein Formtest unter Rennbedingungen und gibt dir Feedback für die finale Marathonphase.";
-  }
-  if(session.type === "strength"){
-    return "Diese Einheit stabilisiert deinen Bewegungsapparat, verbessert Kraftübertragung und reduziert Verletzungsrisiko.";
-  }
-  if(session.type === "bike"){
-    return "Diese Einheit liefert aeroben Reiz ohne zusätzliche Laufbelastung und unterstützt aktive Regeneration.";
-  }
-  if(week.phase === "TAPER" || week.phase === "taper"){
-    return "Diese Einheit hält Spannung und Rhythmus hoch, ohne unnötige Müdigkeit aufzubauen.";
-  }
-  return "Diese Einheit sammelt saubere, kontrollierte Trainingsarbeit und unterstützt die Gesamtbelastung deiner Woche.";
-}
-
-function getCoachHint(session, week){
-  if(session.type === "long"){
-    return "Starte bewusst kontrolliert, achte auf Fueling und bewerte die Qualität erst in der zweiten Hälfte.";
-  }
-  if(session.type === "interval"){
-    return "Treffe die Zielpace sauber statt aggressiv zu eröffnen. Gute Wiederholungen schlagen heroische erste Intervalle.";
-  }
-  if(session.type === "tempo"){
-    return "Bleib rhythmisch und technisch locker. Das Ziel ist Kontrolle, nicht maximaler Kampf.";
-  }
-  if(session.type === "race"){
-    return getSessionPlannedDistanceKm(session) >= 42
-      ? "Die ersten Kilometer dürfen sich fast zu leicht anfühlen. Geduld ist hier Performance."
-      : "Nutze das Rennen als Standortbestimmung und laufe mit Fokus statt mit Ego.";
-  }
-  if(session.type === "strength"){
-    return "Saubere Ausführung vor Last. Du sollst dich danach stabiler fühlen, nicht zerstört.";
-  }
-  if(session.type === "bike"){
-    return "Halte die Intensität wirklich locker. Ziel ist Durchblutung und Zusatzvolumen, nicht Ermüdung.";
-  }
-  if(week.phase === "TAPER" || week.phase === "taper"){
-    return "Weniger machen ist jetzt oft klüger. Frische ist ein Trainingsreiz.";
-  }
-  return "Laufe die Einheit so, dass du morgen noch qualitativ trainieren kannst.";
 }
 
 function parseWorkoutStructure(session){
@@ -753,19 +697,6 @@ function parseWorkoutStructure(session){
   }
 
   return { warmup, mainSet, cooldown };
-}
-
-function formatLogTimestamp(value){
-  if(!value)return "Noch kein Zeitstempel";
-  const date = new Date(value);
-  if(Number.isNaN(date.getTime()))return "Zeitpunkt unbekannt";
-  return date.toLocaleString("de-DE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 function formatSecondsToRaceTime(totalSeconds){
@@ -879,24 +810,6 @@ function getSessionStatus(log){
   return "open";
 }
 
-function getSessionStatusLabel(log){
-  const status = getSessionStatus(log);
-  if(status === "done")return "Erledigt";
-  if(status === "skipped")return "Ausgelassen";
-  return "Offen";
-}
-
-function getSessionStatusTone(log, typeColor){
-  const status = getSessionStatus(log);
-  if(status === "done"){
-    return { background: "rgba(16,185,129,0.16)", color: "#86efac", border: "rgba(16,185,129,0.28)" };
-  }
-  if(status === "skipped"){
-    return { background: "rgba(248,113,113,0.14)", color: "#fca5a5", border: "rgba(248,113,113,0.24)" };
-  }
-  return { background: `${typeColor}22`, color: typeColor, border: `${typeColor}33` };
-}
-
 function getHeroTitle(session){
   if(!session){
     return "Ruhetag";
@@ -928,12 +841,13 @@ function getHomeTabLabel(session, isPreStart){
   return "HOME";
 }
 
-function MetricCard({ label, value, sublabel, accent }){
+/** Prominente 3er-Stat-Box-Reihe (Distanz/Tempo/HF) im Session-Detail-Modal — zweitgrößte visuelle Ebene nach dem Titel. */
+function StatBox({ label, value, sublabel, accent }){
   return (
-    <div style={{background:"rgba(13,16,33,0.86)",border:"1px solid rgba(148,163,184,0.12)",borderRadius:18,padding:14,minWidth:0,boxShadow:"0 14px 34px rgba(2,6,23,0.22)"}}>
-      <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",marginBottom:8,fontWeight:700}}>{label}</div>
-      <div style={{fontSize:24,fontWeight:800,color:accent || "#fff",lineHeight:1}}>{value}</div>
-      {sublabel && <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:8,lineHeight:1.4}}>{sublabel}</div>}
+    <div style={{background:"rgba(13,16,33,0.86)",border:"1px solid rgba(148,163,184,0.14)",borderRadius:16,padding:"12px 10px",minWidth:0,textAlign:"center"}}>
+      <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",marginBottom:6,fontWeight:700}}>{label}</div>
+      <div style={{fontSize:19,fontWeight:800,color:accent || "#fff",lineHeight:1.15,overflowWrap:"anywhere"}}>{value}</div>
+      {sublabel ? <div style={{fontSize:11,color:"var(--text-secondary)",marginTop:5,lineHeight:1.3,overflowWrap:"anywhere"}}>{sublabel}</div> : null}
     </div>
   );
 }
@@ -1391,7 +1305,8 @@ export default function AppMain(){
   const weekSessionStackRef = useRef(null);
   const prevHomeViewportTightRef = useRef(false);
   /** Session-Modal: Trainingsziele (Details unter „Mehr anzeigen“) */
-  const [modalPlanTargetsExpanded, setModalPlanTargetsExpanded] = useState(false);
+  /** Session-Modal: „Mehr anzeigen“ für Workout-Struktur (Intervall/Tempo/Rennen) & Fueling-Hinweise (Long Run/Rennen). */
+  const [modalMoreDetailsExpanded, setModalMoreDetailsExpanded] = useState(false);
   /** Leistung: Recovery-Verlauf — Kurzerklärung ein-/ausklappbar */
   /** Woche-Tab: Beschreibungstext (`session.desc`) pro Einheit ein-/ausklappbar */
   const [weekTabDescExpandedById, setWeekTabDescExpandedById] = useState(() => ({}));
@@ -1506,7 +1421,7 @@ export default function AppMain(){
   }, [healthRuns]);
 
   useEffect(() => {
-    setModalPlanTargetsExpanded(false);
+    setModalMoreDetailsExpanded(false);
   }, [modal?.id]);
 
   const appleHealthRunsLinkedCount = useMemo(() => {
@@ -2730,6 +2645,10 @@ export default function AppMain(){
   const modalMilestones = modal && modalWeek ? getSessionMilestones(modal, modalWeek, milestoneMeta) : [];
   const modalWorkout = modal ? parseWorkoutStructure(modal) : null;
   const modalFuelingHints = modal ? getFuelingHints(modal) : [];
+  /** Workout-Struktur (Warm-up/Main Set/Cool-down) nur bei strukturierten Einheiten — Easy/Long/Ruhetag/Kraft/Rad bleiben schlicht. */
+  const modalShowWorkoutStructure = modal ? MODAL_STRUCTURED_WORKOUT_TYPES.has(modal.type) : false;
+  /** „Mehr anzeigen“-Toggle erscheint nur, wenn es tatsächlich Workout-Struktur oder Fueling-Hinweise zu zeigen gibt. */
+  const modalShowMoreDetailsToggle = modalShowWorkoutStructure || modalFuelingHints.length > 0;
   const todayNextSession = decisionTodayNextSession;
   const firstTrainingSession = ACTIVE_SESSIONS[0] || null;
   const firstTrainingDate = firstTrainingSession ? parseSessionDateLabel(firstTrainingSession.date) : null;
@@ -3113,15 +3032,6 @@ export default function AppMain(){
   const homeRingReservedMinHeight = HOME_PREP_RING_PX + spacingRingToPrimaryActions;
   const compactScreen = getCompactScreenSpacing();
   const spacing = { xs: LAYOUT_SPACING.xs, sm: LAYOUT_SPACING.sm, md: LAYOUT_SPACING.md };
-  /** Week: „Mehr anzeigen“ — Detailblock scrollt im Kartenbudget, verschiebt keine Geschwister-Zeilen */
-  const weekSessionDetailScrollStyle = {
-    maxHeight: LAYOUT_BUDGET.expandableMaxImpact,
-    overflowY: "auto",
-    overflowX: "hidden",
-    WebkitOverflowScrolling: "touch",
-    overscrollBehaviorY: "contain",
-    touchAction: "pan-y",
-  };
   const safeTopPad = "max(44px, env(safe-area-inset-top, 44px))";
   /** Tabbar ~72px + Abstand; zu groß = Leerraum über fixer Nav, zu klein = Content verdeckt */
   const safeBottomContentPad = "calc(86px + env(safe-area-inset-bottom, 0px))";
@@ -4330,14 +4240,9 @@ export default function AppMain(){
                 const status = getSessionStatus(log);
                 const isDone=status==="done";
                 const isSkipped=status==="skipped";
-                const statusTone = getSessionStatusTone(log, ti.col);
                 const milestones = getSessionMilestones(session, w, milestoneMeta);
+                const milestoneEmojis = milestones.map((milestone) => milestone.emoji).join(" ");
                 const hasHint = session.type !== "rest";
-                const sessionDescText = (session.desc && String(session.desc).trim()) || "";
-                const descExpanded = !!weekTabDescExpandedById[session.id];
-                const sessionTargets =
-                  session.type !== "rest" ? getSessionTargetLines(session, preferences.maxHeartRateBpm, w) : null;
-                const weekLinkedEvalPrefix = getWeekLinkedRunFixedPrefix(log?.runEvaluation?.status);
                 const weekCompact = !weekHasExpandedSessionDesc;
                 const sessionRowWrap = weekHasExpandedSessionDesc
                   ? {
@@ -4360,277 +4265,60 @@ export default function AppMain(){
                     : isSkipped
                       ?"linear-gradient(160deg,rgba(40,14,14,0.9),rgba(18,18,30,0.96))"
                       :"linear-gradient(160deg,rgba(18,18,36,0.98),rgba(11,16,28,0.94))",
-                  borderRadius: weekCompact ? 10 : 14,
+                  borderRadius: 14,
                   display:"flex",
-                  gap: weekCompact ? 4 : 8,
-                  alignItems:"flex-start",
+                  gap: 10,
+                  alignItems:"center",
                   cursor:hasHint?"pointer":"default",
                   opacity:session.type==="rest"?0.78:1,
                   border:`1px solid ${isDone?"rgba(16,185,129,0.26)":isSkipped?"rgba(248,113,113,0.2)":"rgba(148,163,184,0.1)"}`,
                   boxShadow:isDone?"0 12px 30px rgba(16,185,129,0.08)":isSkipped?"0 12px 28px rgba(248,113,113,0.08)":"0 14px 32px rgba(2,6,23,0.16)",
                   minHeight: 0,
                 };
-                if (sessionDescText && !descExpanded) {
-                  return(
-                    <div key={session.id} style={sessionRowWrap} data-layout-week-card="1">
-                    <div
-                      onClick={()=>hasHint&&openModal(session)}
-                      style={{...sessionCardShell,padding: weekCompact ? "3px 5px 3px" : "6px 9px 7px"}}
-                    >
-                      <div style={{width:34,flexShrink:0,textAlign:"center"}}>
-                        <div style={{fontSize:10,fontWeight:800,color:"var(--text-secondary)",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
-                      </div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:"flex",flexWrap:"wrap",alignItems:"baseline",gap:"4px 10px",lineHeight:1.35}}>
-                          <span style={{fontSize: weekCompact ? 13 : 15,fontWeight:700,color:weekTitleColor}}>{session.title}</span>
-                          {(() => {
-                            const displayPk = getDisplayPlannedDistanceKm(session);
-                            return displayPk != null && displayPk > 0 ? (
-                            <span style={{fontSize: weekCompact ? 12 : 14,fontWeight:700,color:"rgba(148,163,184,0.88)",whiteSpace:"nowrap"}}>
-                              {`${formatKm(displayPk).toFixed(1)} km`}
-                            </span>
-                            ) : null;
-                          })()}
-                        </div>
-                        {(session.type === "rest" || hasHint) ? (
-                          <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.35, overflowWrap: "anywhere" }}>
-                            <span style={{ fontWeight: 700 }}>Trainingsziele</span>
-                            <span> · {getSessionTargetPreviewOneLiner(session, w)}</span>
-                          </div>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setWeekTabDescExpandedById((prev) => ({ ...prev, [session.id]: true }));
-                          }}
-                          style={{
-                            marginTop: weekCompact ? 3 : 6,
-                            padding: 0,
-                            border: "none",
-                            background: "transparent",
-                            cursor: "pointer",
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: "#7dd3fc",
-                            textAlign: "left",
-                          }}
-                        >
-                          {t("plan.show_more")}
-                        </button>
-                      </div>
-                    </div>
-                    </div>
-                  );
-                }
+                const displayPk = getDisplayPlannedDistanceKm(session);
                 return(
                   <div key={session.id} style={sessionRowWrap} data-layout-week-card="1">
                   <div
                     onClick={()=>hasHint&&openModal(session)}
-                    style={{...sessionCardShell,padding: weekCompact ? "4px 5px 4px" : "8px 9px 9px"}}
+                    style={{...sessionCardShell,padding: weekCompact ? "8px 10px" : "10px 12px"}}
                   >
-                    <div style={{width: weekCompact ? 28 : 36,flexShrink:0,textAlign:"center"}}>
+                    <div style={{width: weekCompact ? 30 : 36,flexShrink:0,textAlign:"center"}}>
                       <div style={{fontSize: weekCompact ? 9 : 10,fontWeight:800,color:"var(--text-secondary)",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
-                      <div style={{marginTop: weekCompact ? 2 : 4,width: weekCompact ? 30 : 36,height: weekCompact ? 28 : 36,borderRadius:10,background:`${ti.col}1a`,border:`1px solid ${ti.col}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize: weekCompact ? 14 : 16}}>{ti.emoji}</div>
+                      <div style={{marginTop: weekCompact ? 3 : 4,width: weekCompact ? 30 : 36,height: weekCompact ? 30 : 36,borderRadius:10,background:`${ti.col}1a`,border:`1px solid ${ti.col}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize: weekCompact ? 15 : 16}}>{ti.emoji}</div>
                     </div>
 
-                    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
-                      <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start",flexWrap:"wrap"}}>
-                        <div style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
-                          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                            <span style={{fontSize:11,padding:"3px 8px",borderRadius:999,background:`${ti.col}22`,color:ti.col,fontWeight:700}}>{getSessionTypeLabel(session.type)}</span>
-                            <span style={{fontSize:11,padding:"3px 8px",borderRadius:999,background:statusTone.background,color:statusTone.color,fontWeight:700,border:`1px solid ${statusTone.border}`}}>
-                              {getSessionStatusLabel(log)}
-                            </span>
-                            {log?.assignedRun?.runId ? (
-                              <span style={{fontSize:11,padding:"3px 8px",borderRadius:999,background:"rgba(56,189,248,0.14)",color:"#7dd3fc",fontWeight:700,border:"1px solid rgba(56,189,248,0.28)"}}>
-                                {weekLinkedEvalPrefix ? `${weekLinkedEvalPrefix} · ` : ""}Mit Einheit verknüpft ✔
-                              </span>
-                            ) : log?.suggestedHealthRunId ? (
-                              <span style={{fontSize:11,padding:"3px 8px",borderRadius:999,background:"rgba(251,191,36,0.14)",color:"#fcd34d",fontWeight:700,border:"1px solid rgba(251,191,36,0.28)"}}>Apple Health Lauf erkannt</span>
-                            ) : null}
-                            {milestones.map((milestone)=>(
-                              <span key={milestone.label} style={{fontSize:11,padding:"3px 8px",borderRadius:999,background:`${milestone.color}1f`,color:milestone.color,fontWeight:700}}>
-                                {milestone.emoji} {milestone.label}
-                              </span>
-                            ))}
-                            {(() => {
-                              const linkId = log?.assignedRun?.runId;
-                              const linkedRun = linkId ? healthRunById.get(linkId) : undefined;
-                              const ivs = linkedRun?.intervalIntensitySnapshot;
-                              const showIv =
-                                isDone &&
-                                linkId &&
-                                shouldUseIntervalScoring({
-                                  sessionType: session.type,
-                                  sessionTitle: session.title,
-                                  planDescription: session.pace ?? null,
-                                }) &&
-                                typeof ivs?.intensityScore === "number";
-                              return showIv ? (
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    padding: "3px 8px",
-                                    borderRadius: 999,
-                                    background: "rgba(16,185,129,0.14)",
-                                    color: "#6ee7b7",
-                                    fontWeight: 700,
-                                    border: "1px solid rgba(16,185,129,0.32)",
-                                  }}
-                                >
-                                  Intervall {ivs!.intensityScore}/100
-                                </span>
-                              ) : null;
-                            })()}
-                          </div>
-                          <div>
-                            <div style={{fontSize: weekCompact ? 13 : 15,fontWeight:700,color:weekTitleColor,lineHeight:1.35}}>{session.title}</div>
-                            <div style={{fontSize: weekCompact ? 10 : 12,color:"#7c8aa5",marginTop: weekCompact ? 1 : 3}}>{session.date}</div>
-                          </div>
-                        </div>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          {hasHint && !isDone && !isSkipped && <div style={{fontSize:11,color:"#4b5563",fontWeight:700,whiteSpace:"nowrap"}}>Details</div>}
-                          {hasHint && (
-                            <button
-                              onClick={(e)=>{e.stopPropagation(); quickCompleteSession(session);}}
-                              style={{
-                                width:34,
-                                height:34,
-                                borderRadius:12,
-                                border:`1px solid ${isDone?"rgba(16,185,129,0.28)":"rgba(148,163,184,0.14)"}`,
-                                background:isDone?"rgba(16,185,129,0.18)":"rgba(15,23,42,0.82)",
-                                color:isDone?"#86efac":"#cbd5e1",
-                                cursor:"pointer",
-                                fontSize:16,
-                                fontWeight:800,
-                                transition:"transform .18s ease, background .18s ease"
-                              }}
-                              aria-label={`${session.title} schnell als erledigt markieren`}
-                            >
-                              ✓
-                            </button>
-                          )}
-                        </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{fontSize: weekCompact ? 14 : 15,fontWeight:700,color:weekTitleColor,lineHeight:1.3,overflowWrap:"anywhere"}}>
+                        {session.title}{milestoneEmojis ? ` ${milestoneEmojis}` : ""}
                       </div>
-
-                      <div style={{ ...weekSessionDetailScrollStyle, marginTop: 8, flex: "1 1 auto", minHeight: 0 }}>
-                      {sessionDescText ? (
-                        <div>
-                          <div style={{ fontSize: 12, color: "#cbd5e1", lineHeight: 1.55 }}>{sessionDescText}</div>
-                          {session.type === "rest" ? (
-                            <div
-                              style={{
-                                marginTop: 10,
-                                paddingTop: 8,
-                                borderTop: "1px solid rgba(148,163,184,0.08)",
-                                fontSize: 11,
-                                color: "var(--text-muted)",
-                                lineHeight: 1.45,
-                              }}
-                            >
-                              <span style={{ fontWeight: 700, color: "rgba(100,116,139,0.95)" }}>Trainingsziele</span>
-                              <span> · {getSessionTargetPreviewOneLiner(session, w)}</span>
-                            </div>
-                          ) : sessionTargets ? (
-                            <div
-                              style={{
-                                marginTop: 10,
-                                paddingTop: 8,
-                                borderTop: "1px solid rgba(148,163,184,0.08)",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color: "var(--text-muted)",
-                                  lineHeight: 1.45,
-                                  marginBottom: 8,
-                                  overflowWrap: "anywhere",
-                                }}
-                              >
-                                <span style={{ fontWeight: 700, color: "rgba(100,116,139,0.95)" }}>Trainingsziele</span>
-                                <span style={{ fontWeight: 600 }}> · {getSessionTargetPreviewOneLiner(session, w)}</span>
-                              </div>
-                              <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.45 }}>{sessionTargets.pulseLabel}</div>
-                              <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.45 }}>{sessionTargets.paceLabel}</div>
-                              {sessionTargets.distanceLabel ? (
-                                <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.45 }}>{sessionTargets.distanceLabel}</div>
-                              ) : null}
-                            </div>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setWeekTabDescExpandedById((prev) => ({ ...prev, [session.id]: false }));
-                            }}
-                            style={{
-                              marginTop: 6,
-                              padding: 0,
-                              border: "none",
-                              background: "transparent",
-                              cursor: "pointer",
-                              fontSize: 12,
-                              fontWeight: 700,
-                              color: "#7dd3fc",
-                              textAlign: "left",
-                            }}
-                          >
-                            Weniger anzeigen
-                          </button>
+                      {displayPk != null && displayPk > 0 ? (
+                        <div style={{fontSize: weekCompact ? 12 : 13,fontWeight:600,color:"rgba(148,163,184,0.85)",marginTop:2}}>
+                          {`${formatKm(displayPk).toFixed(1)} km`}
                         </div>
                       ) : null}
-
-                      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
-                        {(() => {
-                          const displayPk = getDisplayPlannedDistanceKm(session);
-                          return displayPk != null && displayPk > 0 ? (
-                          <div style={{fontSize:12,color:"#38bdf8",fontWeight:700}}>
-                            Distanzziel: {`${formatKm(displayPk).toFixed(1)} km`}
-                          </div>
-                          ) : null;
-                        })()}
-                        {session.pace && <div style={{fontSize:12,color:"#c084fc",fontWeight:700}}>Tempoziel: {session.pace}</div>}
-                      </div>
-
-                      {!sessionDescText ? (
-                        <div
-                          style={{
-                            marginTop: 8,
-                            fontSize: 11,
-                            color: "var(--text-muted)",
-                            lineHeight: 1.45,
-                            overflowWrap: "anywhere",
-                          }}
-                        >
-                          <span style={{ fontWeight: 700, color: "rgba(100,116,139,0.95)" }}>Trainingsziele</span>
-                          <span style={{ fontWeight: 600 }}> · {getSessionTargetPreviewOneLiner(session, w)}</span>
-                        </div>
-                      ) : null}
-
-                      {log ? (
-                        <div style={{marginTop:8,padding:"6px 8px",borderRadius:10,background:"rgba(15,23,42,0.5)",border:"1px solid rgba(148,163,184,0.08)"}}>
-                          <div style={{fontSize:12,color:"#f8fafc",lineHeight:1.5}}>
-                            {getSessionStatusLabel(log)}
-                            {log.feeling > 0 ? ` · ${"★".repeat(log.feeling)}` : ""}
-                            {log.actualKm ? ` · ${log.actualKm} km` : ""}
-                            {log.notes
-                              ? (() => {
-                                  const raw = String(log.notes || "").replace(/\s+/g, " ").trim();
-                                  if (!raw) return "";
-                                  if (raw.length <= 80) return ` · ${raw}`;
-                                  const clipped = raw.slice(0, 160);
-                                  const i = Math.max(clipped.indexOf("."), clipped.indexOf("!"), clipped.indexOf("?"));
-                                  if (i >= 20 && i <= 120) return ` · ${clipped.slice(0, i + 1).trim()}`;
-                                  return "";
-                                })()
-                              : ""}
-                          </div>
-                        </div>
-                      ) : null}
-                      </div>
                     </div>
+
+                    {hasHint && (
+                      <button
+                        onClick={(e)=>{e.stopPropagation(); quickCompleteSession(session);}}
+                        style={{
+                          width:34,
+                          height:34,
+                          flexShrink:0,
+                          borderRadius:12,
+                          border:`1px solid ${isDone?"rgba(16,185,129,0.28)":"rgba(148,163,184,0.14)"}`,
+                          background:isDone?"rgba(16,185,129,0.18)":"rgba(15,23,42,0.82)",
+                          color:isDone?"#86efac":"#cbd5e1",
+                          cursor:"pointer",
+                          fontSize:16,
+                          fontWeight:800,
+                          transition:"transform .18s ease, background .18s ease"
+                        }}
+                        aria-label={`${session.title} schnell als erledigt markieren`}
+                      >
+                        ✓
+                      </button>
+                    )}
                   </div>
                   </div>
                 );
@@ -5726,90 +5414,65 @@ export default function AppMain(){
       ) : (
         <div onClick={closeModal} style={{position:"fixed",inset:0,background:"rgba(2,6,23,0.82)",display:"flex",alignItems:"stretch",justifyContent:"center",padding:0,zIndex:1000}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(180deg,#0c1020 0%, #090d18 100%)",width:"100%",maxWidth:720,height:"100%",overflowY:"auto",borderLeft:"1px solid rgba(148,163,184,0.12)",borderRight:"1px solid rgba(148,163,184,0.12)"}}>
-            <div style={{padding:"calc(18px + max(0px, env(safe-area-inset-top, 0px))) 16px 140px",display:"flex",flexDirection:"column",gap:14}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
-                <div>
-                  <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.12em",color:"#7c8aa5",fontWeight:700,marginBottom:8}}>Session Details</div>
-                  <div style={{fontSize:24,fontWeight:800,color:"#fff",lineHeight:1.15}}>{modal.title}</div>
-                  <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:6}}>{modal.day}, {modal.date} · {modalWeek.label}</div>
-                </div>
+            <div style={{padding:"calc(18px + max(0px, env(safe-area-inset-top, 0px))) 16px 140px",display:"flex",flexDirection:"column",gap:18}}>
+              <div style={{display:"flex",justifyContent:"flex-end"}}>
                 <button onClick={closeModal} style={{background:"rgba(15,23,42,0.8)",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",borderRadius:12,padding:"10px 12px",cursor:"pointer",fontSize:13}}>Schließen</button>
               </div>
 
-              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:`${TI[modal.type].col}22`,color:TI[modal.type].col,fontWeight:700}}>{TI[modal.type].emoji} {getSessionTypeLabel(modal.type)}</span>
-                {(() => {
-                  const effLog = { ...(logs[modal.id] || {}), ...form, assignedRun: logs[modal.id]?.assignedRun };
-                  const st = getSessionStatusTone(effLog, TI[modal.type].col);
-                  return (
-                    <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:st.background,color:st.color,fontWeight:700,border:`1px solid ${st.border}`}}>
-                      {getSessionStatusLabel(effLog)}
-                    </span>
-                  );
-                })()}
-                {logs[modal.id]?.assignedRun?.runId ? (
-                  <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:"rgba(56,189,248,0.14)",color:"#7dd3fc",fontWeight:700}}>Apple Health · {logs[modal.id].assignedRun.distanceKm} km</span>
-                ) : null}
-                {modal.type !== "rest" ? (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      padding: "5px 10px",
-                      borderRadius: 999,
-                      background: logs[modal.id]?.assignedRun?.runId ? "rgba(16,185,129,0.14)" : "rgba(148,163,184,0.08)",
-                      color: logs[modal.id]?.assignedRun?.runId ? "#86efac" : "#cbd5e1",
-                      fontWeight: 700,
-                      border: `1px solid ${logs[modal.id]?.assignedRun?.runId ? "rgba(16,185,129,0.24)" : "rgba(148,163,184,0.14)"}`,
-                    }}
-                  >
-                    {(() => {
-                      const ar = logs[modal.id]?.assignedRun;
-                      if (ar?.runId) {
-                        const t = typeof ar.startDate === "string" && ar.startDate ? new Date(ar.startDate) : null;
-                        const ts = t && Number.isFinite(t.getTime()) ? ` · ${t.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : "";
-                        return `Apple Health: verknüpft${ts}`;
-                      }
-                      return "Apple Health: nicht verknüpft";
-                    })()}
-                  </span>
-                ) : null}
-                {(() => {
-                  const displayPk = getDisplayPlannedDistanceKm(modal);
-                  return displayPk != null && displayPk > 0 ? (
-                  <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:"rgba(56,189,248,0.14)",color:"#38bdf8",fontWeight:700}}>
-                    Distanzziel: {`${formatKm(displayPk).toFixed(1)} km`}
-                  </span>
-                  ) : null;
-                })()}
-                {modal.pace && <span style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:"rgba(168,85,247,0.14)",color:"#c084fc",fontWeight:700}}>Tempoziel: {modal.pace}</span>}
-                {modalMilestones.map((milestone)=>(
-                  <span key={milestone.label} style={{fontSize:11,padding:"5px 10px",borderRadius:999,background:`${milestone.color}1f`,color:milestone.color,fontWeight:700}}>
-                    {milestone.emoji} {milestone.label}
-                  </span>
-                ))}
+              <div style={{textAlign:"center",marginTop:-10}}>
+                <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.12em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Session Details</div>
+                <div style={{fontSize:26,fontWeight:800,color:"#fff",lineHeight:1.2,overflowWrap:"anywhere"}}>
+                  {modal.title}
+                  {modalMilestones.length > 0 ? ` ${modalMilestones.map((milestone) => milestone.emoji).join(" ")}` : ""}
+                </div>
+                <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:6}}>{modal.day}, {modal.date} · {modalWeek.label}</div>
               </div>
 
               {modal.type !== "rest" ? (
-                <div style={{ marginTop: 2 }}>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "var(--text-muted)",
-                      marginTop: 6,
-                      lineHeight: 1.45,
-                      overflowWrap: "anywhere",
-                      minWidth: 0,
-                    }}
-                  >
-                    <span style={{ fontWeight: 700, color: "rgba(100,116,139,0.95)" }}>Trainingsziele</span>
-                    <span style={{ fontWeight: 600 }}> · {getSessionTargetPreviewOneLiner(modal, modalWeek || undefined)}</span>
-                  </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8}}>
+                  <StatBox
+                    label="Distanz"
+                    value={(() => {
+                      const displayPk = getDisplayPlannedDistanceKm(modal);
+                      return displayPk != null && displayPk > 0 ? `${formatKm(displayPk).toFixed(1)} km` : "–";
+                    })()}
+                    accent="#38bdf8"
+                  />
+                  <StatBox
+                    label="Tempo"
+                    value={(() => {
+                      if (modal.type === "strength") return "–";
+                      const pr = parsePlannedPaceRangeMinPerKm(modal.pace);
+                      if (pr) {
+                        return pr.min === pr.max
+                          ? formatPaceMinPerKmLabel(pr.min)
+                          : `${formatPaceMinPerKmLabel(pr.min)}–${formatPaceMinPerKmLabel(pr.max)}`;
+                      }
+                      if (modal.pace && String(modal.pace).trim()) return String(modal.pace).trim();
+                      return "–";
+                    })()}
+                    accent="#c084fc"
+                  />
+                  <StatBox
+                    label="Herzfrequenz"
+                    value={getSessionHrZoneShort(modal, modalWeek || undefined) || "–"}
+                    sublabel={(() => {
+                      const zone = getSessionHrZoneShort(modal, modalWeek || undefined);
+                      const range = getHrRangeForZone(zone, preferences.maxHeartRateBpm);
+                      return range ? `${range.min}–${range.max} bpm` : null;
+                    })()}
+                    accent={TI[modal.type]?.col || "#f87171"}
+                  />
+                </div>
+              ) : null}
+
+              {modalShowMoreDetailsToggle ? (
+                <div>
                   <button
                     type="button"
-                    onClick={() => setModalPlanTargetsExpanded((v) => !v)}
+                    onClick={() => setModalMoreDetailsExpanded((v) => !v)}
                     style={{
                       margin: 0,
-                      marginTop: 4,
                       padding: "6px 0",
                       border: "none",
                       background: "transparent",
@@ -5821,122 +5484,54 @@ export default function AppMain(){
                       textAlign: "left",
                     }}
                   >
-                    {modalPlanTargetsExpanded ? "Weniger anzeigen" : t("plan.show_more")}
+                    {modalMoreDetailsExpanded ? "Weniger anzeigen" : t("plan.show_more")}
                     <span style={{ marginLeft: 6, opacity: 0.85 }} aria-hidden>
-                      {modalPlanTargetsExpanded ? "▴" : "▾"}
-                    </span>
-                    <span style={{ marginLeft: 6, fontWeight: 600, color: "var(--text-muted)", fontSize: 11 }}>
-                      (Trainingsziele)
+                      {modalMoreDetailsExpanded ? "▴" : "▾"}
                     </span>
                   </button>
-                  {modalPlanTargetsExpanded ? (
-                    <div
-                      style={{
-                        marginTop: 8,
-                        padding: "10px 12px",
-                        borderRadius: 14,
-                        background: "rgba(15,23,42,0.42)",
-                        border: "1px solid rgba(148,163,184,0.1)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 10,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.1em",
-                          color: "rgba(100,116,139,0.9)",
-                          fontWeight: 700,
-                          marginBottom: 8,
-                        }}
-                      >
-                        Trainingsziele
-                      </div>
-                      {(() => {
-                        const t = getSessionTargetLines(modal, preferences.maxHeartRateBpm, modalWeek || undefined);
-                        if (!t) return null;
-                        return (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                            <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>{t.pulseLabel}</div>
-                            <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>{t.paceLabel}</div>
-                            {t.distanceLabel ? (
-                              <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>{t.distanceLabel}</div>
-                            ) : null}
+                  {modalMoreDetailsExpanded ? (
+                    <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:8}}>
+                      {modalShowWorkoutStructure ? (
+                        <DetailBlock title="Workout-Struktur">
+                          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                            <div>
+                              <div style={{fontSize:12,fontWeight:700,color:"#38bdf8",marginBottom:4}}>Warm-up</div>
+                              <div style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.6}}>{modalWorkout.warmup}</div>
+                            </div>
+                            <div>
+                              <div style={{fontSize:12,fontWeight:700,color:"#f59e0b",marginBottom:4}}>Main Set</div>
+                              <div style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.6}}>{modalWorkout.mainSet}</div>
+                            </div>
+                            <div>
+                              <div style={{fontSize:12,fontWeight:700,color:"#10b981",marginBottom:4}}>Cool-down</div>
+                              <div style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.6}}>{modalWorkout.cooldown}</div>
+                            </div>
                           </div>
-                        );
-                      })()}
+                        </DetailBlock>
+                      ) : null}
+
+                      {modalFuelingHints.length > 0 ? (
+                        <DetailBlock title="Fueling-Hinweise">
+                          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                            {modalFuelingHints.map((hint) => (
+                              <div key={hint} style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.7}}>
+                                {hint}
+                              </div>
+                            ))}
+                          </div>
+                        </DetailBlock>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
               ) : null}
 
-              <DetailBlock title="Warum diese Einheit?">
-                <div style={{fontSize:14,color:"var(--text-primary)",lineHeight:1.7}}>{getSessionWhy(modal, modalWeek)}</div>
-              </DetailBlock>
-
-              <DetailBlock title="Workout-Struktur">
-                <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  <div>
-                    <div style={{fontSize:12,fontWeight:700,color:"#38bdf8",marginBottom:4}}>Warm-up</div>
-                    <div style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.6}}>{modalWorkout.warmup}</div>
-                  </div>
-                  <div>
-                    <div style={{fontSize:12,fontWeight:700,color:"#f59e0b",marginBottom:4}}>Main Set</div>
-                    <div style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.6}}>{modalWorkout.mainSet}</div>
-                  </div>
-                  <div>
-                    <div style={{fontSize:12,fontWeight:700,color:"#10b981",marginBottom:4}}>Cool-down</div>
-                    <div style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.6}}>{modalWorkout.cooldown}</div>
-                  </div>
-                </div>
-              </DetailBlock>
-
-              <DetailBlock title="Coach-Hinweis">
-                <div style={{fontSize:14,color:"var(--text-primary)",lineHeight:1.7}}>{getCoachHint(modal, modalWeek)}</div>
-              </DetailBlock>
-
-              {modalFuelingHints.length > 0 && (
-                <DetailBlock title="Fueling-Hinweise">
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    {modalFuelingHints.map((hint) => (
-                      <div key={hint} style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.7}}>
-                        {hint}
-                      </div>
-                    ))}
-                  </div>
-                </DetailBlock>
-              )}
-
-              <DetailBlock title="Letzter gespeicherter Eintrag">
-                <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
-                  <MetricCard label="Status" value={getSessionStatusLabel(modalLog)} sublabel={modalLog?.at ? formatLogTimestamp(modalLog.at) : "Noch nicht gespeichert"} accent={isSessionLogDone(modalLog) ? "#10b981" : modalLog?.skipped ? "#f87171" : "var(--text-secondary)"} />
-                  <MetricCard label="Gefühl" value={modalLog?.feeling ? `${"★".repeat(modalLog.feeling)}` : "Keine"} sublabel={modalLog?.feeling ? `${modalLog.feeling}/5` : "Noch kein Rating"} accent="#f59e0b" />
-                  <MetricCard
-                    label="Gelaufene km"
-                    value={modalLog?.assignedRun?.distanceKm != null ? String(modalLog.assignedRun.distanceKm) : modalLog?.actualKm || "—"}
-                    sublabel={
-                      (() => {
-                        const displayPk = getDisplayPlannedDistanceKm(modal);
-                        if (displayPk != null && displayPk > 0) {
-                          return `Distanzziel: ${formatKm(displayPk).toFixed(1)} km`;
-                        }
-                        if (modal.type === "strength" || modal.type === "bike") {
-                          return "Kein Distanzziel";
-                        }
-                        return "Keine Distanz geplant";
-                      })()
-                    }
-                    accent="#38bdf8"
-                  />
-                  <MetricCard label="Notizen" value={modalLog?.notes ? "Vorhanden" : "Keine"} sublabel={modalLog?.notes || "Noch keine Notiz gespeichert"} accent="#c084fc" />
-                </div>
-              </DetailBlock>
-
-              <DetailBlock title="Dein Eintrag">
+              <div style={{paddingTop:14,borderTop:"1px solid rgba(148,163,184,0.1)",display:"flex",flexDirection:"column",gap:14}}>
                 {(() => {
                   const displayPk = getDisplayPlannedDistanceKm(modal);
                   return displayPk != null && displayPk > 0 ? (
-                  <div style={{marginBottom:14}}>
-                    <label style={{display:"block",fontSize:11,fontWeight:700,color:"#7c8aa5",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>Tatsächliche km</label>
+                  <div>
+                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"rgba(124,138,165,0.75)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>Tatsächliche km</label>
                     <input
                       type="number"
                       step="0.1"
@@ -5949,8 +5544,8 @@ export default function AppMain(){
                   ) : null;
                 })()}
 
-                <div style={{marginBottom:14}}>
-                  <label style={{display:"block",fontSize:11,fontWeight:700,color:"#7c8aa5",textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>Gefühl</label>
+                <div>
+                  <label style={{display:"block",fontSize:10,fontWeight:600,color:"rgba(124,138,165,0.75)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>Gefühl</label>
                   <div style={{display:"flex",gap:8}}>
                     {[1,2,3,4,5].map(n=>(
                       <button key={n} onClick={()=>setForm(f=>({...f,feeling:n}))} style={{flex:1,background:form.feeling>=n?"rgba(245,158,11,0.2)":"var(--bg-primary)",border:`1px solid ${form.feeling>=n?"#f59e0b":"rgba(148,163,184,0.14)"}`,borderRadius:12,padding:"10px 0",cursor:"pointer",fontSize:18}}>
@@ -5963,8 +5558,8 @@ export default function AppMain(){
                   </div>
                 </div>
 
-                <div style={{marginBottom:14}}>
-                  <label style={{display:"block",fontSize:11,fontWeight:700,color:"#7c8aa5",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>Notizen</label>
+                <div>
+                  <label style={{display:"block",fontSize:10,fontWeight:600,color:"rgba(124,138,165,0.75)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>Notizen</label>
                   <textarea
                     placeholder="Wie lief's? Besonderheiten? Stimmung?"
                     value={form.notes}
@@ -5973,7 +5568,7 @@ export default function AppMain(){
                   />
                 </div>
 
-                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:14,color:"var(--text-primary)",marginBottom:10}}>
+                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:14,color:"var(--text-primary)"}}>
                   <input type="checkbox" checked={form.done} onChange={e=>setForm(f=>({...f,done:e.target.checked,skipped:e.target.checked?false:f.skipped}))} style={{width:18,height:18,accentColor:"#10b981"}}/>
                   Als abgeschlossen markieren
                 </label>
@@ -5981,7 +5576,7 @@ export default function AppMain(){
                   <input type="checkbox" checked={form.skipped} onChange={e=>setForm(f=>({...f,skipped:e.target.checked,done:e.target.checked?false:f.done}))} style={{width:18,height:18,accentColor:"#f87171"}}/>
                   Als ausgelassen markieren
                 </label>
-              </DetailBlock>
+              </div>
             </div>
 
             <div style={{position:"sticky",bottom:0,padding:16,background:"linear-gradient(180deg,rgba(9,13,24,0) 0%, rgba(9,13,24,0.94) 18%, rgba(9,13,24,1) 100%)",borderTop:"1px solid rgba(148,163,184,0.08)"}}>
