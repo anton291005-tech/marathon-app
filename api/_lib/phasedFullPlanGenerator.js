@@ -20,6 +20,7 @@ const {
   scalePhaseWorkoutsForContinuity,
   groupWorkoutsByWeekStart,
   sumWeekKm,
+  applyLongRunCapPerWeek,
 } = require("./planWorkoutUtils");
 const { getRecommendedVolume } = require("./raceVolumeReference");
 const { computeWeeklyVolumeTargets } = require("./weeklyVolumeProgression");
@@ -294,6 +295,14 @@ async function generateFullPlanByPhases(client, profile) {
   const weekPhaseSchedule = buildWeekPhaseSchedule(totalWeeks, structure.phases);
   const orderedPhases = orderPhases(structure.phases);
 
+  const weekNumberByStartIso = new Map(
+    Object.entries(weekStarts ?? {}).map(([wn, startIso]) => [startIso, Number(wn)]),
+  );
+  const getPhaseForWeekStart = (weekStartIso) => {
+    const wn = weekNumberByStartIso.get(weekStartIso);
+    return wn ? weekPhaseSchedule[wn - 1]?.phase : undefined;
+  };
+
   const weeklyTarget = parseWeeklyKmTarget(profile.weeklyKmRange);
   const volumeGapWarning = weeklyTarget < volumeRef.baseKm[0] * 0.6;
   const effectivePeakKm = volumeGapWarning
@@ -411,10 +420,16 @@ async function generateFullPlanByPhases(client, profile) {
         rawResponseText = text;
         responseLength += len;
         const parsed = parseClaudeJson(text);
-        const chunkWorkouts = normalizeWorkouts(parsed, profile).filter((w) => w.dateIso);
-        if (chunkWorkouts.length === 0) {
+        const rawChunkWorkouts = normalizeWorkouts(parsed, profile).filter((w) => w.dateIso);
+        if (rawChunkWorkouts.length === 0) {
           throw new Error("no valid workouts after parse");
         }
+        // Ultra distances are exempt: raceVolumeReference.js's peakLongRunKm for ultra
+        // assumes a much higher long-run share of weekly volume than the 30%/33% rule.
+        const chunkWorkouts =
+          volumeRef.distKey === "ultra"
+            ? rawChunkWorkouts
+            : applyLongRunCapPerWeek(rawChunkWorkouts, getPhaseForWeekStart);
         phaseWorkouts.push(...chunkWorkouts);
 
         const chunkWeeks = groupWorkoutsByWeekStart(chunkWorkouts);

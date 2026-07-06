@@ -1,6 +1,6 @@
 "use strict";
 
-const { rebuildPlanFromWorkouts } = require("./planWorkoutUtils");
+const { rebuildPlanFromWorkouts, applyLongRunCapPerWeek } = require("./planWorkoutUtils");
 
 const DE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
@@ -719,7 +719,14 @@ function generateMarathonPlanV2ToRace(
     day.setDate(day.getDate() + 1);
   }
 
-  return rebuildPlanFromWorkouts(workouts, metaByWeekStart, weekKeyOverrides);
+  // Same 42.2 km ultra cutoff as raceVolumeReference.js's nearestDistanceKey() — ultra
+  // long runs are exempt from the percent cap (see applyLongRunCapPerWeek in planWorkoutUtils.js).
+  const isUltra = (raceDistanceKm ?? 42.2) > 42.2;
+  const cappedWorkouts = isUltra
+    ? workouts
+    : applyLongRunCapPerWeek(workouts, (weekStartIso) => metaByWeekStart.get(weekStartIso)?.phase);
+
+  return rebuildPlanFromWorkouts(cappedWorkouts, metaByWeekStart, weekKeyOverrides);
 }
 
 function extractWorkoutsForPhase(fullPlan, weekPhaseSchedule, phaseName) {

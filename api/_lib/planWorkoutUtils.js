@@ -20,6 +20,14 @@ const GERMAN_MONTHS = {
 
 const DAY_OFFSET = { Mo: 0, Di: 1, Mi: 2, Do: 3, Fr: 4, Sa: 5, So: 6 };
 
+// Hard limits for how much of a week's running volume a single long run may cover.
+// HIGH_VOLUME applies only in peak-phase weeks at/above the km threshold — see
+// applyLongRunCapPerWeek(). Does not apply to ultra distances (see call sites), where
+// raceVolumeReference.js's peakLongRunKm values assume a much higher long-run share by design.
+const LONG_RUN_CAP_STANDARD = 0.3;
+const LONG_RUN_CAP_HIGH_VOLUME = 0.33;
+const HIGH_VOLUME_WEEKLY_KM_THRESHOLD = 120;
+
 function startOfIsoWeekMonday(date) {
   const d = new Date(date);
   d.setHours(12, 0, 0, 0);
@@ -237,6 +245,93 @@ function scalePhaseWorkoutsForContinuity(phaseWorkouts, previousPhaseSummary, de
   });
 }
 
+/**
+ * Hard clamp: if the long run of a week exceeds `maxPercent` of `weekTotalKm`, cuts it
+ * down to the cap and redistributes the excess proportionally onto the week's other run
+ * workouts (not rest/bike/strength/race), so the week total stays exactly unchanged.
+ *
+ * If there are no other run workouts to absorb the excess (e.g. a taper week with only
+ * the long run and rest days), the long run is still clamped and the week total drops —
+ * there is nothing else it could be redistributed onto.
+ *
+ * @param {Array<{sessionType?: string, sport?: string, km: number}>} workouts - one week's workouts
+ * @param {number} weekTotalKm - this week's total km (sumWeekKm(workouts))
+ * @param {number} maxPercent - e.g. LONG_RUN_CAP_STANDARD or LONG_RUN_CAP_HIGH_VOLUME
+ * @returns {Array} new workouts array (originals untouched) with the clamp applied
+ */
+function clampLongRunToWeekPercent(workouts, weekTotalKm, maxPercent) {
+  if (!(weekTotalKm > 0) || !Array.isArray(workouts) || workouts.length === 0) {
+    return workouts;
+  }
+
+  const longRun = workouts.find((w) => w.sessionType === "long" && w.km > 0);
+  if (!longRun) return workouts;
+
+  const capKm = Math.round(weekTotalKm * maxPercent * 10) / 10;
+  if (longRun.km <= capKm) return workouts;
+
+  const excessKm = Math.round((longRun.km - capKm) * 10) / 10;
+  const otherRuns = workouts.filter(
+    (w) => w !== longRun && w.sport === "run" && w.sessionType !== "race" && w.km > 0,
+  );
+  const otherRunsTotalKm = otherRuns.reduce((sum, w) => sum + w.km, 0);
+
+  if (otherRuns.length === 0 || otherRunsTotalKm <= 0) {
+    return workouts.map((w) => (w === longRun ? { ...w, km: capKm } : w));
+  }
+
+  // Largest-remainder method: proportional shares rounded independently to 0.1 km would
+  // drift from excessKm, breaking the "week total stays exact" guarantee. Working in
+  // integer 0.1-km units keeps the redistributed total exactly equal to excessKm.
+  const shareUnits = otherRuns.map((w) => (excessKm * 10 * w.km) / otherRunsTotalKm);
+  const flooredUnits = shareUnits.map((v) => Math.floor(v));
+  let remainderUnits = Math.round(excessKm * 10) - flooredUnits.reduce((sum, v) => sum + v, 0);
+
+  const byFractionDesc = shareUnits
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac);
+
+  const deltaUnits = [...flooredUnits];
+  for (let k = 0; k < byFractionDesc.length && remainderUnits > 0; k += 1) {
+    deltaUnits[byFractionDesc[k].i] += 1;
+    remainderUnits -= 1;
+  }
+
+  const deltaByRun = new Map(otherRuns.map((w, i) => [w, deltaUnits[i] / 10]));
+
+  return workouts.map((w) => {
+    if (w === longRun) return { ...w, km: capKm };
+    if (deltaByRun.has(w)) {
+      return { ...w, km: Math.round((w.km + deltaByRun.get(w)) * 10) / 10 };
+    }
+    return w;
+  });
+}
+
+/**
+ * Groups `workouts` by week and applies clampLongRunToWeekPercent() to each week, choosing
+ * LONG_RUN_CAP_HIGH_VOLUME only for peak-phase weeks at/above HIGH_VOLUME_WEEKLY_KM_THRESHOLD.
+ *
+ * @param {Array} workouts - all workouts (any number of weeks)
+ * @param {(weekStartIso: string) => (string|undefined)} getPhaseForWeekStart - resolves a
+ *   week's phase ("base"|"build"|"peak"|"taper") from its Monday-based start date
+ * @returns {Array} flattened, clamped workouts (same length/order-by-week as input)
+ */
+function applyLongRunCapPerWeek(workouts, getPhaseForWeekStart) {
+  const weekGroups = groupWorkoutsByWeekStart(workouts);
+  const result = [];
+  for (const [weekStartIso, weekWorkouts] of weekGroups) {
+    const weekTotalKm = sumWeekKm(weekWorkouts);
+    const phase = getPhaseForWeekStart ? getPhaseForWeekStart(weekStartIso) : undefined;
+    const maxPercent =
+      weekTotalKm >= HIGH_VOLUME_WEEKLY_KM_THRESHOLD && phase === "peak"
+        ? LONG_RUN_CAP_HIGH_VOLUME
+        : LONG_RUN_CAP_STANDARD;
+    result.push(...clampLongRunToWeekPercent(weekWorkouts, weekTotalKm, maxPercent));
+  }
+  return result;
+}
+
 module.exports = {
   normalizeWorkouts,
   rebuildPlanFromWorkouts,
@@ -246,4 +341,9 @@ module.exports = {
   scalePhaseWorkoutsForContinuity,
   groupWorkoutsByWeekStart,
   startOfIsoWeekMonday,
+  clampLongRunToWeekPercent,
+  applyLongRunCapPerWeek,
+  LONG_RUN_CAP_STANDARD,
+  LONG_RUN_CAP_HIGH_VOLUME,
+  HIGH_VOLUME_WEEKLY_KM_THRESHOLD,
 };
