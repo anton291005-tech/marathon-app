@@ -755,12 +755,12 @@ function buildContextSummary(context) {
   }
 
   const domain = pickRecoveryDomain(context);
-  const summary = context?.recoverySummary;
+  const recoverySummary = context?.recoverySummary;
   const score =
     typeof domain?.homeRecoveryScore0_100 === "number"
       ? domain.homeRecoveryScore0_100
-      : typeof summary?.avgRecovery === "number"
-        ? summary.avgRecovery
+      : typeof recoverySummary?.avgRecovery === "number"
+        ? recoverySummary.avgRecovery
         : null;
   const label =
     domain && typeof domain.trainingRecoveryLabel === "string"
