@@ -39,6 +39,7 @@
     "language": "Language",
     "account": "Account",
     "logout": "Sign out",
+    "privacy_policy": "Privacy Policy",
     "delete_account": "Delete account",
     "delete_account_confirm": "Are you sure? This action cannot be undone.",
     "cancel": "Cancel",

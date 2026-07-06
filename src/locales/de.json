@@ -39,6 +39,7 @@
     "language": "Sprache",
     "account": "Account",
     "logout": "Abmelden",
+    "privacy_policy": "Datenschutzerklärung",
     "delete_account": "Account löschen",
     "delete_account_confirm": "Bist du sicher? Diese Aktion kann nicht rückgängig gemacht werden.",
     "cancel": "Abbrechen",

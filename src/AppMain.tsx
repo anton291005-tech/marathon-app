@@ -5256,6 +5256,30 @@ export default function AppMain(){
             </div>
           </CollapsibleSettingsCard>
 
+          <a
+            href="https://marathon-app-alpha.vercel.app/privacy-policy"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              marginTop: 8,
+              width: "100%",
+              padding: "13px 16px",
+              fontSize: 14,
+              fontWeight: 700,
+              borderRadius: 12,
+              cursor: "pointer",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-input)",
+              color: "var(--text-primary)",
+              display: "block",
+              textAlign: "center",
+              textDecoration: "none",
+              boxSizing: "border-box",
+            }}
+          >
+            {t("settings.privacy_policy")}
+          </a>
+
           <button
             type="button"
             onClick={() => {
