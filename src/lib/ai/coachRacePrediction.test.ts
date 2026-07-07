@@ -8,7 +8,8 @@ import {
   recoveryWorkoutsVersionFingerprint,
 } from "../../recovery/recoveryStorage";
 import { toAiPlanWeeks } from "./planToAi";
-import { buildRecoverySummaryFromDomain } from "./recoverySummary";
+import { buildRecoverySummaryFromDomain, type RecoverySummary } from "./recoverySummary";
+import { getRecoveryInfluence } from "../../recovery/getRecoveryInfluence";
 
 function makePlan(
   datesessions: Array<{ date: string; day: string; id: string; type: string; title: string; km: number }>,
@@ -157,7 +158,7 @@ describe("computePaceBasedPrediction", () => {
     expect(p!.predictedMarathonTimeSeconds).toBeGreaterThan(0);
   });
 
-  test("TEST 4: elevated resting HR applies fatigue penalty", () => {
+  test("TEST 4a: low recoverySummary applies continuous fatigue adjustment (SSOT-sourced)", () => {
     const paceSecPerKm = 5 * 60 + 45;
     const distKm = 18;
     const duration = paceSecPerKm * distKm;
@@ -177,23 +178,92 @@ describe("computePaceBasedPrediction", () => {
       lr3: mkLog("r3"),
       lr4: mkLog("r4"),
     };
-    const baselineRows = Array.from({ length: 7 }, (_, i) => ({
-      date: `2026-05-${String(i + 1).padStart(2, "0")}`,
-      restingHr: 50,
-      sleepHours: 7.5,
-    }));
-    const stressRows: Array<{ date: string; restingHr: number; sleepHours: number }> = [];
-    for (let day = 28; day <= 31; day++) {
-      stressRows.push({ date: `2026-05-${String(day).padStart(2, "0")}`, restingHr: 58, sleepHours: 7.5 });
-    }
-    for (let day = 1; day <= 10; day++) {
-      stressRows.push({ date: `2026-06-${String(day).padStart(2, "0")}`, restingHr: 58, sleepHours: 7.5 });
-    }
-    const recoveryDailyRows = [...baselineRows, ...stressRows].sort((a, b) => a.date.localeCompare(b.date));
-    const ctx = ctxFor(plan, new Date("2026-06-10T12:00:00").toISOString(), { logs, recoveryDailyRows });
+    const lowRecoverySummary: RecoverySummary = {
+      avgRecovery: 20,
+      avgConfidence: 0.9,
+      influenceWeight: getRecoveryInfluence(1, 0.9),
+      dominantSource: "physio",
+    };
+    const ctxNeutral = ctxFor(plan, new Date("2026-06-10T12:00:00").toISOString(), { logs });
+    const ctxLowRecovery = ctxFor(plan, new Date("2026-06-10T12:00:00").toISOString(), {
+      logs,
+      recoverySummary: lowRecoverySummary,
+    });
+    const pNeutral = computePaceBasedPrediction(ctxNeutral);
+    const pLow = computePaceBasedPrediction(ctxLowRecovery);
+    expect(pNeutral).not.toBeNull();
+    expect(pLow).not.toBeNull();
+    // Bad recovery (avgRecovery < 50) must slow the prediction down (positive adjustment, longer time).
+    expect(pLow!.recoveryAdjustmentApplied).toBeGreaterThan(0);
+    expect(pLow!.recoveryAdjustmentApplied).toBeLessThanOrEqual(0.03);
+    expect(pLow!.predictedMarathonTimeSeconds).toBeGreaterThan(pNeutral!.predictedMarathonTimeSeconds);
+    expect(pLow!.interpretation).toMatch(/Recovery-Score 20\/100/);
+  });
+
+  test("TEST 4b: high recoverySummary applies continuous performance bonus", () => {
+    const paceSecPerKm = 5 * 60 + 45;
+    const distKm = 18;
+    const duration = paceSecPerKm * distKm;
+    const mkLog = (id: string) => ({
+      done: true,
+      assignedRun: { runId: id, startDate: `${id}_start`, duration, distanceKm: distKm },
+    });
+    const plan = makePlan([
+      { id: "lr1", date: "18. Mai", day: "So", type: "long", title: "L", km: 18 },
+      { id: "lr2", date: "25. Mai", day: "So", type: "long", title: "L", km: 18 },
+      { id: "lr3", date: "1. Jun", day: "So", type: "long", title: "L", km: 18 },
+      { id: "lr4", date: "8. Jun", day: "So", type: "long", title: "L", km: 18 },
+    ]);
+    const logs = {
+      lr1: mkLog("r1"),
+      lr2: mkLog("r2"),
+      lr3: mkLog("r3"),
+      lr4: mkLog("r4"),
+    };
+    const highRecoverySummary: RecoverySummary = {
+      avgRecovery: 90,
+      avgConfidence: 0.9,
+      influenceWeight: getRecoveryInfluence(1, 0.9),
+      dominantSource: "physio",
+    };
+    const ctxNeutral = ctxFor(plan, new Date("2026-06-10T12:00:00").toISOString(), { logs });
+    const ctxHighRecovery = ctxFor(plan, new Date("2026-06-10T12:00:00").toISOString(), {
+      logs,
+      recoverySummary: highRecoverySummary,
+    });
+    const pNeutral = computePaceBasedPrediction(ctxNeutral);
+    const pHigh = computePaceBasedPrediction(ctxHighRecovery);
+    expect(pNeutral).not.toBeNull();
+    expect(pHigh).not.toBeNull();
+    expect(pHigh!.recoveryAdjustmentApplied).toBeLessThan(0);
+    expect(pHigh!.recoveryAdjustmentApplied).toBeGreaterThanOrEqual(-0.03);
+    expect(pHigh!.predictedMarathonTimeSeconds).toBeLessThan(pNeutral!.predictedMarathonTimeSeconds);
+  });
+
+  test("TEST 4c: missing recoverySummary is neutral (no adjustment)", () => {
+    const paceSecPerKm = 5 * 60 + 45;
+    const distKm = 18;
+    const duration = paceSecPerKm * distKm;
+    const mkLog = (id: string) => ({
+      done: true,
+      assignedRun: { runId: id, startDate: `${id}_start`, duration, distanceKm: distKm },
+    });
+    const plan = makePlan([
+      { id: "lr1", date: "18. Mai", day: "So", type: "long", title: "L", km: 18 },
+      { id: "lr2", date: "25. Mai", day: "So", type: "long", title: "L", km: 18 },
+      { id: "lr3", date: "1. Jun", day: "So", type: "long", title: "L", km: 18 },
+      { id: "lr4", date: "8. Jun", day: "So", type: "long", title: "L", km: 18 },
+    ]);
+    const logs = {
+      lr1: mkLog("r1"),
+      lr2: mkLog("r2"),
+      lr3: mkLog("r3"),
+      lr4: mkLog("r4"),
+    };
+    const ctx = ctxFor(plan, new Date("2026-06-10T12:00:00").toISOString(), { logs, recoverySummary: undefined });
     const p = computePaceBasedPrediction(ctx);
     expect(p).not.toBeNull();
-    expect(p!.recoveryAdjustmentApplied).toBeLessThanOrEqual(-0.02);
+    expect(p!.recoveryAdjustmentApplied).toBe(0);
   });
 
   test("TEST 5: only one long run → null", () => {
@@ -228,5 +298,90 @@ describe("computePaceBasedPrediction", () => {
     expect(p).not.toBeNull();
     expect(p!.interpretation).toMatch(/\/km/);
     expect(p!.interpretation).toMatch(/\d+:\d{2}:\d{2}/);
+  });
+
+  test("TEST 7: tempo duration staggers the marathon-pace factor", () => {
+    const longPaceSecPerKm = 4 * 60 + 20;
+    const longDist = 20;
+    const longDur = longPaceSecPerKm * longDist;
+    const mkLongLog = (id: string) => ({
+      done: true,
+      assignedRun: { runId: id, startDate: "s", duration: longDur, distanceKm: longDist },
+    });
+    const tempoPaceSecPerKm = 3 * 60 + 50;
+
+    function buildCtx(tempoDistKm: number) {
+      const tempoDur = tempoPaceSecPerKm * tempoDistKm;
+      const plan = makePlan([
+        { id: "l1", date: "25. Mai", day: "So", type: "long", title: "L", km: 20 },
+        { id: "l2", date: "1. Jun", day: "So", type: "long", title: "L", km: 20 },
+        { id: "t1", date: "3. Jun", day: "Mi", type: "tempo", title: "T", km: tempoDistKm },
+      ]);
+      const logs = {
+        l1: mkLongLog("hl1"),
+        l2: mkLongLog("hl2"),
+        t1: { done: true, assignedRun: { runId: "ht1", startDate: "s", duration: tempoDur, distanceKm: tempoDistKm } },
+      };
+      return ctxFor(plan, new Date("2026-06-10T12:00:00").toISOString(), { logs });
+    }
+
+    const pShortTempo = computePaceBasedPrediction(buildCtx(3)); // ~11.5min → short bucket, factor 1.10
+    const pLongTempo = computePaceBasedPrediction(buildCtx(12)); // ~46min → long bucket, factor 1.20
+    expect(pShortTempo).not.toBeNull();
+    expect(pLongTempo).not.toBeNull();
+    expect(pShortTempo!.primaryMethod).toBe("combined");
+    expect(pLongTempo!.primaryMethod).toBe("combined");
+    // Same tempo pace, but a longer tempo effort maps to a larger (slower) marathon-pace factor.
+    expect(pLongTempo!.predictedMarathonTimeSeconds).toBeGreaterThan(pShortTempo!.predictedMarathonTimeSeconds);
+  });
+
+  test("TEST 8: tempo blend weight increases with sample count in the tempo window", () => {
+    const longPaceSecPerKm = 4 * 60 + 20;
+    const longDist = 20;
+    const longDur = longPaceSecPerKm * longDist;
+    const mkLongLog = (id: string) => ({
+      done: true,
+      assignedRun: { runId: id, startDate: "s", duration: longDur, distanceKm: longDist },
+    });
+    const tempoPaceSecPerKm = 3 * 60 + 30;
+    const tempoDistKm = 8; // 8*220s = 1760s ≈ 29min → medium bucket, factor constant across scenarios
+
+    function buildCtx(tempoSampleCount: number) {
+      const tempoDates = ["27. Mai", "29. Mai", "3. Jun", "5. Jun"].slice(0, tempoSampleCount);
+      const tempoSessions = tempoDates.map((date, i) => ({
+        id: `t${i + 1}`,
+        date,
+        day: "Mi",
+        type: "tempo",
+        title: "T",
+        km: tempoDistKm,
+      }));
+      const plan = makePlan([
+        { id: "l1", date: "25. Mai", day: "So", type: "long", title: "L", km: 20 },
+        { id: "l2", date: "1. Jun", day: "So", type: "long", title: "L", km: 20 },
+        ...tempoSessions,
+      ]);
+      const logs: Record<string, any> = { l1: mkLongLog("hl1"), l2: mkLongLog("hl2") };
+      tempoSessions.forEach((s, i) => {
+        logs[s.id] = {
+          done: true,
+          assignedRun: {
+            runId: `ht${i + 1}`,
+            startDate: "s",
+            duration: tempoPaceSecPerKm * tempoDistKm,
+            distanceKm: tempoDistKm,
+          },
+        };
+      });
+      return ctxFor(plan, new Date("2026-06-10T12:00:00").toISOString(), { logs });
+    }
+
+    const pOneSample = computePaceBasedPrediction(buildCtx(1));
+    const pFourSamples = computePaceBasedPrediction(buildCtx(4));
+    expect(pOneSample).not.toBeNull();
+    expect(pFourSamples).not.toBeNull();
+    // Tempo pace here is faster than the long-run-implied marathon pace, so more tempo
+    // samples (more weight) must pull the blended prediction toward the faster tempo time.
+    expect(pFourSamples!.predictedMarathonTimeSeconds).toBeLessThan(pOneSample!.predictedMarathonTimeSeconds);
   });
 });

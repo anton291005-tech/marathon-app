@@ -15,9 +15,24 @@ const MARATHON_KM = 42.195;
 const SUB3_SECONDS = 10800;
 const LONG_WINDOW_DAYS = 8 * 7;
 const TEMPO_WINDOW_DAYS = 6 * 7;
-const RECENT_SLEEP_DAYS = 14;
 const LONG_MIN_KM = 14;
-const TEMPO_MARATHON_PACE_FACTOR = 1.17;
+
+/** Tempo→marathon pace factor staggered by tempo effort duration (shorter tempo = further from marathon pace). */
+const TEMPO_DURATION_SHORT_MAX_MIN = 20;
+const TEMPO_DURATION_MEDIUM_MAX_MIN = 40;
+const TEMPO_FACTOR_SHORT = 1.1;
+const TEMPO_FACTOR_MEDIUM = 1.15;
+const TEMPO_FACTOR_LONG = 1.2;
+
+/** Long-run vs tempo blend weight: tempo weight scales with sample count in TEMPO_WINDOW_DAYS. */
+const TEMPO_WEIGHT_MIN = 0.2;
+const TEMPO_WEIGHT_MAX = 0.4;
+const TEMPO_WEIGHT_MIN_SAMPLES = 1;
+const TEMPO_WEIGHT_MAX_SAMPLES = 4;
+
+/** Max +/- adjustment applied to the prediction from recovery state (fraction of predicted time). */
+const MAX_ADJUSTMENT = 0.03;
+const RECOVERY_NEUTRAL_SCORE = 50;
 
 export type PaceBasedPrediction = {
   predictedMarathonTimeSeconds: number;
@@ -239,75 +254,53 @@ function weightedLongRunPrediction(longRuns: CompletedRunSample[]): number | nul
   return num / den;
 }
 
+function tempoFactorForDurationMin(durationMin: number): number {
+  if (durationMin < TEMPO_DURATION_SHORT_MAX_MIN) return TEMPO_FACTOR_SHORT;
+  if (durationMin <= TEMPO_DURATION_MEDIUM_MAX_MIN) return TEMPO_FACTOR_MEDIUM;
+  return TEMPO_FACTOR_LONG;
+}
+
 function tempoPrediction(samples: CompletedRunSample[], todayYmd: string): number | null {
   const recentCut = addDaysToYmd(todayYmd, -TEMPO_WINDOW_DAYS);
   if (!recentCut) return null;
   const tempos = samples.filter((r) => isTempoType(r.sessionType) && r.ymd >= recentCut);
   if (tempos.length === 0) return null;
-  const avgPace = tempos.reduce((a, r) => a + r.paceSecPerKm, 0) / tempos.length;
-  const marathonPace = avgPace * TEMPO_MARATHON_PACE_FACTOR;
-  return marathonPace * MARATHON_KM;
+  const marathonSecondsPerSample = tempos.map((r) => {
+    const factor = tempoFactorForDurationMin(r.durationSec / 60);
+    return r.paceSecPerKm * factor * MARATHON_KM;
+  });
+  return marathonSecondsPerSample.reduce((a, b) => a + b, 0) / marathonSecondsPerSample.length;
+}
+
+function computeTempoWeight(tempoCount: number): number {
+  if (tempoCount <= TEMPO_WEIGHT_MIN_SAMPLES) return TEMPO_WEIGHT_MIN;
+  if (tempoCount >= TEMPO_WEIGHT_MAX_SAMPLES) return TEMPO_WEIGHT_MAX;
+  const ratio = (tempoCount - TEMPO_WEIGHT_MIN_SAMPLES) / (TEMPO_WEIGHT_MAX_SAMPLES - TEMPO_WEIGHT_MIN_SAMPLES);
+  return TEMPO_WEIGHT_MIN + ratio * (TEMPO_WEIGHT_MAX - TEMPO_WEIGHT_MIN);
 }
 
 type RecoveryAdjust = {
   factor: number;
   combinedDecimal: number;
-  rhrDelta: number | null;
-  sleepPenaltyApplied: boolean;
+  avgRecovery: number | null;
+  avgConfidence: number | null;
 };
 
-function computeRecoveryAdjustment(context: AiContext, todayYmd: string): RecoveryAdjust {
-  let factor = 1;
-  let combined = 0;
-  let rhrDelta: number | null = null;
-  let sleepPenaltyApplied = false;
-
-  const rows = [...(context.recoveryDailyRows ?? [])].filter((r) => r?.date).sort((a, b) => a.date.localeCompare(b.date));
-  if (rows.length === 0) {
-    return { factor: 1, combinedDecimal: 0, rhrDelta: null, sleepPenaltyApplied: false };
+/**
+ * Sole recovery source is context.recoverySummary (recoveryDomain SSOT) — no independent
+ * RHR/sleep computation here, so the prediction can never diverge from the Recovery display.
+ */
+function computeRecoveryAdjustment(context: AiContext): RecoveryAdjust {
+  const summary = context.recoverySummary;
+  if (!summary) {
+    return { factor: 1, combinedDecimal: 0, avgRecovery: null, avgConfidence: null };
   }
-
-  const baselineVals = rows
-    .slice(0, 7)
-    .map((r) => r.restingHr)
-    .filter((x): x is number => typeof x === "number" && Number.isFinite(x) && x > 0);
-  const baseline =
-    baselineVals.length >= 3 ? baselineVals.reduce((a, b) => a + b, 0) / baselineVals.length : null;
-
-  const last14Start = addDaysToYmd(todayYmd, -(RECENT_SLEEP_DAYS - 1));
-  if (!last14Start) {
-    return { factor: 1, combinedDecimal: 0, rhrDelta: null, sleepPenaltyApplied: false };
-  }
-  const recentRows = rows.filter((r) => r.date >= last14Start && r.date <= todayYmd);
-  const rhrRecent = recentRows
-    .map((r) => r.restingHr)
-    .filter((x): x is number => typeof x === "number" && Number.isFinite(x) && x > 0);
-  const avgRecentRhr = rhrRecent.length ? rhrRecent.reduce((a, b) => a + b, 0) / rhrRecent.length : null;
-
-  if (baseline != null && avgRecentRhr != null) {
-    rhrDelta = avgRecentRhr - baseline;
-    if (rhrDelta > 5) {
-      factor *= 1.02;
-      combined -= 0.02;
-    } else if (rhrDelta <= 0) {
-      factor *= 0.99;
-      combined += 0.01;
-    }
-  }
-
-  const sleepVals = recentRows
-    .map((r) => r.sleepHours)
-    .filter((x): x is number => typeof x === "number" && Number.isFinite(x) && x > 0);
-  if (sleepVals.length >= 4) {
-    const avgSleep = sleepVals.reduce((a, b) => a + b, 0) / sleepVals.length;
-    if (avgSleep < 7) {
-      factor *= 1.01;
-      combined -= 0.01;
-      sleepPenaltyApplied = true;
-    }
-  }
-
-  return { factor, combinedDecimal: combined, rhrDelta, sleepPenaltyApplied };
+  const factor =
+    1 +
+    ((RECOVERY_NEUTRAL_SCORE - summary.avgRecovery) / RECOVERY_NEUTRAL_SCORE) *
+      MAX_ADJUSTMENT *
+      summary.influenceWeight;
+  return { factor, combinedDecimal: factor - 1, avgRecovery: summary.avgRecovery, avgConfidence: summary.avgConfidence };
 }
 
 function confidenceFromCounts(longUsed: number, tempoUsed: number, combined: boolean): "high" | "medium" | "low" {
@@ -343,8 +336,8 @@ function buildInterpretation(args: {
       : "";
 
   const recoveryClause =
-    recovery.combinedDecimal < -0.01 && recovery.rhrDelta != null && recovery.rhrDelta > 5
-      ? ` Deine Erholungswerte zeigen aktuell erhöhte Belastung (Ruhe-HF +${Math.round(recovery.rhrDelta)} bpm) — das fließt konservativ in die Prognose ein.`
+    recovery.avgRecovery != null && recovery.combinedDecimal > 0.01
+      ? ` Deine Erholungswerte zeigen aktuell erhöhte Belastung (Recovery-Score ${recovery.avgRecovery}/100, Confidence ${Math.round((recovery.avgConfidence ?? 0) * 100)}%) — das fließt konservativ in die Prognose ein.`
       : "";
 
   if (prediction.isSubThreeHourTarget) {
@@ -385,16 +378,23 @@ export function computePaceBasedPrediction(context: AiContext): PaceBasedPredict
 
   const tempoPred = tempoPrediction(samples, todayYmd);
 
+  const tempoWindowStart = addDaysToYmd(todayYmd, -TEMPO_WINDOW_DAYS);
+  const tempoCount =
+    tempoWindowStart != null
+      ? samples.filter((r) => isTempoType(r.sessionType) && r.ymd >= tempoWindowStart).length
+      : 0;
+
   let combinedSeconds = longPred;
   let primaryMethod: PaceBasedPrediction["primaryMethod"] = "long_run";
   if (tempoPred != null && Number.isFinite(tempoPred)) {
-    combinedSeconds = 0.6 * longPred + 0.4 * tempoPred;
+    const tempoWeight = computeTempoWeight(tempoCount);
+    combinedSeconds = (1 - tempoWeight) * longPred + tempoWeight * tempoPred;
     primaryMethod = "combined";
   } else {
     primaryMethod = "long_run";
   }
 
-  const recovery = computeRecoveryAdjustment(context, todayYmd);
+  const recovery = computeRecoveryAdjustment(context);
   const adjustedSeconds = combinedSeconds * recovery.factor;
   const predictedMarathonTimeSeconds = Math.round(adjustedSeconds);
   const predictedPaceSecPerKm = predictedMarathonTimeSeconds / MARATHON_KM;
@@ -402,12 +402,6 @@ export function computePaceBasedPrediction(context: AiContext): PaceBasedPredict
   const longRecent = [...longRuns].sort((a, b) => (a.ymd === b.ymd ? 0 : a.ymd < b.ymd ? 1 : -1)).slice(0, 3);
   const longAvgPaceSecPerKm =
     longRecent.length > 0 ? longRecent.reduce((a, r) => a + r.paceSecPerKm, 0) / longRecent.length : null;
-
-  const tempoWindowStart = addDaysToYmd(todayYmd, -TEMPO_WINDOW_DAYS);
-  const tempoCount =
-    tempoWindowStart != null
-      ? samples.filter((r) => isTempoType(r.sessionType) && r.ymd >= tempoWindowStart).length
-      : 0;
 
   const confidenceLevel = confidenceFromCounts(longRuns.length, tempoCount, tempoPred != null);
   const dataPointsUsed = longRuns.length + tempoCount;
