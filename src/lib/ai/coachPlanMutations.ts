@@ -118,8 +118,12 @@ function isDateInCalendarWeek(day: Date, weekStartMonday: Date): boolean {
 }
 
 export function buildBoostNextWeekVolumePatches(context: AiContext, pct: number): PlanPatch[] {
-  const pctSafe = Number.isFinite(pct) ? Math.min(35, Math.max(5, pct)) : 15;
+  const magnitude = Number.isFinite(pct) ? Math.min(35, Math.max(5, Math.abs(pct))) : 15;
+  const pctSafe = pct < 0 ? -magnitude : magnitude;
   const factor = 1 + pctSafe / 100;
+  const isReduction = pctSafe < 0;
+  const verb = isReduction ? "reduziert" : "erhöht";
+  const signStr = isReduction ? `${pctSafe}` : `+${pctSafe}`;
   const nextMonday = nextCalendarMondayAfterThisWeek(context);
   const patches: PlanPatch[] = [];
 
@@ -135,12 +139,12 @@ export function buildBoostNextWeekVolumePatches(context: AiContext, pct: number)
       sessionId: session.id,
       changes: {
         km: nextKm,
-        title: `${session.title}${session.title.includes("km") ? "" : ""} (+${pctSafe}% Volumen)`,
+        title: `${session.title} (${signStr}% Volumen)`,
         desc: session.desc
-          ? `${session.desc} — Volumen für nächste Woche um ~${pctSafe}% erhöht.`
-          : `Volumen für nächste Woche um ~${pctSafe}% erhöht.`,
+          ? `${session.desc} — Volumen für nächste Woche um ~${Math.abs(pctSafe)}% ${verb}.`
+          : `Volumen für nächste Woche um ~${Math.abs(pctSafe)}% ${verb}.`,
       },
-      reason: `Nächste Woche +${pctSafe}% Volumen`,
+      reason: `Nächste Woche ${signStr}% Volumen`,
     });
   }
   return patches;

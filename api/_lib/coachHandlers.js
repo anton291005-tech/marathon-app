@@ -404,9 +404,6 @@ function normalizePreview(rawPreview, actionType, risk, schedulingHint) {
 }
 
 function inferActionType(rawAction, risk) {
-  if (rawAction === null) {
-    return null;
-  }
   const payloadActionType =
     rawAction && typeof rawAction === "object" ? rawAction.type : undefined;
   if (typeof payloadActionType === "string" && ALLOWED_ACTIONS.includes(payloadActionType)) {

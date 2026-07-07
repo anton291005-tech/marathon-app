@@ -1,4 +1,4 @@
-import { buildTaperWindowPatches, isoDateLocalNoon } from "./coachPlanMutations";
+import { buildBoostNextWeekVolumePatches, buildTaperWindowPatches, isoDateLocalNoon } from "./coachPlanMutations";
 import type { AiContext } from "./types";
 import { toAiPlanWeeks } from "./planToAi";
 import type { PlanWeek } from "../../marathonPrediction";
@@ -90,5 +90,40 @@ describe("buildTaperWindowPatches", () => {
     const ctx = ctxFor(plan, today, { raceDateIso: null });
     const r = buildTaperWindowPatches(ctx, isoDateLocalNoon(race));
     expect(r.shortLeadWarning).toMatch(/kurze Vorlaufzeit/i);
+  });
+});
+
+describe("buildBoostNextWeekVolumePatches", () => {
+  function planWithOneTempoNextWeek(): PlanWeek[] {
+    return makePlan([{ id: "n1", date: "13. Mai", day: "Mi", type: "tempo", title: "Tempo", km: 10 }]);
+  }
+
+  test("negative pct reduces next week's volume instead of flipping to an increase", () => {
+    const today = new Date("2026-05-06T08:00:00").toISOString();
+    const ctx = ctxFor(planWithOneTempoNextWeek(), today);
+    const patches = buildBoostNextWeekVolumePatches(ctx, -20);
+    expect(patches).toHaveLength(1);
+    expect(patches[0].changes.km).toBe(8);
+    expect(patches[0].reason).toMatch(/-20%/);
+    expect(patches[0].changes.desc).toMatch(/reduziert/);
+  });
+
+  test("positive pct still increases volume as before", () => {
+    const today = new Date("2026-05-06T08:00:00").toISOString();
+    const ctx = ctxFor(planWithOneTempoNextWeek(), today);
+    const patches = buildBoostNextWeekVolumePatches(ctx, 20);
+    expect(patches).toHaveLength(1);
+    expect(patches[0].changes.km).toBe(12);
+    expect(patches[0].reason).toMatch(/\+20%/);
+    expect(patches[0].changes.desc).toMatch(/erhöht/);
+  });
+
+  test("clamps magnitude to max 35% while preserving sign", () => {
+    const today = new Date("2026-05-06T08:00:00").toISOString();
+    const ctx = ctxFor(planWithOneTempoNextWeek(), today);
+    const reduced = buildBoostNextWeekVolumePatches(ctx, -80);
+    const increased = buildBoostNextWeekVolumePatches(ctx, 80);
+    expect(reduced[0].changes.km).toBe(6.5);
+    expect(increased[0].changes.km).toBe(13.5);
   });
 });
