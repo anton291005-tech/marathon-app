@@ -844,7 +844,7 @@ function getHomeTabLabel(session, isPreStart){
 /** Prominente 3er-Stat-Box-Reihe (Distanz/Tempo/HF) im Session-Detail-Modal — zweitgrößte visuelle Ebene nach dem Titel. */
 function StatBox({ label, value, sublabel, accent }){
   return (
-    <div style={{background:"rgba(13,16,33,0.86)",border:"1px solid rgba(148,163,184,0.14)",borderRadius:16,padding:"12px 10px",minWidth:0,textAlign:"center"}}>
+    <div style={{background:"rgba(13,16,33,0.86)",border:"1px solid var(--border-default)",borderRadius:16,padding:"12px 10px",minWidth:0,textAlign:"center"}}>
       <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",marginBottom:6,fontWeight:700}}>{label}</div>
       <div style={{fontSize:19,fontWeight:800,color:accent || "#fff",lineHeight:1.15,overflowWrap:"anywhere"}}>{value}</div>
       {sublabel ? <div style={{fontSize:11,color:"var(--text-secondary)",marginTop:5,lineHeight:1.3,overflowWrap:"anywhere"}}>{sublabel}</div> : null}
@@ -854,7 +854,7 @@ function StatBox({ label, value, sublabel, accent }){
 
 function DetailBlock({ title, children }){
   return (
-    <div style={{background:"rgba(9,11,26,0.92)",border:"1px solid rgba(148,163,184,0.12)",borderRadius:18,padding:16}}>
+    <div style={{background:"rgba(9,11,26,0.92)",border:"1px solid var(--border-default)",borderRadius:18,padding:16}}>
       <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:12}}>{title}</div>
       {children}
     </div>
@@ -2425,7 +2425,7 @@ export default function AppMain(){
   const w = displayPlan.length > 0 ? displayPlan[safeWIdx] : null;
   const wSessions = getWeekSessionList(w);
   const weekHasExpandedSessionDesc = wSessions.some((s) => !!weekTabDescExpandedById[s.id]);
-  const ph=PI[w?.phase ?? ""] ?? PI["base"] ?? PI["BASE"] ?? { label:"Woche", emoji:"📅", col:"var(--text-secondary)", bg:"rgba(148,163,184,0.12)" };
+  const ph=PI[w?.phase ?? ""] ?? PI["base"] ?? PI["BASE"] ?? { label:"Woche", emoji:"📅", col:"var(--text-secondary)", bg:"var(--border-default)" };
   // Week 1 mid-week start: show greyed placeholder cells for days before plan start
   const WEEK_DAYS_DE = ["Mo","Di","Mi","Do","Fr","Sa","So"];
   const missingLeadingDays = wIdx === 0 && wSessions.length > 0 && wSessions[0].day !== "Mo"
@@ -3549,7 +3549,7 @@ export default function AppMain(){
             {firstTrainingStart ? (
               <div style={{ position: "relative", display: "flex", justifyContent: "center", marginBottom: homeScrollLocked ? 4 : 6, flexShrink: 0, width: "100%" }}>
                 {!hasCalendarStarted ? (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(148,163,184,0.06)", border: "1px solid rgba(148,163,184,0.1)", borderRadius: 999, padding: homeScrollLocked ? "2px 8px" : "3px 10px" }}>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--border-default)", border: "1px solid var(--border-default)", borderRadius: 999, padding: homeScrollLocked ? "2px 8px" : "3px 10px" }}>
                     <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#475569", display: "inline-block" }} />
                     <span style={{ fontSize: homeScrollLocked ? 10 : 11, color: "#475569", fontWeight: 700 }}>Plan startet am {blockStartLabel}</span>
                   </div>
@@ -3597,7 +3597,7 @@ export default function AppMain(){
                       cy="60"
                       r={ringRadius}
                       fill="none"
-                      stroke="rgba(148,163,184,0.08)"
+                      stroke="var(--border-default)"
                       strokeWidth="7.5"
                     />
                     <circle
@@ -3706,8 +3706,8 @@ export default function AppMain(){
                   minWidth: 46,
                   margin: 0,
                   padding: 0,
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(148,163,184,0.16)",
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-default)",
                   color: homeRunSession ? "var(--text-secondary)" : "#374151",
                   borderRadius: 999,
                   cursor: homeRunSession ? "pointer" : "not-allowed",
@@ -3795,7 +3795,7 @@ export default function AppMain(){
                   <div
                     style={{
                       paddingBottom: 6,
-                      borderBottom: "1px solid rgba(148,163,184,0.12)",
+                      borderBottom: "1px solid var(--border-default)",
                       marginTop: 0,
                     }}
                   >
@@ -3869,7 +3869,7 @@ export default function AppMain(){
                   <div
                     style={{
                       paddingBottom: 6,
-                      borderBottom: "1px solid rgba(148,163,184,0.12)",
+                      borderBottom: "1px solid var(--border-default)",
                       marginTop: 0,
                     }}
                   >
@@ -3918,7 +3918,7 @@ export default function AppMain(){
                           }}
                         >
                           {isRecoveryHydrating && uiRecoveryScore0_100 == null ? (
-                            <span style={{ display: "inline-block", width: 42, height: 14, borderRadius: 4, background: "rgba(255,255,255,0.08)", animation: "pulse 1.2s ease-in-out infinite", verticalAlign: "middle" }} />
+                            <span style={{ display: "inline-block", width: 42, height: 14, borderRadius: 4, background: "var(--bg-surface)", animation: "pulse 1.2s ease-in-out infinite", verticalAlign: "middle" }} />
                           ) : uiRecoveryScore0_100 != null ? formatScore100(uiRecoveryScoreDisplay) : "Keine Daten verfügbar"}
                         </span>
                       </span>
@@ -3944,7 +3944,7 @@ export default function AppMain(){
                       padding: "10px 12px",
                       borderRadius: 12,
                       background: "rgba(15,23,42,0.4)",
-                      border: "1px solid rgba(148,163,184,0.1)",
+                      border: "1px solid var(--border-default)",
                       marginBottom: 12,
                     }}
                   >
@@ -4068,13 +4068,13 @@ export default function AppMain(){
             </div>
 
             {/* Metrics group — cleaner, softer and less boxy */}
-            <div style={{display:"flex",flexDirection:"column",gap: homeScrollLocked ? 5 : 6,padding: homeScrollLocked ? "6px 8px" : "8px 10px",borderRadius:18,background:"linear-gradient(160deg,rgba(15,23,42,0.33),rgba(12,18,34,0.2))",border:"1px solid rgba(148,163,184,0.1)",width:"100%",minWidth:0,boxSizing:"border-box"}}>
+            <div style={{display:"flex",flexDirection:"column",gap: homeScrollLocked ? 5 : 6,padding: homeScrollLocked ? "6px 8px" : "8px 10px",borderRadius:18,background:"linear-gradient(160deg,rgba(15,23,42,0.33),rgba(12,18,34,0.2))",border:"1px solid var(--border-default)",width:"100%",minWidth:0,boxSizing:"border-box"}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:4}}>
                 <div style={{padding:"6px 5px",textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Erholung</div>
                   <div style={{fontSize:15,fontWeight:800,color:recoveryPresentation.session.toneHex,lineHeight:1.1}}>
                     {isRecoveryHydrating && recoveryPresentation.session.label === "Keine Daten"
-                      ? <span style={{ display: "inline-block", width: 30, height: 13, borderRadius: 3, background: "rgba(255,255,255,0.08)", animation: "pulse 1.2s ease-in-out infinite", verticalAlign: "middle" }} />
+                      ? <span style={{ display: "inline-block", width: 30, height: 13, borderRadius: 3, background: "var(--bg-surface)", animation: "pulse 1.2s ease-in-out infinite", verticalAlign: "middle" }} />
                       : recoveryPresentation.session.label}
                   </div>
                 </div>
@@ -4139,13 +4139,13 @@ export default function AppMain(){
           >
             <div data-tour="week-header" style={{ flexShrink: 0, background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:16,padding:"4px 6px 4px",boxShadow:"0 20px 40px var(--shadow)"}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===0?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
+                <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid var(--border-default)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===0?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
                 <div style={{flex:1,textAlign:"center",minWidth:0}}>
                   <span style={{display:"inline-block",padding:"3px 9px",borderRadius:999,fontSize:11,fontWeight:700,background:ph.bg,color:ph.col,marginBottom:4}}>{ph.emoji} {ph.label}</span>
                   <div style={{fontSize:17,fontWeight:800,color:"var(--text-primary)",lineHeight:1.2}}>{w?.label ?? ""}</div>
                   <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:2}}>{w?.dates ?? ""}</div>
                 </div>
-                <button onClick={()=>setWIdx(i=>Math.min(displayPlan.length-1,i+1))} disabled={wIdx===displayPlan.length-1} style={{background:wIdx===displayPlan.length-1?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===displayPlan.length-1?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
+                <button onClick={()=>setWIdx(i=>Math.min(displayPlan.length-1,i+1))} disabled={wIdx===displayPlan.length-1} style={{background:wIdx===displayPlan.length-1?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid var(--border-default)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===displayPlan.length-1?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
               </div>
 
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:3,marginTop:2}}>
@@ -4182,11 +4182,11 @@ export default function AppMain(){
               </div>
 
               <div style={{display:"flex",gap:3,marginTop:2}}>
-                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"3px 4px",borderRadius:10,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
+                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"3px 4px",borderRadius:10,background:"rgba(10,14,26,0.55)",border:"1px solid var(--border-default)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:2}}>{t("plan.units")}</div>
                   <div style={{fontSize:15,fontWeight:800,color:"var(--text-primary)",lineHeight:1.15}}>{weekAnalysis.doneSessions}/{weekAnalysis.plannedTrainSessions}</div>
                 </div>
-                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"3px 4px",borderRadius:10,background:"rgba(10,14,26,0.55)",border:"1px solid rgba(148,163,184,0.08)"}}>
+                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"3px 4px",borderRadius:10,background:"rgba(10,14,26,0.55)",border:"1px solid var(--border-default)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:2}}>{t("plan.intensive")}</div>
                   <div style={{fontSize:15,fontWeight:800,color:"#fb7185",lineHeight:1.15}}>{weekAnalysis.intenseDone}/{weekAnalysis.intensePlanned}</div>
                 </div>
@@ -4218,7 +4218,7 @@ export default function AppMain(){
                 <div key={`pre-start-${dayLabel}`} style={{flex:"1 1 0%",minHeight:0,display:"flex",flexDirection:"column"}}>
                   <div style={{
                     background:"rgba(11,16,28,0.55)",
-                    border:"1px solid rgba(148,163,184,0.07)",
+                    border:"1px solid var(--border-default)",
                     borderRadius:10,
                     display:"flex",
                     alignItems:"center",
@@ -4271,7 +4271,7 @@ export default function AppMain(){
                   alignItems:"center",
                   cursor:hasHint?"pointer":"default",
                   opacity:session.type==="rest"?0.78:1,
-                  border:`1px solid ${isDone?"rgba(16,185,129,0.26)":isSkipped?"rgba(248,113,113,0.2)":"rgba(148,163,184,0.1)"}`,
+                  border:`1px solid ${isDone?"rgba(16,185,129,0.26)":isSkipped?"rgba(248,113,113,0.2)":"var(--border-default)"}`,
                   boxShadow:isDone?"0 12px 30px rgba(16,185,129,0.08)":isSkipped?"0 12px 28px rgba(248,113,113,0.08)":"0 14px 32px rgba(2,6,23,0.16)",
                   minHeight: 0,
                 };
@@ -4306,7 +4306,7 @@ export default function AppMain(){
                           height:34,
                           flexShrink:0,
                           borderRadius:12,
-                          border:`1px solid ${isDone?"rgba(16,185,129,0.28)":"rgba(148,163,184,0.14)"}`,
+                          border:`1px solid ${isDone?"rgba(16,185,129,0.28)":"var(--border-default)"}`,
                           background:isDone?"rgba(16,185,129,0.18)":"rgba(15,23,42,0.82)",
                           color:isDone?"#86efac":"#cbd5e1",
                           cursor:"pointer",
@@ -4493,7 +4493,7 @@ export default function AppMain(){
                             <button
                               key={week.wn}
                               onClick={()=>{setWIdx(idx);setView("week");}}
-                              style={{background:"rgba(11,15,28,0.9)",borderRadius:12,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",border:"1px solid rgba(148,163,184,0.1)",textAlign:"left",flexShrink:0}}
+                              style={{background:"rgba(11,15,28,0.9)",borderRadius:12,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",border:"1px solid var(--border-default)",textAlign:"left",flexShrink:0}}
                             >
                               <div style={{minWidth:0}}>
                                 <div style={{fontSize:12,fontWeight:700,color:"#fff"}}>{week.label}</div>
@@ -5116,7 +5116,7 @@ export default function AppMain(){
                               style={{
                                 alignSelf:"flex-start",
                                 background:"rgba(15,23,42,0.85)",
-                                border:"1px solid rgba(148,163,184,0.2)",
+                                border:"1px solid var(--border-default)",
                                 borderRadius:12,
                                 padding:"8px 12px",
                                 color:"#cbd5e1",
@@ -5134,7 +5134,7 @@ export default function AppMain(){
                             style={{
                               marginTop:4,
                               paddingTop:10,
-                              borderTop:"1px solid rgba(148,163,184,0.12)",
+                              borderTop:"1px solid var(--border-default)",
                               display:"flex",
                               flexDirection:"column",
                               gap:6,
@@ -5191,7 +5191,7 @@ export default function AppMain(){
                                 alignSelf:"flex-start",
                                 marginTop:4,
                                 background:"transparent",
-                                border:"1px solid rgba(148,163,184,0.25)",
+                                border:"1px solid var(--border-default)",
                                 borderRadius:10,
                                 padding:"6px 10px",
                                 color:"var(--text-secondary)",
@@ -5215,7 +5215,7 @@ export default function AppMain(){
                       style={{
                         alignSelf:"flex-start",
                         background:"rgba(15,23,42,0.85)",
-                        border:"1px solid rgba(148,163,184,0.2)",
+                        border:"1px solid var(--border-default)",
                         borderRadius:12,
                         padding:"10px 14px",
                         color:"#cbd5e1",
@@ -5344,7 +5344,7 @@ export default function AppMain(){
       ) : null}
 
       <div style={{position:"fixed",left:"calc(12px + env(safe-area-inset-left, 0px))",right:"calc(12px + env(safe-area-inset-right, 0px))",bottom:"calc(12px + env(safe-area-inset-bottom, 0px))",zIndex:90}}>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:6,background:"rgba(9,12,22,0.72)",border:"1px solid rgba(148,163,184,0.08)",borderRadius:24,padding:"10px 8px 11px",boxShadow:"0 20px 50px rgba(2,6,23,0.32)",backdropFilter:"blur(22px)"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:6,background:"rgba(9,12,22,0.72)",border:"1px solid var(--border-default)",borderRadius:24,padding:"10px 8px 11px",boxShadow:"0 20px 50px rgba(2,6,23,0.32)",backdropFilter:"blur(22px)"}}>
           {[
             { key: "home", label: homeTabLabel, icon: null },
             { key: "week", label: t("plan.week_label"), icon: "▤" },
@@ -5438,10 +5438,10 @@ export default function AppMain(){
         <PostWorkoutSummaryCard open summary={modalCompletionSummaryDisplay} onDone={closeModal} />
       ) : (
         <div onClick={closeModal} style={{position:"fixed",inset:0,background:"rgba(2,6,23,0.82)",display:"flex",alignItems:"stretch",justifyContent:"center",padding:0,zIndex:1000}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(180deg,#0c1020 0%, #090d18 100%)",width:"100%",maxWidth:720,height:"100%",overflowY:"auto",borderLeft:"1px solid rgba(148,163,184,0.12)",borderRight:"1px solid rgba(148,163,184,0.12)"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(180deg,#0c1020 0%, #090d18 100%)",width:"100%",maxWidth:720,height:"100%",overflowY:"auto",borderLeft:"1px solid var(--border-default)",borderRight:"1px solid var(--border-default)"}}>
             <div style={{padding:"calc(18px + max(0px, env(safe-area-inset-top, 0px))) 16px 140px",display:"flex",flexDirection:"column",gap:18}}>
               <div style={{display:"flex",justifyContent:"flex-end"}}>
-                <button onClick={closeModal} style={{background:"rgba(15,23,42,0.8)",border:"1px solid rgba(148,163,184,0.12)",color:"#cbd5e1",borderRadius:12,padding:"10px 12px",cursor:"pointer",fontSize:13}}>Schließen</button>
+                <button onClick={closeModal} style={{background:"rgba(15,23,42,0.8)",border:"1px solid var(--border-default)",color:"#cbd5e1",borderRadius:12,padding:"10px 12px",cursor:"pointer",fontSize:13}}>Schließen</button>
               </div>
 
               <div style={{textAlign:"center",marginTop:-10}}>
@@ -5551,7 +5551,7 @@ export default function AppMain(){
                 </div>
               ) : null}
 
-              <div style={{paddingTop:14,borderTop:"1px solid rgba(148,163,184,0.1)",display:"flex",flexDirection:"column",gap:14}}>
+              <div style={{paddingTop:14,borderTop:"1px solid var(--border-default)",display:"flex",flexDirection:"column",gap:14}}>
                 {(() => {
                   const displayPk = getDisplayPlannedDistanceKm(modal);
                   return displayPk != null && displayPk > 0 ? (
@@ -5573,7 +5573,7 @@ export default function AppMain(){
                   <label style={{display:"block",fontSize:10,fontWeight:600,color:"rgba(124,138,165,0.75)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>Gefühl</label>
                   <div style={{display:"flex",gap:8}}>
                     {[1,2,3,4,5].map(n=>(
-                      <button key={n} onClick={()=>setForm(f=>({...f,feeling:n}))} style={{flex:1,background:form.feeling>=n?"rgba(245,158,11,0.2)":"var(--bg-primary)",border:`1px solid ${form.feeling>=n?"#f59e0b":"rgba(148,163,184,0.14)"}`,borderRadius:12,padding:"10px 0",cursor:"pointer",fontSize:18}}>
+                      <button key={n} onClick={()=>setForm(f=>({...f,feeling:n}))} style={{flex:1,background:form.feeling>=n?"rgba(245,158,11,0.2)":"var(--bg-primary)",border:`1px solid ${form.feeling>=n?"#f59e0b":"var(--border-default)"}`,borderRadius:12,padding:"10px 0",cursor:"pointer",fontSize:18}}>
                         ⭐
                       </button>
                     ))}
@@ -5604,9 +5604,9 @@ export default function AppMain(){
               </div>
             </div>
 
-            <div style={{position:"sticky",bottom:0,padding:16,background:"linear-gradient(180deg,rgba(9,13,24,0) 0%, rgba(9,13,24,0.94) 18%, rgba(9,13,24,1) 100%)",borderTop:"1px solid rgba(148,163,184,0.08)"}}>
+            <div style={{position:"sticky",bottom:0,padding:16,background:"linear-gradient(180deg,rgba(9,13,24,0) 0%, rgba(9,13,24,0.94) 18%, rgba(9,13,24,1) 100%)",borderTop:"1px solid var(--border-default)"}}>
               <div style={{display:"flex",gap:10}}>
-                <button onClick={closeModal} style={{flex:1,background:"#0b1220",border:"1px solid rgba(148,163,184,0.12)",color:"var(--text-secondary)",borderRadius:14,padding:"13px",cursor:"pointer",fontSize:14,fontWeight:600}}>Abbrechen</button>
+                <button onClick={closeModal} style={{flex:1,background:"#0b1220",border:"1px solid var(--border-default)",color:"var(--text-secondary)",borderRadius:14,padding:"13px",cursor:"pointer",fontSize:14,fontWeight:600}}>Abbrechen</button>
                 <button onClick={saveModal} style={{flex:1.4,background:"linear-gradient(135deg,#10b981,#3b82f6)",border:"none",color:"#fff",borderRadius:14,padding:"13px",cursor:"pointer",fontSize:14,fontWeight:700}}>Speichern</button>
               </div>
             </div>
