@@ -212,12 +212,20 @@ function buildConvertWorkoutPatches(action: AiAssistantAction): PlanPatch[] {
   return [{ sessionId: sessionId.trim(), changes }];
 }
 
+function buildReplaceWorkoutPatches(action: AiAssistantAction): PlanPatch[] {
+  const { sessionId, newSession } = (action.payload ?? {}) as Record<string, any>;
+  if (!sessionId || typeof sessionId !== "string") return [];
+  if (!newSession || typeof newSession !== "object") return [];
+  return [{ sessionId: sessionId.trim(), changes: newSession as Partial<AiPlanSession> }];
+}
+
 function resolveActionPatches(action: AiAssistantAction, context: AiContext): PlanPatch[] {
   if (action.type === "adjust_plan_for_illness") return buildIllnessPatches(context);
   if (action.type === "replace_bike_with_run") return buildBikeReplacementPatches(context);
   if (action.type === "shift_race_date") return buildShiftRaceDatePatches(context, action.payload);
   if (action.type === "shift_plan_start_date") return buildShiftPlanStartDatePatches(context, action.payload);
   if (action.type === "convert_workout_to_run") return buildConvertWorkoutPatches(action);
+  if (action.type === "replace_workout") return buildReplaceWorkoutPatches(action);
   if (action.type === "adapt_plan_injury_no_run") {
     const weeks = Number(action.payload?.weeks ?? action.payload?.injuryWeeks ?? 2);
     return buildInjuryNoRunningPatches(context, Number.isFinite(weeks) ? weeks : 2);
