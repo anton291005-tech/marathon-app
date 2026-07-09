@@ -114,7 +114,8 @@ export function computePlanAdherenceScoreFromHistory(history: TrainingSession[])
 } {
   const plannedSessions = history.filter((s) => s.planned);
   if (plannedSessions.length === 0) {
-    return { score: 0, confidence: 0 };
+    // Nichts war fällig — kein Versagen, also kein roter Score.
+    return { score: 100, confidence: 0 };
   }
 
   const n = plannedSessions.length;
@@ -125,7 +126,7 @@ export function computePlanAdherenceScoreFromHistory(history: TrainingSession[])
       if (!s.completed) return 0;
       const pd = s.plannedDistance;
       const ad = s.actualDistance;
-      if (!pd || !ad) return 0.5;
+      if (!pd || !ad) return 1;
       return Math.min(ad / pd, 1);
     }),
   );

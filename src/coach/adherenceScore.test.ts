@@ -99,7 +99,7 @@ describe("computePlanAdherenceScore", () => {
 });
 
 describe("computePlanAdherenceScoreFromHistory", () => {
-  it("empty history → score 0", () => {
-    expect(computePlanAdherenceScoreFromHistory([])).toEqual({ score: 0, confidence: 0 });
+  it("empty history (nothing due yet) → score 100", () => {
+    expect(computePlanAdherenceScoreFromHistory([])).toEqual({ score: 100, confidence: 0 });
   });
 });
