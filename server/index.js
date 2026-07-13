@@ -10,6 +10,7 @@ const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
 const { handleAiCoach } = require("../api/_lib/coachHandlers");
+const { handleStravaAuthRequest, handleStravaCallbackRequest } = require("../api/_lib/stravaService");
 const {
   AI_RESPONSE_SCHEMA,
   ALLOWED_ACTIONS,
@@ -714,6 +715,31 @@ app.post("/api/ai", async (req, res) => {
       message: "Interner Fehler. Bitte erneut versuchen.",
       action: null,
     });
+  }
+});
+
+app.get("/api/strava/auth", async (req, res) => {
+  try {
+    const { status, body, redirectUrl } = await handleStravaAuthRequest(req);
+    if (redirectUrl) {
+      return res.redirect(status, redirectUrl);
+    }
+    return res.status(status).json(body);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[ai-server] /api/strava/auth unhandled error:", err?.message || err);
+    return res.status(500).json({ error: "Strava auth failed" });
+  }
+});
+
+app.get("/api/strava/callback", async (req, res) => {
+  try {
+    const { redirectUrl } = await handleStravaCallbackRequest(req);
+    return res.redirect(302, redirectUrl);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[ai-server] /api/strava/callback unhandled error:", err?.message || err);
+    return res.redirect(302, "myrace://strava-connected?status=error&reason=internal_error");
   }
 });
 

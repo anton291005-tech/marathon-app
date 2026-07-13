@@ -109,6 +109,13 @@ root.render(
 
 if (Capacitor.isNativePlatform()) {
   void CapApp.addListener('appUrlOpen', async (event: { url: string }) => {
+    if (event.url.startsWith('myrace://strava-connected')) {
+      const { Browser } = await import('@capacitor/browser');
+      void Browser.close();
+      const status = new URL(event.url).searchParams.get('status') || 'error';
+      window.dispatchEvent(new CustomEvent('myrace:stravaConnected', { detail: { status } }));
+      return;
+    }
     if (!event.url.startsWith('myrace://auth/confirm')) return;
     const tokens = parseAuthTokensFromUrl(event.url);
     if (!tokens?.access_token || !tokens?.refresh_token) return;
