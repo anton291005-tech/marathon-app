@@ -108,6 +108,8 @@ import { loadHealthWorkouts, saveHealthWorkout } from "./lib/supabase/services/h
 import { loadRecoveryDaily, saveRecoveryDay } from "./lib/supabase/services/recoveryDailyService";
 import { loadCoachMemory } from "./lib/supabase/services/coachMemoryService";
 import { deleteAccountViaApi } from "./lib/supabase/services/deleteAccountService";
+import { supabase } from "./lib/supabase/client";
+import { getApiBaseUrl } from "./lib/api/apiBaseUrl";
 import { clearMarathonLocalStorage } from "./persistence/clearMarathonLocalStorage";
 import { migrateLocalDataToSupabase } from "./lib/supabase/migrations/migrateLocalDataToSupabase";
 import { configureCoachMemoryRemoteSync, setCoachMemory } from "./lib/ai/memory/coachMemory";
@@ -1139,6 +1141,7 @@ export default function AppMain(){
     trainingPlans: false,
     teilen: false,
     appleHealth: false,
+    strava: false,
     raceCalc: false,
     backup: false,
   });
@@ -1436,6 +1439,9 @@ export default function AppMain(){
   const [healthAppleConnectBusy, setHealthAppleConnectBusy] = useState(false);
   const [appleHealthConnectFeedback, setAppleHealthConnectFeedback] = useState(null);
   const [appleHealthLoadFeedback, setAppleHealthLoadFeedback] = useState(null);
+  const [stravaConnected, setStravaConnected] = useState(null);
+  const [stravaConnectBusy, setStravaConnectBusy] = useState(false);
+  const [stravaFeedback, setStravaFeedback] = useState(null);
   const [isHealthConnected, setIsHealthConnected] = useState(
     () => typeof localStorage !== "undefined" && localStorage.getItem(APPLE_HEALTH_CONNECTED_KEY) === "1",
   );
@@ -1686,6 +1692,69 @@ export default function AppMain(){
       });
     } finally {
       setHealthAppleConnectBusy(false);
+    }
+  };
+
+  const checkStravaConnectionStatus = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("strava_connections")
+        .select("strava_athlete_id")
+        .maybeSingle();
+      if (error) {
+        console.error("[Strava] connection status check failed", error);
+        return;
+      }
+      setStravaConnected(Boolean(data?.strava_athlete_id));
+    } catch (err) {
+      console.error("[Strava] connection status check failed", err);
+    }
+  };
+
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== "ios") return;
+    void checkStravaConnectionStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- check once on mount for iOS
+  }, []);
+
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== "ios") return;
+    const onStravaConnected = (event) => {
+      const status = event?.detail?.status;
+      if (status === "connected") {
+        setStravaFeedback({ tone: "ok", text: "Mit Strava verbunden." });
+        void checkStravaConnectionStatus();
+      } else {
+        setStravaFeedback({ tone: "err", text: "Strava-Verbindung fehlgeschlagen. Bitte erneut versuchen." });
+      }
+      setStravaConnectBusy(false);
+    };
+    window.addEventListener("myrace:stravaConnected", onStravaConnected);
+    return () => window.removeEventListener("myrace:stravaConnected", onStravaConnected);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- listener registered once on mount
+  }, []);
+
+  const handleStravaConnect = async () => {
+    if (Capacitor.getPlatform() !== "ios") return;
+    setStravaFeedback(null);
+    setStravaConnectBusy(true);
+    try {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw new Error(sessionError.message);
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Nicht angemeldet");
+
+      const { Browser } = await import("@capacitor/browser");
+      const browserFinishedListener = await Browser.addListener("browserFinished", () => {
+        setStravaConnectBusy(false);
+        void browserFinishedListener.remove();
+      });
+      const authUrl = `${getApiBaseUrl()}/api/strava/auth?token=${encodeURIComponent(token)}`;
+      await Browser.open({ url: authUrl, presentationStyle: "popover" });
+    } catch (err) {
+      console.error("[Strava] connect failed", err);
+      setStravaFeedback({ tone: "err", text: "Strava-Verbindung konnte nicht gestartet werden." });
+      setStravaConnectBusy(false);
     }
   };
 
@@ -5230,6 +5299,62 @@ export default function AppMain(){
                 </div>
               )}
               </>
+              </div>
+            </CollapsibleSettingsCard>
+          ) : null}
+
+          {Capacitor.getPlatform() === "ios" ? (
+            <CollapsibleSettingsCard
+              title="Calendar Sync"
+              subtitle={stravaConnected ? "Mit Strava verbunden" : "Nicht verbunden"}
+              expanded={settingsCards.strava}
+              onToggle={() => toggleSettingsCard("strava")}
+            >
+              <div style={{marginTop:12}}>
+                <div
+                  style={{
+                    fontSize:13,
+                    fontWeight:700,
+                    marginBottom:8,
+                    color:stravaConnected ? "#86efac" : "var(--text-secondary)",
+                    lineHeight:1.45,
+                  }}
+                >
+                  {stravaConnected ? "Mit Strava verbunden" : "Nicht verbunden"}
+                </div>
+                {!stravaConnected ? (
+                  <button
+                    type="button"
+                    onClick={() => handleStravaConnect()}
+                    disabled={stravaConnectBusy}
+                    style={{
+                      background:"rgba(252,76,2,0.16)",
+                      border:"1px solid rgba(252,76,2,0.4)",
+                      borderRadius:12,
+                      padding:"10px 14px",
+                      color:"#fdba8c",
+                      fontSize:13,
+                      fontWeight:700,
+                      cursor:stravaConnectBusy ? "default" : "pointer",
+                      opacity:stravaConnectBusy ? 0.55 : 1,
+                    }}
+                  >
+                    {stravaConnectBusy ? "Verbinde…" : "Mit Strava verbinden"}
+                  </button>
+                ) : null}
+                {stravaFeedback ? (
+                  <div
+                    style={{
+                      fontSize:12,
+                      lineHeight:1.45,
+                      marginTop:8,
+                      color:stravaFeedback.tone === "ok" ? "#86efac" : "#fca5a5",
+                      fontWeight:650,
+                    }}
+                  >
+                    {stravaFeedback.text}
+                  </div>
+                ) : null}
               </div>
             </CollapsibleSettingsCard>
           ) : null}
