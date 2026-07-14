@@ -7,11 +7,12 @@
  * All handler functions receive a plain request body object and return
  * { status: number, body: object } — no Express or http dependencies.
  *
- * The Express dev server (server/index.js) still uses its own copy of this
- * logic for local development. Both files must be kept in sync manually.
+ * The Express dev server (server/index.js) imports handleAiCoach directly
+ * from this file, so there is only one copy of the Claude coach logic.
  */
 
 const OpenAI = require("openai");
+const Anthropic = require("@anthropic-ai/sdk");
 const { extractJson } = require("./extractJson");
 // Deliberately use a local copy so this directory is fully self-contained.
 // Do NOT change this back to "../../server/aiSchema" — that file is not always
@@ -816,6 +817,31 @@ function buildMessagesArray(input, context) {
   return messages.length ? messages : inputTrim ? [{ role: "user", content: inputTrim }] : [];
 }
 
+/**
+ * Wraps the global fetch so every HTTP attempt the SDK makes — including its
+ * internal retries on 429/5xx/connection errors — is logged. Uses
+ * process.stdout.write instead of console.log: console.log can be buffered
+ * and lost if Vercel kills the function before the log is flushed.
+ */
+function loggingFetch(url, init) {
+  return fetch(url, init).then(
+    (response) => {
+      if (!response.ok) {
+        process.stdout.write(
+          `[api/ai] Anthropic attempt failed: HTTP ${response.status}\n`
+        );
+      }
+      return response;
+    },
+    (err) => {
+      process.stdout.write(
+        `[api/ai] Anthropic attempt failed: network error (${err?.message || err})\n`
+      );
+      throw err;
+    }
+  );
+}
+
 async function callClaudeApi({ input, context, apiKey }) {
   const contextJson = buildUserPayload(input, context);
   const messages = buildMessagesArray(input, context);
@@ -827,38 +853,29 @@ async function callClaudeApi({ input, context, apiKey }) {
     lastMsg.content = `${lastMsg.content}\n\n[KONTEXT-DATEN]\n${contextJson}`;
   }
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 800,
-      system: [
-        {
-          type: "text",
-          text: buildStaticCoachSystemPrompt(),
-          cache_control: { type: "ephemeral" },
-        },
-        {
-          type: "text",
-          text: buildDynamicCoachSystemPrompt(context),
-        },
-      ],
-      messages,
-    }),
+  // maxRetries: 2 → 3 attempts total. The SDK retries 429/5xx (incl. 529
+  // Overloaded) and connection errors with exponential backoff, and throws
+  // immediately on other 4xx (400/401/403/...) — no retry, as before.
+  const anthropic = new Anthropic({ apiKey, maxRetries: 2, fetch: loggingFetch });
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 800,
+    system: [
+      {
+        type: "text",
+        text: buildStaticCoachSystemPrompt(),
+        cache_control: { type: "ephemeral" },
+      },
+      {
+        type: "text",
+        text: buildDynamicCoachSystemPrompt(context),
+      },
+    ],
+    messages,
   });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Anthropic HTTP ${response.status}: ${errText.slice(0, 300)}`);
-  }
-
-  const data = await response.json();
-  return data.content?.[0]?.text ?? "";
+  return response.content?.[0]?.text ?? "";
 }
 
 function parseClaudeCoachResponse(text, userInput, context) {
