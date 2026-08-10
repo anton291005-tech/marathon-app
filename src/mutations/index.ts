@@ -4,3 +4,4 @@ export { normalizePlanPatchesForApply } from "./normalizePlanPatches";
 export { APP_CORE_LOCALSTORAGE_EFFECT_ORDER } from "./persistenceSequencing";
 export { summarizeTrainingPlanV2PatchMutation, trainingPlanV2MutationFingerprint } from "./mutationSummary";
 export { trySwapWorkoutDatesInPlan } from "./trainingPlanSwapMutation";
+export { computeSwapWorkoutsV2Result } from "./computeSwapWorkoutsV2Result";

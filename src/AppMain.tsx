@@ -118,7 +118,7 @@ import { normalizeTrainingPlan } from "./planV2/normalizeTrainingPlan";
 import { isUserTrainingPlan } from "./planV2/isUserTrainingPlan";
 import { validateTrainingPlanV2Integrity } from "./ai/validation/validateTrainingPlanV2Integrity";
 import { applyConversionToPlan } from "./ai/validation/validateConversion";
-import { mergePlanPatchLists, trySwapWorkoutDatesInPlan } from "./mutations";
+import { mergePlanPatchLists, computeSwapWorkoutsV2Result } from "./mutations";
 import {
   MARATHON_AI_PLAN_PATCHES_KEY,
   MARATHON_APPLE_HEALTH_CONNECTED_KEY,
@@ -129,8 +129,6 @@ import {
 import { safeReadLocalStorageItem } from "./persistence/safeLocalStorage";
 import { hydrateMarathonLogsFromStorage } from "./sessionLogs/hydrateMarathonLogs";
 import { trainingPhaseColor, type TrainingPhase } from "./planV2/trainingPhase";
-import { buildSwapAthleteFacingWarnings, validateSwap } from "./ai/validation/validateSwap";
-import { buildValidationContext } from "./ai/validation/buildValidationContext";
 import {
   getStoredHealthRunCanonicalType,
   loadHealthRunsFromStorage,
@@ -2379,32 +2377,10 @@ export default function AppMain(){
   };
 
   const handleSwapWorkoutsV2 = (sourceId: string, targetId: string, _overrideAccepted?: boolean) => {
-    if (!sourceId || !targetId || sourceId === targetId) {
-      return { ok: false, message: "Ich habe nichts geändert (ungültige Auswahl)." };
-    }
-    const before = trainingPlanV2;
-    const swapped = trySwapWorkoutDatesInPlan(before, sourceId, targetId);
-    if (!swapped.ok) {
-      const msg =
-        swapped.reason === "missing_ids"
-          ? "Ich konnte die beiden Einheiten nicht sicher finden."
-          : swapped.reason === "integrity_failed"
-            ? "Ich habe den Tausch abgebrochen (Integritätsprüfung fehlgeschlagen)."
-            : "Ich habe nichts geändert (ungültige Auswahl).";
-      return { ok: false, message: msg };
-    }
-    const after = swapped.after;
-
-    const source = before.workouts.find((w) => w.id === sourceId) ?? null;
-    const target = before.workouts.find((w) => w.id === targetId) ?? null;
-    if (!source || !target) {
-      return { ok: false, message: "Ich konnte die beiden Einheiten nicht sicher finden." };
-    }
-
-    const validationContext = buildValidationContext({
-      before,
-      after,
-      targetWorkout: target,
+    const result = computeSwapWorkoutsV2Result({
+      before: trainingPlanV2,
+      sourceId,
+      targetId,
       weekPhaseMap,
       planGoal: "marathon",
       recoveryScore0_100: (recoveryDomain as any)?.homeRecoveryScore0_100 ?? null,
@@ -2413,26 +2389,15 @@ export default function AppMain(){
           Math.max(1, (recoveryDomain as any).series.slice(-7).length)
         : undefined,
     });
-    const validation = validateSwap({ source, target, before, after, weekPhaseMap, validationContext });
-
-    const axisReasons = [
-      validation.axes?.structural?.reason,
-      validation.axes?.load?.reason,
-      validation.axes?.recovery?.reason,
-      validation.axes?.micro?.reason,
-    ].filter(Boolean) as string[];
-    const athleteHints = buildSwapAthleteFacingWarnings({ before, after });
-    const mergedWarnings = [...athleteHints, ...(validation.status === "warn" ? axisReasons : [])];
-    const warningText =
-      mergedWarnings.length > 0
-        ? [...new Set(mergedWarnings)].join("\n\n")
-        : null;
-
-    setTrainingPlanV2(normalizeTrainingPlan(after));
-    if (user?.id && planRemoteReady) {
-      void saveTrainingPlan(user.id, normalizeTrainingPlan(after));
+    if (!result.ok) {
+      return { ok: false, message: result.message };
     }
-    return { ok: true, message: "Tausch übernommen.", warningText };
+
+    setTrainingPlanV2(normalizeTrainingPlan(result.after));
+    if (user?.id && planRemoteReady) {
+      void saveTrainingPlan(user.id, normalizeTrainingPlan(result.after));
+    }
+    return { ok: true, message: result.message, warningText: result.warningText };
   };
 
   const buildCurrentAiContext = useCallback(
