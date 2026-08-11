@@ -190,7 +190,12 @@ function buildVerlaufCardPresentation(
     trendValues: last7SeriesValues(domain.series),
     insightText: isInitial ? null : (domain.insight.text || null),
     insightShowWarning: domain.insight.showWarning,
-    fallback7d: null,
+    fallback7d: domain.homeRecoveryFallback7dBreakdown
+      ? {
+          sleepAvg: domain.homeRecoveryFallback7dBreakdown.sleepAvg,
+          sleepTrend: domain.homeRecoveryFallback7dBreakdown.sleepTrend,
+        }
+      : null,
   };
 }
 

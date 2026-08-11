@@ -23,6 +23,8 @@ import {
   recoverySnapshotVersionHash,
   recoveryWorkoutsVersionFingerprint,
 } from "./recoveryStorage";
+import { computeRecoveryFallback7d, type RecoveryFallback7dBreakdown } from "./recoveryFallback7d";
+import { computeLoadOnlyHomeRecoveryScore0_100 } from "./loadOnlyHomeRecoveryScore";
 
 /** Platzhalter-Hash für Bootstrap-Metadaten (nicht gegen Live-Fingerprints validieren). */
 export const RECOVERY_BOOTSTRAP_SNAPSHOT_HASH = "boot" as const;
@@ -63,6 +65,8 @@ export type RecoveryDomainState = {
   homeRecoveryBreakdown: HomeRecoveryScoreBreakdown | null;
   /** Which scoring path produced `homeRecoveryScore0_100` (debug / pipeline classification). */
   homeRecoveryScoreSource: "live" | "fallback7d" | "loadOnly" | null;
+  /** Populated only when `homeRecoveryScoreSource === "fallback7d"`; drives the Verlauf card's fallback line. */
+  homeRecoveryFallback7dBreakdown: RecoveryFallback7dBreakdown | null;
 };
 
 const EMPTY_LATENT: RecoveryLatentDomain = {
@@ -396,6 +400,7 @@ export function buildInitialRecoveryDomainState(now: Date): RecoveryDomainState 
     insight: { ...INITIAL_BOOT_INSIGHT },
     homeRecoveryBreakdown: null,
     homeRecoveryScoreSource: null,
+    homeRecoveryFallback7dBreakdown: null,
   };
 }
 
@@ -416,6 +421,56 @@ export function buildInsufficientRecoveryDomainState(now: Date): RecoveryDomainS
     insight: { ...EMPTY_INSIGHT },
     homeRecoveryBreakdown: null,
     homeRecoveryScoreSource: null,
+    homeRecoveryFallback7dBreakdown: null,
+  };
+}
+
+function tryFallbackRecoveryScore(args: GetRecoveryDomainStateArgs): RecoveryDomainState | null {
+  if (args.recoveryDailyRows.length === 0) return null;
+
+  const fb7d = computeRecoveryFallback7d({
+    todayCalendarYmd: args.todayCalendarYmd,
+    recoveryDailyRows: args.recoveryDailyRows,
+    plan: args.plan,
+    logs: args.logs,
+  });
+  if (fb7d) {
+    return buildFallbackRecoveryDomainState(args.now, fb7d.score1_100, "fallback7d", fb7d.breakdown);
+  }
+
+  const loadOnlyScore = computeLoadOnlyHomeRecoveryScore0_100({
+    todayYmd: args.todayCalendarYmd,
+    plan: args.plan,
+    logs: args.logs,
+    recoveryDailyRows: args.recoveryDailyRows,
+  });
+  return buildFallbackRecoveryDomainState(args.now, loadOnlyScore, "loadOnly", null);
+}
+
+function buildFallbackRecoveryDomainState(
+  now: Date,
+  scoreNum: number,
+  source: "fallback7d" | "loadOnly",
+  fallback7dBreakdown: RecoveryFallback7dBreakdown | null,
+): RecoveryDomainState {
+  const { windowStartYmd, windowEndYmd } = emptyDomainWindows(now);
+  const sessionRecovery = sessionRecoveryFromScore0To100(scoreNum);
+  return {
+    domainKind: "live",
+    isBootConsistentSnapshot: false,
+    homeRecoveryScore0_100: Math.round(Math.max(0, Math.min(100, scoreNum))),
+    homeRecoveryWindowStartYmd: windowStartYmd,
+    homeRecoveryWindowEndYmd: windowEndYmd,
+    isInsufficient: false,
+    sessionRecovery,
+    trainingRecoveryLabel: sessionRecovery.label,
+    latent: { ...EMPTY_LATENT },
+    series: [],
+    rollups: [],
+    insight: { ...EMPTY_INSIGHT },
+    homeRecoveryBreakdown: null,
+    homeRecoveryScoreSource: source,
+    homeRecoveryFallback7dBreakdown: fallback7dBreakdown,
   };
 }
 
@@ -438,6 +493,8 @@ export function getRecoveryDomainState(args: GetRecoveryDomainStateArgs): Recove
   getRecoverySnapshotMissingInputFields(args);
 
   if (!hasMinData) {
+    const fallback = tryFallbackRecoveryScore(args);
+    if (fallback) return fallback;
     if (typeof process !== "undefined" && process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
       console.assert(
@@ -565,5 +622,6 @@ export function getRecoveryDomainState(args: GetRecoveryDomainStateArgs): Recove
     insight,
     homeRecoveryBreakdown,
     homeRecoveryScoreSource: "live",
+    homeRecoveryFallback7dBreakdown: null,
   };
 }

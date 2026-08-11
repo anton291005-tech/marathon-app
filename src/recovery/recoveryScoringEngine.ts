@@ -510,6 +510,8 @@ export function computeDailyRecoverySeries(
         insightDataMode,
         semanticUncertaintyState,
         aiReasoningMode,
+        source: p.coverage > 0 ? "physio" : "load_only",
+        pointConfidence: overallConfidence,
       },
     });
   }
