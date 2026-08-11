@@ -136,6 +136,33 @@ export function averageHeartRateBpmInWorkoutWindow(
   return inRange.reduce((a, s) => a + s.value, 0) / inRange.length;
 }
 
+const HEALTHKIT_LAP_EVENT_TYPE = 3;
+
+function normalizeHealthRunLap(raw: unknown): HealthRunLap | null {
+  if (raw == null || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const distanceMeters = typeof r.distanceMeters === "number" ? r.distanceMeters : typeof r.distance === "number" ? r.distance : undefined;
+  const durationSeconds = typeof r.durationSeconds === "number" ? r.durationSeconds : typeof r.duration === "number" ? r.duration : undefined;
+  return { ...r, distanceMeters, durationSeconds };
+}
+
+function lapsFromWorkoutEvents(events: unknown): HealthRunLap[] | undefined {
+  if (!Array.isArray(events)) return undefined;
+  const laps: HealthRunLap[] = [];
+  for (const raw of events) {
+    if (raw == null || typeof raw !== "object") continue;
+    const e = raw as Record<string, unknown>;
+    if (e.type !== "lap" && e.type !== HEALTHKIT_LAP_EVENT_TYPE) continue;
+    const metadata = (e.metadata ?? {}) as Record<string, unknown>;
+    const durationSeconds =
+      typeof e.durationSeconds === "number" ? e.durationSeconds : typeof e.duration === "number" ? e.duration : undefined;
+    const distanceMeters =
+      typeof metadata.distanceMeters === "number" ? metadata.distanceMeters : typeof metadata.distance === "number" ? metadata.distance : undefined;
+    laps.push({ distanceMeters, durationSeconds, type: e.type as number | string, metadata });
+  }
+  return laps.length > 0 ? laps : undefined;
+}
+
 /** Aus Capacitor-Workout → gespeicherte Form inkl. runId */
 export function workoutToStored(
   workout: {
@@ -212,7 +239,14 @@ export function workoutToStored(
     ...(typeof avgHeartRateBpm === "number" && Number.isFinite(avgHeartRateBpm)
       ? { avgHeartRateBpm: Math.round(avgHeartRateBpm) }
       : {}),
-    ...(workout.laps != null ? { laps: workout.laps as HealthRunLap[] } : {}),
+    ...(() => {
+      if (Array.isArray(workout.laps)) {
+        const normalized = workout.laps.map(normalizeHealthRunLap).filter((l): l is HealthRunLap => l != null);
+        if (normalized.length > 0) return { laps: normalized };
+      }
+      const fromEvents = lapsFromWorkoutEvents(workout.workoutEvents);
+      return fromEvents ? { laps: fromEvents } : {};
+    })(),
     ...(workout.splits != null ? { splits: workout.splits } : {}),
     ...(workout.gpsStream != null ? { gpsStream: workout.gpsStream } : {}),
   };
