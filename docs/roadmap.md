@@ -65,6 +65,8 @@ Stand `CI=true npm test` (2026-08-11): alle 4 vorbestehenden Suiten (11 Einzelte
 
 Keiner der 11 Fälle war eindeutig trivial (kein veralteter Snapshot-Wert) — alle brauchten echte Diagnose vor dem Fix, wie hier dokumentiert.
 
+**Offener Nachschärfungspunkt (Test-Lücke, kein Bug):** `recoveryPipeline.integration.test.ts` Testfall "valid same-day inputs → numeric score shown consistently…" prüft `homeRecoveryScoreSource` nicht. Empirisch bestätigt: dieser Fixture-Fall (nur 1 Tag Daten) läuft über den `loadOnly`-Fallback (`source="loadOnly"`, nicht `"live"`), weil `hasMinData` bei nur 1 Tag scheitert und `computeRecoveryFallback7d` mangels ≥3 valider Tage ebenfalls `null` liefert. Test sollte um `expect(domain.homeRecoveryScoreSource).toBe("loadOnly")` ergänzt werden, damit explizit abgesichert ist, dass 1-Tag-Daten nie fälschlich als `"live"` markiert werden. Kein aktueller Fix nötig, nur Testschärfung für später.
+
 ## Cleanup-Kandidaten
 Während der Recherche zu Schritt 6/8 als unbenutzt identifiziert — noch nicht gelöscht, nur dokumentiert, damit es nicht vergessen wird:
 - `src/components/ai/SwapConfirmationCard.tsx` — nur vom eigenen Test (`AiCoachPanel.swapConfirm.test.tsx`) referenziert, kein Produktions-Import gefunden. Der echte Live-Pfad läuft über `AiActionCard.tsx`.
