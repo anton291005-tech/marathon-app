@@ -54,17 +54,16 @@ Wissenschaftliche Planqualität ist die Leitplanke. Kalender-Constraints optimie
 - **Onboarding-Bug:** Onboarding erscheint fälschlich beim Hauptaccount bei localhost-Login trotz existierendem Plan. Gleiches Supabase-Projekt (`eeiakrybuxszmzlhlooj`) bestätigt — kein Dev/Prod-Trennungsproblem, also echter Bug. Onboarding auf dem Hauptaccount NICHT abschließen, bis diagnostiziert (Gefahr: überschreibt bestehenden Trainingsplan).
 - **Strava On-Device-Test:** Backend/Registrierung fertig, OAuth-Flow auf iPhone 13 noch nicht durchgetestet (Safari-Handoff → Login → Deep Link `myrace://strava-connected` → Eintrag in `strava_connections`). Wartet auf verfügbares Lightning-Kabel — kein Blocker für Backend-Arbeit.
 
-## Bekannte Testfehler
-Stand `CI=true npm test` (2026-08-11): **4 Suiten rot, 11 Einzeltests rot** von 535 gesamt. Die Produkt-Roadmap-PDF nennt "18 vorbestehende Testfehler" — diese Zahl deckt sich weder mit 4 Suiten noch mit 11 Einzeltests. **Ungeklärte Diskrepanz, nicht aufgelöst** — evtl. PDF-Stand vor Fix-Commits, oder "18" zählt zusätzliche, aktuell übersprungene Tests mit.
+## Bekannte Testfehler (behoben)
+Stand `CI=true npm test` (2026-08-11): alle 4 vorbestehenden Suiten (11 Einzeltests) wurden diagnostiziert und gefixt, `CI=true npm test` zeigt 85/85 Suiten, 536/536 Tests grün (inkl. 1 neuer Charakterisierungstest). `CI=false npm run build` läuft durch. Die Produkt-Roadmap-PDF nannte "18 vorbestehende Testfehler" — diese Zahl deckte sich nie mit den tatsächlichen 4 Suiten/11 Tests; **Diskrepanz bleibt ungeklärt** (evtl. PDF-Stand vor Fix-Commits, oder "18" zählte zusätzliche, aktuell übersprungene Tests mit).
 
-| Suite | Failing Tests | Ursache | Aufwand | Priorität |
-|---|---|---|---|---|
-| `appleHealthWorkoutSync.test.ts` | 2 | **Bestätigter Bug im Produktionscode** (nicht nur Testerwartung): `workoutToStored` (`src/healthRuns.ts:215`) reicht `workout.laps` roh durch ohne `distance`/`duration` → `distanceMeters`/`durationSeconds` zu normalisieren; `workoutEvents`-basierte Laps werden gar nicht in `laps` übersetzt. Betrifft echte Nutzerdaten (Health-Sync), nicht nur Testlogik. | mittel | **hoch** |
-| `recoveryConfidenceLayer.test.ts` | 3 | `source`/Confidence-Felder liefern `false`/unerwartete Werte statt `physio`/`load_only` — Logikfehler in `recoveryScoringEngine.ts`, vermutlich gleiche Ursache wie unten. | mittel, braucht eigene Diagnose | normal |
-| `recoveryPipeline.integration.test.ts` | 5 | `homeRecoveryScore0_100`/`homeRecoveryScoreSource` kommen `null` statt befüllt — hohe Wahrscheinlichkeit einer gemeinsamen Root Cause mit der Confidence-Layer-Suite (beide im Recovery-Domain-Pfad). | mittel, gebündelt mit obigem diagnostizierbar | normal |
-| `aiUncertaintyLanguage.test.ts` | 1 | Erwartet Keywords "confidence/gering/vorsichtig" in Coach-Antwort; `mockBrain.ts` enthält diese Wörter nirgends (verifiziert per grep) — Antwort ist inhaltlich vorsichtig, nutzt aber nie die erwarteten Begriffe. Unklar ob Feature verloren ging oder Test zu strikt war. | klein–mittel, nicht eindeutig trivial | normal |
+| Suite | Fix | Commit |
+|---|---|---|
+| `appleHealthWorkoutSync.test.ts` (2) | `workoutToStored` (`src/healthRuns.ts`) normalisiert `distance`/`duration` → `distanceMeters`/`durationSeconds` und leitet `laps` aus `workoutEvents` (type `"lap"`/`3`) ab. War ein nie gebautes Feature, kein Regressions-Bug. | `c33287f` |
+| `recoveryConfidenceLayer.test.ts` (3) + `recoveryPipeline.integration.test.ts` (5) | Zwei unabhängige Bugs, kein gemeinsamer Root Cause: (a) `computeDailyRecoverySeries` setzte `source`/`pointConfidence` nie — `recoverySummary.ts` fiel dadurch in Produktion still immer auf `"physio"` zurück; jetzt beide Werte aus bereits berechneten `coverage`/`overallConfidence` durchgereicht. (b) `computeRecoveryFallback7d` und `computeLoadOnlyHomeRecoveryScore0_100` waren fertig gebaut, aber nie importiert — jetzt in `getRecoveryDomainState` verdrahtet (nur im `hasMinData`-Fallback-Zweig, `hasPhysioData`-Gate bleibt bewusst hart, siehe bestehenden `recoveryDomainState.test.ts`-Fall). | `d2aced6` |
+| `aiUncertaintyLanguage.test.ts` (1) | `buildRiskCoachMessage` (`mockBrain.ts`) liest jetzt `recoveryDomain.latent.uncertaintyTier` und hängt bei `"high"` einen Vorsicht-Hinweis an — Wording an `recoverySemanticLayer.ts` `certaintyLabelDe()` angelehnt. War eine Integrationslücke (Wortwahl existierte bereits im Recovery-Dashboard, war aber nie an den Chat-Coach-Pfad angebunden), kein zu strikter Test. Charakterisierungs-Gegenprobe (niedrige Unsicherheit → kein Zusatzsatz) ergänzt. | `cadfe2f` |
 
-Keiner der 11 Fälle war eindeutig trivial/risikolos (kein veralteter Snapshot-Wert o.ä.) — daher kein Fix in dieser Doku-Session, alle vier als Folgeauftrag hier dokumentiert.
+Keiner der 11 Fälle war eindeutig trivial (kein veralteter Snapshot-Wert) — alle brauchten echte Diagnose vor dem Fix, wie hier dokumentiert.
 
 ## Cleanup-Kandidaten
 Während der Recherche zu Schritt 6/8 als unbenutzt identifiziert — noch nicht gelöscht, nur dokumentiert, damit es nicht vergessen wird:
