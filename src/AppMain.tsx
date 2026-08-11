@@ -94,6 +94,13 @@ import { getAiContext } from "./lib/ai/getAiContext";
 import { AI_COACH_AVAILABLE_SCREENS } from "./lib/ai/aiCoachAvailableScreens";
 import { loadProfile, saveProfile } from "./lib/supabase/services/profilesService";
 import { loadPlanPatches, savePlanPatch } from "./lib/supabase/services/planPatchesService";
+import { loadWeeklyScheduleBlocks } from "./lib/supabase/services/weeklyScheduleBlocksService";
+import { assignSessionToBestCapacityDay } from "./ai/mutations/assignSessionToBestCapacityDay";
+import {
+  buildCalendarReassignmentCandidates,
+  buildCalendarReassignmentAction,
+} from "./ai/mutations/buildCalendarReassignmentAction";
+import AiActionCard from "./components/ai/AiActionCard";
 import { loadSessionLogs, saveSessionLog } from "./lib/supabase/services/sessionLogsService";
 import {
   deletePlan,
@@ -1076,6 +1083,8 @@ export default function AppMain(){
   const logsRef = useRef(logs);
   logsRef.current = logs;
   const [aiPlanPatches, setAiPlanPatches] = useState(() => readStoredJson(MARATHON_AI_PLAN_PATCHES_KEY, []));
+  const [scheduleBlocks, setScheduleBlocks] = useState([]);
+  const [pendingCalendarProposal, setPendingCalendarProposal] = useState(null);
   const baseWeekMetaByStartIso = useMemo(() => buildWeekMetaMapFromBasePlan(BASE_PLAN), []);
   const [hasUserTrainingPlan, setHasUserTrainingPlan] = useState(() => {
     const raw = readStoredJson(TRAINING_PLAN_V2_STORAGE_KEY, null);
@@ -1235,10 +1244,12 @@ export default function AppMain(){
       loadTrainingPlan(user.id),
       loadPlanPatches(user.id),
       loadAllTrainingPlans(user.id),
+      loadWeeklyScheduleBlocks(user.id),
     ])
-      .then(([remotePlan, remotePatches, remotePlanList]) => {
+      .then(([remotePlan, remotePatches, remotePlanList, remoteScheduleBlocks]) => {
         if (cancelled) return;
         setAllTrainingPlans(remotePlanList);
+        if (remoteScheduleBlocks != null) setScheduleBlocks(remoteScheduleBlocks);
         if (skipRemotePlanHydrationRef.current) {
           skipRemotePlanHydrationRef.current = false;
         } else if (remotePlan != null && isUserTrainingPlan(remotePlan, preferences)) {
@@ -2465,6 +2476,29 @@ export default function AppMain(){
   const missingLeadingDays = wIdx === 0 && wSessions.length > 0 && wSessions[0].day !== "Mo"
     ? WEEK_DAYS_DE.slice(0, WEEK_DAYS_DE.indexOf(wSessions[0].day))
     : [];
+
+  const handleProposeCalendarReassignment = (sessionId)=>{
+    if (!w) return;
+    const candidates = buildCalendarReassignmentCandidates(w, sessionId, scheduleBlocks);
+    const result = assignSessionToBestCapacityDay(displayPlan, sessionId, candidates);
+    const action = buildCalendarReassignmentAction(sessionId, result, displayPlan);
+    if (!action) {
+      setPendingCalendarProposal({ sessionId, action: null, patches: [] });
+      return;
+    }
+    setPendingCalendarProposal({ sessionId, action, patches: result.patches });
+  };
+
+  const handleConfirmCalendarReassignment = ()=>{
+    if (pendingCalendarProposal?.patches?.length) {
+      handleAiApplyPlanPatches(null, null, pendingCalendarProposal.patches);
+    }
+    setPendingCalendarProposal(null);
+  };
+
+  const handleCancelCalendarReassignment = ()=>{
+    setPendingCalendarProposal(null);
+  };
   const totalSess=ACTIVE_SESSIONS.length;
   const doneSessions = ACTIVE_SESSIONS.filter((session) => isSessionLogDone(logs[session.id]));
   const doneSess=doneSessions.length;
@@ -4267,6 +4301,21 @@ export default function AppMain(){
                   </div>
                 </div>
               ))}
+              {pendingCalendarProposal && (
+                pendingCalendarProposal.action ? (
+                  <AiActionCard
+                    action={pendingCalendarProposal.action}
+                    onConfirm={handleConfirmCalendarReassignment}
+                    onCancel={handleCancelCalendarReassignment}
+                    onEdit={handleCancelCalendarReassignment}
+                  />
+                ) : (
+                  <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,fontSize:13,color:"var(--text-secondary)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                    <span>Keine sinnvolle Alternative im Kalender gefunden.</span>
+                    <button onClick={handleCancelCalendarReassignment} style={{background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700}}>OK</button>
+                  </div>
+                )
+              )}
               {wSessions.map(session=>{
                 const ti=TI[session.type];
                 const weekTitleColor = session.type === "rest" ? "var(--text-secondary)" : ti?.col || "#fff";
@@ -4351,6 +4400,25 @@ export default function AppMain(){
                         aria-label={`${session.title} schnell als erledigt markieren`}
                       >
                         ✓
+                      </button>
+                    )}
+                    {hasHint && scheduleBlocks.length > 0 && (
+                      <button
+                        onClick={(e)=>{e.stopPropagation(); handleProposeCalendarReassignment(session.id);}}
+                        style={{
+                          width:34,
+                          height:34,
+                          flexShrink:0,
+                          borderRadius:12,
+                          border:"1px solid var(--border-default)",
+                          background:"rgba(15,23,42,0.82)",
+                          color:"#cbd5e1",
+                          cursor:"pointer",
+                          fontSize:15,
+                        }}
+                        aria-label={`${session.title} an Kalender anpassen`}
+                      >
+                        📅
                       </button>
                     )}
                   </div>

@@ -22,7 +22,8 @@ export type AiActionType =
   | "integrate_missed_workout"
   | "replace_training_plan_generated"
   | "update_user_preferences"
-  | "swap_training_days";
+  | "swap_training_days"
+  | "reassign_session_to_calendar";
 
 export type SessionType =
   | "rest"
