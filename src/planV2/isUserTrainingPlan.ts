@@ -18,10 +18,11 @@ export function isEmbeddedLegacyTrainingPlan(plan: TrainingPlanV2 | null | undef
 export function isUserTrainingPlan(
   plan: unknown,
   prefs?: PersistedMarathonPreferences | null,
+  opts?: { trustedSource?: boolean },
 ): boolean {
   if (!plan || !validateTrainingPlanV2Integrity(plan as TrainingPlanV2)) return false;
   const typed = plan as TrainingPlanV2;
-  if (isEmbeddedLegacyTrainingPlan(typed)) return false;
+  if (opts?.trustedSource !== true && isEmbeddedLegacyTrainingPlan(typed)) return false;
   if (prefs?.onboardingComplete === true) return true;
   return typed.workouts.some((w) => String(w.id).startsWith("coach-gen-"));
 }

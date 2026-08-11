@@ -1268,7 +1268,7 @@ export default function AppMain(){
         const remotePlan = planResult.status === "fulfilled" ? planResult.value : null;
         if (skipRemotePlanHydrationRef.current) {
           skipRemotePlanHydrationRef.current = false;
-        } else if (remotePlan != null && isUserTrainingPlan(remotePlan, preferences)) {
+        } else if (remotePlan != null && isUserTrainingPlan(remotePlan, preferences, { trustedSource: true })) {
           setHasUserTrainingPlan(true);
           setTrainingPlanV2(remotePlan);
         }
@@ -1424,7 +1424,7 @@ export default function AppMain(){
           }
           if (skipRemotePlanHydrationRef.current) {
             skipRemotePlanHydrationRef.current = false;
-          } else if (remotePlan != null && isUserTrainingPlan(remotePlan, preferences)) {
+          } else if (remotePlan != null && isUserTrainingPlan(remotePlan, preferences, { trustedSource: true })) {
             setHasUserTrainingPlan(true);
             setTrainingPlanV2(remotePlan);
           }
@@ -2894,7 +2894,9 @@ export default function AppMain(){
         const remotePlan = await loadTrainingPlan(user.id);
         if (remotePlan != null && validateTrainingPlanV2Integrity(remotePlan)) {
           setTrainingPlanV2(remotePlan);
-          setHasUserTrainingPlan(isUserTrainingPlan(remotePlan, preferencesRef.current));
+          setHasUserTrainingPlan(
+            isUserTrainingPlan(remotePlan, preferencesRef.current, { trustedSource: true }),
+          );
         }
         await refreshAllTrainingPlans();
       } catch (e) {
@@ -2919,7 +2921,9 @@ export default function AppMain(){
           const remotePlan = await loadTrainingPlan(user.id);
           if (remotePlan != null && validateTrainingPlanV2Integrity(remotePlan)) {
             setTrainingPlanV2(remotePlan);
-            setHasUserTrainingPlan(isUserTrainingPlan(remotePlan, preferencesRef.current));
+            setHasUserTrainingPlan(
+              isUserTrainingPlan(remotePlan, preferencesRef.current, { trustedSource: true }),
+            );
           }
         }
         await refreshAllTrainingPlans();

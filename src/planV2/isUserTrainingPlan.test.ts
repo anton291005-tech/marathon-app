@@ -67,4 +67,22 @@ describe("isUserTrainingPlan", () => {
     });
     expect(isUserTrainingPlan(plan, {})).toBe(true);
   });
+
+  it("accepts w##-xx-style ids from a trusted source with onboarding prefs", () => {
+    const plan = rebuildPlanFromWorkouts({
+      workouts: [
+        {
+          id: "w25-so",
+          dateIso: "2026-09-27T10:00:00.000Z",
+          sport: "run",
+          sessionType: "race",
+          title: "Marathon",
+          km: 42.2,
+        },
+      ],
+    });
+    expect(
+      isUserTrainingPlan(plan, { onboardingComplete: true }, { trustedSource: true }),
+    ).toBe(true);
+  });
 });
