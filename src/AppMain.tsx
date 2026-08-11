@@ -1240,22 +1240,39 @@ export default function AppMain(){
     if (!user?.id) return;
     let cancelled = false;
     setPlanRemoteReady(false);
-    void Promise.all([
+    void Promise.allSettled([
       loadTrainingPlan(user.id),
       loadPlanPatches(user.id),
       loadAllTrainingPlans(user.id),
       loadWeeklyScheduleBlocks(user.id),
     ])
-      .then(([remotePlan, remotePatches, remotePlanList, remoteScheduleBlocks]) => {
+      .then(([planResult, patchesResult, planListResult, scheduleBlocksResult]) => {
         if (cancelled) return;
-        setAllTrainingPlans(remotePlanList);
-        if (remoteScheduleBlocks != null) setScheduleBlocks(remoteScheduleBlocks);
+        for (const [label, result] of [
+          ["loadTrainingPlan", planResult],
+          ["loadPlanPatches", patchesResult],
+          ["loadAllTrainingPlans", planListResult],
+          ["loadWeeklyScheduleBlocks", scheduleBlocksResult],
+        ] as const) {
+          if (result.status === "rejected") {
+            // eslint-disable-next-line no-console
+            console.error(`[planRemoteLoad] ${label} rejected:`, result.reason);
+          }
+        }
+        if (planListResult.status === "fulfilled") {
+          setAllTrainingPlans(planListResult.value);
+        }
+        if (scheduleBlocksResult.status === "fulfilled" && scheduleBlocksResult.value != null) {
+          setScheduleBlocks(scheduleBlocksResult.value);
+        }
+        const remotePlan = planResult.status === "fulfilled" ? planResult.value : null;
         if (skipRemotePlanHydrationRef.current) {
           skipRemotePlanHydrationRef.current = false;
         } else if (remotePlan != null && isUserTrainingPlan(remotePlan, preferences)) {
           setHasUserTrainingPlan(true);
           setTrainingPlanV2(remotePlan);
         }
+        const remotePatches = patchesResult.status === "fulfilled" ? patchesResult.value : null;
         if (skipRemotePatchesHydrationRef.current) {
           skipRemotePatchesHydrationRef.current = false;
         } else if (remotePatches != null) {
