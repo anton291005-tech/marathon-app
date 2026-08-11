@@ -21,8 +21,9 @@ export function isUserTrainingPlan(
   opts?: { trustedSource?: boolean },
 ): boolean {
   if (!plan || !validateTrainingPlanV2Integrity(plan as TrainingPlanV2)) return false;
+  if (opts?.trustedSource === true) return true;
   const typed = plan as TrainingPlanV2;
-  if (opts?.trustedSource !== true && isEmbeddedLegacyTrainingPlan(typed)) return false;
+  if (isEmbeddedLegacyTrainingPlan(typed)) return false;
   if (prefs?.onboardingComplete === true) return true;
   return typed.workouts.some((w) => String(w.id).startsWith("coach-gen-"));
 }

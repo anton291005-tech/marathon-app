@@ -68,7 +68,7 @@ describe("isUserTrainingPlan", () => {
     expect(isUserTrainingPlan(plan, {})).toBe(true);
   });
 
-  it("accepts w##-xx-style ids from a trusted source with onboarding prefs", () => {
+  it("accepts w##-xx-style ids from a trusted source, even without onboarding prefs", () => {
     const plan = rebuildPlanFromWorkouts({
       workouts: [
         {
@@ -81,8 +81,12 @@ describe("isUserTrainingPlan", () => {
         },
       ],
     });
-    expect(
-      isUserTrainingPlan(plan, { onboardingComplete: true }, { trustedSource: true }),
-    ).toBe(true);
+    expect(isUserTrainingPlan(plan, {}, { trustedSource: true })).toBe(true);
+    expect(isUserTrainingPlan(plan, null, { trustedSource: true })).toBe(true);
+  });
+
+  it("still rejects a trusted-source plan that fails integrity", () => {
+    expect(isUserTrainingPlan(null, {}, { trustedSource: true })).toBe(false);
+    expect(isUserTrainingPlan({}, {}, { trustedSource: true })).toBe(false);
   });
 });
