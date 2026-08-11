@@ -31,12 +31,45 @@
 ### 5. Load-Tag-Presets-Library + self-calibrating Load-Scoring
 Regelbasiert, transparent, kalibriert sich über Post-Workout-Feedback selbst nach.
 
+### 6. Vorher/Nachher-Diff-Screen
+**Ziel:** Nach Kalender-Connect (Wow-Moment) im "Woche"-Screen zeigen, wie sich die Trainingswoche durch die Capacity-Engine verändert hat.
+**Datei-Anker:** Live-Wochenansicht ist inline in `src/AppMain.tsx` (`activeView==="week"`, ab Zeile ~4160) — es gibt noch keine separate Woche-Komponente und keine Vorher/Nachher-Darstellung.
+**Akzeptanzkriterium (Vorschlag, noch nicht final freigegeben):** Diff wird im Woche-Screen sichtbar (nicht nur im Chat), zeigt pro verschobener Session alten vs. neuen Tag, verletzt keine bestehende Wochenansicht-Struktur.
+
+### 7. Post-Workout-Feedback-Loop zur Belastungsfaktor-Kalibrierung
+**Ziel:** Regelbasierte Load-Scoring-Faktoren kalibrieren sich selbst über Post-Workout-Feedback nach (Bezug zu Schritt 5, das bereits "self-calibrating Load-Scoring" nennt — Schritt 7 ist die Feedback-Seite davon).
+**Akzeptanzkriterium:** noch zu präzisieren (Platzhalter — aus Produkt-Roadmap-PDF nachzutragen).
+
+### 8. Erklärbarkeits-UI ("Warum wurde das geändert?")
+**Ziel:** Sichtbar machen, warum die Engine eine Session auf einen Tag gelegt hat (Ranking: Micro-Structure-Severity vor Capacity-Score vor Datum), inkl. Warnung bei unvermeidbarem Konflikt.
+**Datei-Anker:**
+- `assignSessionToBestCapacityDay.ts:21-29` liefert bereits `microStructureSeverity`, `warning`, `chosenTargetSessionId` — Basis für die Erklärbarkeits-UI vorhanden, aber **keine Runner-up-Kandidaten/-Scores** (nur der gewählte Tag) — für eine echte Ranking-Erklärung müsste der Rückgabetyp erweitert werden.
+- Einziges bestehendes "Warum"-UI-Pattern (`DetailBlock title="Warum diese Einheit?"`) existiert nur in der toten `App.tsx:2553` (Legacy, nicht im Live-Pfad `AppMain.tsx`) — kein wiederverwendbares Live-Pattern.
+- Die Chat-Bestätigungskarte im Live-Pfad ist `AiActionCard.tsx` (nicht `SwapConfirmationCard.tsx`, welches unbenutzter toter Code ist) — generisch, rendert nur Freitext-`items`, kein strukturiertes Alt/Neu- oder Warnungs-Feld. Andockmöglichkeit vorhanden, aber Erweiterung nötig.
+
 ## Harte Regel (nicht verhandelbar)
 Wissenschaftliche Planqualität ist die Leitplanke. Kalender-Constraints optimieren nur INNERHALB der Trainingsplan-Regeln — sie dürfen diese niemals überschreiben. Bei Konflikt gewinnt immer die Trainingsplan-Regel, nicht der Kalender.
 
 ## Bekannte Blocker
 - **Onboarding-Bug:** Onboarding erscheint fälschlich beim Hauptaccount bei localhost-Login trotz existierendem Plan. Gleiches Supabase-Projekt (`eeiakrybuxszmzlhlooj`) bestätigt — kein Dev/Prod-Trennungsproblem, also echter Bug. Onboarding auf dem Hauptaccount NICHT abschließen, bis diagnostiziert (Gefahr: überschreibt bestehenden Trainingsplan).
 - **Strava On-Device-Test:** Backend/Registrierung fertig, OAuth-Flow auf iPhone 13 noch nicht durchgetestet (Safari-Handoff → Login → Deep Link `myrace://strava-connected` → Eintrag in `strava_connections`). Wartet auf verfügbares Lightning-Kabel — kein Blocker für Backend-Arbeit.
+
+## Bekannte Testfehler
+Stand `CI=true npm test` (2026-08-11): **4 Suiten rot, 11 Einzeltests rot** von 535 gesamt. Die Produkt-Roadmap-PDF nennt "18 vorbestehende Testfehler" — diese Zahl deckt sich weder mit 4 Suiten noch mit 11 Einzeltests. **Ungeklärte Diskrepanz, nicht aufgelöst** — evtl. PDF-Stand vor Fix-Commits, oder "18" zählt zusätzliche, aktuell übersprungene Tests mit.
+
+| Suite | Failing Tests | Ursache | Aufwand | Priorität |
+|---|---|---|---|---|
+| `appleHealthWorkoutSync.test.ts` | 2 | **Bestätigter Bug im Produktionscode** (nicht nur Testerwartung): `workoutToStored` (`src/healthRuns.ts:215`) reicht `workout.laps` roh durch ohne `distance`/`duration` → `distanceMeters`/`durationSeconds` zu normalisieren; `workoutEvents`-basierte Laps werden gar nicht in `laps` übersetzt. Betrifft echte Nutzerdaten (Health-Sync), nicht nur Testlogik. | mittel | **hoch** |
+| `recoveryConfidenceLayer.test.ts` | 3 | `source`/Confidence-Felder liefern `false`/unerwartete Werte statt `physio`/`load_only` — Logikfehler in `recoveryScoringEngine.ts`, vermutlich gleiche Ursache wie unten. | mittel, braucht eigene Diagnose | normal |
+| `recoveryPipeline.integration.test.ts` | 5 | `homeRecoveryScore0_100`/`homeRecoveryScoreSource` kommen `null` statt befüllt — hohe Wahrscheinlichkeit einer gemeinsamen Root Cause mit der Confidence-Layer-Suite (beide im Recovery-Domain-Pfad). | mittel, gebündelt mit obigem diagnostizierbar | normal |
+| `aiUncertaintyLanguage.test.ts` | 1 | Erwartet Keywords "confidence/gering/vorsichtig" in Coach-Antwort; `mockBrain.ts` enthält diese Wörter nirgends (verifiziert per grep) — Antwort ist inhaltlich vorsichtig, nutzt aber nie die erwarteten Begriffe. Unklar ob Feature verloren ging oder Test zu strikt war. | klein–mittel, nicht eindeutig trivial | normal |
+
+Keiner der 11 Fälle war eindeutig trivial/risikolos (kein veralteter Snapshot-Wert o.ä.) — daher kein Fix in dieser Doku-Session, alle vier als Folgeauftrag hier dokumentiert.
+
+## Cleanup-Kandidaten
+Während der Recherche zu Schritt 6/8 als unbenutzt identifiziert — noch nicht gelöscht, nur dokumentiert, damit es nicht vergessen wird:
+- `src/components/ai/SwapConfirmationCard.tsx` — nur vom eigenen Test (`AiCoachPanel.swapConfirm.test.tsx`) referenziert, kein Produktions-Import gefunden. Der echte Live-Pfad läuft über `AiActionCard.tsx`.
+- `App.tsx:2553` (`DetailBlock title="Warum diese Einheit?"`) — Legacy-Datei, nicht im Live-Pfad (`AppMain.tsx`); einziges bestehendes "Warum"-UI-Pattern, aber tot. Relevant für Schritt 8, falls das Pattern reaktiviert statt neu gebaut werden soll.
 
 ## Out of Scope bis TestFlight
 UI/UX-Redesign, Triathlon-Erweiterung, Android, Apple-Watch-Companion — nicht anfassen, auch nicht "nebenbei".
