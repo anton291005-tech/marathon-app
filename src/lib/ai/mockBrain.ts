@@ -216,7 +216,17 @@ function detectRiskSignals(text: string, context: AiContext) {
   };
 }
 
-function buildRiskCoachMessage(text: string, risk: ReturnType<typeof detectRiskSignals>): string {
+/** Zusatzsatz nur bei hoher Erholungs-Unsicherheit — Wording an recoverySemanticLayer.ts certaintyLabelDe() angelehnt. */
+function uncertaintyHintDe(uncertaintyTier: "low" | "medium" | "high" | undefined): string {
+  if (uncertaintyTier !== "high") return "";
+  return " Deine Erholungsdaten sind aktuell mit geringer Konfidenz eingeschaetzt, daher bewusst vorsichtig formuliert.";
+}
+
+function buildRiskCoachMessage(
+  text: string,
+  risk: ReturnType<typeof detectRiskSignals>,
+  recoveryUncertaintyTier?: "low" | "medium" | "high",
+): string {
   const variant = stableVariantIndex(text, 3);
   if (risk.injury) {
     const openers = [
@@ -233,7 +243,7 @@ function buildRiskCoachMessage(text: string, risk: ReturnType<typeof detectRiskS
       "Das ist ein Ego-Tag, kein Performance-Tag.",
     ];
     const loadHint = risk.avgFeeling !== null ? `Aktuell liegt dein Belastungssignal bei ca. ${risk.avgFeeling.toFixed(1)}/5. ` : "";
-    return `${openers[variant]} ${loadHint}Heute nur locker oder komplett frei, keine Intervalle. Schiebe Qualitaet auf ${risk.nextKeySession}.`;
+    return `${openers[variant]} ${loadHint}Heute nur locker oder komplett frei, keine Intervalle. Schiebe Qualitaet auf ${risk.nextKeySession}.${uncertaintyHintDe(recoveryUncertaintyTier)}`;
   }
   const ask = text.includes("ich bin krank") ? "Seit wann bist du krank und hast du Fieber oder Brustsymptome? " : "";
   return `Krankheit hat Trainingsvorrang. ${ask}Heute 2-4 Tage Pause vom Laufen, nur Spaziergang oder Mobility wenn fieberfrei. Danach 20-30 Min lockerer Testlauf und Reaktion 24h beobachten.`;
@@ -292,7 +302,7 @@ export function buildMockAiResponse(userInput: string, context: AiContext): AiAs
     };
     return {
       mode: "coach",
-      message: buildRiskCoachMessage(text, risk),
+      message: buildRiskCoachMessage(text, risk, context.recoveryDomain?.latent.uncertaintyTier),
       action,
     };
   }

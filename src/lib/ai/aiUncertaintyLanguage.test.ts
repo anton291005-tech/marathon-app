@@ -40,5 +40,28 @@ describe("AI uncertainty language (recovery confidence)", () => {
     const res = buildMockAiResponse("ich will heute intervalle laufen obwohl ich muede bin", ctxWithDomain(domain));
     expect(res.message.toLowerCase()).toMatch(/confidence|gering|vorsichtig/);
   });
+
+  it("high-confidence recovery does NOT add cautious-uncertainty wording to fatigue advice", () => {
+    const domain = {
+      domainKind: "live",
+      isBootConsistentSnapshot: true,
+      homeRecoveryScore0_100: 45,
+      homeRecoveryScoreSource: "live",
+      fallback7dBreakdown: null,
+      homeRecoveryWindowStartYmd: "2026-04-06",
+      homeRecoveryWindowEndYmd: "2026-04-06",
+      isInsufficient: false,
+      sessionRecovery: { label: "Niedrig", tone: "#f87171" },
+      trainingRecoveryLabel: "Niedrig",
+      latent: { R_t: 45, confidence: 0.9, trend7d: "stable", uncertaintyTier: "low", rVariance7d: 1 },
+      series: [],
+      rollups: [],
+      insight: { text: "", showWarning: false, dataMode: "full", recoveryConfidence: 0.9, semanticUncertaintyState: "lowUncertainty", aiReasoningMode: null },
+      homeRecoveryBreakdown: null,
+    } as unknown as RecoveryDomainState;
+
+    const res = buildMockAiResponse("ich will heute intervalle laufen obwohl ich muede bin", ctxWithDomain(domain));
+    expect(res.message.toLowerCase()).not.toMatch(/confidence|gering|vorsichtig/);
+  });
 });
 
