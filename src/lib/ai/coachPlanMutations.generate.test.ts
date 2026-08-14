@@ -1,4 +1,4 @@
-import { generateMarathonPlanV2ToRace, type AiPlanRules } from "./coachPlanMutations";
+import { generateMarathonPlanV2ToRace, type AiPlanRules, type PlanPhaseSpec } from "./coachPlanMutations";
 
 function findRaceWorkout(plan: ReturnType<typeof generateMarathonPlanV2ToRace>) {
   return plan.workouts.find((w) => w.sessionType === "race");
@@ -361,5 +361,33 @@ describe("generateMarathonPlanV2ToRace distance/volume/rest", () => {
     for (const w of nonRecovery) {
       expect(w.meta?.label ?? "").not.toContain("⬇️");
     }
+  });
+
+  test("no near-zero km running sessions for finish-goal + low weekly-km + Claude taper phase (regression: 0.8km interval bug)", () => {
+    // Combined scale factors (goal=finish → 0.8x, "0–20 km" bucket → 0.3x weeklyKmScale,
+    // and the taper phase's volume multiplier bottoming out at 0.3x in its last week)
+    // used to multiply down to ~0.07x, which rounding could still leave >0 but meaningless
+    // (e.g. an "Intervall" session at 0.8km). Only "easy" sessions were floored before the fix.
+    const claudePhases: PlanPhaseSpec[] = [
+      { name: "base", weeks: 4, label: "Basis", focus: "x" },
+      { name: "build", weeks: 4, label: "Aufbau", focus: "x" },
+      { name: "peak", weeks: 2, label: "Peak", focus: "x" },
+      { name: "taper", weeks: 2, label: "Taper", focus: "x" },
+    ];
+    const plan = generateMarathonPlanV2ToRace(
+      new Date(2026, 0, 5, 12, 0, 0),
+      new Date(2026, 3, 5, 12, 0, 0),
+      "finish",
+      10,
+      "0–20 km",
+      undefined,
+      undefined,
+      claudePhases,
+    );
+
+    const nearZero = plan.workouts.filter(
+      (w) => w.sessionType !== "rest" && w.sessionType !== "race" && w.km > 0 && w.km < 2,
+    );
+    expect(nearZero).toEqual([]);
   });
 });

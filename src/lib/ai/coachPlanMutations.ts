@@ -967,7 +967,13 @@ function workoutForTrainingDay(
   );
   const desc = `Coach-Plan (${dur} Tage bis Rennen).${descSuffix}`;
 
-  if (sessionType === "easy" && km > 0) {
+  // Guardrail against near-zero km sessions: combined scale factors (goal, weekly-km
+  // bucket, phase/taper volume multiplier) can multiply down to a fraction where
+  // rounding still leaves km > 0 but the session is meaningless (e.g. a 0.8km
+  // "Intervall"). Applies to every running session type, not just "easy" — a stray
+  // 0.8km tempo/interval/long is just as nonsensical as a 0.8km easy run.
+  const RUNNING_SESSION_TYPES = new Set(["easy", "interval", "tempo", "long"]);
+  if (RUNNING_SESSION_TYPES.has(sessionType) && km > 0) {
     const minMeaningfulKm = raceConfig.raceKm <= 10 ? 5 : 6;
     if (km < minMeaningfulKm) {
       return restWorkoutForDay(ymd, iso, "Aktive Erholung.");
