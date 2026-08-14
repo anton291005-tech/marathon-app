@@ -11,6 +11,7 @@ const {
   getWeekTotalKmFromPlan,
   defaultStructureForWeeks,
   formatDeDate,
+  isoDateOf,
 } = require("./deterministicPlanGenerator");
 const {
   normalizeWorkouts,
@@ -21,6 +22,7 @@ const {
   groupWorkoutsByWeekStart,
   sumWeekKm,
   applyLongRunCapPerWeek,
+  clampPostRaceSessionsToRest,
 } = require("./planWorkoutUtils");
 const { getRecommendedVolume } = require("./raceVolumeReference");
 const { computeWeeklyVolumeTargets } = require("./weeklyVolumeProgression");
@@ -278,6 +280,7 @@ async function generateFullPlanByPhases(client, profile) {
   if (!startDay || !raceDay) {
     throw new Error("Invalid planStartDate or raceDate");
   }
+  const raceDayIso = isoDateOf(raceDay);
 
   process.stdout.write(`[phased-plan] fetching structure ${JSON.stringify({})}\n`);
   process.stdout.write(`[phased-plan] PHASE STRUCTURE START ${new Date().toISOString()}\n`);
@@ -426,10 +429,11 @@ async function generateFullPlanByPhases(client, profile) {
         }
         // Ultra distances are exempt: raceVolumeReference.js's peakLongRunKm for ultra
         // assumes a much higher long-run share of weekly volume than the 30%/33% rule.
-        const chunkWorkouts =
+        const longRunCappedWorkouts =
           volumeRef.distKey === "ultra"
             ? rawChunkWorkouts
             : applyLongRunCapPerWeek(rawChunkWorkouts, getPhaseForWeekStart);
+        const chunkWorkouts = clampPostRaceSessionsToRest(longRunCappedWorkouts, raceDayIso);
         phaseWorkouts.push(...chunkWorkouts);
 
         const chunkWeeks = groupWorkoutsByWeekStart(chunkWorkouts);

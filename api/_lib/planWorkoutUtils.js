@@ -332,6 +332,44 @@ function applyLongRunCapPerWeek(workouts, getPhaseForWeekStart) {
   return result;
 }
 
+// Session types the AI-generated plan must never place after race day — matches the
+// HIGH_INTENSITY_SESSION_TYPES set used for capacity scoring (src/scheduling/capacityScore.ts).
+// The phase prompt (buildPhaseSystemPrompt) tells Claude to fill every weekday of race week
+// and mark only the exact race date "race", but gives no instruction for days after it, so a
+// non-Sunday race date can otherwise leave hard/structured sessions un-downgraded in the tail
+// of that week. Clamp them the same way applyLongRunCapPerWeek() clamps long-run volume: as a
+// deterministic guarantee, not a prompt request.
+const POST_RACE_DISALLOWED_SESSION_TYPES = new Set(["interval", "tempo", "race", "long"]);
+
+/**
+ * Forces any interval/tempo/race/long session dated after `raceDateIso` down to a rest day.
+ * Sessions on or before race day, and already-easy/rest/bike/strength sessions after it, are
+ * left untouched.
+ *
+ * @param {Array} workouts
+ * @param {string|null} raceDateIso - "YYYY-MM-DD"
+ * @returns {Array}
+ */
+function clampPostRaceSessionsToRest(workouts, raceDateIso) {
+  if (!raceDateIso) return workouts;
+  return workouts.map((w) => {
+    const workoutDateIso = String(w.dateIso ?? "").slice(0, 10);
+    if (!workoutDateIso || workoutDateIso <= raceDateIso) return w;
+    if (!POST_RACE_DISALLOWED_SESSION_TYPES.has(w.sessionType)) return w;
+    return {
+      ...w,
+      sport: "rest",
+      sessionType: "rest",
+      title: "Ruhetag",
+      km: 0,
+      desc: "Erholung nach dem Rennen.",
+      pace: null,
+      structured: null,
+      intensity: "low",
+    };
+  });
+}
+
 module.exports = {
   normalizeWorkouts,
   rebuildPlanFromWorkouts,
@@ -343,6 +381,7 @@ module.exports = {
   startOfIsoWeekMonday,
   clampLongRunToWeekPercent,
   applyLongRunCapPerWeek,
+  clampPostRaceSessionsToRest,
   LONG_RUN_CAP_STANDARD,
   LONG_RUN_CAP_HIGH_VOLUME,
   HIGH_VOLUME_WEEKLY_KM_THRESHOLD,
