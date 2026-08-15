@@ -495,6 +495,19 @@ function fallbackStructuredResponse(
   return normalizeAiResponseForFrontend({ message }, { userInput, context });
 }
 
+/**
+ * Pure technical-failure response (Claude call threw — timeout, rate limit,
+ * network error). Deliberately bypasses detectRiskProfile/normalizeAiResponseForFrontend:
+ * that heuristic is a safety net for real coach replies, not a source of truth
+ * on its own, and running it here would turn an API outage into a fabricated
+ * adjust_plan_for_illness action driven only by the day's recovery score.
+ */
+function technicalFailureResponse(
+  message = "Ich konnte gerade nicht antworten, versuch's nochmal."
+) {
+  return { mode: "coach", message, action: null, degraded: true };
+}
+
 function parseModelJson(response) {
   if (
     response &&
@@ -1115,12 +1128,7 @@ async function handleAiCoach(rawBody) {
     console.error("[api/ai] Claude error", { // eslint-disable-line no-console
       message: typeof error?.message === "string" ? error.message : "unknown",
     });
-    const fallback = fallbackStructuredResponse(
-      "Ich konnte die Antwort nicht sauber strukturieren.",
-      bareUser,
-      context
-    );
-    return { status: 200, body: fallback };
+    return { status: 200, body: technicalFailureResponse() };
   }
 }
 
