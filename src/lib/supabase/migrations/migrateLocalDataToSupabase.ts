@@ -30,6 +30,13 @@ import { loadSessionLogs, upsertSessionLogWithResult } from "../services/session
 import { loadTrainingPlan, saveTrainingPlan } from "../services/trainingPlanService";
 
 export const MIGRATION_TO_SUPABASE_DONE_KEY = "migration_to_supabase_done_v1";
+/**
+ * Separate from `MIGRATION_TO_SUPABASE_DONE_KEY`: session-log upsert failures (e.g. a persistently
+ * failing row) must not block the "core" flag above forever, since that would force profile/plan/
+ * patches/health/recovery/coachMemory to be re-fetched and re-compared on every page load too —
+ * see `migrateSessionLogsOnly` below, which retries session logs alone once core is done.
+ */
+export const SESSION_LOGS_MIGRATION_DONE_KEY = "migration_session_logs_done_v1";
 /** First Supabase row revision for a user — not `TrainingPlanV2.version` (schema version 2). */
 export const INITIAL_TRAINING_PLAN_REVISION = 1;
 const COACH_MEMORY_STORAGE_KEY = "marathon.coachMemory.v1";
@@ -238,9 +245,44 @@ async function migrateSessionLogsToSupabase(
 }
 
 /**
+ * Retries only the session-log sync (used once the core migration below is already done but
+ * session logs still have pending/failed rows) — does NOT touch profile/plan/patches/health/
+ * recovery/coachMemory, so it never re-issues a `recovery_daily` read for an already-migrated
+ * account just because session logs are still catching up.
+ */
+async function migrateSessionLogsOnly(userId: string): Promise<boolean> {
+  // eslint-disable-next-line no-console
+  console.log("[migration] session_logs-only retry start", { userId });
+  try {
+    const remoteLogs = await loadSessionLogs(userId);
+    const localLogs = readLocalSessionLogs();
+    const { uploadedAny, sessionLogsOk } = await migrateSessionLogsToSupabase(userId, localLogs, remoteLogs);
+
+    if (sessionLogsOk) {
+      localStorage.setItem(SESSION_LOGS_MIGRATION_DONE_KEY, "1");
+      // eslint-disable-next-line no-console
+      console.log("[migration] migration_session_logs_done_v1 set");
+    }
+
+    return uploadedAny && sessionLogsOk;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[migrateLocalDataToSupabase] session_logs-only retry failed", err);
+    return false;
+  }
+}
+
+/**
  * One-time upload of pre-auth localStorage data into Supabase for a signed-in user.
  * Session logs: merge — upload local rows whose sessionId is not yet in remote.
- * Sets `MIGRATION_TO_SUPABASE_DONE_KEY` only when uploads succeeded without session_logs errors.
+ *
+ * Two independent done-flags, not one: `MIGRATION_TO_SUPABASE_DONE_KEY` covers profile/plan/
+ * patches/health/recovery/coachMemory and is set once this pass has run, regardless of
+ * session-log outcome (those other zones already only log their own upload errors, never gate
+ * on them). `SESSION_LOGS_MIGRATION_DONE_KEY` covers session logs specifically and is set only
+ * when `sessionLogsOk`. This way a persistently failing session-log row keeps retrying (via
+ * `migrateSessionLogsOnly`) without forcing every other already-migrated data type — including
+ * `recovery_daily` — to be re-fetched and re-compared on every page load.
  */
 export async function migrateLocalDataToSupabase(userId: string): Promise<boolean> {
   if (!userId || typeof localStorage === "undefined") {
@@ -248,10 +290,18 @@ export async function migrateLocalDataToSupabase(userId: string): Promise<boolea
     console.log("[migration] abort early: missing userId or localStorage");
     return false;
   }
-  if (localStorage.getItem(MIGRATION_TO_SUPABASE_DONE_KEY) === "1") {
+
+  const coreDone = localStorage.getItem(MIGRATION_TO_SUPABASE_DONE_KEY) === "1";
+  const sessionLogsDone = localStorage.getItem(SESSION_LOGS_MIGRATION_DONE_KEY) === "1";
+
+  if (coreDone && sessionLogsDone) {
     // eslint-disable-next-line no-console
-    console.log("[migration] abort early: migration_to_supabase_done_v1 already set");
+    console.log("[migration] abort early: core + session_logs already done");
     return false;
+  }
+
+  if (coreDone && !sessionLogsDone) {
+    return migrateSessionLogsOnly(userId);
   }
 
   // eslint-disable-next-line no-console
@@ -348,24 +398,29 @@ export async function migrateLocalDataToSupabase(userId: string): Promise<boolea
     }
 
     const localLogsPending = Object.keys(readLocalSessionLogs()).length;
-    const maySetDoneFlag = !uploadedAny || (uploadedAny && sessionLogsOk);
 
     // eslint-disable-next-line no-console
     console.log("[migration] done-flag decision", {
       uploadedAny,
       sessionLogsOk,
       localLogsPending,
-      maySetDoneFlag,
     });
 
-    if (maySetDoneFlag) {
-      localStorage.setItem(MIGRATION_TO_SUPABASE_DONE_KEY, "1");
+    // Core zones (profile/plan/patches/health/recovery/coachMemory) never gated on their own
+    // upload success (they only log warnings on error) — this pass has run, so mark it done
+    // regardless of `sessionLogsOk`, and let `migrateSessionLogsOnly` handle session-log retries.
+    localStorage.setItem(MIGRATION_TO_SUPABASE_DONE_KEY, "1");
+    // eslint-disable-next-line no-console
+    console.log("[migration] migration_to_supabase_done_v1 set");
+
+    if (sessionLogsOk) {
+      localStorage.setItem(SESSION_LOGS_MIGRATION_DONE_KEY, "1");
       // eslint-disable-next-line no-console
-      console.log("[migration] migration_to_supabase_done_v1 set");
-    } else if (uploadedAny && !sessionLogsOk) {
+      console.log("[migration] migration_session_logs_done_v1 set");
+    } else {
       // eslint-disable-next-line no-console
       console.warn(
-        "[migration] migration_to_supabase_done_v1 NOT set — other data uploaded but session_logs had errors",
+        "[migration] migration_session_logs_done_v1 NOT set — session_logs had errors, will retry standalone next load",
       );
     }
 

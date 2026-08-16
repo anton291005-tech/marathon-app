@@ -1,9 +1,13 @@
-import { MIGRATION_TO_SUPABASE_DONE_KEY } from "../lib/supabase/migrations/migrateLocalDataToSupabase";
+import {
+  MIGRATION_TO_SUPABASE_DONE_KEY,
+  SESSION_LOGS_MIGRATION_DONE_KEY,
+} from "../lib/supabase/migrations/migrateLocalDataToSupabase";
 import { RESET_ONBOARDING_STORAGE_KEY } from "../onboarding/marathonPreferencesOnboarding";
 import { KNOWN_MY_RACE_STORAGE_KEYS } from "./marathonLocalStorageKeys";
 
 const EXTRA_KEYS = [
   MIGRATION_TO_SUPABASE_DONE_KEY,
+  SESSION_LOGS_MIGRATION_DONE_KEY,
   "marathon_migration_flags_v1",
   "marathon.coachMemory.v1",
   RESET_ONBOARDING_STORAGE_KEY,

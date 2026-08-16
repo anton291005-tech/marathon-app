@@ -54,7 +54,10 @@ import {
   buildIsolatedOnboardingPreferences,
   detachSessionLogsFromPlan,
 } from "./onboarding/onboardingPlanIsolation";
-import { MIGRATION_TO_SUPABASE_DONE_KEY } from "./lib/supabase/migrations/migrateLocalDataToSupabase";
+import {
+  MIGRATION_TO_SUPABASE_DONE_KEY,
+  SESSION_LOGS_MIGRATION_DONE_KEY,
+} from "./lib/supabase/migrations/migrateLocalDataToSupabase";
 import AiCoachPanel from "./components/ai/AiCoachPanel";
 import { PostWorkoutSummaryCard } from "./components/PostWorkoutSummaryCard";
 import { getCoachFeedback } from "./coachFeedback";
@@ -2976,6 +2979,7 @@ export default function AppMain(){
         if (typeof localStorage !== "undefined") {
           localStorage.removeItem(RESET_ONBOARDING_STORAGE_KEY);
           localStorage.removeItem(MIGRATION_TO_SUPABASE_DONE_KEY);
+          localStorage.removeItem(SESSION_LOGS_MIGRATION_DONE_KEY);
           localStorage.setItem(MARATHON_AI_PLAN_PATCHES_KEY, JSON.stringify([]));
           localStorage.setItem(MARATHON_PREFERENCES_KEY, JSON.stringify(isolatedPrefs));
           localStorage.setItem(MARATHON_LOGS_KEY, JSON.stringify(detachedLogs));
@@ -3021,6 +3025,7 @@ export default function AppMain(){
 
         if (typeof localStorage !== "undefined") {
           localStorage.setItem(MIGRATION_TO_SUPABASE_DONE_KEY, "1");
+          localStorage.setItem(SESSION_LOGS_MIGRATION_DONE_KEY, "1");
         }
       } catch (e) {
         // eslint-disable-next-line no-console
@@ -5085,6 +5090,7 @@ export default function AppMain(){
                 onClick={() => {
                   try {
                     localStorage.removeItem(MIGRATION_TO_SUPABASE_DONE_KEY);
+                    localStorage.removeItem(SESSION_LOGS_MIGRATION_DONE_KEY);
                   } catch {
                     // ignore
                   }
