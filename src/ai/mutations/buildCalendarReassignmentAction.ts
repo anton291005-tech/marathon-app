@@ -1,7 +1,7 @@
 import type { AiPlanWeek, AiPlanSession, AiAssistantAction, AiActionPreview } from "../../lib/ai/types";
 import type { SessionAssignmentCandidate, SessionAssignmentResult } from "./assignSessionToBestCapacityDay";
 import type { WeeklyScheduleBlock } from "../../lib/supabase/services/weeklyScheduleBlocksService";
-import { computeDayCapacityScore } from "../../scheduling/capacityScore";
+import { computeDayCapacityScore, type DayCapacityScore } from "../../scheduling/capacityScore";
 import { parseSessionDateLabel } from "../../appSmartFeatures";
 import { getAppCalendarYmd } from "../../core/time/timeSystem";
 
@@ -38,6 +38,24 @@ export function buildCalendarReassignmentCandidates(
     candidates.push({ targetSessionId: session.id, capacity: computeDayCapacityScore(dateIso, blocks) });
   }
   return candidates;
+}
+
+/**
+ * Capacity of `sessionId`'s own (pre-swap) day — the slot a displaced candidate session would land
+ * on. Feeds `assignSessionToBestCapacityDay`'s `sourceDayCapacity` so it can score both sides of a
+ * swap, not just the clicked session's new day. `null` when the session isn't found or its date
+ * can't be parsed, matching the defensive skip already used in `buildCalendarReassignmentCandidates`.
+ */
+export function computeSourceDayCapacity(
+  week: AiPlanWeek,
+  sessionId: string,
+  blocks: WeeklyScheduleBlock[],
+): DayCapacityScore | null {
+  const session = findSessionById([week], sessionId);
+  if (!session) return null;
+  const dateIso = sessionDateIso(session);
+  if (!dateIso) return null;
+  return computeDayCapacityScore(dateIso, blocks);
 }
 
 /**

@@ -1,5 +1,18 @@
-import { computeDayCapacityScore } from "./capacityScore";
+import { computeDayCapacityScore, computeSessionDayFitScore, type DayCapacityScore } from "./capacityScore";
 import type { RecurringScheduleBlock, OneOffScheduleBlock } from "../lib/supabase/services/weeklyScheduleBlocksService";
+
+function capacity(score: number): DayCapacityScore {
+  return {
+    dateIso: "2026-08-10",
+    isWeekend: false,
+    windowMinutes: 960,
+    busyMinutes: Math.round((1 - score) * 960),
+    freeMinutes: Math.round(score * 960),
+    capacityScore: score,
+    isFullyBooked: score === 0,
+    isFullyFree: score === 1,
+  };
+}
 
 function recurring(overrides: Partial<RecurringScheduleBlock>): RecurringScheduleBlock {
   return {
@@ -106,5 +119,34 @@ describe("computeDayCapacityScore", () => {
     const blocks = [recurring({ dayOfWeek: 2 })]; // Dienstag, wir prüfen Montag
     const result = computeDayCapacityScore("2026-08-10", blocks);
     expect(result.isFullyFree).toBe(true);
+  });
+});
+
+describe("computeSessionDayFitScore", () => {
+  test("hochintensive Session (tempo/interval/race/long) wird auf einem überlasteten Tag stark bestraft", () => {
+    const busy = capacity(0.1);
+    expect(computeSessionDayFitScore({ type: "tempo" }, busy)).toBe(0.1);
+    expect(computeSessionDayFitScore({ type: "interval" }, busy)).toBe(0.1);
+    expect(computeSessionDayFitScore({ type: "race" }, busy)).toBe(0.1);
+    expect(computeSessionDayFitScore({ type: "long" }, busy)).toBe(0.1);
+  });
+
+  test("easy/rest Session wird auf einem überlasteten Tag kaum bestraft", () => {
+    const busy = capacity(0.1);
+    const free = capacity(1);
+    const easyBusy = computeSessionDayFitScore({ type: "easy" }, busy);
+    const easyFree = computeSessionDayFitScore({ type: "easy" }, free);
+    expect(easyBusy).toBeGreaterThan(0.85);
+    expect(easyFree).toBe(1);
+    expect(easyBusy).toBeLessThan(easyFree);
+  });
+
+  test("beide Gruppen bleiben monoton in capacityScore (kein Rangwechsel bei besserer Capacity)", () => {
+    expect(computeSessionDayFitScore({ type: "tempo" }, capacity(0.3))).toBeLessThan(
+      computeSessionDayFitScore({ type: "tempo" }, capacity(0.9)),
+    );
+    expect(computeSessionDayFitScore({ type: "easy" }, capacity(0.3))).toBeLessThan(
+      computeSessionDayFitScore({ type: "easy" }, capacity(0.9)),
+    );
   });
 });

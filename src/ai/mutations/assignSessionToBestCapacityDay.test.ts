@@ -143,4 +143,25 @@ describe("assignSessionToBestCapacityDay", () => {
     expect(result.reason).toBe("integrity-violation");
     expect(result.patches).toEqual([]);
   });
+
+  test("Klick auf die easy Session eines überlasteten Tages darf den Tempodauerlauf nicht auf diesen Tag verdrängen", () => {
+    // Montag = Uni+Gym (überlastet, capacityScore niedrig), Freitag = frei (capacityScore hoch).
+    // Ohne Berücksichtigung der verdrängten Seite würde der Algorithmus den freien Freitag für die
+    // geklickte easy Session wählen und dabei den Tempodauerlauf unbewertet auf Montag schieben.
+    const plan = buildPlan([
+      { id: "s-mon", type: "easy", date: "10. Aug", day: "Montag" },
+      { id: "s-fri", type: "tempo", date: "14. Aug", day: "Freitag" },
+    ]);
+    const candidates: SessionAssignmentCandidate[] = [{ targetSessionId: "s-fri", capacity: capacity("2026-08-14", 0.9) }];
+    const sourceDayCapacity = capacity("2026-08-10", 0.1);
+
+    const result = assignSessionToBestCapacityDay(plan, "s-mon", candidates, sourceDayCapacity);
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("no-good-fit-candidate");
+    expect(result.patches).toEqual([]);
+    const tempo = result.plan[0].s.find((sess) => sess.id === "s-fri");
+    expect(tempo?.day).toBe("Freitag");
+    expect(tempo?.date).toBe("14. Aug");
+  });
 });

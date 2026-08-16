@@ -99,6 +99,7 @@ import { assignSessionToBestCapacityDay } from "./ai/mutations/assignSessionToBe
 import {
   buildCalendarReassignmentCandidates,
   buildCalendarReassignmentAction,
+  computeSourceDayCapacity,
 } from "./ai/mutations/buildCalendarReassignmentAction";
 import AiActionCard from "./components/ai/AiActionCard";
 import { loadSessionLogs, saveSessionLog } from "./lib/supabase/services/sessionLogsService";
@@ -2497,7 +2498,8 @@ export default function AppMain(){
   const handleProposeCalendarReassignment = (sessionId)=>{
     if (!w) return;
     const candidates = buildCalendarReassignmentCandidates(w, sessionId, scheduleBlocks);
-    const result = assignSessionToBestCapacityDay(displayPlan, sessionId, candidates);
+    const sourceDayCapacity = computeSourceDayCapacity(w, sessionId, scheduleBlocks);
+    const result = assignSessionToBestCapacityDay(displayPlan, sessionId, candidates, sourceDayCapacity);
     const action = buildCalendarReassignmentAction(sessionId, result, displayPlan);
     if (!action) {
       setPendingCalendarProposal({ sessionId, action: null, patches: [] });

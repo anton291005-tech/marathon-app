@@ -1,4 +1,5 @@
 import type { WeeklyScheduleBlock } from "../lib/supabase/services/weeklyScheduleBlocksService";
+import type { SessionType } from "../lib/ai/types";
 
 export type DayCapacityScore = {
   dateIso: string;
@@ -105,4 +106,21 @@ export function computeDayCapacityScore(dateIso: string, blocks: WeeklyScheduleB
     isFullyBooked: freeMinutes === 0,
     isFullyFree: busyMinutes === 0,
   };
+}
+
+/** interval/tempo/race need real free time; "long" is treated the same way for now — its volume alone is already a load, finer per-type grading is a later iteration. */
+const HIGH_INTENSITY_SESSION_TYPES: ReadonlySet<SessionType> = new Set<SessionType>(["tempo", "interval", "race", "long"]);
+
+/** Easy/recovery sessions fit onto a busy day almost as well as a free one, so calendar load barely moves their score. */
+const LOW_INTENSITY_CAPACITY_WEIGHT = 0.1;
+
+/**
+ * Combines a day's raw calendar capacity with the intensity of the session that would be placed
+ * there: high-intensity sessions are penalized in proportion to how booked the day is, easy/recovery
+ * sessions are not — a busy day is still an acceptable home for a recovery run.
+ */
+export function computeSessionDayFitScore(session: { type: SessionType }, dayCapacity: DayCapacityScore): number {
+  const capacity = dayCapacity.capacityScore;
+  if (HIGH_INTENSITY_SESSION_TYPES.has(session.type)) return capacity;
+  return 1 - (1 - capacity) * LOW_INTENSITY_CAPACITY_WEIGHT;
 }
