@@ -2,6 +2,9 @@ import { supabase } from "../client";
 
 export type ScheduleBlockCategory = "job" | "study" | "volunteer" | "sport" | "other";
 
+/** Herkunft einer Zeile: manuell/SQL-Testdaten, EventKit-Import oder Onboarding-Preset. */
+export type ScheduleBlockSource = "manual" | "eventkit" | "preset";
+
 type ScheduleBlockCommon = {
   id: string;
   title: string;
@@ -9,6 +12,7 @@ type ScheduleBlockCommon = {
   startTime: string; // "HH:MM" (or "HH:MM:SS" as returned by Postgres `time`)
   endTime: string;
   notes: string | null;
+  source: ScheduleBlockSource;
 };
 
 export type RecurringScheduleBlock = ScheduleBlockCommon & {
@@ -39,6 +43,8 @@ export type DbWeeklyScheduleBlockRow = {
   recurrence_start_date: string | null;
   recurrence_end_date: string | null;
   notes: string | null;
+  // Fehlt bei Selects gegen eine DB, auf der Migration 010 noch nicht angewendet wurde.
+  source?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -49,6 +55,12 @@ function toCategory(value: string): ScheduleBlockCategory {
   return (VALID_CATEGORIES as string[]).includes(value) ? (value as ScheduleBlockCategory) : "other";
 }
 
+const VALID_SOURCES: ScheduleBlockSource[] = ["manual", "eventkit", "preset"];
+
+function toSource(value: string | null | undefined): ScheduleBlockSource {
+  return (VALID_SOURCES as string[]).includes(value ?? "") ? (value as ScheduleBlockSource) : "manual";
+}
+
 export function dbRowToScheduleBlock(row: DbWeeklyScheduleBlockRow): WeeklyScheduleBlock | null {
   const common = {
     id: row.id,
@@ -57,6 +69,7 @@ export function dbRowToScheduleBlock(row: DbWeeklyScheduleBlockRow): WeeklySched
     startTime: row.start_time,
     endTime: row.end_time,
     notes: row.notes,
+    source: toSource(row.source),
   };
 
   if (row.is_recurring) {
@@ -92,6 +105,7 @@ export function scheduleBlockToUpsertPayload(userId: string, block: WeeklySchedu
     recurrence_start_date: block.isRecurring ? block.recurrenceStartDate : null,
     recurrence_end_date: block.isRecurring ? block.recurrenceEndDate : null,
     notes: block.notes,
+    source: block.source,
   };
 }
 

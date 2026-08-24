@@ -22,6 +22,7 @@ function recurring(overrides: Partial<RecurringScheduleBlock>): RecurringSchedul
     startTime: "09:00",
     endTime: "17:00",
     notes: null,
+    source: "manual",
     isRecurring: true,
     dayOfWeek: 1, // Montag
     recurrenceStartDate: null,
@@ -38,6 +39,7 @@ function oneOff(overrides: Partial<OneOffScheduleBlock>): OneOffScheduleBlock {
     startTime: "09:00",
     endTime: "17:00",
     notes: null,
+    source: "manual",
     isRecurring: false,
     specificDate: "2026-08-10",
     ...overrides,

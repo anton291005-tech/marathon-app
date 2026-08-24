@@ -20,6 +20,7 @@ function recurringRow(overrides: Partial<DbWeeklyScheduleBlockRow> = {}): DbWeek
     recurrence_start_date: "2026-01-01",
     recurrence_end_date: null,
     notes: null,
+    source: "manual",
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -40,6 +41,7 @@ function oneOffRow(overrides: Partial<DbWeeklyScheduleBlockRow> = {}): DbWeeklyS
     recurrence_start_date: null,
     recurrence_end_date: null,
     notes: "Ganztägig eingeplant",
+    source: "manual",
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -56,6 +58,7 @@ describe("dbRowToScheduleBlock", () => {
       startTime: "18:00:00",
       endTime: "20:00:00",
       notes: null,
+      source: "manual",
       isRecurring: true,
       dayOfWeek: 2,
       recurrenceStartDate: "2026-01-01",
@@ -72,6 +75,7 @@ describe("dbRowToScheduleBlock", () => {
       startTime: "14:00:00",
       endTime: "23:00:00",
       notes: "Ganztägig eingeplant",
+      source: "manual",
       isRecurring: false,
       specificDate: "2026-03-14",
     });
@@ -88,6 +92,17 @@ describe("dbRowToScheduleBlock", () => {
   it("fällt bei unbekannter category auf 'other' zurück", () => {
     const block = dbRowToScheduleBlock(oneOffRow({ category: "unknown-category" }));
     expect(block?.category).toBe("other");
+  });
+
+  it("mappt source 'eventkit' und 'preset' durch", () => {
+    expect(dbRowToScheduleBlock(oneOffRow({ source: "eventkit" }))?.source).toBe("eventkit");
+    expect(dbRowToScheduleBlock(recurringRow({ source: "preset" }))?.source).toBe("preset");
+  });
+
+  it("fällt bei fehlender oder unbekannter source auf 'manual' zurück (Prä-Migration-010-Zeilen)", () => {
+    expect(dbRowToScheduleBlock(oneOffRow({ source: undefined }))?.source).toBe("manual");
+    expect(dbRowToScheduleBlock(oneOffRow({ source: null }))?.source).toBe("manual");
+    expect(dbRowToScheduleBlock(oneOffRow({ source: "unknown-source" }))?.source).toBe("manual");
   });
 });
 
@@ -110,6 +125,7 @@ describe("scheduleBlockToUpsertPayload", () => {
       recurrence_start_date: "2026-01-01",
       recurrence_end_date: null,
       notes: null,
+      source: "manual",
     });
   });
 
@@ -131,6 +147,13 @@ describe("scheduleBlockToUpsertPayload", () => {
       recurrence_start_date: null,
       recurrence_end_date: null,
       notes: "Ganztägig eingeplant",
+      source: "manual",
     });
+  });
+
+  it("schreibt source 'eventkit' in den Upsert-Payload", () => {
+    const block = dbRowToScheduleBlock(oneOffRow({ source: "eventkit" })) as OneOffScheduleBlock;
+    const payload = scheduleBlockToUpsertPayload("user-1", block);
+    expect(payload.source).toBe("eventkit");
   });
 });
