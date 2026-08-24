@@ -24,6 +24,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCalendarsUsageDescription</key>
+	<string>MyRace liest deine Kalendertermine, um Trainingseinheiten an Tagen mit freier Zeit zu planen. Termine werden nicht verändert.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>MyRace liest deine Kalendertermine, um Trainingseinheiten an Tagen mit freier Zeit zu planen. Termine werden nicht verändert.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Diese App liest deine Trainingsdaten, um dein Training zu analysieren.</string>
 	<key>NSHealthUpdateUsageDescription</key>
