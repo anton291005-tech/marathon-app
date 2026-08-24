@@ -31,11 +31,20 @@
 
 **Klarstellung (Stufe-1-Recherche, swapTrainingDays-Migration):** Frühere Formulierung "erweitert `swapTrainingDays`" war irreführend — Namenskollision zwischen totem `src/lib/ai/tools.ts`-Code (inzwischen entfernt) und dem echten, nutzerinitiierten 2-Tage-Chat-Swap (`AiCoachPanel.tsx` → `AppMain.tsx:handleSwapWorkoutsV2` → `trySwapWorkoutDatesInPlan`/`validateSwap`, `TrainingPlanV2`-Ebene). `assignSessionToBestCapacityDay` erweitert diesen Chat-Swap nicht; es ist die Grundlage für Schritt 4 (systeminitiierte N-Kandidaten-Auswahl bei einem Kalender-Trigger), arbeitet auf `AiPlanWeek`/`PlanPatch` und ist noch nicht an einen Live-Einstiegspunkt angebunden.
 
-### 4. iOS Calendar Import via EventKit + Onboarding-Presets
-**Blockiert von:** Onboarding-Bug-Diagnose (siehe unten) — nicht vor dessen Fix beginnen, da hier Onboarding-Presets ergänzt werden.
+### 4. iOS Calendar Import via EventKit + Onboarding-Presets — Code-seitig umgesetzt (2026-08-24), Device-E2E offen
+**Entscheidungen (Interview-Protokoll, mit Anton abgestimmt):** Full Access (iOS 17+, technisch alternativlos zum Lesen; beide plist-Keys gesetzt), stille Keyword-Klassifikation (`src/calendar/eventClassifier.ts` — Kategorie bis Schritt 5 rein informativ, Capacity-Score nutzt nur Zeitfenster), Connect-Import + Foreground-Resync (eigener `appStateChange`-Listener in `AppMain.tsx`, 5-min-Debounce, kein Background-Sync), Replace-All pro Sync über `source`-Spalte (Migration 010: `'manual'|'eventkit'|'preset'`; Testdaten-Accounts bleiben als `'manual'` strukturell unantastbar), Occurrence-Expansion in One-Off-Zeilen (Fenster heute+28d, `src/calendar/eventToScheduleBlocks.ts`) statt RRULE-Mapping, Plugin `@ebarooni/capacitor-calendar@8.3.0` (SPM-Build verifiziert, Swift-Fallback nicht nötig), Preset-Fallback (Vollzeit/Teilzeit/Studium/Schicht, `src/calendar/presets.ts`) im neuen skippbaren Onboarding-Schritt 4 für Deny/leer/Web.
+
+**Umgesetzt (Commits `ec6a5e4`…`cdb172b`):** Migration 010 + Service-Types, Bulk-Write (`replaceAllEventkitBlocks`/`insertPresetBlocks`), pure Domain (Classifier/Mapping/Presets), Plugin + Info.plist + Nativ-Wrapper (`calendarImportService.ts`), Sync-Orchestrator (`calendarSyncService.ts`), Onboarding-Schritt 4 (Union 1–5, 7 RTL-Tests), AppMain-Verdrahtung (userId-Prop, Post-Onboarding-Reload, Foreground-Resync). 608/608 Tests grün, Web-Build + Xcode-Simulator-Build grün. Capacity-Engine unverändert.
+
+**Noch offen (manuell, blockiert Abnahme):**
+- Migration 010 in Supabase anwenden (SQL-Editor; keine CLI lokal verlinkt) — davor schlägt jeder Import-/Preset-Write mit unbekannter `source`-Spalte fehl.
+- E2E auf iPhone 13: Onboarding-Connect (Permission-Dialog mit deutschem Purpose-String) → „N Termine importiert" → 📅-Reassignment; Deny-Pfad → Presets; Event ändern/löschen → Foreground-Resync; Schluss-SQL: Testaccounts `dc86a082`/`c2559684` weiter 100 % `source='manual'`.
+
+**Bekannte v1-Lücken (Backlog, kein Blocker):** abgelehnte Einladungen werden mit-importiert (Self-Attendee-Status über Bridge unzuverlässig); Settings-Connect-Card für Bestandsnutzer (die Onboarding nie wieder sehen) als Folge-Task „Schritt 4b" (Muster `handleAppleHealthConnectInSettings`).
 
 ### 5. Load-Tag-Presets-Library + self-calibrating Load-Scoring
 Regelbasiert, transparent, kalibriert sich über Post-Workout-Feedback selbst nach.
+**Anschluss an Schritt 4:** nutzt die dort eingeführte stille Kategorie-Klassifikation (`job`/`study`/…) als Ausgangsbasis für Load-Tags — erst hier bekommt die Kategorie Engine-Wirkung; ggf. Import-Review-/Nachklassifizierungs-UI hier nachziehen.
 
 ### 6. Vorher/Nachher-Diff-Screen
 **Ziel:** Nach Kalender-Connect (Wow-Moment) im "Woche"-Screen zeigen, wie sich die Trainingswoche durch die Capacity-Engine verändert hat.
