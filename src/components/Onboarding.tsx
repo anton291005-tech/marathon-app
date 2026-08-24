@@ -38,6 +38,14 @@ import {
   type RaceGoal,
 } from "../onboarding/marathonPreferencesOnboarding";
 import type { TrainingPlanV2 } from "../planV2/types";
+import { calendarIsAvailable, calendarRequestReadAuthorization } from "../calendar/calendarImportService";
+import {
+  isCalendarImportConnected,
+  markCalendarImportConnected,
+  runCalendarWindowSync,
+} from "../calendar/calendarSyncService";
+import { SCHEDULE_PRESETS, presetToScheduleBlocks, type SchedulePresetId } from "../calendar/presets";
+import { insertPresetBlocks } from "../lib/supabase/services/weeklyScheduleBlocksService";
 
 // ---------------------------------------------------------------------------
 
@@ -49,7 +57,7 @@ const PREFERENCE_HINTS = [
   "z.B. Kein Training am Dienstag",
 ] as const;
 
-type OnboardingStep = 1 | 2 | 3 | 4;
+type OnboardingStep = 1 | 2 | 3 | 4 | 5;
 
 const inputStyle: CSSProperties = {
   width: "100%",
@@ -153,9 +161,11 @@ export type OnboardingProps = {
     patches: PlanPatch[],
     planName?: string,
   ) => void | Promise<void>;
+  /** Supabase-User-ID für Kalender-Import/Preset-Writes in Schritt 4 (Nutzer ist beim Onboarding bereits authentifiziert). */
+  userId?: string | null;
 };
 
-export function Onboarding({ onComplete }: OnboardingProps) {
+export function Onboarding({ onComplete, userId = null }: OnboardingProps) {
   const { t } = useTranslation();
   const [step, setStep] = useState<OnboardingStep>(1);
   const [shortcutId, setShortcutId] = useState<DistanceShortcutId | null>(null);
@@ -300,8 +310,86 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   }, []);
 
   const goNext = useCallback(() => {
-    setStep((s) => (s < 4 ? ((s + 1) as OnboardingStep) : s));
+    setStep((s) => (s < 5 ? ((s + 1) as OnboardingStep) : s));
   }, []);
+
+  // --- Schritt 4: Kalender verbinden (skippbar; Preset-Fallback für Deny/leer/Web) ---
+  const [calendarStepMode, setCalendarStepMode] = useState<"connect" | "connected" | "fallback">(() => {
+    if (isCalendarImportConnected()) return "connected";
+    return calendarIsAvailable() ? "connect" : "fallback";
+  });
+  const [calendarBusy, setCalendarBusy] = useState(false);
+  const [calendarFeedback, setCalendarFeedback] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+  const [selectedPresetId, setSelectedPresetId] = useState<SchedulePresetId | null>(null);
+
+  const handleConnectCalendar = useCallback(async () => {
+    if (calendarBusy) return;
+    setCalendarBusy(true);
+    setCalendarFeedback(null);
+    try {
+      const granted = await calendarRequestReadAuthorization();
+      if (!granted) {
+        setCalendarStepMode("fallback");
+        setCalendarFeedback({
+          tone: "err",
+          text: "Kein Kalenderzugriff — wähle stattdessen einen typischen Wochenrhythmus.",
+        });
+        return;
+      }
+      if (!userId) {
+        setCalendarStepMode("fallback");
+        setCalendarFeedback({
+          tone: "err",
+          text: "Import gerade nicht möglich — wähle einen typischen Wochenrhythmus.",
+        });
+        return;
+      }
+      const result = await runCalendarWindowSync(userId);
+      if (!result.ok) {
+        setCalendarStepMode("fallback");
+        setCalendarFeedback({
+          tone: "err",
+          text: "Kalender-Import fehlgeschlagen — wähle einen typischen Wochenrhythmus.",
+        });
+        return;
+      }
+      markCalendarImportConnected();
+      if (result.importedCount === 0) {
+        setCalendarStepMode("fallback");
+        setCalendarFeedback({
+          tone: "ok",
+          text: "Kalender verbunden — in den nächsten 4 Wochen sind keine Termine eingetragen. Optional kannst du einen typischen Rhythmus wählen.",
+        });
+        return;
+      }
+      setCalendarStepMode("connected");
+      setCalendarFeedback({ tone: "ok", text: `✓ ${result.importedCount} Termine importiert` });
+    } finally {
+      setCalendarBusy(false);
+    }
+  }, [calendarBusy, userId]);
+
+  const handleSelectPreset = useCallback(
+    async (presetId: SchedulePresetId) => {
+      if (calendarBusy) return;
+      setSelectedPresetId(presetId);
+      setCalendarFeedback(null);
+      if (!userId) return;
+      setCalendarBusy(true);
+      try {
+        const result = await insertPresetBlocks(userId, presetToScheduleBlocks(presetId));
+        if (result.ok) {
+          setCalendarFeedback({ tone: "ok", text: "✓ Wochenrhythmus gespeichert" });
+        } else {
+          setSelectedPresetId(null);
+          setCalendarFeedback({ tone: "err", text: "Speichern fehlgeschlagen — bitte erneut versuchen." });
+        }
+      } finally {
+        setCalendarBusy(false);
+      }
+    },
+    [calendarBusy, userId],
+  );
 
   const handleFinish = useCallback(async () => {
     if (!summaryPayload || isGenerating) return;
@@ -474,9 +562,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             gap: 6,
             marginBottom: 22,
           }}
-          aria-label={`Schritt ${step} von 4`}
+          aria-label={`Schritt ${step} von 5`}
         >
-          {([1, 2, 3, 4] as const).map((n) => (
+          {([1, 2, 3, 4, 5] as const).map((n) => (
             <div
               key={n}
               style={{
@@ -736,7 +824,120 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           </>
         ) : null}
 
-        {step === 4 && summaryPayload && distance ? (
+        {step === 4 ? (
+          <>
+            <h2 style={sectionTitleStyle}>Kalender verbinden</h2>
+            <p style={sectionSubtitleStyle}>
+              MyRace plant dein Training um deine echten Termine herum. Verbinde deinen Kalender — oder
+              wähle einen typischen Wochenrhythmus. Termine werden nur gelesen, nie verändert.
+            </p>
+
+            {calendarStepMode === "connect" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void handleConnectCalendar()}
+                  disabled={calendarBusy}
+                  style={{
+                    width: "100%",
+                    padding: "14px 16px",
+                    fontSize: 15,
+                    fontWeight: 700,
+                    border: "none",
+                    borderRadius: 14,
+                    cursor: calendarBusy ? "not-allowed" : "pointer",
+                    opacity: calendarBusy ? 0.7 : 1,
+                    color: "#fff",
+                    background: "linear-gradient(135deg, #10b981, #3b82f6)",
+                  }}
+                >
+                  {calendarBusy ? "Verbinde…" : "Kalender verbinden"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCalendarStepMode("fallback")}
+                  style={{
+                    marginTop: 14,
+                    padding: 0,
+                    border: "none",
+                    background: "none",
+                    color: "var(--text-muted)",
+                    fontSize: 13,
+                    textDecoration: "underline",
+                    cursor: "pointer",
+                  }}
+                >
+                  Ohne Kalender fortfahren
+                </button>
+              </>
+            ) : null}
+
+            {calendarStepMode === "connected" ? (
+              <p style={{ margin: 0, fontSize: 14, color: "#34d399", fontWeight: 600 }}>
+                ✓ Kalender verbunden
+              </p>
+            ) : null}
+
+            {calendarStepMode === "fallback" ? (
+              <>
+                <div style={{ ...labelStyle, marginBottom: 8 }}>Typischer Wochenrhythmus</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {SCHEDULE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      disabled={calendarBusy}
+                      onClick={() => void handleSelectPreset(preset.id)}
+                      style={{
+                        ...chipButtonStyle(selectedPresetId === preset.id),
+                        flex: "1 1 45%",
+                        textAlign: "left",
+                      }}
+                    >
+                      <span style={{ display: "block" }}>{preset.label}</span>
+                      <span style={{ display: "block", fontSize: 11, fontWeight: 400, marginTop: 2 }}>
+                        {preset.description}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {calendarIsAvailable() ? (
+                  <button
+                    type="button"
+                    onClick={() => setCalendarStepMode("connect")}
+                    style={{
+                      marginTop: 14,
+                      padding: 0,
+                      border: "none",
+                      background: "none",
+                      color: "var(--text-muted)",
+                      fontSize: 13,
+                      textDecoration: "underline",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Doch Kalender verbinden
+                  </button>
+                ) : null}
+              </>
+            ) : null}
+
+            {calendarFeedback ? (
+              <p
+                style={{
+                  margin: "14px 0 0",
+                  fontSize: 13,
+                  lineHeight: 1.45,
+                  color: calendarFeedback.tone === "ok" ? "#34d399" : "#f87171",
+                }}
+              >
+                {calendarFeedback.text}
+              </p>
+            ) : null}
+          </>
+        ) : null}
+
+        {step === 5 && summaryPayload && distance ? (
           <>
             <h2 style={sectionTitleStyle}>{t("onboarding.step4_title")}</h2>
             <p style={sectionSubtitleStyle}>{t("onboarding.step4_subtitle")}</p>
@@ -911,7 +1112,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             </button>
           ) : null}
 
-          {step < 4 ? (
+          {step < 5 ? (
             <button
               type="button"
               disabled={step === 1 ? !step1Valid : step === 2 ? !step2Valid : false}
