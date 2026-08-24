@@ -142,6 +142,67 @@ export async function saveWeeklyScheduleBlock(userId: string, block: WeeklySched
   }
 }
 
+export type BulkWriteResult = { ok: boolean; insertedCount: number };
+
+/**
+ * Replace-All-Sync des EventKit-Imports: löscht ALLE 'eventkit'-Zeilen des Users
+ * und schreibt die übergebenen Blöcke frisch. Zeilen mit source 'manual'/'preset'
+ * (SQL-Testdaten, Onboarding-Presets) sind über das Delete-Prädikat strukturell geschützt.
+ * Nicht transaktional — ein Fehler zwischen Delete und Insert heilt der nächste Sync.
+ */
+export async function replaceAllEventkitBlocks(
+  userId: string,
+  blocks: WeeklyScheduleBlock[]
+): Promise<BulkWriteResult> {
+  return replaceBlocksBySource(userId, "eventkit", blocks);
+}
+
+/**
+ * Onboarding-Preset-Auswahl: löscht bestehende 'preset'-Zeilen des Users (Preset-Wechsel
+ * idempotent) und schreibt die Blöcke des gewählten Presets.
+ */
+export async function insertPresetBlocks(
+  userId: string,
+  blocks: WeeklyScheduleBlock[]
+): Promise<BulkWriteResult> {
+  return replaceBlocksBySource(userId, "preset", blocks);
+}
+
+async function replaceBlocksBySource(
+  userId: string,
+  source: Exclude<ScheduleBlockSource, "manual">,
+  blocks: WeeklyScheduleBlock[]
+): Promise<BulkWriteResult> {
+  const { error: deleteError } = await supabase
+    .from("weekly_schedule_blocks")
+    .delete()
+    .eq("user_id", userId)
+    .eq("source", source);
+
+  if (deleteError) {
+    if (process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.warn("[weeklyScheduleBlocksService] replaceBlocksBySource delete", source, deleteError.message);
+    }
+    return { ok: false, insertedCount: 0 };
+  }
+
+  const rows = blocks.filter((b) => b.source === source).map((b) => scheduleBlockToUpsertPayload(userId, b));
+  if (rows.length === 0) return { ok: true, insertedCount: 0 };
+
+  const { error: insertError } = await supabase.from("weekly_schedule_blocks").insert(rows);
+
+  if (insertError) {
+    if (process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.warn("[weeklyScheduleBlocksService] replaceBlocksBySource insert", source, insertError.message);
+    }
+    return { ok: false, insertedCount: 0 };
+  }
+
+  return { ok: true, insertedCount: rows.length };
+}
+
 export async function deleteWeeklyScheduleBlock(userId: string, id: string): Promise<void> {
   const { error } = await supabase.from("weekly_schedule_blocks").delete().eq("id", id).eq("user_id", userId);
 
