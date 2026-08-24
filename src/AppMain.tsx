@@ -98,6 +98,7 @@ import { AI_COACH_AVAILABLE_SCREENS } from "./lib/ai/aiCoachAvailableScreens";
 import { loadProfile, saveProfile } from "./lib/supabase/services/profilesService";
 import { loadPlanPatches, savePlanPatch } from "./lib/supabase/services/planPatchesService";
 import { loadWeeklyScheduleBlocks } from "./lib/supabase/services/weeklyScheduleBlocksService";
+import { runCalendarForegroundResync } from "./calendar/calendarSyncService";
 import { assignSessionToBestCapacityDay } from "./ai/mutations/assignSessionToBestCapacityDay";
 import {
   buildCalendarReassignmentCandidates,
@@ -1599,6 +1600,28 @@ export default function AppMain(){
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchRunningWorkoutsLast7Days stable ref from mount
   }, []);
 
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let lastCalendarSyncTime = 0;
+    // Kalender ändern sich seltener als Workouts — bewusst längeres Debounce als beim Health-Sync.
+    const CALENDAR_RESYNC_DEBOUNCE_MS = 5 * 60_000;
+    const listenerPromise = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (!isActive) return;
+      const now = getAppNowEpochMs();
+      if (now - lastCalendarSyncTime < CALENDAR_RESYNC_DEBOUNCE_MS) return;
+      lastCalendarSyncTime = now;
+      const uid = userIdForHealthSyncRef.current;
+      if (!uid) return;
+      // No-op ohne Connected-Marker oder bei entzogener Berechtigung (im Service geprüft).
+      void runCalendarForegroundResync(uid).then((freshBlocks) => {
+        if (freshBlocks) setScheduleBlocks(freshBlocks);
+      });
+    });
+    return () => {
+      listenerPromise.then((l) => l.remove());
+    };
+  }, []);
+
   const handleAppleHealthConnectInSettings = async () => {
     if (Capacitor.getPlatform() !== "ios") return;
     setAppleHealthConnectFeedback(null);
@@ -2996,6 +3019,11 @@ export default function AppMain(){
         setPreferences(isolatedPrefs);
         if (user?.id) {
           void saveProfile(user.id, isolatedPrefs);
+          // Onboarding-Schritt 4 (Kalender/Preset) schreibt Blöcke während des Onboardings —
+          // ohne Reload wären sie erst nach App-Neustart im State sichtbar.
+          void loadWeeklyScheduleBlocks(user.id).then((blocks) => {
+            if (blocks) setScheduleBlocks(blocks);
+          });
         }
 
         if (plan) {
@@ -5801,7 +5829,9 @@ export default function AppMain(){
         </div>
       ))}
 
-      {showOnboarding ? <Onboarding onComplete={handleOnboardingComplete} /> : null}
+      {showOnboarding ? (
+        <Onboarding onComplete={handleOnboardingComplete} userId={user?.id ?? null} />
+      ) : null}
 
       {!showOnboarding && showTour && user ? (
         <AppTour
