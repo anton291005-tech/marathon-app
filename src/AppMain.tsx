@@ -45,7 +45,7 @@ import RaceCalculator from "./components/RaceCalculator";
 import SurfaceCard from "./components/SurfaceCard";
 import { AccountDeleteDialog } from "./components/AccountDeleteDialog";
 import { Onboarding } from "./components/Onboarding";
-import { AppTour, TOUR_SEEN_KEY } from "./components/AppTour";
+import { AppTour, hasSeenTour, markTourSeen } from "./components/AppTour";
 import {
   RESET_ONBOARDING_STORAGE_KEY,
   needsOnboarding,
@@ -1073,8 +1073,16 @@ export default function AppMain(){
   const [showTour, setShowTour] = useState<boolean>(false);
   useEffect(() => {
     if (!user) return;
-    const t = setTimeout(() => setShowTour(true), 500);
-    return () => clearTimeout(t);
+    let cancelled = false;
+    const t = setTimeout(() => {
+      void hasSeenTour().then((seen) => {
+        if (!cancelled && !seen) setShowTour(true);
+      });
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [user]);
   const [accountDeleteStep, setAccountDeleteStep] = useState<0 | 1 | 2>(0);
   const [accountDeleteBusy, setAccountDeleteBusy] = useState(false);
@@ -5836,7 +5844,7 @@ export default function AppMain(){
       {!showOnboarding && showTour && user ? (
         <AppTour
           onComplete={() => {
-            localStorage.setItem(TOUR_SEEN_KEY, "true");
+            void markTourSeen();
             setShowTour(false);
           }}
           onTabChange={(tab) => navigateToView(tab)}

@@ -13,6 +13,7 @@
     "@capacitor/ios": "^8.3.0",
     "@capacitor/keyboard": "^8.0.3",
     "@capacitor/local-notifications": "^8.2.0",
+    "@capacitor/preferences": "^8.0.1",
     "@capacitor/push-notifications": "^8.1.1",
     "@capgo/capacitor-health": "^8.4.2",
     "@ebarooni/capacitor-calendar": "^8.3.0",

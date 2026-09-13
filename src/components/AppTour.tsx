@@ -1,6 +1,32 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Preferences } from '@capacitor/preferences';
 
 export const TOUR_SEEN_KEY = 'myrace_tour_seen';
+
+// localStorage in iOS WKWebViews (Capacitor) is not reliably persistent across app
+// restarts/reinstalls. Preferences (native UserDefaults) is. We still read the old
+// localStorage flag once to avoid re-showing the tour to users who already saw it
+// before this fix shipped.
+export async function hasSeenTour(): Promise<boolean> {
+  const { value } = await Preferences.get({ key: TOUR_SEEN_KEY });
+  if (value === 'true') return true;
+
+  let legacy: string | null = null;
+  try {
+    legacy = typeof localStorage === 'undefined' ? null : localStorage.getItem(TOUR_SEEN_KEY);
+  } catch {
+    legacy = null;
+  }
+  if (legacy === 'true') {
+    await Preferences.set({ key: TOUR_SEEN_KEY, value: 'true' });
+    return true;
+  }
+  return false;
+}
+
+export async function markTourSeen(): Promise<void> {
+  await Preferences.set({ key: TOUR_SEEN_KEY, value: 'true' });
+}
 
 type TourStep = {
   target?: string;
