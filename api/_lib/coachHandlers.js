@@ -917,6 +917,7 @@ async function callClaudeApi({ input, context, apiKey }) {
   // immediately on other 4xx (400/401/403/...) — no retry, as before.
   const anthropic = new Anthropic({ apiKey, maxRetries: 2, fetch: loggingFetch });
 
+  const cacheableContextJson = buildCacheableContextJson(context);
   const systemBlocks = [
     {
       type: "text",
@@ -932,7 +933,7 @@ async function callClaudeApi({ input, context, apiKey }) {
       // dynamic summary below — anything volatile placed ahead of this
       // breakpoint invalidates the whole cached span.
       type: "text",
-      text: buildCacheableContextJson(context),
+      text: cacheableContextJson,
       cache_control: { type: "ephemeral" },
     },
     {
@@ -961,6 +962,8 @@ async function callClaudeApi({ input, context, apiKey }) {
       cacheCreationInputTokens: response.usage?.cache_creation_input_tokens ?? 0,
       cacheReadInputTokens: response.usage?.cache_read_input_tokens ?? 0,
       messagesInHistory: messages.length,
+            cacheableContextJsonLength: cacheableContextJson.length,
+            recoveryDomainJsonLength: JSON.stringify(context?.recoveryDomain ?? null).length,
       conversationId: context?.conversationId ?? null,
       userId: context?.userId ?? null,
       timestamp: new Date().toISOString(),
