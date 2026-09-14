@@ -732,13 +732,59 @@ function buildStaticCoachSystemPrompt() {
   ].join("\n");
 }
 
+const COACH_CONTEXT_SSOT_NOTE =
+  "Use recoveryDomain + recoverySummary for readiness; use trainingPlan (next14Days/last7Days/planSummary) + logsLast10Days + healthRunsLast10Days for schedule/volume adherence questions.";
+
+/**
+ * Fields shared by buildUserPayload (OpenAI path, includes userInput) and
+ * buildCacheableContextJson (Claude path, excludes userInput so the block
+ * stays byte-identical across a conversation and is safe to cache).
+ */
+function buildCoachContextData(context) {
+  const todayIso = typeof context?.todayIso === "string" ? context.todayIso : "";
+  const recoveryDomain = pickRecoveryDomain(context);
+  const availableScreens = Array.isArray(context?.availableScreens) ? context.availableScreens : [];
+  const raceDateIso = context?.raceDateIso === null || typeof context?.raceDateIso === "string" ? context.raceDateIso : null;
+  const goals = context?.goals && typeof context.goals === "object" && !Array.isArray(context.goals) ? context.goals : {};
+  const maxHeartRateBpm =
+    typeof context?.maxHeartRateBpm === "number" ? context.maxHeartRateBpm : null;
+  const recoverySummary =
+    context?.recoverySummary && typeof context.recoverySummary === "object" ? context.recoverySummary : null;
+  const trainingPlan = buildTrimmedTrainingPlan(context);
+  const logsLast10Days = trimLogsLast10Days(context);
+  const healthRunsLast10Days = trimHealthRunsLast10Days(context);
+  return {
+    todayIso,
+    raceDateIso,
+    goals,
+    maxHeartRateBpm,
+    recoveryDomain,
+    recoverySummary,
+    availableScreens,
+    trainingPlan,
+    logsLast10Days,
+    healthRunsLast10Days,
+    instructions: {
+      language: "German",
+      actionSafety: "suggest-only-never-auto-apply",
+      structuredOutput: true,
+      recoverySsot: COACH_CONTEXT_SSOT_NOTE,
+    },
+  };
+}
+
+/** Same context data as buildUserPayload, without userInput — kept byte-stable for prompt caching. */
+function buildCacheableContextJson(context) {
+  return JSON.stringify(buildCoachContextData(context));
+}
+
 function buildDynamicCoachSystemPrompt(context) {
   const contextBlock = buildContextSummary(context || {});
   return [
     "KONTEXT DES USERS:",
     contextBlock,
     "",
-    "Strukturierte Rohdaten (JSON) folgen in den User-Nachrichten.",
+    "Strukturierte Rohdaten (JSON) folgen im nächsten System-Block.",
   ].join("\n");
 }
 
@@ -860,14 +906,9 @@ function loggingFetch(url, init) {
 const COACH_CHAT_MODEL = "claude-sonnet-5";
 
 async function callClaudeApi({ input, context, apiKey }) {
-  const contextJson = buildUserPayload(input, context);
   const messages = buildMessagesArray(input, context);
   if (messages.length === 0) {
     messages.push({ role: "user", content: typeof input === "string" ? input.trim() : "" });
-  }
-  const lastMsg = messages[messages.length - 1];
-  if (lastMsg.role === "user" && lastMsg.content !== contextJson) {
-    lastMsg.content = `${lastMsg.content}\n\n[KONTEXT-DATEN]\n${contextJson}`;
   }
 
   // maxRetries: 2 → 3 attempts total. The SDK retries 429/5xx (incl. 529
@@ -883,11 +924,21 @@ async function callClaudeApi({ input, context, apiKey }) {
       {
         type: "text",
         text: buildStaticCoachSystemPrompt(),
-        cache_control: { type: "ephemeral" },
       },
       {
         type: "text",
         text: buildDynamicCoachSystemPrompt(context),
+      },
+      {
+        // Large, stable per-conversation payload (recoveryDomain, trainingPlan,
+        // logs). No userInput here — keeping it out is what lets this block stay
+        // byte-identical turn-to-turn so it's actually cache-eligible. This is
+        // the last block of the stable prefix, so the breakpoint covers the
+        // whole system array (tools → system render order), not just the
+        // static instructions above.
+        type: "text",
+        text: buildCacheableContextJson(context),
+        cache_control: { type: "ephemeral" },
       },
     ],
     messages,
@@ -952,42 +1003,7 @@ function parseClaudeCoachResponse(text, userInput, context) {
 }
 
 function buildUserPayload(input, context) {
-  const todayIso = typeof context?.todayIso === "string" ? context.todayIso : "";
-  const recoveryDomain = pickRecoveryDomain(context);
-  const availableScreens = Array.isArray(context?.availableScreens) ? context.availableScreens : [];
-  const raceDateIso = context?.raceDateIso === null || typeof context?.raceDateIso === "string" ? context.raceDateIso : null;
-  const goals = context?.goals && typeof context.goals === "object" && !Array.isArray(context.goals) ? context.goals : {};
-  const maxHeartRateBpm =
-    typeof context?.maxHeartRateBpm === "number"
-      ? context.maxHeartRateBpm
-      : context?.maxHeartRateBpm === null
-        ? null
-        : null;
-  const recoverySummary =
-    context?.recoverySummary && typeof context.recoverySummary === "object" ? context.recoverySummary : null;
-  const trainingPlan = buildTrimmedTrainingPlan(context);
-  const logsLast10Days = trimLogsLast10Days(context);
-  const healthRunsLast10Days = trimHealthRunsLast10Days(context);
-  return JSON.stringify({
-    userInput: input,
-    todayIso,
-    raceDateIso,
-    goals,
-    maxHeartRateBpm,
-    recoveryDomain,
-    recoverySummary,
-    availableScreens,
-    trainingPlan,
-    logsLast10Days,
-    healthRunsLast10Days,
-    instructions: {
-      language: "German",
-      actionSafety: "suggest-only-never-auto-apply",
-      structuredOutput: true,
-      recoverySsot:
-        "Use recoveryDomain + recoverySummary for readiness; use trainingPlan (next14Days/last7Days/planSummary) + logsLast10Days + healthRunsLast10Days for schedule/volume adherence questions.",
-    },
-  });
+  return JSON.stringify({ userInput: input, ...buildCoachContextData(context) });
 }
 
 async function callResponsesApi({ selectedModel, input, context, allowedActions, responseSchemaVersion }) {
