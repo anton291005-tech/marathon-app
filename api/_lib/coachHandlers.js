@@ -878,6 +878,7 @@ async function callClaudeApi({ input, context, apiKey }) {
   const response = await anthropic.messages.create({
     model: COACH_CHAT_MODEL,
     max_tokens: 800,
+    thinking: { type: "disabled" },
     system: [
       {
         type: "text",
