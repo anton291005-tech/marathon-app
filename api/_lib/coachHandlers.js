@@ -874,7 +874,7 @@ async function callClaudeApi({ input, context, apiKey }) {
   const anthropic = new Anthropic({ apiKey, maxRetries: 2, fetch: loggingFetch });
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
+    model: "claude-sonnet-5",
     max_tokens: 800,
     system: [
       {
