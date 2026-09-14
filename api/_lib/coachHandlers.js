@@ -857,6 +857,8 @@ function loggingFetch(url, init) {
   );
 }
 
+const COACH_CHAT_MODEL = "claude-sonnet-5";
+
 async function callClaudeApi({ input, context, apiKey }) {
   const contextJson = buildUserPayload(input, context);
   const messages = buildMessagesArray(input, context);
@@ -874,7 +876,7 @@ async function callClaudeApi({ input, context, apiKey }) {
   const anthropic = new Anthropic({ apiKey, maxRetries: 2, fetch: loggingFetch });
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-5",
+    model: COACH_CHAT_MODEL,
     max_tokens: 800,
     system: [
       {
@@ -1138,7 +1140,7 @@ async function handleAiCoach(rawBody) {
   }
 
   try {
-    console.log("[api/ai] model=claude-sonnet-4-6"); // eslint-disable-line no-console
+    console.log(`[api/ai] model=${COACH_CHAT_MODEL}`); // eslint-disable-line no-console
     const rawText = await callClaudeApi({ input: bareUser, context, apiKey: anthropicApiKey });
     console.log("[api/ai] Claude response (first 200 chars):", rawText.slice(0, 200)); // eslint-disable-line no-console
 
