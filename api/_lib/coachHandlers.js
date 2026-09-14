@@ -890,6 +890,23 @@ async function callClaudeApi({ input, context, apiKey }) {
     messages,
   });
 
+  try {
+    console.log("[coach-chat-usage]", JSON.stringify({
+      seq: 1,
+      model: response.model,
+      inputTokens: response.usage?.input_tokens ?? 0,
+      outputTokens: response.usage?.output_tokens ?? 0,
+      cacheCreationInputTokens: response.usage?.cache_creation_input_tokens ?? 0,
+      cacheReadInputTokens: response.usage?.cache_read_input_tokens ?? 0,
+      messagesInHistory: messages.length,
+      conversationId: context?.conversationId ?? null,
+      userId: context?.userId ?? null,
+      timestamp: new Date().toISOString(),
+    })); // eslint-disable-line no-console
+  } catch {
+    // Logging must never block or delay the chat response.
+  }
+
   return response.content?.[0]?.text ?? "";
 }
 
