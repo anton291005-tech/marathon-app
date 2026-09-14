@@ -741,7 +741,8 @@ const COACH_CONTEXT_SSOT_NOTE =
  * stays byte-identical across a conversation and is safe to cache).
  */
 function buildCoachContextData(context) {
-  const todayIso = typeof context?.todayIso === "string" ? context.todayIso : "";
+    const rawTodayIso = typeof context?.todayIso === "string" ? context.todayIso : "";
+    const todayIso = rawTodayIso ? rawTodayIso.slice(0, 10) : ""; // Tag-Granularitaet statt Millisekunden-Timestamp -- sonst invalidiert jeder Call den Prompt-Cache
   const recoveryDomain = pickRecoveryDomain(context);
   const availableScreens = Array.isArray(context?.availableScreens) ? context.availableScreens : [];
   const raceDateIso = context?.raceDateIso === null || typeof context?.raceDateIso === "string" ? context.raceDateIso : null;
