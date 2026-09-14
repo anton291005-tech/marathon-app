@@ -743,18 +743,43 @@ const COACH_CONTEXT_SSOT_NOTE =
 /** Keep only the last N days of the raw daily series before it enters the cached block.
  * buildRecoverySummaryFromDomain (client-side) already only reads the last 7 days from
   * this array, so 21 days leaves real margin while stopping months of daily rows from
-   * inflating the ~90k-token cache. rollups intentionally left untouched here pending a
-    * separate size measurement -- do not extend this trim to rollups without checking first. */
+   * inflating the ~90k-token cache. */
 function trimRecoveryDomainSeriesForCache(domain, maxDays = 21) {
     if (!domain || typeof domain !== "object" || !Array.isArray(domain.series)) return domain;
-    const sorted = [...domain.series].sort((a, b) => String(a?.date).localeCompare(String(b?.date)));
+        const sorted = [...domain.series].sort((a, b) => String(a?.date).localeCompare(String(b?.date)));
     return { ...domain, series: sorted.slice(-maxDays) };
 }
+
+/** recoveryDomain.rollups is built as one entry PER PLAN WEEK (recoveryRollupBuilder.js:
+ * `args.plan.map(...)`), covering the whole plan including weeks that have not started yet
+  * (those get pure "Woche noch nicht begonnen" placeholders -- zero signal, still costs tokens).
+   * Measured at ~44% of the trimmed cache block (18.7KB), bigger than the trimmed series. Nothing
+    * in the coach system prompt or handler code reads .rollups by name -- it exists for the app's
+     * own recovery history chart, not for the LLM. Keep only completed/current weeks (drop
+      * not-yet-started weeks entirely) and cap to the last N of those, reusing the same
+       * current-week detection already trusted for next14Days/last7Days instead of re-deriving it. */
+function trimRecoveryDomainRollupsForCache(domain, context, maxWeeks = 4) {
+    if (!domain || typeof domain !== "object" || !Array.isArray(domain.rollups)) return domain;
+        const weeks = collectIncomingPlanWeeks(context);
+    const rawTodayIso = typeof context?.todayIso === "string" ? context.todayIso : "";
+    const now = rawTodayIso ? new Date(rawTodayIso) : new Date();
+    const today = normalizeCalendarDay(Number.isFinite(now.getTime()) ? now : new Date());
+    const currentWeek = weeks.length ? findCurrentPlanWeek(weeks, today, today.getFullYear()) : null;
+    const currentIndex = currentWeek ? weeks.indexOf(currentWeek) : -1;
+    const cutoffIndex = currentIndex >= 0 ? currentIndex : domain.rollups.length - 1;
+    const completedAndCurrent = domain.rollups.filter(
+          (r) => typeof r?.weekIndex === "number" && r.weekIndex <= cutoffIndex,
+        );
+    const trimmed = (completedAndCurrent.length ? completedAndCurrent : domain.rollups).slice(-maxWeeks);
+    return { ...domain, rollups: trimmed };
+}
+
+
 
 function buildCoachContextData(context) {
     const rawTodayIso = typeof context?.todayIso === "string" ? context.todayIso : "";
     const todayIso = rawTodayIso ? rawTodayIso.slice(0, 10) : ""; // Tag-Granularitaet statt Millisekunden-Timestamp -- sonst invalidiert jeder Call den Prompt-Cache
-  const recoveryDomain = trimRecoveryDomainSeriesForCache(pickRecoveryDomain(context));
+    const recoveryDomain = trimRecoveryDomainRollupsForCache(trimRecoveryDomainSeriesForCache(pickRecoveryDomain(context)), context);
   const availableScreens = Array.isArray(context?.availableScreens) ? context.availableScreens : [];
   const raceDateIso = context?.raceDateIso === null || typeof context?.raceDateIso === "string" ? context.raceDateIso : null;
   const goals = context?.goals && typeof context.goals === "object" && !Array.isArray(context.goals) ? context.goals : {};
