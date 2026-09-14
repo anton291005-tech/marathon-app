@@ -784,7 +784,7 @@ function buildDynamicCoachSystemPrompt(context) {
     "KONTEXT DES USERS:",
     contextBlock,
     "",
-    "Strukturierte Rohdaten (JSON) folgen im nächsten System-Block.",
+    "Strukturierte Rohdaten (JSON) siehe vorheriger System-Block.",
   ].join("\n");
 }
 
@@ -916,31 +916,38 @@ async function callClaudeApi({ input, context, apiKey }) {
   // immediately on other 4xx (400/401/403/...) — no retry, as before.
   const anthropic = new Anthropic({ apiKey, maxRetries: 2, fetch: loggingFetch });
 
+  const systemBlocks = [
+    {
+      type: "text",
+      text: buildStaticCoachSystemPrompt(),
+    },
+    {
+      // Large, stable per-conversation payload (recoveryDomain, trainingPlan,
+      // logs). No userInput here — keeping it out is what lets this block stay
+      // byte-identical turn-to-turn so it's actually cache-eligible. This is
+      // the last block of the stable prefix, so the breakpoint covers the
+      // whole system array (tools → system render order), not just the
+      // static instructions above. Must stay the LAST block before the
+      // dynamic summary below — anything volatile placed ahead of this
+      // breakpoint invalidates the whole cached span.
+      type: "text",
+      text: buildCacheableContextJson(context),
+      cache_control: { type: "ephemeral" },
+    },
+    {
+      // Per-turn framing text, deliberately AFTER the cache breakpoint: this
+      // is regenerated every call and must never sit ahead of cache_control,
+      // or it silently invalidates the (expensive) JSON block above it too.
+      type: "text",
+      text: buildDynamicCoachSystemPrompt(context),
+    },
+  ];
+
   const response = await anthropic.messages.create({
     model: COACH_CHAT_MODEL,
     max_tokens: 800,
     thinking: { type: "disabled" },
-    system: [
-      {
-        type: "text",
-        text: buildStaticCoachSystemPrompt(),
-      },
-      {
-        type: "text",
-        text: buildDynamicCoachSystemPrompt(context),
-      },
-      {
-        // Large, stable per-conversation payload (recoveryDomain, trainingPlan,
-        // logs). No userInput here — keeping it out is what lets this block stay
-        // byte-identical turn-to-turn so it's actually cache-eligible. This is
-        // the last block of the stable prefix, so the breakpoint covers the
-        // whole system array (tools → system render order), not just the
-        // static instructions above.
-        type: "text",
-        text: buildCacheableContextJson(context),
-        cache_control: { type: "ephemeral" },
-      },
-    ],
+    system: systemBlocks,
     messages,
   });
 
