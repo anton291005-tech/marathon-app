@@ -21,6 +21,8 @@ import {
 } from "../lib/supabase/services/weeklyScheduleBlocksService";
 import {
   CALENDAR_CONNECTED_KEY,
+  clearCalendarImportConnected,
+  computeCalendarConnectionDisplay,
   isCalendarImportConnected,
   markCalendarImportConnected,
   runCalendarForegroundResync,
@@ -162,5 +164,56 @@ describe("connected marker", () => {
     markCalendarImportConnected();
     expect(localStorage.getItem(CALENDAR_CONNECTED_KEY)).toBe("1");
     expect(isCalendarImportConnected()).toBe(true);
+  });
+
+  it("clearCalendarImportConnected setzt den Marker zurück (Settings-Trennen)", () => {
+    markCalendarImportConnected();
+    expect(isCalendarImportConnected()).toBe(true);
+
+    clearCalendarImportConnected();
+
+    expect(isCalendarImportConnected()).toBe(false);
+    expect(localStorage.getItem(CALENDAR_CONNECTED_KEY)).toBeNull();
+  });
+});
+
+describe("computeCalendarConnectionDisplay", () => {
+  it("granted + connected → connected/disconnect", () => {
+    expect(computeCalendarConnectionDisplay("granted", true)).toEqual({
+      badge: "connected",
+      action: "disconnect",
+    });
+  });
+
+  it("granted + nicht (mehr) lokal verbunden → not-connected/request-access (kein zweiter OS-Dialog nötig)", () => {
+    expect(computeCalendarConnectionDisplay("granted", false)).toEqual({
+      badge: "not-connected",
+      action: "request-access",
+    });
+  });
+
+  it("prompt (notDetermined) → not-connected/request-access", () => {
+    expect(computeCalendarConnectionDisplay("prompt", false)).toEqual({
+      badge: "not-connected",
+      action: "request-access",
+    });
+  });
+
+  it("denied → denied/open-settings, unabhängig vom lokalen Flag", () => {
+    expect(computeCalendarConnectionDisplay("denied", false)).toEqual({
+      badge: "denied",
+      action: "open-settings",
+    });
+    expect(computeCalendarConnectionDisplay("denied", true)).toEqual({
+      badge: "denied",
+      action: "open-settings",
+    });
+  });
+
+  it("unavailable → unavailable/none", () => {
+    expect(computeCalendarConnectionDisplay("unavailable", false)).toEqual({
+      badge: "unavailable",
+      action: "none",
+    });
   });
 });

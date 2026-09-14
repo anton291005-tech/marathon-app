@@ -98,7 +98,23 @@ import { AI_COACH_AVAILABLE_SCREENS } from "./lib/ai/aiCoachAvailableScreens";
 import { loadProfile, saveProfile } from "./lib/supabase/services/profilesService";
 import { loadPlanPatches, savePlanPatch } from "./lib/supabase/services/planPatchesService";
 import { loadWeeklyScheduleBlocks } from "./lib/supabase/services/weeklyScheduleBlocksService";
-import { runCalendarForegroundResync } from "./calendar/calendarSyncService";
+import {
+  runCalendarForegroundResync,
+  runCalendarWindowSync,
+  isCalendarImportConnected,
+  markCalendarImportConnected,
+  clearCalendarImportConnected,
+  computeCalendarConnectionDisplay,
+} from "./calendar/calendarSyncService";
+import {
+  calendarCheckReadPermission,
+  calendarRequestReadAuthorization,
+  type CalendarPermissionStatus,
+} from "./calendar/calendarImportService";
+import {
+  fetchStravaConnectionStatus,
+  disconnectStrava,
+} from "./lib/supabase/services/stravaConnectionService";
 import { assignSessionToBestCapacityDay } from "./ai/mutations/assignSessionToBestCapacityDay";
 import {
   buildCalendarReassignmentCandidates,
@@ -1162,6 +1178,7 @@ export default function AppMain(){
     teilen: false,
     appleHealth: false,
     strava: false,
+    calendar: false,
     raceCalc: false,
     backup: false,
   });
@@ -1481,6 +1498,10 @@ export default function AppMain(){
   const [stravaConnected, setStravaConnected] = useState(null);
   const [stravaConnectBusy, setStravaConnectBusy] = useState(false);
   const [stravaFeedback, setStravaFeedback] = useState(null);
+  const [calendarPermission, setCalendarPermission] = useState<CalendarPermissionStatus | null>(null);
+  const [calendarConnectedFlag, setCalendarConnectedFlag] = useState(false);
+  const [calendarConnectBusy, setCalendarConnectBusy] = useState(false);
+  const [calendarFeedback, setCalendarFeedback] = useState(null);
   const [isHealthConnected, setIsHealthConnected] = useState(
     () => typeof localStorage !== "undefined" && localStorage.getItem(APPLE_HEALTH_CONNECTED_KEY) === "1",
   );
@@ -1615,6 +1636,9 @@ export default function AppMain(){
     const CALENDAR_RESYNC_DEBOUNCE_MS = 5 * 60_000;
     const listenerPromise = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
       if (!isActive) return;
+      // Ungedrosselt: Settings-Card muss sofort aktualisieren, wenn der Nutzer aus den
+      // iOS-Systemeinstellungen zurückkehrt (Permission-Check ist billig, kein Netzwerk-Call).
+      void checkCalendarConnectionStatus();
       const now = getAppNowEpochMs();
       if (now - lastCalendarSyncTime < CALENDAR_RESYNC_DEBOUNCE_MS) return;
       lastCalendarSyncTime = now;
@@ -1758,15 +1782,8 @@ export default function AppMain(){
 
   const checkStravaConnectionStatus = async () => {
     try {
-      const { data, error } = await supabase
-        .from("strava_connections")
-        .select("strava_athlete_id")
-        .maybeSingle();
-      if (error) {
-        console.error("[Strava] connection status check failed", error);
-        return;
-      }
-      setStravaConnected(Boolean(data?.strava_athlete_id));
+      const connected = await fetchStravaConnectionStatus();
+      setStravaConnected(connected);
     } catch (err) {
       console.error("[Strava] connection status check failed", err);
     }
@@ -1777,6 +1794,87 @@ export default function AppMain(){
     void checkStravaConnectionStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- check once on mount for iOS
   }, []);
+
+  const handleStravaDisconnect = async () => {
+    setStravaFeedback(null);
+    setStravaConnectBusy(true);
+    try {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw new Error(sessionError.message);
+      const userId = data.session?.user?.id;
+      if (!userId) throw new Error("Nicht angemeldet");
+      const result = await disconnectStrava(userId);
+      if (!result.ok) throw new Error("delete failed");
+      setStravaConnected(false);
+      setStravaFeedback({ tone: "ok", text: "Strava getrennt." });
+    } catch (err) {
+      console.error("[Strava] disconnect failed", err);
+      setStravaFeedback({ tone: "err", text: "Strava konnte nicht getrennt werden." });
+    } finally {
+      setStravaConnectBusy(false);
+    }
+  };
+
+  const checkCalendarConnectionStatus = async () => {
+    if (Capacitor.getPlatform() !== "ios") return;
+    try {
+      const permission = await calendarCheckReadPermission();
+      setCalendarPermission(permission);
+      setCalendarConnectedFlag(isCalendarImportConnected());
+    } catch (err) {
+      console.error("[Kalender] Statusprüfung fehlgeschlagen", err);
+    }
+  };
+
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== "ios") return;
+    void checkCalendarConnectionStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- check once on mount for iOS
+  }, []);
+
+  const handleCalendarConnectInSettings = async () => {
+    if (calendarConnectBusy) return;
+    setCalendarFeedback(null);
+    setCalendarConnectBusy(true);
+    try {
+      const granted = await calendarRequestReadAuthorization();
+      if (!granted) {
+        await checkCalendarConnectionStatus();
+        setCalendarFeedback({ tone: "err", text: "Kein Kalenderzugriff erteilt." });
+        return;
+      }
+      const uid = userIdForHealthSyncRef.current;
+      if (!uid) {
+        setCalendarFeedback({ tone: "err", text: "Import gerade nicht möglich — bitte erneut versuchen." });
+        return;
+      }
+      const result = await runCalendarWindowSync(uid);
+      if (!result.ok) {
+        setCalendarFeedback({ tone: "err", text: "Kalender-Import fehlgeschlagen." });
+        return;
+      }
+      markCalendarImportConnected();
+      const freshBlocks = await loadWeeklyScheduleBlocks(uid);
+      if (freshBlocks) setScheduleBlocks(freshBlocks);
+      setCalendarFeedback({
+        tone: "ok",
+        text: result.importedCount > 0 ? `✓ ${result.importedCount} Termine importiert` : "Kalender verbunden — keine Termine in den nächsten 4 Wochen.",
+      });
+    } finally {
+      setCalendarConnectBusy(false);
+      await checkCalendarConnectionStatus();
+    }
+  };
+
+  const handleCalendarDisconnectInSettings = () => {
+    clearCalendarImportConnected();
+    setCalendarConnectedFlag(false);
+    setCalendarFeedback({ tone: "ok", text: "Kalender getrennt — bereits importierte Termine bleiben bestehen." });
+  };
+
+  const handleOpenIosCalendarSettings = () => {
+    window.location.href = "app-settings:";
+  };
 
   useEffect(() => {
     if (Capacitor.getPlatform() !== "ios") return;
@@ -5439,7 +5537,26 @@ export default function AppMain(){
                   >
                     {stravaConnectBusy ? "Verbinde…" : "Mit Strava verbinden"}
                   </button>
-                ) : null}
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleStravaDisconnect()}
+                    disabled={stravaConnectBusy}
+                    style={{
+                      background:"rgba(15,23,42,0.85)",
+                      border:"1px solid var(--border-default)",
+                      borderRadius:12,
+                      padding:"10px 14px",
+                      color:"#cbd5e1",
+                      fontSize:13,
+                      fontWeight:700,
+                      cursor:stravaConnectBusy ? "default" : "pointer",
+                      opacity:stravaConnectBusy ? 0.55 : 1,
+                    }}
+                  >
+                    {stravaConnectBusy ? "Trenne…" : "Trennen"}
+                  </button>
+                )}
                 {stravaFeedback ? (
                   <div
                     style={{
@@ -5456,6 +5573,110 @@ export default function AppMain(){
               </div>
             </CollapsibleSettingsCard>
           ) : null}
+
+          {Capacitor.getPlatform() === "ios" ? (() => {
+            const display = computeCalendarConnectionDisplay(
+              calendarPermission ?? "unavailable",
+              calendarConnectedFlag
+            );
+            const badgeText = {
+              connected: "Verbunden",
+              "not-connected": "Nicht verbunden",
+              denied: "Zugriff verweigert",
+              unavailable: "Nicht verfügbar",
+            }[display.badge];
+            const badgeColor = display.badge === "connected" ? "#86efac" : "var(--text-secondary)";
+            return (
+              <CollapsibleSettingsCard
+                title="Kalender"
+                subtitle={badgeText}
+                expanded={settingsCards.calendar}
+                onToggle={() => toggleSettingsCard("calendar")}
+              >
+                <div style={{marginTop:12}}>
+                  <div style={{fontSize:13, fontWeight:700, marginBottom:8, color:badgeColor, lineHeight:1.45}}>
+                    {badgeText}
+                  </div>
+                  {display.action === "disconnect" ? (
+                    <button
+                      type="button"
+                      onClick={() => handleCalendarDisconnectInSettings()}
+                      disabled={calendarConnectBusy}
+                      style={{
+                        background:"rgba(15,23,42,0.85)",
+                        border:"1px solid var(--border-default)",
+                        borderRadius:12,
+                        padding:"10px 14px",
+                        color:"#cbd5e1",
+                        fontSize:13,
+                        fontWeight:700,
+                        cursor:calendarConnectBusy ? "default" : "pointer",
+                        opacity:calendarConnectBusy ? 0.55 : 1,
+                      }}
+                    >
+                      Trennen
+                    </button>
+                  ) : null}
+                  {display.action === "request-access" ? (
+                    <button
+                      type="button"
+                      onClick={() => handleCalendarConnectInSettings()}
+                      disabled={calendarConnectBusy}
+                      style={{
+                        background:"rgba(16,185,129,0.16)",
+                        border:"1px solid rgba(52,211,153,0.4)",
+                        borderRadius:12,
+                        padding:"10px 14px",
+                        color:"#6ee7b7",
+                        fontSize:13,
+                        fontWeight:700,
+                        cursor:calendarConnectBusy ? "default" : "pointer",
+                        opacity:calendarConnectBusy ? 0.55 : 1,
+                      }}
+                    >
+                      {calendarConnectBusy ? "Verbinde…" : "Kalenderzugriff aktivieren"}
+                    </button>
+                  ) : null}
+                  {display.action === "open-settings" ? (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenIosCalendarSettings()}
+                      style={{
+                        background:"rgba(56,189,248,0.18)",
+                        border:"1px solid rgba(56,189,248,0.35)",
+                        borderRadius:12,
+                        padding:"10px 14px",
+                        color:"#7dd3fc",
+                        fontSize:13,
+                        fontWeight:700,
+                        cursor:"pointer",
+                      }}
+                    >
+                      In Einstellungen aktivieren
+                    </button>
+                  ) : null}
+                  {display.action === "none" ? (
+                    <div style={{fontSize:12, color:"var(--text-secondary)", lineHeight:1.45}}>
+                      Kalenderzugriff auf diesem Gerät nicht verfügbar.
+                    </div>
+                  ) : null}
+                  {calendarFeedback ? (
+                    <div
+                      style={{
+                        fontSize:12,
+                        lineHeight:1.45,
+                        marginTop:8,
+                        color:calendarFeedback.tone === "ok" ? "#86efac" : "#fca5a5",
+                        fontWeight:650,
+                      }}
+                    >
+                      {calendarFeedback.text}
+                    </div>
+                  ) : null}
+                </div>
+              </CollapsibleSettingsCard>
+            );
+          })() : null}
 
           <CollapsibleSettingsCard
             title="Race Calculator"

@@ -7,6 +7,7 @@ import { getAppCalendarYmd, getAppNow, getAppNowEpochMs } from "../core/time/tim
 import {
   calendarCheckReadPermission,
   fetchCalendarOccurrences,
+  type CalendarPermissionStatus,
 } from "./calendarImportService";
 import { occurrencesToScheduleBlocks } from "./eventToScheduleBlocks";
 import { loadCalendarSyncAnchors, saveCalendarSyncAnchors } from "./calendarSyncAnchorStore";
@@ -45,6 +46,45 @@ export function markCalendarImportConnected(): void {
   } catch {
     // quota / private mode
   }
+}
+
+/** Gegenstück zu markCalendarImportConnected() — Settings-„Trennen" (stoppt künftige EventKit-Reads). */
+export function clearCalendarImportConnected(): void {
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.removeItem(CALENDAR_CONNECTED_KEY);
+  } catch {
+    // quota / private mode
+  }
+}
+
+export type CalendarConnectionDisplay = {
+  badge: "connected" | "not-connected" | "denied" | "unavailable";
+  action: "disconnect" | "request-access" | "open-settings" | "none";
+};
+
+/**
+ * Reine Ableitung für die Settings-„Kalender"-Card aus OS-Permission + lokalem Connect-Flag.
+ * `granted` + `!connected` zeigt "request-access" statt "disconnect": ein erneuter Aufruf von
+ * calendarRequestReadAuthorization() liefert bei bereits erteilter Berechtigung sofort `true`
+ * zurück (kein zweiter OS-Dialog nötig) — Trennen setzt nur den lokalen Flag, nie die OS-Permission.
+ */
+export function computeCalendarConnectionDisplay(
+  permission: CalendarPermissionStatus,
+  connected: boolean
+): CalendarConnectionDisplay {
+  if (permission === "granted") {
+    return connected
+      ? { badge: "connected", action: "disconnect" }
+      : { badge: "not-connected", action: "request-access" };
+  }
+  if (permission === "denied") {
+    return { badge: "denied", action: "open-settings" };
+  }
+  if (permission === "prompt") {
+    return { badge: "not-connected", action: "request-access" };
+  }
+  return { badge: "unavailable", action: "none" };
 }
 
 /**
