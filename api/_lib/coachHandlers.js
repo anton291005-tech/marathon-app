@@ -740,10 +740,21 @@ const COACH_CONTEXT_SSOT_NOTE =
  * buildCacheableContextJson (Claude path, excludes userInput so the block
  * stays byte-identical across a conversation and is safe to cache).
  */
+/** Keep only the last N days of the raw daily series before it enters the cached block.
+ * buildRecoverySummaryFromDomain (client-side) already only reads the last 7 days from
+  * this array, so 21 days leaves real margin while stopping months of daily rows from
+   * inflating the ~90k-token cache. rollups intentionally left untouched here pending a
+    * separate size measurement -- do not extend this trim to rollups without checking first. */
+function trimRecoveryDomainSeriesForCache(domain, maxDays = 21) {
+    if (!domain || typeof domain !== "object" || !Array.isArray(domain.series)) return domain;
+    const sorted = [...domain.series].sort((a, b) => String(a?.date).localeCompare(String(b?.date)));
+    return { ...domain, series: sorted.slice(-maxDays) };
+}
+
 function buildCoachContextData(context) {
     const rawTodayIso = typeof context?.todayIso === "string" ? context.todayIso : "";
     const todayIso = rawTodayIso ? rawTodayIso.slice(0, 10) : ""; // Tag-Granularitaet statt Millisekunden-Timestamp -- sonst invalidiert jeder Call den Prompt-Cache
-  const recoveryDomain = pickRecoveryDomain(context);
+  const recoveryDomain = trimRecoveryDomainSeriesForCache(pickRecoveryDomain(context));
   const availableScreens = Array.isArray(context?.availableScreens) ? context.availableScreens : [];
   const raceDateIso = context?.raceDateIso === null || typeof context?.raceDateIso === "string" ? context.raceDateIso : null;
   const goals = context?.goals && typeof context.goals === "object" && !Array.isArray(context.goals) ? context.goals : {};
@@ -964,6 +975,8 @@ async function callClaudeApi({ input, context, apiKey }) {
       messagesInHistory: messages.length,
             cacheableContextJsonLength: cacheableContextJson.length,
             recoveryDomainJsonLength: JSON.stringify(context?.recoveryDomain ?? null).length,
+            recoveryDomainSeriesLength: Array.isArray(context?.recoveryDomain?.series) ? JSON.stringify(context.recoveryDomain.series).length : 0,
+            recoveryDomainRollupsLength: Array.isArray(context?.recoveryDomain?.rollups) ? JSON.stringify(context.recoveryDomain.rollups).length : 0,
       conversationId: context?.conversationId ?? null,
       userId: context?.userId ?? null,
       timestamp: new Date().toISOString(),
