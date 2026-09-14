@@ -138,6 +138,7 @@ async function generatePlanRulesWithClaude(profile) {
     client.messages.create({
       model: "claude-sonnet-5",
       max_tokens: 1500,
+      thinking: { type: "disabled" },
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildUserMessage(profile) }],
     }),
