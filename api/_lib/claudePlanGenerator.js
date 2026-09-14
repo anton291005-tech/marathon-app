@@ -136,8 +136,8 @@ async function generatePlanRulesWithClaude(profile) {
 
   const message = await Promise.race([
     client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 500,
+      model: "claude-sonnet-5",
+      max_tokens: 1500,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildUserMessage(profile) }],
     }),
