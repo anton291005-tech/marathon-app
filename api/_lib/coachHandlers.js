@@ -38,7 +38,9 @@ function readEnvTrimmed(name) {
 }
 
 const apiKey = readEnvTrimmed("OPENAI_API_KEY");
-const anthropicApiKey = readEnvTrimmed("ANTHROPIC_API_KEY");
+function getAnthropicApiKey() {
+  return readEnvTrimmed("ANTHROPIC_API_KEY");
+}
 const project = readEnvTrimmed("OPENAI_PROJECT");
 const organization = readEnvTrimmed("OPENAI_ORG");
 const defaultModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
@@ -1081,6 +1083,7 @@ function ensureParsedBody(raw) {
  * @returns {{ status: number, body: object }}
  */
 async function handleAiCoach(rawBody) {
+  const anthropicApiKey = getAnthropicApiKey();
   const body = ensureParsedBody(rawBody);
   console.log("[api/ai] incoming body keys:", Object.keys(body)); // eslint-disable-line no-console
   const {
