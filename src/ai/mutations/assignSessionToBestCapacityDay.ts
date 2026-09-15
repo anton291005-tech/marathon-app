@@ -101,6 +101,69 @@ function diffToPatches(before: AiPlanWeek[], after: AiPlanWeek[], ids: string[])
  * The result is produced via `applyPlanPatches` (not direct mutation) and gated by
  * `validatePlanIntegrity`, per the Phase-2-Roadmap acceptance criterion for Schritt 3.
  */
+type ScoredCandidate = {
+  candidate: SessionAssignmentCandidate;
+  after: AiPlanWeek[];
+  severity: number;
+  reason: string | null;
+  combinedFit: number;
+};
+
+/** Scores one candidate day; `null` when it's the moved session's own day or its target can't be found. */
+function scoreCandidate(
+  before: AiPlanWeek[],
+  sessionId: string,
+  movedSession: AiPlanSession,
+  candidate: SessionAssignmentCandidate,
+  sourceDayCapacity: DayCapacityScore | null,
+  context: ValidationContext,
+): ScoredCandidate | null {
+  if (candidate.targetSessionId === sessionId) return null;
+  const displacedSession = findSessionById(before, candidate.targetSessionId);
+  if (!displacedSession) return null;
+
+  const simulated = swapWorkouts(before, sessionId, candidate.targetSessionId);
+  const afterV2 = normalizeTrainingPlan(simulated);
+  const microResult = validateMicroStructure(afterV2, context);
+  const microAxis = microResult.axes.micro;
+
+  // Both sides of the swap must be scored: the moved session on its new (candidate) day, AND the
+  // displaced session that gets pushed onto the moved session's old day — otherwise a great capacity
+  // fit for the clicked session can silently shove a high-intensity session onto an overloaded day.
+  const movedFit = computeSessionDayFitScore(movedSession, candidate.capacity);
+  const displacedFit = sourceDayCapacity ? computeSessionDayFitScore(displacedSession, sourceDayCapacity) : 1;
+
+  return {
+    candidate,
+    after: simulated,
+    severity: microAxis?.score ?? 0,
+    reason: microAxis?.reason ?? null,
+    combinedFit: Math.min(movedFit, displacedFit),
+  };
+}
+
+/** Shared by the auto-pick (`assignSessionToBestCapacityDay`) and the full ranked list (`rankCalendarReassignmentCandidates`) — same order, so "the winner" is always ranked[0]. */
+function scoreAndRankCandidates(
+  before: AiPlanWeek[],
+  sessionId: string,
+  movedSession: AiPlanSession,
+  candidates: SessionAssignmentCandidate[],
+  sourceDayCapacity: DayCapacityScore | null,
+  context: ValidationContext,
+): ScoredCandidate[] {
+  const scored: ScoredCandidate[] = [];
+  for (const candidate of candidates) {
+    const result = scoreCandidate(before, sessionId, movedSession, candidate, sourceDayCapacity, context);
+    if (result) scored.push(result);
+  }
+  scored.sort((a, b) => {
+    if (a.severity !== b.severity) return a.severity - b.severity;
+    if (a.combinedFit !== b.combinedFit) return b.combinedFit - a.combinedFit;
+    return a.candidate.capacity.dateIso.localeCompare(b.candidate.capacity.dateIso);
+  });
+  return scored;
+}
+
 export function assignSessionToBestCapacityDay(
   plan: AiPlanWeek[],
   sessionId: string,
@@ -124,50 +187,11 @@ export function assignSessionToBestCapacityDay(
   }
 
   const context: ValidationContext = phase ? { ...NEUTRAL_VALIDATION_CONTEXT, phase } : NEUTRAL_VALIDATION_CONTEXT;
-
-  type ScoredCandidate = {
-    candidate: SessionAssignmentCandidate;
-    after: AiPlanWeek[];
-    severity: number;
-    reason: string | null;
-    combinedFit: number;
-  };
-  const scored: ScoredCandidate[] = [];
-
-  for (const candidate of candidates) {
-    if (candidate.targetSessionId === sessionId) continue;
-    const displacedSession = findSessionById(before, candidate.targetSessionId);
-    if (!displacedSession) continue;
-
-    const simulated = swapWorkouts(before, sessionId, candidate.targetSessionId);
-    const afterV2 = normalizeTrainingPlan(simulated);
-    const microResult = validateMicroStructure(afterV2, context);
-    const microAxis = microResult.axes.micro;
-
-    // Both sides of the swap must be scored: the moved session on its new (candidate) day, AND the
-    // displaced session that gets pushed onto the moved session's old day — otherwise a great capacity
-    // fit for the clicked session can silently shove a high-intensity session onto an overloaded day.
-    const movedFit = computeSessionDayFitScore(movedSession, candidate.capacity);
-    const displacedFit = sourceDayCapacity ? computeSessionDayFitScore(displacedSession, sourceDayCapacity) : 1;
-
-    scored.push({
-      candidate,
-      after: simulated,
-      severity: microAxis?.score ?? 0,
-      reason: microAxis?.reason ?? null,
-      combinedFit: Math.min(movedFit, displacedFit),
-    });
-  }
+  const scored = scoreAndRankCandidates(before, sessionId, movedSession, candidates, sourceDayCapacity, context);
 
   if (scored.length === 0) {
     return { ...emptyResult, reason: "no-valid-candidates" };
   }
-
-  scored.sort((a, b) => {
-    if (a.severity !== b.severity) return a.severity - b.severity;
-    if (a.combinedFit !== b.combinedFit) return b.combinedFit - a.combinedFit;
-    return a.candidate.capacity.dateIso.localeCompare(b.candidate.capacity.dateIso);
-  });
 
   const winner = scored[0];
   if (winner.combinedFit < MIN_FIT_SCORE_THRESHOLD) {
@@ -188,5 +212,98 @@ export function assignSessionToBestCapacityDay(
     chosenTargetSessionId: winner.candidate.targetSessionId,
     microStructureSeverity: winner.severity,
     warning: winner.severity >= MICRO_STRUCTURE_WARN_THRESHOLD ? winner.reason : null,
+  };
+}
+
+export type RankedCalendarCandidate = {
+  targetSessionId: string;
+  dateIso: string;
+  combinedFit: number;
+  microStructureSeverity: number;
+  microStructureReason: string | null;
+  /** Would be rejected (low fit) or warned (micro-structure) by the auto-pick engine — surfaced so the
+   * athlete can see it's a worse choice, not hidden, since they may still deliberately pick it. */
+  isConflict: boolean;
+};
+
+/**
+ * Same scoring/ranking as `assignSessionToBestCapacityDay`'s internal winner-pick, but returns every
+ * valid candidate (best first) instead of discarding all but the winner — feeds the manual "Bearbeiten"
+ * day-picker in the calendar panel so the athlete can choose a different day than the auto-pick.
+ */
+export function rankCalendarReassignmentCandidates(
+  plan: AiPlanWeek[],
+  sessionId: string,
+  candidates: SessionAssignmentCandidate[],
+  sourceDayCapacity: DayCapacityScore | null = null,
+  phase?: ValidationContext["phase"],
+): RankedCalendarCandidate[] {
+  const before: AiPlanWeek[] = deepClone(plan);
+  const movedSession = findSessionById(before, sessionId);
+  if (!sessionId || !movedSession || candidates.length === 0) return [];
+
+  const context: ValidationContext = phase ? { ...NEUTRAL_VALIDATION_CONTEXT, phase } : NEUTRAL_VALIDATION_CONTEXT;
+  const scored = scoreAndRankCandidates(before, sessionId, movedSession, candidates, sourceDayCapacity, context);
+
+  return scored.map((s) => ({
+    targetSessionId: s.candidate.targetSessionId,
+    dateIso: s.candidate.capacity.dateIso,
+    combinedFit: s.combinedFit,
+    microStructureSeverity: s.severity,
+    microStructureReason: s.reason,
+    isConflict: s.combinedFit < MIN_FIT_SCORE_THRESHOLD || s.severity >= MICRO_STRUCTURE_WARN_THRESHOLD,
+  }));
+}
+
+/**
+ * Applies an athlete-chosen target day instead of the engine's auto-pick (used when "Bearbeiten" ->
+ * a candidate from `rankCalendarReassignmentCandidates` is selected). Unlike the auto-pick, a poor
+ * `combinedFit` never hard-rejects here — the athlete already saw the candidate flagged via
+ * `isConflict` and chose it anyway. `validatePlanIntegrity` still gates the result since that's a
+ * structural invariant, not a quality judgment call the athlete can override.
+ */
+export function assignSessionToChosenDay(
+  plan: AiPlanWeek[],
+  sessionId: string,
+  targetSessionId: string,
+  phase?: ValidationContext["phase"],
+): SessionAssignmentResult {
+  const before: AiPlanWeek[] = deepClone(plan);
+  const emptyResult: Omit<SessionAssignmentResult, "reason"> = {
+    ok: false,
+    plan: before,
+    patches: [],
+    chosenTargetSessionId: null,
+    microStructureSeverity: 0,
+    warning: null,
+  };
+
+  const movedSession = findSessionById(before, sessionId);
+  const displacedSession = findSessionById(before, targetSessionId);
+  if (!sessionId || !movedSession || !targetSessionId || !displacedSession) {
+    return { ...emptyResult, reason: "no-candidates" };
+  }
+
+  const context: ValidationContext = phase ? { ...NEUTRAL_VALIDATION_CONTEXT, phase } : NEUTRAL_VALIDATION_CONTEXT;
+  const simulated = swapWorkouts(before, sessionId, targetSessionId);
+  const afterV2 = normalizeTrainingPlan(simulated);
+  const microResult = validateMicroStructure(afterV2, context);
+  const microAxis = microResult.axes.micro;
+  const severity = microAxis?.score ?? 0;
+
+  const patches = diffToPatches(before, simulated, [sessionId, targetSessionId]);
+  const patched = applyPlanPatches(before, patches);
+
+  if (!validatePlanIntegrity(patched)) {
+    return { ...emptyResult, reason: "integrity-violation" };
+  }
+
+  return {
+    ok: true,
+    plan: patched,
+    patches,
+    chosenTargetSessionId: targetSessionId,
+    microStructureSeverity: severity,
+    warning: severity >= MICRO_STRUCTURE_WARN_THRESHOLD ? microAxis?.reason ?? null : null,
   };
 }

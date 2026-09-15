@@ -1,4 +1,9 @@
-import { assignSessionToBestCapacityDay, type SessionAssignmentCandidate } from "./assignSessionToBestCapacityDay";
+import {
+  assignSessionToBestCapacityDay,
+  rankCalendarReassignmentCandidates,
+  assignSessionToChosenDay,
+  type SessionAssignmentCandidate,
+} from "./assignSessionToBestCapacityDay";
 import type { AiPlanWeek, AiPlanSession, SessionType } from "../../lib/ai/types";
 import type { DayCapacityScore } from "../../scheduling/capacityScore";
 
@@ -163,5 +168,90 @@ describe("assignSessionToBestCapacityDay", () => {
     const tempo = result.plan[0].s.find((sess) => sess.id === "s-fri");
     expect(tempo?.day).toBe("Freitag");
     expect(tempo?.date).toBe("14. Aug");
+  });
+});
+
+describe("rankCalendarReassignmentCandidates", () => {
+  test("liefert alle Kandidaten in derselben Reihenfolge, in der assignSessionToBestCapacityDay den Gewinner waehlt", () => {
+    const plan = buildPlan(BASE_WEEK);
+    const candidates: SessionAssignmentCandidate[] = [
+      { targetSessionId: "s-thu", capacity: capacity("2026-08-13", 0.3) },
+      { targetSessionId: "s-sun", capacity: capacity("2026-08-16", 0.9) },
+    ];
+    const ranked = rankCalendarReassignmentCandidates(plan, "s-tue", candidates);
+    expect(ranked.map((c) => c.targetSessionId)).toEqual(["s-sun", "s-thu"]);
+    expect(ranked[0].isConflict).toBe(false);
+  });
+
+  test("markiert Kandidaten unterhalb des Fit-Schwellwerts als isConflict statt sie wegzulassen", () => {
+    // Gleiches Setup wie der "darf den Tempodauerlauf nicht verdraengen"-Fall oben: der einzige
+    // Kandidat faellt unter MIN_FIT_SCORE_THRESHOLD und wuerde beim Auto-Pick hart abgelehnt.
+    const plan = buildPlan([
+      { id: "s-mon", type: "easy", date: "10. Aug", day: "Montag" },
+      { id: "s-fri", type: "tempo", date: "14. Aug", day: "Freitag" },
+    ]);
+    const candidates: SessionAssignmentCandidate[] = [{ targetSessionId: "s-fri", capacity: capacity("2026-08-14", 0.9) }];
+    const sourceDayCapacity = capacity("2026-08-10", 0.1);
+
+    const ranked = rankCalendarReassignmentCandidates(plan, "s-mon", candidates, sourceDayCapacity);
+    expect(ranked).toHaveLength(1);
+    expect(ranked[0].isConflict).toBe(true);
+  });
+
+  test("markiert Kandidaten mit Micro-Structure-Konflikt als isConflict", () => {
+    const plan = buildPlan(BASE_WEEK_ALL_CONFLICT);
+    const candidates: SessionAssignmentCandidate[] = [
+      { targetSessionId: "s-wed", capacity: capacity("2026-08-12", 0.9) },
+      { targetSessionId: "s-sat", capacity: capacity("2026-08-15", 0.5) },
+    ];
+    const ranked = rankCalendarReassignmentCandidates(plan, "s-tue", candidates);
+    expect(ranked.every((c) => c.isConflict)).toBe(true);
+  });
+
+  test("keine Kandidaten oder unbekannte Session -> leere Liste", () => {
+    const plan = buildPlan(BASE_WEEK);
+    expect(rankCalendarReassignmentCandidates(plan, "s-tue", [])).toEqual([]);
+    expect(
+      rankCalendarReassignmentCandidates(plan, "does-not-exist", [
+        { targetSessionId: "s-sun", capacity: capacity("2026-08-16", 0.9) },
+      ]),
+    ).toEqual([]);
+  });
+});
+
+describe("assignSessionToChosenDay", () => {
+  test("wendet den manuell gewaehlten Tag an, auch wenn er nicht der beste Kandidat waere", () => {
+    const plan = buildPlan(BASE_WEEK);
+    const result = assignSessionToChosenDay(plan, "s-tue", "s-thu");
+    expect(result.ok).toBe(true);
+    expect(result.chosenTargetSessionId).toBe("s-thu");
+    const moved = result.plan[0].s.find((sess) => sess.id === "s-tue");
+    expect(moved?.date).toBe("13. Aug");
+  });
+
+  test("wendet einen Kandidaten an, der beim Auto-Pick wegen zu niedrigem Fit-Score hart abgelehnt wuerde", () => {
+    const plan = buildPlan([
+      { id: "s-mon", type: "easy", date: "10. Aug", day: "Montag" },
+      { id: "s-fri", type: "tempo", date: "14. Aug", day: "Freitag" },
+    ]);
+    const result = assignSessionToChosenDay(plan, "s-mon", "s-fri");
+    expect(result.ok).toBe(true);
+    expect(result.chosenTargetSessionId).toBe("s-fri");
+  });
+
+  test("strukturelle Integritaetsverletzung blockiert weiterhin, auch bei manueller Auswahl", () => {
+    const plan = buildPlan(BASE_WEEK);
+    plan[0].s.push({ ...plan[0].s[0] });
+    const result = assignSessionToChosenDay(plan, "s-tue", "s-sun");
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("integrity-violation");
+    expect(result.patches).toEqual([]);
+  });
+
+  test("unbekannte Ziel-Session -> no-candidates", () => {
+    const plan = buildPlan(BASE_WEEK);
+    const result = assignSessionToChosenDay(plan, "s-tue", "does-not-exist");
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("no-candidates");
   });
 });

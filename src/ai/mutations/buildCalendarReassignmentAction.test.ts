@@ -1,5 +1,9 @@
-import { buildCalendarReassignmentCandidates, buildCalendarReassignmentAction } from "./buildCalendarReassignmentAction";
-import { assignSessionToBestCapacityDay } from "./assignSessionToBestCapacityDay";
+import {
+  buildCalendarReassignmentCandidates,
+  buildCalendarReassignmentAction,
+  buildCalendarReassignmentCandidateViews,
+} from "./buildCalendarReassignmentAction";
+import { assignSessionToBestCapacityDay, rankCalendarReassignmentCandidates } from "./assignSessionToBestCapacityDay";
 import type { AiPlanWeek, AiPlanSession, SessionType, PlanPatch } from "../../lib/ai/types";
 import type { SessionAssignmentResult } from "./assignSessionToBestCapacityDay";
 import type { RecurringScheduleBlock, OneOffScheduleBlock } from "../../lib/supabase/services/weeklyScheduleBlocksService";
@@ -27,6 +31,18 @@ const BASE_WEEK: DaySpec[] = [
   { id: "s-fri", type: "rest", date: "14. Aug", day: "Freitag", title: "Ruhetag" },
   { id: "s-sat", type: "long", date: "15. Aug", day: "Samstag", title: "Long Run" },
   { id: "s-sun", type: "easy", date: "16. Aug", day: "Sonntag", title: "Easy Run" },
+];
+
+// Variante mit Sonntag als zweiter Intervall-Einheit, für den "alle Kandidaten haben einen
+// Konflikt"-Fall (siehe assignSessionToBestCapacityDay.test.ts).
+const BASE_WEEK_ALL_CONFLICT: DaySpec[] = [
+  { id: "s-mon", type: "interval", date: "10. Aug", day: "Montag", title: "Intervalle" },
+  { id: "s-tue", type: "easy", date: "11. Aug", day: "Dienstag", title: "Easy Run" },
+  { id: "s-wed", type: "interval", date: "12. Aug", day: "Mittwoch", title: "Intervalle" },
+  { id: "s-thu", type: "easy", date: "13. Aug", day: "Donnerstag", title: "Easy Run" },
+  { id: "s-fri", type: "rest", date: "14. Aug", day: "Freitag", title: "Ruhetag" },
+  { id: "s-sat", type: "long", date: "15. Aug", day: "Samstag", title: "Long Run" },
+  { id: "s-sun", type: "interval", date: "16. Aug", day: "Sonntag", title: "Intervalle" },
 ];
 
 function recurring(overrides: Partial<RecurringScheduleBlock>): RecurringScheduleBlock {
@@ -151,5 +167,29 @@ describe("buildCalendarReassignmentAction", () => {
     expect(action).not.toBeNull();
     expect(action?.preview?.title).toBe("Trainingstag an Kalender anpassen");
     expect(action?.preview?.confirmLabel).toBe("Übernehmen");
+  });
+});
+
+describe("buildCalendarReassignmentCandidateViews", () => {
+  test("baut ein Label pro Kandidat aus der Session, die den Tag aktuell belegt, und uebernimmt isConflict", () => {
+    const plan = buildPlan(BASE_WEEK);
+    const candidates = buildCalendarReassignmentCandidates(plan[0], "s-tue", []);
+    const ranked = rankCalendarReassignmentCandidates(plan, "s-tue", candidates);
+    const views = buildCalendarReassignmentCandidateViews(plan[0], ranked);
+
+    expect(views).toHaveLength(ranked.length);
+    const sunView = views.find((v) => v.targetSessionId === "s-sun");
+    expect(sunView?.label).toBe("Sonntag (16. Aug) – Easy Run");
+    expect(sunView?.isConflict).toBe(false);
+  });
+
+  test("markiert Konflikt-Kandidaten mit isConflict und reicht die Warnung durch", () => {
+    const plan = buildPlan(BASE_WEEK_ALL_CONFLICT);
+    const candidates = buildCalendarReassignmentCandidates(plan[0], "s-tue", []);
+    const ranked = rankCalendarReassignmentCandidates(plan, "s-tue", candidates);
+    const views = buildCalendarReassignmentCandidateViews(plan[0], ranked);
+
+    expect(views.every((v) => v.isConflict)).toBe(true);
+    expect(views.some((v) => !!v.warningReason)).toBe(true);
   });
 });

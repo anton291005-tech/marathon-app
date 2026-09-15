@@ -115,10 +115,15 @@ import {
   fetchStravaConnectionStatus,
   disconnectStrava,
 } from "./lib/supabase/services/stravaConnectionService";
-import { assignSessionToBestCapacityDay } from "./ai/mutations/assignSessionToBestCapacityDay";
+import {
+  assignSessionToBestCapacityDay,
+  rankCalendarReassignmentCandidates,
+  assignSessionToChosenDay,
+} from "./ai/mutations/assignSessionToBestCapacityDay";
 import {
   buildCalendarReassignmentCandidates,
   buildCalendarReassignmentAction,
+  buildCalendarReassignmentCandidateViews,
   computeSourceDayCapacity,
 } from "./ai/mutations/buildCalendarReassignmentAction";
 import AiActionCard from "./components/ai/AiActionCard";
@@ -2631,13 +2636,15 @@ export default function AppMain(){
     if (!w) return;
     const candidates = buildCalendarReassignmentCandidates(w, sessionId, scheduleBlocks);
     const sourceDayCapacity = computeSourceDayCapacity(w, sessionId, scheduleBlocks);
+    const ranked = rankCalendarReassignmentCandidates(displayPlan, sessionId, candidates, sourceDayCapacity);
+    const candidateViews = buildCalendarReassignmentCandidateViews(w, ranked);
     const result = assignSessionToBestCapacityDay(displayPlan, sessionId, candidates, sourceDayCapacity);
     const action = buildCalendarReassignmentAction(sessionId, result, displayPlan);
     if (!action) {
-      setPendingCalendarProposal({ sessionId, action: null, patches: [] });
+      setPendingCalendarProposal({ sessionId, action: null, patches: [], candidates: candidateViews, mode: "preview" });
       return;
     }
-    setPendingCalendarProposal({ sessionId, action, patches: result.patches });
+    setPendingCalendarProposal({ sessionId, action, patches: result.patches, candidates: candidateViews, mode: "preview" });
   };
 
   const handleConfirmCalendarReassignment = ()=>{
@@ -2648,6 +2655,21 @@ export default function AppMain(){
   };
 
   const handleCancelCalendarReassignment = ()=>{
+    setPendingCalendarProposal(null);
+  };
+
+  const handleEditCalendarReassignment = ()=>{
+    setPendingCalendarProposal(prev => prev ? { ...prev, mode: "select" } : prev);
+  };
+
+  const handleSelectCalendarReassignmentTarget = (targetSessionId)=>{
+    if (!pendingCalendarProposal) return;
+    const result = assignSessionToChosenDay(displayPlan, pendingCalendarProposal.sessionId, targetSessionId);
+    if (!result.ok || !result.patches.length) {
+      setPendingCalendarProposal(prev => prev ? { ...prev, action: null, patches: [], mode: "preview" } : prev);
+      return;
+    }
+    handleAiApplyPlanPatches(null, null, result.patches);
     setPendingCalendarProposal(null);
   };
   const totalSess=ACTIVE_SESSIONS.length;
@@ -4464,12 +4486,44 @@ export default function AppMain(){
                 </div>
               ))}
               {pendingCalendarProposal && (
-                pendingCalendarProposal.action ? (
+                pendingCalendarProposal.mode === "select" ? (
+                  <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,display:"flex",flexDirection:"column",gap:8}}>
+                    <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700}}>Anderen Tag wählen</div>
+                    {pendingCalendarProposal.candidates.length === 0 ? (
+                      <span style={{fontSize:13,color:"var(--text-secondary)"}}>Keine anderen Tage in dieser Woche verfügbar.</span>
+                    ) : pendingCalendarProposal.candidates.map(candidate => (
+                      <button
+                        key={candidate.targetSessionId}
+                        onClick={()=>handleSelectCalendarReassignmentTarget(candidate.targetSessionId)}
+                        style={{
+                          display:"flex",
+                          flexDirection:"column",
+                          alignItems:"flex-start",
+                          gap:2,
+                          textAlign:"left",
+                          background:"rgba(15,23,42,0.82)",
+                          border:candidate.isConflict?"1px solid rgba(248,113,113,0.4)":"1px solid var(--border-default)",
+                          borderRadius:11,
+                          padding:"10px 12px",
+                          cursor:"pointer",
+                        }}
+                      >
+                        <span style={{fontSize:13,fontWeight:700,color:"#dbe7ff"}}>{candidate.label}</span>
+                        {candidate.isConflict && (
+                          <span style={{fontSize:11,color:"#f87171"}}>
+                            ⚠️ Ungünstig{candidate.warningReason ? `: ${candidate.warningReason}` : ""}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                    <button onClick={handleCancelCalendarReassignment} style={{alignSelf:"flex-end",background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700,fontSize:13}}>Abbrechen</button>
+                  </div>
+                ) : pendingCalendarProposal.action ? (
                   <AiActionCard
                     action={pendingCalendarProposal.action}
                     onConfirm={handleConfirmCalendarReassignment}
                     onCancel={handleCancelCalendarReassignment}
-                    onEdit={handleCancelCalendarReassignment}
+                    onEdit={handleEditCalendarReassignment}
                   />
                 ) : (
                   <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,fontSize:13,color:"var(--text-secondary)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>

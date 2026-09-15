@@ -1,5 +1,5 @@
 import type { AiPlanWeek, AiPlanSession, AiAssistantAction, AiActionPreview } from "../../lib/ai/types";
-import type { SessionAssignmentCandidate, SessionAssignmentResult } from "./assignSessionToBestCapacityDay";
+import type { SessionAssignmentCandidate, SessionAssignmentResult, RankedCalendarCandidate } from "./assignSessionToBestCapacityDay";
 import type { WeeklyScheduleBlock } from "../../lib/supabase/services/weeklyScheduleBlocksService";
 import { computeDayCapacityScore, type DayCapacityScore } from "../../scheduling/capacityScore";
 import { parseSessionDateLabel } from "../../appSmartFeatures";
@@ -98,4 +98,33 @@ export function buildCalendarReassignmentAction(
     payload: { sessionId, targetSessionId: result.chosenTargetSessionId },
     preview,
   };
+}
+
+export type CalendarReassignmentCandidateView = {
+  targetSessionId: string;
+  label: string;
+  isConflict: boolean;
+  warningReason: string | null;
+};
+
+/**
+ * Turns the engine's ranked candidates into display rows for the manual "Bearbeiten" day-picker —
+ * one label per candidate day, built from the session that currently occupies it (same info shown
+ * in the week list), plus the conflict flag from `rankCalendarReassignmentCandidates` so the UI can
+ * mark it without hiding it.
+ */
+export function buildCalendarReassignmentCandidateViews(
+  week: AiPlanWeek,
+  ranked: RankedCalendarCandidate[],
+): CalendarReassignmentCandidateView[] {
+  return ranked.map((candidate) => {
+    const session = (week.s ?? []).find((s) => s.id === candidate.targetSessionId);
+    const label = session ? `${session.day} (${session.date}) – ${session.title}` : candidate.dateIso;
+    return {
+      targetSessionId: candidate.targetSessionId,
+      label,
+      isConflict: candidate.isConflict,
+      warningReason: candidate.microStructureReason,
+    };
+  });
 }
