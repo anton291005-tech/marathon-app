@@ -2625,6 +2625,7 @@ export default function AppMain(){
   const w = displayPlan.length > 0 ? displayPlan[safeWIdx] : null;
   const wSessions = getWeekSessionList(w);
   const weekHasExpandedSessionDesc = wSessions.some((s) => !!weekTabDescExpandedById[s.id]);
+  const weekStackShouldScroll = weekHasExpandedSessionDesc || pendingCalendarProposal?.mode === "select";
   const ph=PI[w?.phase ?? ""] ?? PI["base"] ?? PI["BASE"] ?? { label:"Woche", emoji:"📅", col:"var(--text-secondary)", bg:"var(--border-default)" };
   // Week 1 mid-week start: show greyed placeholder cells for days before plan start
   const WEEK_DAYS_DE = ["Mo","Di","Mi","Do","Fr","Sa","So"];
@@ -3479,7 +3480,7 @@ export default function AppMain(){
       );
       if (cards.length >= 2) validateSiblingStackNoOverlap(cards, "week-sessions");
     }
-  }, [activeView, homeCoachAssessmentExpanded, weekTabDescExpandedById, wIdx, view]);
+  }, [activeView, homeCoachAssessmentExpanded, weekTabDescExpandedById, wIdx, view, pendingCalendarProposal]);
 
   return(
     <div
@@ -4452,11 +4453,11 @@ export default function AppMain(){
                 minHeight: 0,
                 display: "flex",
                 flexDirection: "column",
-                justifyContent: weekHasExpandedSessionDesc ? "flex-start" : "space-evenly",
-                gap: weekHasExpandedSessionDesc ? 4 : 0,
+                justifyContent: weekStackShouldScroll ? "flex-start" : "space-evenly",
+                gap: weekStackShouldScroll ? 4 : 0,
                 marginTop: 2,
                 overflowX: "hidden",
-                overflowY: weekHasExpandedSessionDesc ? "auto" : "hidden",
+                overflowY: weekStackShouldScroll ? "auto" : "hidden",
                 WebkitOverflowScrolling: "touch",
                 overscrollBehaviorY: "contain",
               }}
@@ -4487,7 +4488,7 @@ export default function AppMain(){
               ))}
               {pendingCalendarProposal && (
                 pendingCalendarProposal.mode === "select" ? (
-                  <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,display:"flex",flexDirection:"column",gap:8}}>
+                  <div data-layout-week-card="1" style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,display:"flex",flexDirection:"column",gap:8,flexShrink:0,maxHeight:"min(60vh, 420px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
                     <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700}}>Anderen Tag wählen</div>
                     {pendingCalendarProposal.candidates.length === 0 ? (
                       <span style={{fontSize:13,color:"var(--text-secondary)"}}>Keine anderen Tage in dieser Woche verfügbar.</span>
