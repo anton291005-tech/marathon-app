@@ -46,6 +46,17 @@ const PR_BLEND_ANCHOR_WEIGHT = 0.35;
 const PR_ANCHOR_FACTOR = 1.08;
 const PR_MAX_SLOWDOWN_FACTOR = 1.15;
 
+/**
+ * A completed half-marathon-or-longer race is run at genuine race effort — a far stronger
+ * fitness signal than any number of deliberately-paced training long runs or tempo efforts.
+ * It anchors (dominates) the forecast via its own Riegel extrapolation instead of being
+ * averaged in as just another WETTKAMPF_SESSION_TYPES sample. Stays relevant longer than
+ * training data, so it gets its own, wider window.
+ */
+const RACE_ANCHOR_MIN_KM = 21;
+const RACE_ANCHOR_WINDOW_DAYS = 120;
+const RACE_ANCHOR_DOMINANT_WEIGHT = 0.75;
+
 export type ForecastInput = {
   plan: PlanWeek[];
   logs: Record<string, SessionLog>;
@@ -82,6 +93,14 @@ type PaceRunSample = {
   distanceKm: number;
   durationSec: number;
   paceSecPerKm: number;
+};
+
+type RaceAnchor = {
+  predictedSeconds: number;
+  ymd: string;
+  distanceKm: number;
+  durationSec: number;
+  daysAgo: number;
 };
 
 function sigmoid(x: number): number {
@@ -189,6 +208,45 @@ function collectPaceRunSamples(
 
   out.sort((a, b) => (a.ymd === b.ymd ? 0 : a.ymd < b.ymd ? -1 : 1));
   return out;
+}
+
+function findRaceAnchor(
+  plan: PlanWeek[],
+  logs: Record<string, SessionLog>,
+  healthRuns: StoredHealthRun[],
+  now: Date,
+): RaceAnchor | null {
+  const byId = healthRunById(healthRuns);
+  const todayYmd = berlinWallClockYmd(now);
+  const year = now.getFullYear();
+  let best: RaceAnchor | null = null;
+
+  for (const week of plan) {
+    for (const session of week.s ?? []) {
+      if (session.type !== "race") continue;
+      const dt = parseSessionDateLabel(session.date, year);
+      if (!dt) continue;
+      const ymd = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      if (ymd > todayYmd) continue;
+      const daysBack = calendarDaysBetweenYmd(ymd, todayYmd);
+      if (!Number.isFinite(daysBack) || daysBack < 0 || daysBack > RACE_ANCHOR_WINDOW_DAYS) continue;
+
+      const log = logs[session.id];
+      if (!isSessionLogDone(log)) continue;
+
+      const dist = extractDistanceKm(session, log, byId);
+      if (!(dist && dist >= RACE_ANCHOR_MIN_KM)) continue;
+      const dur = extractDurationSec(log, byId);
+      if (!(dur && dur > 0)) continue;
+
+      if (best == null || ymd > best.ymd) {
+        const predictedSeconds = riegelMarathonSeconds(dur, dist);
+        if (!Number.isFinite(predictedSeconds)) continue;
+        best = { predictedSeconds, ymd, distanceKm: dist, durationSec: dur, daysAgo: daysBack };
+      }
+    }
+  }
+  return best;
 }
 
 function computeMaxLongRunKm(
@@ -391,8 +449,9 @@ export function computeMarathonForecast(input: ForecastInput): MarathonForecast 
     now,
   );
   const window42Adherence = compute42DayVolumeAdherence(input.plan, input.logs, input.healthRuns, now);
+  const raceAnchor = findRaceAnchor(input.plan, input.logs, input.healthRuns, now);
 
-  if (paceSamples.length < MIN_PACE_SAMPLES) {
+  if (paceSamples.length < MIN_PACE_SAMPLES && raceAnchor == null) {
     return {
       ready: false,
       message:
@@ -413,7 +472,18 @@ export function computeMarathonForecast(input: ForecastInput): MarathonForecast 
 
   const { baseSeconds: trainingBaseSeconds, wettkampfSessionCount } =
     baseSecondsFromSegmentedPaceSamples(paceSamples);
-  if (trainingBaseSeconds == null || !Number.isFinite(trainingBaseSeconds)) {
+
+  let baseSeconds: number;
+  if (raceAnchor != null) {
+    // Race result dominates — training paces only nudge it, they never dilute it away.
+    baseSeconds =
+      trainingBaseSeconds != null && Number.isFinite(trainingBaseSeconds)
+        ? RACE_ANCHOR_DOMINANT_WEIGHT * raceAnchor.predictedSeconds +
+          (1 - RACE_ANCHOR_DOMINANT_WEIGHT) * trainingBaseSeconds
+        : raceAnchor.predictedSeconds;
+  } else if (trainingBaseSeconds != null && Number.isFinite(trainingBaseSeconds)) {
+    baseSeconds = trainingBaseSeconds;
+  } else {
     return {
       ready: false,
       message: "Pace-Daten unvollständig – bitte Health-Läufe zuordnen.",
@@ -431,7 +501,7 @@ export function computeMarathonForecast(input: ForecastInput): MarathonForecast 
     };
   }
 
-  let predictedSeconds = applyPersonalBestAnchor(trainingBaseSeconds, input.personalBestSeconds);
+  let predictedSeconds = applyPersonalBestAnchor(baseSeconds, input.personalBestSeconds);
   predictedSeconds *= volumeAdherenceTimeFactor(weeklyVolumeAdherence, window42Adherence);
   predictedSeconds *= longRunDepthFactor(maxLongRunKm);
   predictedSeconds *= recoveryTimeFactor(input.homeRecoveryScore0_100);

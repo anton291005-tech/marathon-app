@@ -17,6 +17,17 @@ const LONG_WINDOW_DAYS = 8 * 7;
 const TEMPO_WINDOW_DAYS = 6 * 7;
 const LONG_MIN_KM = 14;
 
+/**
+ * A completed race (sessionType "race") at half-marathon distance or longer is a genuine
+ * race-effort data point — unlike a training-paced long run, it's valid Riegel input on its
+ * own. It stays relevant longer than training data, so it gets its own, wider window and
+ * dominates the blend instead of being averaged in as just another sample.
+ */
+const RACE_WINDOW_DAYS = 120;
+const RACE_MIN_KM = 21;
+const RACE_HIGH_CONFIDENCE_MAX_AGE_DAYS = 60;
+const RACE_DOMINANT_WEIGHT = 0.75;
+
 /** Tempo→marathon pace factor staggered by tempo effort duration (shorter tempo = further from marathon pace). */
 const TEMPO_DURATION_SHORT_MAX_MIN = 20;
 const TEMPO_DURATION_MEDIUM_MAX_MIN = 40;
@@ -39,7 +50,7 @@ export type PaceBasedPrediction = {
   predictedPaceSecPerKm: number;
   confidenceLevel: "high" | "medium" | "low";
   dataPointsUsed: number;
-  primaryMethod: "long_run" | "tempo" | "combined";
+  primaryMethod: "race" | "race_combined" | "long_run" | "tempo" | "combined";
   recoveryAdjustmentApplied: number;
   isSubThreeHourTarget: boolean;
   gapToSubThreeSeconds: number;
@@ -52,6 +63,14 @@ type CompletedRunSample = {
   distanceKm: number;
   durationSec: number;
   paceSecPerKm: number;
+};
+
+type RaceAnchor = {
+  predictedSeconds: number;
+  ymd: string;
+  distanceKm: number;
+  durationSec: number;
+  daysAgo: number;
 };
 
 export function formatRaceClockGerman(seconds: number): string {
@@ -194,6 +213,10 @@ function isTempoType(t: string): boolean {
   return t === "tempo" || t === "interval";
 }
 
+function isRaceType(t: string): boolean {
+  return t === "race";
+}
+
 function collectSamples(
   context: AiContext,
   now: Date,
@@ -203,6 +226,9 @@ function collectSamples(
   const todayYmd = berlinWallClockYmd(now);
   const year = now.getFullYear();
   const out: CompletedRunSample[] = [];
+  // Races stay relevant longer than training data, so the collection window has to cover
+  // both — the tighter LONG_WINDOW_DAYS filter for long/tempo runs is applied downstream.
+  const maxWindowDays = Math.max(LONG_WINDOW_DAYS, RACE_WINDOW_DAYS);
 
   for (const w of context.plan as PlanWeek[]) {
     for (const s of w.s ?? []) {
@@ -211,7 +237,7 @@ function collectSamples(
       const ymd = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
       if (ymd > todayYmd) continue;
       const daysBack = calendarDaysBetweenYmd(ymd, todayYmd);
-      if (!Number.isFinite(daysBack) || daysBack < 0 || daysBack > LONG_WINDOW_DAYS) continue;
+      if (!Number.isFinite(daysBack) || daysBack < 0 || daysBack > maxWindowDays) continue;
 
       const log = context.logs[s.id] as SessionLog | undefined;
       if (!isSessionLogDone(log)) continue;
@@ -272,6 +298,32 @@ function tempoPrediction(samples: CompletedRunSample[], todayYmd: string): numbe
   return marathonSecondsPerSample.reduce((a, b) => a + b, 0) / marathonSecondsPerSample.length;
 }
 
+/**
+ * Anchors the forecast on a real race result (half-marathon distance or longer) rather than
+ * training-paced long runs. A race is run at genuine race effort, so — unlike an easy/aerobic
+ * long run — it's a valid Riegel input on its own. Picks the most recent qualifying race
+ * within RACE_WINDOW_DAYS.
+ */
+function racePrediction(samples: CompletedRunSample[], todayYmd: string): RaceAnchor | null {
+  const windowStart = addDaysToYmd(todayYmd, -RACE_WINDOW_DAYS);
+  if (!windowStart) return null;
+  const races = samples.filter(
+    (r) => isRaceType(r.sessionType) && r.distanceKm >= RACE_MIN_KM && r.ymd >= windowStart,
+  );
+  if (races.length === 0) return null;
+  const mostRecent = [...races].sort((a, b) => (a.ymd === b.ymd ? 0 : a.ymd < b.ymd ? 1 : -1))[0];
+  const predictedSeconds = riegelMarathonSeconds(mostRecent.durationSec, mostRecent.distanceKm);
+  if (!Number.isFinite(predictedSeconds)) return null;
+  const daysAgo = calendarDaysBetweenYmd(mostRecent.ymd, todayYmd);
+  return {
+    predictedSeconds,
+    ymd: mostRecent.ymd,
+    distanceKm: mostRecent.distanceKm,
+    durationSec: mostRecent.durationSec,
+    daysAgo: Number.isFinite(daysAgo) ? daysAgo : RACE_WINDOW_DAYS,
+  };
+}
+
 function computeTempoWeight(tempoCount: number): number {
   if (tempoCount <= TEMPO_WEIGHT_MIN_SAMPLES) return TEMPO_WEIGHT_MIN;
   if (tempoCount >= TEMPO_WEIGHT_MAX_SAMPLES) return TEMPO_WEIGHT_MAX;
@@ -322,8 +374,9 @@ function buildInterpretation(args: {
   recovery: RecoveryAdjust;
   longEquivSeconds: number | null;
   displayLongWindowCount: number;
+  race: RaceAnchor | null;
 }): string {
-  const { prediction, longAvgPaceSecPerKm, longRunCount, tempoCount, recovery, displayLongWindowCount } = args;
+  const { prediction, longAvgPaceSecPerKm, longRunCount, tempoCount, recovery, displayLongWindowCount, race } = args;
   const nLong = displayLongWindowCount;
   const paceStr = longAvgPaceSecPerKm != null ? formatPaceGerman(longAvgPaceSecPerKm) : formatPaceGerman(prediction.predictedPaceSecPerKm);
   const timeStr = formatRaceClockGerman(prediction.predictedMarathonTimeSeconds);
@@ -335,6 +388,11 @@ function buildInterpretation(args: {
       ? "Noch wenige Daten verfügbar — mit mehr abgeschlossenen Einheiten wird die Prognose genauer. "
       : "";
 
+  const raceClause =
+    race != null
+      ? `Basierend auf deinem Wettkampf über ${race.distanceKm.toFixed(1)} km (${formatRaceClockGerman(race.durationSec)}, vor ${race.daysAgo} Tag${race.daysAgo === 1 ? "" : "en"}) `
+      : "";
+
   const recoveryClause =
     recovery.avgRecovery != null && recovery.combinedDecimal > 0.01
       ? ` Deine Erholungswerte zeigen aktuell erhöhte Belastung (Recovery-Score ${recovery.avgRecovery}/100, Confidence ${Math.round((recovery.avgConfidence ?? 0) * 100)}%) — das fließt konservativ in die Prognose ein.`
@@ -343,7 +401,9 @@ function buildInterpretation(args: {
   if (prediction.isSubThreeHourTarget) {
     const under = minutesRounded(SUB3_SECONDS - prediction.predictedMarathonTimeSeconds);
     body =
-      `${lowPrefix}Basierend auf deinen letzten ${nLong} langen Läufen (Ø ${paceStr}) prognostiziere ich eine Marathonzeit von ${timeStr} — das ist ${under} Minuten unter der 3-Stunden-Marke.${recoveryClause} Halte das aktuelle Niveau, du bist auf Kurs.`;
+      race != null
+        ? `${lowPrefix}${raceClause}prognostiziere ich eine Marathonzeit von ${timeStr} — das ist ${under} Minuten unter der 3-Stunden-Marke.${recoveryClause} Halte das aktuelle Niveau, du bist auf Kurs.`
+        : `${lowPrefix}Basierend auf deinen letzten ${nLong} langen Läufen (Ø ${paceStr}) prognostiziere ich eine Marathonzeit von ${timeStr} — das ist ${under} Minuten unter der 3-Stunden-Marke.${recoveryClause} Halte das aktuelle Niveau, du bist auf Kurs.`;
   } else if (prediction.gapToSubThreeSeconds <= 300) {
     const overMin = minutesRounded(prediction.gapToSubThreeSeconds);
     const focus =
@@ -351,14 +411,18 @@ function buildInterpretation(args: {
         ? "Priorisiere strukturierte Tempo- und Schwelleneinheiten, um die Geschwindigkeitsreserve zu erhöhen."
         : "Nutze die nächsten langen Läufe, um Marathonpace ökonomischer zu halten — gleichmäßige Pace statt Einbruch am Ende.";
     body =
-      `${lowPrefix}Deine aktuelle Form deutet auf ${timeStr} hin — ${overMin} Minuten über Sub-3h. Das ist knapp. ${focus}${recoveryClause}`;
+      race != null
+        ? `${lowPrefix}${raceClause}deutet auf ${timeStr} hin — ${overMin} Minuten über Sub-3h. Das ist knapp. ${focus}${recoveryClause}`
+        : `${lowPrefix}Deine aktuelle Form deutet auf ${timeStr} hin — ${overMin} Minuten über Sub-3h. Das ist knapp. ${focus}${recoveryClause}`;
   } else {
     const lrEquiv =
       longAvgPaceSecPerKm != null && args.longEquivSeconds != null
         ? formatRaceClockGerman(args.longEquivSeconds)
         : timeStr;
     body =
-      `${lowPrefix}Aktuell prognostiziere ich ${timeStr} für deinen Marathon. Um Sub-3h zu erreichen, brauchst du ${sub3Pace} Marathonpace. Deine aktuelle Long-Run-Pace von ${paceStr} entspricht einer rechnerischen Zielzeit von ${lrEquiv}.${recoveryClause} Verteile Tempo und Länge über mehr Wochen — ohne Sprünge bei der Intensität.`;
+      race != null
+        ? `${lowPrefix}${raceClause}prognostiziere ich aktuell ${timeStr} für deinen Marathon. Um Sub-3h zu erreichen, brauchst du ${sub3Pace} Marathonpace.${recoveryClause} Verteile Tempo und Länge über mehr Wochen — ohne Sprünge bei der Intensität.`
+        : `${lowPrefix}Aktuell prognostiziere ich ${timeStr} für deinen Marathon. Um Sub-3h zu erreichen, brauchst du ${sub3Pace} Marathonpace. Deine aktuelle Long-Run-Pace von ${paceStr} entspricht einer rechnerischen Zielzeit von ${lrEquiv}.${recoveryClause} Verteile Tempo und Länge über mehr Wochen — ohne Sprünge bei der Intensität.`;
   }
 
   return body.replace(/\s+/g, " ").trim();
@@ -370,12 +434,15 @@ export function computePaceBasedPrediction(context: AiContext): PaceBasedPredict
   const todayYmd = berlinWallClockYmd(now);
 
   const samples = collectSamples(context, now, healthRuns);
-  const longRuns = samples.filter((r) => isLongType(r.sessionType) && r.distanceKm >= LONG_MIN_KM);
-  if (longRuns.length < 2) return null;
+  const longWindowStart = addDaysToYmd(todayYmd, -LONG_WINDOW_DAYS);
+  const longRuns = samples.filter(
+    (r) => isLongType(r.sessionType) && r.distanceKm >= LONG_MIN_KM && (longWindowStart == null || r.ymd >= longWindowStart),
+  );
+  const race = racePrediction(samples, todayYmd);
 
-  const longPred = weightedLongRunPrediction(longRuns);
-  if (longPred == null || !Number.isFinite(longPred)) return null;
+  if (race == null && longRuns.length < 2) return null;
 
+  const longPred = longRuns.length >= 2 ? weightedLongRunPrediction(longRuns) : null;
   const tempoPred = tempoPrediction(samples, todayYmd);
 
   const tempoWindowStart = addDaysToYmd(todayYmd, -TEMPO_WINDOW_DAYS);
@@ -384,14 +451,42 @@ export function computePaceBasedPrediction(context: AiContext): PaceBasedPredict
       ? samples.filter((r) => isTempoType(r.sessionType) && r.ymd >= tempoWindowStart).length
       : 0;
 
-  let combinedSeconds = longPred;
-  let primaryMethod: PaceBasedPrediction["primaryMethod"] = "long_run";
-  if (tempoPred != null && Number.isFinite(tempoPred)) {
-    const tempoWeight = computeTempoWeight(tempoCount);
-    combinedSeconds = (1 - tempoWeight) * longPred + tempoWeight * tempoPred;
-    primaryMethod = "combined";
+  let combinedSeconds: number;
+  let primaryMethod: PaceBasedPrediction["primaryMethod"];
+
+  if (race != null) {
+    // Race result anchors the estimate — training-paced long runs / tempo runs only nudge it,
+    // they never dominate it. A real race effort is a far stronger fitness signal than any
+    // number of deliberately-paced training long runs.
+    let trainingSeconds: number | null = null;
+    if (longPred != null && Number.isFinite(longPred)) {
+      if (tempoPred != null && Number.isFinite(tempoPred)) {
+        const tempoWeight = computeTempoWeight(tempoCount);
+        trainingSeconds = (1 - tempoWeight) * longPred + tempoWeight * tempoPred;
+      } else {
+        trainingSeconds = longPred;
+      }
+    } else if (tempoPred != null && Number.isFinite(tempoPred)) {
+      trainingSeconds = tempoPred;
+    }
+    if (trainingSeconds != null) {
+      combinedSeconds = RACE_DOMINANT_WEIGHT * race.predictedSeconds + (1 - RACE_DOMINANT_WEIGHT) * trainingSeconds;
+      primaryMethod = "race_combined";
+    } else {
+      combinedSeconds = race.predictedSeconds;
+      primaryMethod = "race";
+    }
+  } else if (longPred != null && Number.isFinite(longPred)) {
+    if (tempoPred != null && Number.isFinite(tempoPred)) {
+      const tempoWeight = computeTempoWeight(tempoCount);
+      combinedSeconds = (1 - tempoWeight) * longPred + tempoWeight * tempoPred;
+      primaryMethod = "combined";
+    } else {
+      combinedSeconds = longPred;
+      primaryMethod = "long_run";
+    }
   } else {
-    primaryMethod = "long_run";
+    return null;
   }
 
   const recovery = computeRecoveryAdjustment(context);
@@ -403,8 +498,13 @@ export function computePaceBasedPrediction(context: AiContext): PaceBasedPredict
   const longAvgPaceSecPerKm =
     longRecent.length > 0 ? longRecent.reduce((a, r) => a + r.paceSecPerKm, 0) / longRecent.length : null;
 
-  const confidenceLevel = confidenceFromCounts(longRuns.length, tempoCount, tempoPred != null);
-  const dataPointsUsed = longRuns.length + tempoCount;
+  const confidenceLevel: PaceBasedPrediction["confidenceLevel"] =
+    race != null
+      ? race.daysAgo <= RACE_HIGH_CONFIDENCE_MAX_AGE_DAYS
+        ? "high"
+        : "medium"
+      : confidenceFromCounts(longRuns.length, tempoCount, tempoPred != null);
+  const dataPointsUsed = (race != null ? 1 : 0) + longRuns.length + tempoCount;
 
   const isSubThreeHourTarget = predictedMarathonTimeSeconds < SUB3_SECONDS;
   const gapToSubThreeSeconds = predictedMarathonTimeSeconds - SUB3_SECONDS;
@@ -436,6 +536,7 @@ export function computePaceBasedPrediction(context: AiContext): PaceBasedPredict
     recovery,
     longEquivSeconds: longEquivSeconds != null && Number.isFinite(longEquivSeconds) ? longEquivSeconds : null,
     displayLongWindowCount: longRecent.length,
+    race,
   });
 
   return { ...basePred, interpretation };

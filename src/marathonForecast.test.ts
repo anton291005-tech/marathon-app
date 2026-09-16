@@ -173,6 +173,93 @@ describe("computeMarathonForecast", () => {
     expect(ui.consistencyScore).not.toBeNull();
   });
 
+  it("anchors the forecast to a recent half-marathon race result instead of slow training long runs", () => {
+    const longPaceSecPerKm = 360; // 6:00/km, deliberately slow training pace
+    const raceDurationSec = 1 * 3600 + 25 * 60 + 37; // 1:25:37
+    const raceDistanceKm = 21.0975;
+
+    const planWithRace = makePlan([
+      { id: "a", date: "8. Mar", type: "long", km: 20 },
+      { id: "b", date: "12. Mar", type: "long", km: 20 },
+      { id: "race", date: "1. Feb", type: "race", km: 21 },
+    ]);
+    const logsWithRace: Record<string, SessionLog> = {
+      a: doneLog({ runId: "r1", distanceKm: 20, durationSec: 20 * longPaceSecPerKm }),
+      b: doneLog({ runId: "r2", distanceKm: 20, durationSec: 20 * longPaceSecPerKm }),
+      race: doneLog({ runId: "race1", distanceKm: raceDistanceKm, durationSec: raceDurationSec }),
+    };
+    const healthRunsWithRace = [
+      healthRun("r1", 20 * longPaceSecPerKm, 20),
+      healthRun("r2", 20 * longPaceSecPerKm, 20),
+      healthRun("race1", raceDurationSec, raceDistanceKm),
+    ];
+    const withRace = computeMarathonForecast({ plan: planWithRace, logs: logsWithRace, healthRuns: healthRunsWithRace, now });
+
+    const planNoRace = makePlan([
+      { id: "a", date: "8. Mar", type: "long", km: 20 },
+      { id: "b", date: "12. Mar", type: "long", km: 20 },
+    ]);
+    const logsNoRace: Record<string, SessionLog> = { a: logsWithRace.a, b: logsWithRace.b };
+    const healthRunsNoRace = [healthRunsWithRace[0], healthRunsWithRace[1]];
+    const withoutRace = computeMarathonForecast({ plan: planNoRace, logs: logsNoRace, healthRuns: healthRunsNoRace, now });
+
+    expect(withRace.ready).toBe(true);
+    expect(withoutRace.ready).toBe(true);
+    // The race result is a far stronger fitness signal than deliberately slow training long
+    // runs — it must pull the forecast meaningfully faster, not get diluted away by them.
+    expect(withRace.predictedSeconds!).toBeLessThan(withoutRace.predictedSeconds! - 1200);
+    // Riegel extrapolation from the race lands around 2:58 — the blended forecast should be
+    // close to that, not near the ~3:20+ training-only guess.
+    expect(withRace.predictedSeconds!).toBeLessThan(3 * 3600 + 15 * 60);
+  });
+
+  it("is ready from a single race result alone, with no other pace samples", () => {
+    const raceDurationSec = 1 * 3600 + 25 * 60 + 37;
+    const raceDistanceKm = 21.0975;
+    const plan = makePlan([{ id: "race", date: "1. Feb", type: "race", km: 21 }]);
+    const logs: Record<string, SessionLog> = {
+      race: doneLog({ runId: "race1", distanceKm: raceDistanceKm, durationSec: raceDurationSec }),
+    };
+    const healthRuns = [healthRun("race1", raceDurationSec, raceDistanceKm)];
+    const forecast = computeMarathonForecast({ plan, logs, healthRuns, now });
+    expect(forecast.ready).toBe(true);
+    expect(forecast.predictedSeconds!).toBeLessThan(3 * 3600 + 15 * 60);
+  });
+
+  it("ignores a race result older than the 120-day anchor window (falls back to training-only)", () => {
+    const oldRaceNow = new Date("2026-11-20T12:00:00.000Z"); // "1. Jun" is ~172 days before this
+    const longPaceSecPerKm = 360;
+    const raceDurationSec = 1 * 3600 + 25 * 60 + 37;
+    const raceDistanceKm = 21.0975;
+
+    const planWithOldRace = makePlan([
+      { id: "a", date: "8. Nov", type: "long", km: 20 },
+      { id: "b", date: "12. Nov", type: "long", km: 20 },
+      { id: "race", date: "1. Jun", type: "race", km: 21 },
+    ]);
+    const logs: Record<string, SessionLog> = {
+      a: doneLog({ runId: "r1", distanceKm: 20, durationSec: 20 * longPaceSecPerKm }),
+      b: doneLog({ runId: "r2", distanceKm: 20, durationSec: 20 * longPaceSecPerKm }),
+      race: doneLog({ runId: "race1", distanceKm: raceDistanceKm, durationSec: raceDurationSec }),
+    };
+    const healthRuns = [
+      healthRun("r1", 20 * longPaceSecPerKm, 20),
+      healthRun("r2", 20 * longPaceSecPerKm, 20),
+      healthRun("race1", raceDurationSec, raceDistanceKm),
+    ];
+    const withOldRace = computeMarathonForecast({ plan: planWithOldRace, logs, healthRuns, now: oldRaceNow });
+
+    const planNoRace = makePlan([
+      { id: "a", date: "8. Nov", type: "long", km: 20 },
+      { id: "b", date: "12. Nov", type: "long", km: 20 },
+    ]);
+    const logsNoRace: Record<string, SessionLog> = { a: logs.a, b: logs.b };
+    const healthRunsNoRace = [healthRuns[0], healthRuns[1]];
+    const withoutRace = computeMarathonForecast({ plan: planNoRace, logs: logsNoRace, healthRuns: healthRunsNoRace, now: oldRaceNow });
+
+    expect(withOldRace.predictedSeconds).toBe(withoutRace.predictedSeconds);
+  });
+
   it("clamps forecast between 2:20 and 5:00", () => {
     const plan = makePlan([
       { id: "a", date: "8. Mar", type: "long", km: 10 },

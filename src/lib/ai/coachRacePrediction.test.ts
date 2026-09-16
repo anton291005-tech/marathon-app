@@ -384,4 +384,70 @@ describe("computePaceBasedPrediction", () => {
     // samples (more weight) must pull the blended prediction toward the faster tempo time.
     expect(pFourSamples!.predictedMarathonTimeSeconds).toBeLessThan(pOneSample!.predictedMarathonTimeSeconds);
   });
+
+  test("TEST 9: recent half-marathon race dominates slow training long runs (race_combined, high confidence)", () => {
+    const longPaceSecPerKm = 5 * 60 + 45;
+    const longDistKm = 18;
+    const longDur = longPaceSecPerKm * longDistKm;
+    const mkLongLog = (id: string) => ({
+      done: true,
+      assignedRun: { runId: id, startDate: "s", duration: longDur, distanceKm: longDistKm },
+    });
+
+    const raceDistanceKm = 21.0975;
+    const raceDurationSec = 1 * 3600 + 25 * 60 + 37; // 1:25:37
+    const raceLog = {
+      done: true,
+      assignedRun: { runId: "race1run", startDate: "s", duration: raceDurationSec, distanceKm: raceDistanceKm },
+    };
+
+    const longSessions = [
+      { id: "lr1", date: "18. Mai", day: "So", type: "long", title: "L", km: 18 },
+      { id: "lr2", date: "25. Mai", day: "So", type: "long", title: "L", km: 18 },
+      { id: "lr3", date: "1. Jun", day: "So", type: "long", title: "L", km: 18 },
+      { id: "lr4", date: "8. Jun", day: "So", type: "long", title: "L", km: 18 },
+    ];
+    const logsLongOnly = { lr1: mkLongLog("hl1"), lr2: mkLongLog("hl2"), lr3: mkLongLog("hl3"), lr4: mkLongLog("hl4") };
+    const logsWithRace = { ...logsLongOnly, race1: raceLog };
+
+    const planLongOnly = makePlan(longSessions);
+    const planWithRace = makePlan([
+      ...longSessions,
+      { id: "race1", date: "11. Mai", day: "Mo", type: "race", title: "Halbmarathon", km: 21 },
+    ]);
+
+    const ctxLongOnly = ctxFor(planLongOnly, new Date("2026-06-10T12:00:00").toISOString(), { logs: logsLongOnly });
+    const ctxWithRace = ctxFor(planWithRace, new Date("2026-06-10T12:00:00").toISOString(), { logs: logsWithRace });
+
+    const pLongOnly = computePaceBasedPrediction(ctxLongOnly);
+    const pWithRace = computePaceBasedPrediction(ctxWithRace);
+
+    expect(pLongOnly).not.toBeNull();
+    expect(pWithRace).not.toBeNull();
+    expect(pWithRace!.primaryMethod).toBe("race_combined");
+    expect(pWithRace!.confidenceLevel).toBe("high");
+    // The race result is a far stronger fitness signal than deliberately slow training long
+    // runs — it must pull the prediction meaningfully faster, not get diluted away by them.
+    expect(pWithRace!.predictedMarathonTimeSeconds).toBeLessThan(pLongOnly!.predictedMarathonTimeSeconds - 1800);
+  });
+
+  test("TEST 10: race older than 60 days still anchors the prediction, but confidence drops to medium", () => {
+    const raceDistanceKm = 21.0975;
+    const raceDurationSec = 1 * 3600 + 25 * 60 + 37; // 1:25:37
+    const plan = makePlan([{ id: "race1", date: "12. Mar", day: "Do", type: "race", title: "Halbmarathon", km: 21 }]);
+    const logs = {
+      race1: {
+        done: true,
+        assignedRun: { runId: "race1run", startDate: "s", duration: raceDurationSec, distanceKm: raceDistanceKm },
+      },
+    };
+    const ctx = ctxFor(plan, new Date("2026-06-10T12:00:00").toISOString(), { logs });
+    const p = computePaceBasedPrediction(ctx);
+    expect(p).not.toBeNull();
+    expect(p!.primaryMethod).toBe("race");
+    expect(p!.confidenceLevel).toBe("medium");
+    // Riegel extrapolation from the race pace alone, not a null/training-only result.
+    expect(p!.predictedMarathonTimeSeconds).toBeGreaterThan(9000);
+    expect(p!.predictedMarathonTimeSeconds).toBeLessThan(13000);
+  });
 });
