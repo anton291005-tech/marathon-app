@@ -82,7 +82,7 @@ import {
   getSessionPlannedDistanceKm,
   type SessionLog,
 } from "./marathonPrediction";
-import { getMarathonPrediction } from "./marathonForecast";
+import { getMarathonPrediction, riegelMarathonSeconds } from "./marathonForecast";
 import {
   analyzeWeek,
   getPlanWeekTimeBoundsMs,
@@ -778,7 +778,66 @@ function getWeeklyFatigue(week){
   return { label: "niedrig", icon: "🟢", color: "#34d399", note: "Kontrollierte Woche, gut für Konstanz und Erholung." };
 }
 
-function getPerformancePrediction({
+/** Legacy "no completed half marathon this cycle" default — unchanged from the original heuristic. */
+const HALF_MARATHON_SIGNAL_NEUTRAL_DEFAULT = 0.45;
+/** A half-marathon result still counts at full pace-based weight up to this age. */
+const HALF_MARATHON_SIGNAL_FULL_WEIGHT_MAX_AGE_DAYS = 60;
+/** Beyond this age the race no longer influences confidence at all — mirrors the race-anchor window in marathonForecast.ts / coachRacePrediction.ts. */
+const HALF_MARATHON_SIGNAL_MAX_AGE_DAYS = 120;
+/** How strongly a current, qualifying race dominates readiness over routine plan-completion metrics — mirrors RACE_DOMINANT_WEIGHT in marathonForecast.ts / coachRacePrediction.ts. */
+const HALF_MARATHON_RACE_DOMINANT_WEIGHT = 0.75;
+
+/**
+ * Pace-based strength of a completed half-marathon(+) result, 0..1, centered at 0.5 when the
+ * race's Riegel-projected marathon time exactly matches the user's own goal time. A race
+ * predicting a finish faster than the goal pulls this toward 1; slower pulls it toward 0.
+ * Returns null when there isn't enough data (distance/duration) to project a pace.
+ */
+export function getHalfMarathonRacePaceScore({ actualDistanceKm, actualDurationSec, targetSeconds }){
+  if (!(actualDistanceKm >= 21) || !(actualDurationSec > 0)) return null;
+  const projectedMarathonSeconds = riegelMarathonSeconds(actualDurationSec, actualDistanceKm);
+  if (!Number.isFinite(projectedMarathonSeconds) || projectedMarathonSeconds <= 0) return null;
+  const safeTargetSeconds = targetSeconds && targetSeconds > 0 ? targetSeconds : (2 * 3600 + 49 * 60 + 50);
+  const paceRatio = safeTargetSeconds / projectedMarathonSeconds;
+  return Math.max(0, Math.min(1, 0.5 + (paceRatio - 1) * 10));
+}
+
+/**
+ * Finds the most recently completed half-marathon(+) race in the plan and resolves it to a
+ * pace score + age, ready to feed into getPerformancePrediction. Returns nulls when there is
+ * no qualifying, completed race.
+ */
+export function resolveHalfMarathonRaceSignal({ activeSessions, logs, healthRunById, targetSeconds, now }){
+  const race = activeSessions.find(
+    (session) =>
+      session.type === "race" &&
+      getSessionPlannedDistanceKm(session) >= 21 &&
+      getSessionPlannedDistanceKm(session) < 42 &&
+      isSessionLogDone(logs[session.id]),
+  );
+  if (!race) return { halfMarathonRacePaceScore: null, halfMarathonRaceDaysAgo: null };
+
+  const log = logs[race.id];
+  const actualDistanceKm = getSessionRunningActualKm(race, log, healthRunById);
+  const ar = log?.assignedRun;
+  const health = ar?.runId ? healthRunById.get(ar.runId) : undefined;
+  const actualDurationSec =
+    typeof ar?.duration === "number" && ar.duration > 0 ? ar.duration : health?.duration;
+
+  const raceDate = parseSessionDateLabel(race.date);
+  const halfMarathonRaceDaysAgo = raceDate
+    ? calendarDaysBetweenYmd(berlinWallClockYmd(raceDate), berlinWallClockYmd(now))
+    : null;
+
+  const halfMarathonRacePaceScore =
+    typeof actualDurationSec === "number" && Number.isFinite(actualDurationSec) && actualDurationSec > 0
+      ? getHalfMarathonRacePaceScore({ actualDistanceKm, actualDurationSec, targetSeconds })
+      : null;
+
+  return { halfMarathonRacePaceScore, halfMarathonRaceDaysAgo };
+}
+
+export function getPerformancePrediction({
   doneLongRuns,
   longRuns,
   doneHardSessions,
@@ -786,14 +845,43 @@ function getPerformancePrediction({
   avgFeeling,
   progressRatio,
   qualityLongRunScore,
-  halfMarathonSignal,
+  halfMarathonRacePaceScore,
+  halfMarathonRaceDaysAgo,
   targetSeconds,
 }){
   const safeTargetSeconds = targetSeconds || (2 * 3600 + 49 * 60 + 50);
   const longRunScore = longRuns > 0 ? doneLongRuns / longRuns : 0;
   const hardScore = hardSessions > 0 ? doneHardSessions / hardSessions : 0;
   const feelingScore = Math.max(0, Math.min(1, (avgFeeling - 2) / 3));
-  const readiness = (longRunScore * 0.28) + (hardScore * 0.24) + (feelingScore * 0.14) + (progressRatio * 0.16) + (qualityLongRunScore * 0.1) + (halfMarathonSignal * 0.08);
+  const baseReadiness = (longRunScore * 0.28) + (hardScore * 0.24) + (feelingScore * 0.14) + (progressRatio * 0.16) + (qualityLongRunScore * 0.1);
+
+  const hasCurrentRaceSignal =
+    typeof halfMarathonRacePaceScore === "number" && Number.isFinite(halfMarathonRacePaceScore) &&
+    typeof halfMarathonRaceDaysAgo === "number" && Number.isFinite(halfMarathonRaceDaysAgo) &&
+    halfMarathonRaceDaysAgo <= HALF_MARATHON_SIGNAL_MAX_AGE_DAYS;
+
+  let readiness;
+  if (hasCurrentRaceSignal) {
+    // A real, current race result is a far stronger fitness signal than routine
+    // plan-completion metrics — it dominates readiness instead of being diluted into an
+    // 8%-weighted average, and fades back to training-only once it gets old.
+    const recencyWeight =
+      halfMarathonRaceDaysAgo <= HALF_MARATHON_SIGNAL_FULL_WEIGHT_MAX_AGE_DAYS
+        ? 1
+        : Math.max(
+            0,
+            1 -
+              (halfMarathonRaceDaysAgo - HALF_MARATHON_SIGNAL_FULL_WEIGHT_MAX_AGE_DAYS) /
+                (HALF_MARATHON_SIGNAL_MAX_AGE_DAYS - HALF_MARATHON_SIGNAL_FULL_WEIGHT_MAX_AGE_DAYS),
+          );
+    const raceWeight = HALF_MARATHON_RACE_DOMINANT_WEIGHT * recencyWeight;
+    const trainingReadinessNormalized = baseReadiness / 0.92;
+    readiness = raceWeight * halfMarathonRacePaceScore + (1 - raceWeight) * trainingReadinessNormalized;
+  } else {
+    // Unchanged legacy behavior: no current half-marathon result to anchor on.
+    readiness = baseReadiness + HALF_MARATHON_SIGNAL_NEUTRAL_DEFAULT * 0.08;
+  }
+
   const penalty = (1 - readiness) * 360;
   const predictedSeconds = safeTargetSeconds + penalty;
 
@@ -2701,22 +2789,6 @@ export default function AppMain(){
       return sum + ((distanceScore * 0.65) + (feelingScore * 0.35)) / arr.length;
     }, 0)
     : 0.4;
-  const halfMarathonRace = ACTIVE_SESSIONS.find(
-    (session) =>
-      session.type === "race" &&
-      getSessionPlannedDistanceKm(session) >= 21 &&
-      getSessionPlannedDistanceKm(session) < 42 &&
-      isSessionLogDone(logs[session.id]),
-  );
-  const halfMarathonSignal = halfMarathonRace
-    ? Math.min(
-        1,
-        ((logs[halfMarathonRace.id]?.feeling || 3) / 5) * 0.55 +
-          (getSessionRunningActualKm(halfMarathonRace, logs[halfMarathonRace.id], healthRunById) >= 21
-            ? 0.45
-            : 0.2),
-      )
-    : 0.45;
   const raceGoalFinish = preferences.raceGoal === "finish";
   const parsedTargetTime = parseTargetTimeToSeconds(preferences.targetTime);
   const targetSeconds = raceGoalFinish
@@ -2727,6 +2799,13 @@ export default function AppMain(){
     : parsedTargetTime
       ? preferences.targetTime
       : undefined;
+  const { halfMarathonRacePaceScore, halfMarathonRaceDaysAgo } = resolveHalfMarathonRaceSignal({
+    activeSessions: ACTIVE_SESSIONS,
+    logs,
+    healthRunById,
+    targetSeconds,
+    now: getAppNow(),
+  });
   const predictionReadiness = getPredictionReadiness({
     doneSessionsCount: doneSess,
     loggedKm: loggedRunKm,
@@ -2741,7 +2820,8 @@ export default function AppMain(){
     avgFeeling,
     progressRatio: completedSessionRatio,
     qualityLongRunScore,
-    halfMarathonSignal,
+    halfMarathonRacePaceScore,
+    halfMarathonRaceDaysAgo,
     targetSeconds,
   });
   const performancePrediction = predictionReadiness.ready
