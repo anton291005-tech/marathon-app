@@ -51,7 +51,7 @@ const MICRO_STRUCTURE_WARN_THRESHOLD = 60;
  * fit (e.g. a tempo run forced onto a fully-booked day) is not something the athlete should have to
  * override, since a genuinely better slot may simply not exist among the current candidates.
  */
-const MIN_FIT_SCORE_THRESHOLD = 0.35;
+export const MIN_FIT_SCORE_THRESHOLD = 0.35;
 
 function findSessionById(plan: AiPlanWeek[], id: string): AiPlanSession | null {
   for (const week of plan) {
