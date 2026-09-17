@@ -126,6 +126,10 @@ import {
   buildCalendarReassignmentCandidateViews,
   computeSourceDayCapacity,
 } from "./ai/mutations/buildCalendarReassignmentAction";
+import { scanWeekForCalendarConflicts } from "./ai/mutations/scanWeekForCalendarConflicts";
+import { proposeWeekCalendarReassignments } from "./ai/mutations/proposeWeekCalendarReassignments";
+import { validateWeekReassignmentBatch } from "./ai/mutations/validateWeekReassignmentBatch";
+import { buildWeekCalendarReassignmentBatchAction } from "./ai/mutations/buildWeekCalendarReassignmentBatchAction";
 import AiActionCard from "./components/ai/AiActionCard";
 import { loadSessionLogs, saveSessionLog } from "./lib/supabase/services/sessionLogsService";
 import {
@@ -1207,6 +1211,7 @@ export default function AppMain(){
   const [aiPlanPatches, setAiPlanPatches] = useState(() => readStoredJson(MARATHON_AI_PLAN_PATCHES_KEY, []));
   const [scheduleBlocks, setScheduleBlocks] = useState([]);
   const [pendingCalendarProposal, setPendingCalendarProposal] = useState(null);
+  const [weekCalendarBatchProposal, setWeekCalendarBatchProposal] = useState(null);
   const baseWeekMetaByStartIso = useMemo(() => buildWeekMetaMapFromBasePlan(BASE_PLAN), []);
   const [hasUserTrainingPlan, setHasUserTrainingPlan] = useState(() => {
     const raw = readStoredJson(TRAINING_PLAN_V2_STORAGE_KEY, null);
@@ -2713,7 +2718,7 @@ export default function AppMain(){
   const w = displayPlan.length > 0 ? displayPlan[safeWIdx] : null;
   const wSessions = getWeekSessionList(w);
   const weekHasExpandedSessionDesc = wSessions.some((s) => !!weekTabDescExpandedById[s.id]);
-  const weekStackShouldScroll = weekHasExpandedSessionDesc || pendingCalendarProposal?.mode === "select";
+  const weekStackShouldScroll = weekHasExpandedSessionDesc || pendingCalendarProposal?.mode === "select" || !!weekCalendarBatchProposal;
   const ph=PI[w?.phase ?? ""] ?? PI["base"] ?? PI["BASE"] ?? { label:"Woche", emoji:"📅", col:"var(--text-secondary)", bg:"var(--border-default)" };
   // Week 1 mid-week start: show greyed placeholder cells for days before plan start
   const WEEK_DAYS_DE = ["Mo","Di","Mi","Do","Fr","Sa","So"];
@@ -2760,6 +2765,34 @@ export default function AppMain(){
     }
     handleAiApplyPlanPatches(null, null, result.patches);
     setPendingCalendarProposal(null);
+  };
+
+  const handleScanWeekForCalendarConflicts = ()=>{
+    if (!w) return;
+    const conflicts = scanWeekForCalendarConflicts(w, scheduleBlocks);
+    if (conflicts.length === 0) {
+      setWeekCalendarBatchProposal({ action: null, patches: [], status: "no-conflicts" });
+      return;
+    }
+    const proposals = proposeWeekCalendarReassignments(conflicts, w, scheduleBlocks);
+    const validation = validateWeekReassignmentBatch(proposals, w);
+    if (!validation.valid) {
+      setWeekCalendarBatchProposal({ action: null, patches: [], status: "blocked", blockedReasons: validation.violations });
+      return;
+    }
+    const action = buildWeekCalendarReassignmentBatchAction(proposals, validation, w);
+    setWeekCalendarBatchProposal({ action, patches: validation.patches, status: "proposal" });
+  };
+
+  const handleConfirmWeekCalendarBatch = ()=>{
+    if (weekCalendarBatchProposal?.patches?.length) {
+      handleAiApplyPlanPatches(null, null, weekCalendarBatchProposal.patches);
+    }
+    setWeekCalendarBatchProposal(null);
+  };
+
+  const handleCancelWeekCalendarBatch = ()=>{
+    setWeekCalendarBatchProposal(null);
   };
   const totalSess=ACTIVE_SESSIONS.length;
   const doneSessions = ACTIVE_SESSIONS.filter((session) => isSessionLogDone(logs[session.id]));
@@ -3560,7 +3593,7 @@ export default function AppMain(){
       );
       if (cards.length >= 2) validateSiblingStackNoOverlap(cards, "week-sessions");
     }
-  }, [activeView, homeCoachAssessmentExpanded, weekTabDescExpandedById, wIdx, view, pendingCalendarProposal]);
+  }, [activeView, homeCoachAssessmentExpanded, weekTabDescExpandedById, wIdx, view, pendingCalendarProposal, weekCalendarBatchProposal]);
 
   return(
     <div
@@ -4526,6 +4559,30 @@ export default function AppMain(){
               </div>
             </div>
 
+            {scheduleBlocks.length > 0 && w && !pendingCalendarProposal && !weekCalendarBatchProposal && (
+              <button
+                onClick={handleScanWeekForCalendarConflicts}
+                style={{
+                  flexShrink: 0,
+                  marginTop: 6,
+                  background: "rgba(15,23,42,0.82)",
+                  border: "1px solid var(--border-default)",
+                  borderRadius: 12,
+                  padding: "8px 12px",
+                  color: "#cbd5e1",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                📅 Woche auf Kalenderkonflikte prüfen
+              </button>
+            )}
+
             <div
               ref={weekSessionStackRef}
               style={{
@@ -4612,6 +4669,36 @@ export default function AppMain(){
                     <button onClick={handleCancelCalendarReassignment} style={{background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700}}>OK</button>
                   </div>
                 )
+              )}
+              {weekCalendarBatchProposal && (
+                <div data-layout-week-card="1" style={{flexShrink:0,maxHeight:"min(60vh, 420px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+                  {weekCalendarBatchProposal.status === "no-conflicts" ? (
+                    <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,fontSize:13,color:"var(--text-secondary)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                      <span>Keine Kalenderkonflikte in dieser Woche gefunden.</span>
+                      <button onClick={handleCancelWeekCalendarBatch} style={{background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700}}>OK</button>
+                    </div>
+                  ) : weekCalendarBatchProposal.status === "blocked" ? (
+                    <div style={{background:"var(--bg-card)",border:"1px solid rgba(248,113,113,0.4)",borderRadius:14,padding:12,display:"flex",flexDirection:"column",gap:8}}>
+                      <span style={{fontSize:13,color:"#f87171",lineHeight:1.5}}>
+                        Konnte nicht automatisch aufgelöst werden: {(weekCalendarBatchProposal.blockedReasons || []).join(" ")}
+                      </span>
+                      <span style={{fontSize:12,color:"var(--text-secondary)"}}>Bitte einzelne Konflikte über den 📅-Button pro Einheit bearbeiten.</span>
+                      <button onClick={handleCancelWeekCalendarBatch} style={{alignSelf:"flex-end",background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700,fontSize:13}}>OK</button>
+                    </div>
+                  ) : weekCalendarBatchProposal.action ? (
+                    <AiActionCard
+                      action={weekCalendarBatchProposal.action}
+                      onConfirm={handleConfirmWeekCalendarBatch}
+                      onCancel={handleCancelWeekCalendarBatch}
+                      onEdit={handleCancelWeekCalendarBatch}
+                    />
+                  ) : (
+                    <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,fontSize:13,color:"var(--text-secondary)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                      <span>Keine automatisch lösbaren Konflikte gefunden.</span>
+                      <button onClick={handleCancelWeekCalendarBatch} style={{background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700}}>OK</button>
+                    </div>
+                  )}
+                </div>
               )}
               {wSessions.map(session=>{
                 const ti=TI[session.type];

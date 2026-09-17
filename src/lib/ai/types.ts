@@ -23,7 +23,8 @@ export type AiActionType =
   | "replace_training_plan_generated"
   | "update_user_preferences"
   | "swap_training_days"
-  | "reassign_session_to_calendar";
+  | "reassign_session_to_calendar"
+  | "reassign_week_calendar_batch";
 
 export type SessionType =
   | "rest"

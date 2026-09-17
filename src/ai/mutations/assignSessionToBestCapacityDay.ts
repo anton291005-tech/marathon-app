@@ -28,7 +28,7 @@ export type SessionAssignmentResult = {
   reason?: "no-candidates" | "no-valid-candidates" | "integrity-violation" | "no-good-fit-candidate";
 };
 
-const NEUTRAL_VALIDATION_CONTEXT: ValidationContext = {
+export const NEUTRAL_VALIDATION_CONTEXT: ValidationContext = {
   planGoal: "marathon",
   currentWeekLoad: 0,
   weeklyAvgLoad: 0,
@@ -53,7 +53,7 @@ const MICRO_STRUCTURE_WARN_THRESHOLD = 60;
  */
 export const MIN_FIT_SCORE_THRESHOLD = 0.35;
 
-function findSessionById(plan: AiPlanWeek[], id: string): AiPlanSession | null {
+export function findSessionById(plan: AiPlanWeek[], id: string): AiPlanSession | null {
   for (const week of plan) {
     for (const session of week.s ?? []) {
       if (session.id === id) return session;
@@ -62,7 +62,7 @@ function findSessionById(plan: AiPlanWeek[], id: string): AiPlanSession | null {
   return null;
 }
 
-function diffToPatches(before: AiPlanWeek[], after: AiPlanWeek[], ids: string[]): PlanPatch[] {
+export function diffToPatches(before: AiPlanWeek[], after: AiPlanWeek[], ids: string[]): PlanPatch[] {
   const patches: PlanPatch[] = [];
   for (const id of ids) {
     const b = findSessionById(before, id);

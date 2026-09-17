@@ -46,10 +46,16 @@
 Regelbasiert, transparent, kalibriert sich über Post-Workout-Feedback selbst nach.
 **Anschluss an Schritt 4:** nutzt die dort eingeführte stille Kategorie-Klassifikation (`job`/`study`/…) als Ausgangsbasis für Load-Tags — erst hier bekommt die Kategorie Engine-Wirkung; ggf. Import-Review-/Nachklassifizierungs-UI hier nachziehen.
 
-### 6. Vorher/Nachher-Diff-Screen
+### 6. Vorher/Nachher-Diff-Screen — Akzeptanzkriterium final (2026-09-17), UI-Anbindung in Arbeit
 **Ziel:** Nach Kalender-Connect (Wow-Moment) im "Woche"-Screen zeigen, wie sich die Trainingswoche durch die Capacity-Engine verändert hat.
-**Datei-Anker:** Live-Wochenansicht ist inline in `src/AppMain.tsx` (`activeView==="week"`, ab Zeile ~4160) — es gibt noch keine separate Woche-Komponente und keine Vorher/Nachher-Darstellung.
-**Akzeptanzkriterium (Vorschlag, noch nicht final freigegeben):** Diff wird im Woche-Screen sichtbar (nicht nur im Chat), zeigt pro verschobener Session alten vs. neuen Tag, verletzt keine bestehende Wochenansicht-Struktur.
+**Rechenlogik (fertig):** `scanWeekForCalendarConflicts.ts` (Konflikt-Scan pro Woche), `proposeWeekCalendarReassignments.ts` (Greedy-Vorschlag), `validateWeekReassignmentBatch.ts` (Batch-Validierung) — alle in `src/ai/mutations/`.
+**Datei-Anker (UI):** Live-Wochenansicht ist inline in `src/AppMain.tsx` (`activeView==="week"`, ab Zeile ~4470); Diff-Screen dockt an `AiActionCard.tsx` an.
+**Akzeptanzkriterium (final, mit Anton abgestimmt am 2026-09-17):**
+- Trigger ist on-demand (Button/Banner im Woche-Tab) — kein automatischer Scan beim Tab-Öffnen; "dauerhaft aktiv, erkennt neue Kalendereinträge sofort" ist bewusst nicht Teil dieses Schritts.
+- Diff wird im Woche-Screen sichtbar (nicht nur im Chat), zeigt pro verschobener Session alten vs. neuen Tag.
+- Warn-Level-Reassignments (Micro-Structure-Status "warn") blockieren das Batch nicht mehr hart, sondern werden mit Warnhinweis angezeigt — Athlet bestätigt aktiv. Nur echte strukturelle Verstöße (Session nicht gefunden, widersprüchliche Zuordnung, Integritätsverletzung) bleiben Hard-Block fürs gesamte Batch.
+- Partial Resolution: nicht automatisch lösbare Konflikte werden am Ende des Diff-Screens als Liste ausgewiesen, kein Blocker fürs restliche Batch — Einzelfall-Bearbeitung läuft über den bestehenden 📅-Button pro Session.
+- Verletzt keine bestehende Wochenansicht-Struktur (Scroll/Overlap-Pattern aus dem Bearbeiten-Fix vom 15. Sept wiederverwendet, nicht neu gebaut).
 
 ### 7. Post-Workout-Feedback-Loop zur Belastungsfaktor-Kalibrierung
 **Ziel:** Regelbasierte Load-Scoring-Faktoren kalibrieren sich selbst über Post-Workout-Feedback nach (Bezug zu Schritt 5, das bereits "self-calibrating Load-Scoring" nennt — Schritt 7 ist die Feedback-Seite davon).

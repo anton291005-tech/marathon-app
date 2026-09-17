@@ -12,6 +12,7 @@ export default function AiActionCard({ action, disabled, onConfirm, onCancel, on
   const preview = action.preview;
   if (!preview) return null;
   const isNavigation = action.type === "navigate_to_screen";
+  const hideEdit = isNavigation || action.type === "reassign_week_calendar_batch";
 
   return (
     <div
@@ -52,7 +53,7 @@ export default function AiActionCard({ action, disabled, onConfirm, onCancel, on
           {preview.confirmLabel || (isNavigation ? "Oeffnen" : "Uebernehmen")}
         </button>
 
-        {!isNavigation && (
+        {!hideEdit && (
           <button
             onClick={onEdit}
             disabled={disabled}
