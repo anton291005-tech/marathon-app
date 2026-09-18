@@ -170,7 +170,6 @@ describe("isPhysicalLoadTitle", () => {
     "FUSSBALL",
     "Football mit Freunden",
     "Soccer",
-    "Turnier",
     "Wettkampf",
     "Match",
     "Handball-Spiel",
@@ -190,6 +189,8 @@ describe("isPhysicalLoadTitle", () => {
     "Schicht",
     "Arbeit",
     "Job",
+    "Schachturnier", // "Turnier" allein ist kein Belastungs-Stichwort
+    "Turnier",
     "Vorlesung",
     "Training", // zu generisch
     "Spiel", // zu generisch
@@ -207,6 +208,7 @@ describe("isPhysicalLoadTitle", () => {
     }
     expect(PHYSICAL_LOAD_TITLE_KEYWORDS).not.toContain("spiel");
     expect(PHYSICAL_LOAD_TITLE_KEYWORDS).not.toContain("training");
+    expect(PHYSICAL_LOAD_TITLE_KEYWORDS).not.toContain("turnier");
   });
 });
 
@@ -235,6 +237,13 @@ describe("Belastungs-Blocks in computeDayCapacityScore / computeSessionDayFitSco
       expect(day.capacityScore).toBe(0.5);
       expect(day.physicalLoadBlockTitles).toEqual([]);
     }
+  });
+
+  test("Schachturnier (gleiche Zeiten, kein Sport-Stichwort) ist kein Belastungstag; Fußballturnier bleibt es", () => {
+    const chess = computeDayCapacityScore("2026-09-20", [{ ...tournament, title: "Schachturnier" }]);
+    expect(chess.physicalLoadBlockTitles).toEqual([]);
+    expect(computeSessionDayFitScore({ type: "long" }, chess)).toBeGreaterThanOrEqual(MIN_FIT_SCORE_THRESHOLD);
+    expect(computeDayCapacityScore("2026-09-20", [tournament]).physicalLoadBlockTitles).toEqual(["Fußballturnier"]);
   });
 
   test("Belastungs-Block an einem anderen Datum färbt den Tag nicht", () => {

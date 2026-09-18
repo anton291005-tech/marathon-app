@@ -231,6 +231,7 @@ import {
   validateNoVerticalOverflow,
   validateSiblingStackNoOverlap,
 } from "./layout";
+import { getWeekSessionRowWrapStyle, shouldWeekStackScroll } from "./layout/weekStackLayout";
 import {
   beginAppFrame,
   getAppNow,
@@ -2718,7 +2719,11 @@ export default function AppMain(){
   const w = displayPlan.length > 0 ? displayPlan[safeWIdx] : null;
   const wSessions = getWeekSessionList(w);
   const weekHasExpandedSessionDesc = wSessions.some((s) => !!weekTabDescExpandedById[s.id]);
-  const weekStackShouldScroll = weekHasExpandedSessionDesc || pendingCalendarProposal?.mode === "select" || !!weekCalendarBatchProposal;
+  const weekStackShouldScroll = shouldWeekStackScroll({
+    hasExpandedSessionDesc: weekHasExpandedSessionDesc,
+    pendingCalendarProposal,
+    weekCalendarBatchProposal,
+  });
   const ph=PI[w?.phase ?? ""] ?? PI["base"] ?? PI["BASE"] ?? { label:"Woche", emoji:"📅", col:"var(--text-secondary)", bg:"var(--border-default)" };
   // Week 1 mid-week start: show greyed placeholder cells for days before plan start
   const WEEK_DAYS_DE = ["Mo","Di","Mi","Do","Fr","Sa","So"];
@@ -4656,17 +4661,21 @@ export default function AppMain(){
                     ))}
                     <button onClick={handleCancelCalendarReassignment} style={{alignSelf:"flex-end",background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700,fontSize:13}}>Abbrechen</button>
                   </div>
-                ) : pendingCalendarProposal.action ? (
-                  <AiActionCard
-                    action={pendingCalendarProposal.action}
-                    onConfirm={handleConfirmCalendarReassignment}
-                    onCancel={handleCancelCalendarReassignment}
-                    onEdit={handleEditCalendarReassignment}
-                  />
                 ) : (
-                  <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,fontSize:13,color:"var(--text-secondary)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                    <span>Keine sinnvolle Alternative im Kalender gefunden.</span>
-                    <button onClick={handleCancelCalendarReassignment} style={{background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700}}>OK</button>
+                  <div data-layout-week-card="1" style={{flexShrink:0,maxHeight:"min(60vh, 420px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+                    {pendingCalendarProposal.action ? (
+                      <AiActionCard
+                        action={pendingCalendarProposal.action}
+                        onConfirm={handleConfirmCalendarReassignment}
+                        onCancel={handleCancelCalendarReassignment}
+                        onEdit={handleEditCalendarReassignment}
+                      />
+                    ) : (
+                      <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,fontSize:13,color:"var(--text-secondary)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                        <span>Keine sinnvolle Alternative im Kalender gefunden.</span>
+                        <button onClick={handleCancelCalendarReassignment} style={{background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700}}>OK</button>
+                      </div>
+                    )}
                   </div>
                 )
               )}
@@ -4711,21 +4720,7 @@ export default function AppMain(){
                 const milestoneEmojis = milestones.map((milestone) => milestone.emoji).join(" ");
                 const hasHint = session.type !== "rest";
                 const weekCompact = !weekHasExpandedSessionDesc;
-                const sessionRowWrap = weekHasExpandedSessionDesc
-                  ? {
-                      flex: "0 0 auto" as const,
-                      minHeight: 0,
-                      overflow: "visible" as const,
-                      display: "flex" as const,
-                      flexDirection: "column" as const,
-                    }
-                  : {
-                      flex: "1 1 0%" as const,
-                      minHeight: 0,
-                      overflow: "hidden" as const,
-                      display: "flex" as const,
-                      flexDirection: "column" as const,
-                    };
+                const sessionRowWrap = getWeekSessionRowWrapStyle(weekStackShouldScroll);
                 const sessionCardShell = {
                   background:isDone
                     ?"linear-gradient(160deg,rgba(7,36,31,0.94),rgba(13,19,32,0.96))"

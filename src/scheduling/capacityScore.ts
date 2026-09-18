@@ -47,7 +47,6 @@ export const PHYSICAL_LOAD_TITLE_KEYWORDS: readonly string[] = [
   "fussball",
   "football",
   "soccer",
-  "turnier",
   "wettkampf",
   "match",
   "handball",
