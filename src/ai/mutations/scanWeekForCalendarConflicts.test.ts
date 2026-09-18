@@ -111,3 +111,50 @@ describe("scanWeekForCalendarConflicts", () => {
     expect(scanWeekForCalendarConflicts(plan[0], []).some((c) => c.sessionId === "s-broken")).toBe(false);
   });
 });
+
+// Montag 14. Sep 2026 .. Sonntag 20. Sep 2026 — Long Run 18 km MP am Sonntag (20.09.), Fußballturnier 11–19 Uhr.
+const TOURNAMENT_WEEK: DaySpec[] = [
+  { id: "s-mon", type: "easy", date: "14. Sep", day: "Montag", title: "Easy Run" },
+  { id: "s-tue", type: "interval", date: "15. Sep", day: "Dienstag", title: "Intervalle" },
+  { id: "s-wed", type: "easy", date: "16. Sep", day: "Mittwoch", title: "Easy Run" },
+  { id: "s-thu", type: "easy", date: "17. Sep", day: "Donnerstag", title: "Easy Run" },
+  { id: "s-fri", type: "rest", date: "18. Sep", day: "Freitag", title: "Ruhetag" },
+  { id: "s-sat", type: "easy", date: "19. Sep", day: "Samstag", title: "Easy Run" },
+  { id: "s-sun", type: "long", date: "20. Sep", day: "Sonntag", title: "Long Run 18 km MP" },
+];
+
+function sundayBlock(title: string): OneOffScheduleBlock {
+  return oneOff({
+    id: "o-sun",
+    title,
+    category: "other",
+    source: "eventkit",
+    specificDate: "2026-09-20",
+    startTime: "11:00",
+    endTime: "19:00",
+  });
+}
+
+describe("scanWeekForCalendarConflicts – körperliche Belastung (Titel-basiert)", () => {
+  test("Fußballturnier So 11–19 Uhr (category other) ist ein Konflikt für Long Run 18 km MP, Grund nennt den Termin", () => {
+    const week = buildPlan(TOURNAMENT_WEEK)[0];
+    const conflicts = scanWeekForCalendarConflicts(week, [sundayBlock("Fußballturnier")]);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]).toMatchObject({ sessionId: "s-sun", dayIso: "2026-09-20" });
+    expect(conflicts[0].conflictReason).toContain("Fußballturnier");
+  });
+
+  test("gleiche Zeiten, Titel Schicht oder Arbeit: wie bisher kein Konflikt (50 % belegt)", () => {
+    const week = buildPlan(TOURNAMENT_WEEK)[0];
+    expect(scanWeekForCalendarConflicts(week, [sundayBlock("Schicht")])).toEqual([]);
+    expect(scanWeekForCalendarConflicts(week, [sundayBlock("Arbeit")])).toEqual([]);
+  });
+
+  test("Fußballturnier + Easy Run am selben Tag: kein Konflikt", () => {
+    const easyWeek = TOURNAMENT_WEEK.map((spec) =>
+      spec.id === "s-sun" ? { ...spec, type: "easy" as const, title: "Easy Run" } : spec,
+    );
+    const week = buildPlan(easyWeek)[0];
+    expect(scanWeekForCalendarConflicts(week, [sundayBlock("Fußballturnier")])).toEqual([]);
+  });
+});

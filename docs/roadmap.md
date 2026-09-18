@@ -20,6 +20,15 @@
 ### 2. Capacity Scoring pro Tag
 **Akzeptanzkriterium:** Score-Funktion deterministisch und dokumentiert, Unit-Tests für Randfälle (voll ausgebuchter Tag, komplett freier Tag, Teilverfügbarkeit, Wochenend-Sonderfall).
 
+### 2b. Belastungsbewusste Konflikterkennung (Erweiterung von Schritt 2, Hebel 4 „Titel-basiert") — umgesetzt (2026-09-18)
+**Anlass:** Ein Kalendertermin „Fußballturnier" (category `other`, So 11–19 Uhr) wurde nicht als Konflikt für einen Long Run 18 km MP erkannt, weil das Capacity-Scoring nur den belegten Zeitanteil bewertet (8 h von 16 h = 50 % ≥ `MIN_FIT_SCORE_THRESHOLD` 0,35).
+**Akzeptanzkriterium:**
+- Ein Block gilt als „körperliche Belastung", wenn ein Wort seines Titels (case-insensitive) einem Stichwort aus `PHYSICAL_LOAD_TITLE_KEYWORDS` (`src/scheduling/capacityScore.ts`, exportiert, leicht erweiterbar) entspricht; Kompositum-Treffer (Stichwort am Wortanfang/-ende, z. B. „Fußballturnier", „Hallenfußball") nur für Stichwörter ab 6 Zeichen. Zu generische Wörter („Spiel", „Training") sind bewusst nicht enthalten. Die Kategorie (`other`) bleibt weiterhin rein informativ (siehe Schritt 5).
+- Hat ein Tag mindestens einen solchen Block (Überlappung mit dem Tagesfenster), liegt `computeSessionDayFitScore` für die bereits als hohe Intensität behandelten Typen (`tempo`/`interval`/`race`/`long`) unter `MIN_FIT_SCORE_THRESHOLD` (Deckel `PHYSICAL_LOAD_DAY_FIT_SCORE` = 0,2) → Konflikt. Leichte Sessions (`easy`/`strength`/`bike`/`rest`) und der Anteil-Check bleiben unverändert.
+- Der Titel wird über `DayCapacityScore.physicalLoadBlockTitles` durchgereicht; dadurch nutzen Wochen-Scan, 📅-Button, Wochenbatch und Kandidaten-Ranking (inkl. Gegenseite des Swaps) ohne Signaturänderung dieselbe Regel. Der Konfliktgrund des Scans nennt den Termin.
+- Tests: Scan, Batch-Vorschlag (anderer Tag), Neutraltitel („Schicht"/„Arbeit") unverändert, Easy Run am selben Tag kein Konflikt, Belastungstag nie Zieltag für harte Sessions.
+**Bekannte Grenzen (Backlog, kein Blocker):** rein titelbasiert (keine Dauer-/Uhrzeitprüfung, kein Abgleich „freie Lücke vs. Laufdauer"); wiederkehrende Sport-Termine (z. B. wöchentliches „Fußballtraining") markieren jede Woche den Tag als Belastungstag; die Kategorie fließt weiterhin nicht ins Scoring ein; vorbestehend (nicht durch 2b verursacht, aber jetzt öfter erreichbar): `scoreAndRankCandidates` sortiert erst nach Micro-Structure-Severity, dann nach Fit — ein Belastungs-/überbuchter Tag mit niedrigerer Severity kann Platz 1 belegen und den 📅-Einzel-Auto-Pick per `no-good-fit-candidate` blockieren (der Wochenbatch nutzt das erste `!isConflict` und ist nicht betroffen).
+
 ### 3. Session Assignment Engine — abgeschlossen (`src/ai/mutations/assignSessionToBestCapacityDay.ts`)
 **Akzeptanzkriterium:** Kann eine bestehende Trainingswoche unter neuen Kalender-Constraints umverteilen, ohne die Trainingsplan-Regeln zu brechen (siehe Harte Regel unten). Tests grün. — **Erweiterung um bilateralen Fit-Score (siehe unten) ebenfalls abgehakt: Tests grün, End-to-End verdrahtet.**
 

@@ -1,4 +1,13 @@
-import { computeDayCapacityScore, computeSessionDayFitScore, type DayCapacityScore } from "./capacityScore";
+import {
+  computeDayCapacityScore,
+  computeSessionDayFitScore,
+  isPhysicalLoadConflict,
+  isPhysicalLoadTitle,
+  PHYSICAL_LOAD_DAY_FIT_SCORE,
+  PHYSICAL_LOAD_TITLE_KEYWORDS,
+  type DayCapacityScore,
+} from "./capacityScore";
+import { MIN_FIT_SCORE_THRESHOLD } from "../ai/mutations/assignSessionToBestCapacityDay";
 import type { RecurringScheduleBlock, OneOffScheduleBlock } from "../lib/supabase/services/weeklyScheduleBlocksService";
 
 function capacity(score: number): DayCapacityScore {
@@ -11,6 +20,7 @@ function capacity(score: number): DayCapacityScore {
     capacityScore: score,
     isFullyBooked: score === 0,
     isFullyFree: score === 1,
+    physicalLoadBlockTitles: [],
   };
 }
 
@@ -150,5 +160,117 @@ describe("computeSessionDayFitScore", () => {
     expect(computeSessionDayFitScore({ type: "easy" }, capacity(0.3))).toBeLessThan(
       computeSessionDayFitScore({ type: "easy" }, capacity(0.9)),
     );
+  });
+});
+
+describe("isPhysicalLoadTitle", () => {
+  test.each([
+    "Fußballturnier",
+    "Fussballturnier",
+    "FUSSBALL",
+    "Football mit Freunden",
+    "Soccer",
+    "Turnier",
+    "Wettkampf",
+    "Match",
+    "Handball-Spiel",
+    "Basketball",
+    "Volleyball (Beach)",
+    "Hockey",
+    "Tennis",
+    "Klettern",
+    "Triathlon Vorbereitung",
+    "Hallenfußball", // Kompositum: Stichwort am Wortende
+    "Beachvolleyball",
+  ])("%s zählt als körperliche Belastung", (title) => {
+    expect(isPhysicalLoadTitle(title)).toBe(true);
+  });
+
+  test.each([
+    "Schicht",
+    "Arbeit",
+    "Job",
+    "Vorlesung",
+    "Training", // zu generisch
+    "Spiel", // zu generisch
+    "Spieleabend",
+    "Matcha Latte", // kurzes Stichwort "match" gilt nur als ganzes Wort
+    "Zahnarzt",
+    "",
+  ])("%s zählt NICHT als körperliche Belastung", (title) => {
+    expect(isPhysicalLoadTitle(title)).toBe(false);
+  });
+
+  test("Stichwortliste ist klein geschrieben und enthält keine zu generischen Wörter", () => {
+    for (const keyword of PHYSICAL_LOAD_TITLE_KEYWORDS) {
+      expect(keyword).toBe(keyword.toLowerCase());
+    }
+    expect(PHYSICAL_LOAD_TITLE_KEYWORDS).not.toContain("spiel");
+    expect(PHYSICAL_LOAD_TITLE_KEYWORDS).not.toContain("training");
+  });
+});
+
+describe("Belastungs-Blocks in computeDayCapacityScore / computeSessionDayFitScore", () => {
+  // 2026-09-20 ist ein Sonntag (Wochenendfenster 07:00-23:00 = 960min)
+  const tournament = oneOff({
+    id: "o-fb",
+    title: "Fußballturnier",
+    category: "other",
+    source: "eventkit",
+    specificDate: "2026-09-20",
+    startTime: "11:00",
+    endTime: "19:00",
+  });
+
+  test("Tag mit Belastungs-Block: Anteil-Check bleibt unverändert (50 % belegt), Titel wird durchgereicht", () => {
+    const day = computeDayCapacityScore("2026-09-20", [tournament]);
+    expect(day.busyMinutes).toBe(480);
+    expect(day.capacityScore).toBe(0.5);
+    expect(day.physicalLoadBlockTitles).toEqual(["Fußballturnier"]);
+  });
+
+  test("Block mit neutralem Titel (Schicht/Arbeit) und gleichen Zeiten: keine Belastung", () => {
+    for (const title of ["Schicht", "Arbeit"]) {
+      const day = computeDayCapacityScore("2026-09-20", [{ ...tournament, title }]);
+      expect(day.capacityScore).toBe(0.5);
+      expect(day.physicalLoadBlockTitles).toEqual([]);
+    }
+  });
+
+  test("Belastungs-Block an einem anderen Datum färbt den Tag nicht", () => {
+    expect(computeDayCapacityScore("2026-09-19", [tournament]).physicalLoadBlockTitles).toEqual([]);
+  });
+
+  test("Belastungs-Block komplett außerhalb des Tagesfensters zählt nicht", () => {
+    const early = { ...tournament, startTime: "04:00", endTime: "06:30" }; // Wochenendfenster beginnt 07:00
+    expect(computeDayCapacityScore("2026-09-20", [early]).physicalLoadBlockTitles).toEqual([]);
+  });
+
+  test("harte Session (tempo/interval/race/long) auf Belastungstag liegt unter MIN_FIT_SCORE_THRESHOLD", () => {
+    const day = computeDayCapacityScore("2026-09-20", [tournament]);
+    for (const type of ["tempo", "interval", "race", "long"] as const) {
+      const fit = computeSessionDayFitScore({ type }, day);
+      expect(fit).toBeLessThan(MIN_FIT_SCORE_THRESHOLD);
+      expect(isPhysicalLoadConflict({ type }, day)).toBe(true);
+    }
+  });
+
+  test("leichte Sessions (easy/strength/bike/rest) bleiben auf dem Belastungstag unverändert", () => {
+    const withLoad = computeDayCapacityScore("2026-09-20", [tournament]);
+    const withoutLoad = computeDayCapacityScore("2026-09-20", [{ ...tournament, title: "Schicht" }]);
+    for (const type of ["easy", "strength", "bike", "rest"] as const) {
+      expect(computeSessionDayFitScore({ type }, withLoad)).toBe(computeSessionDayFitScore({ type }, withoutLoad));
+      expect(isPhysicalLoadConflict({ type }, withLoad)).toBe(false);
+    }
+    expect(computeSessionDayFitScore({ type: "easy" }, withLoad)).toBeGreaterThanOrEqual(MIN_FIT_SCORE_THRESHOLD);
+  });
+
+  test("Belastungs-Deckel liegt unter der Konfliktschwelle und hebt ein besseres Fit-Score nie an", () => {
+    expect(PHYSICAL_LOAD_DAY_FIT_SCORE).toBeLessThan(MIN_FIT_SCORE_THRESHOLD);
+    const nearlyBooked = computeDayCapacityScore("2026-09-20", [
+      { ...tournament, startTime: "07:00", endTime: "22:30" },
+    ]);
+    expect(nearlyBooked.capacityScore).toBeLessThan(PHYSICAL_LOAD_DAY_FIT_SCORE);
+    expect(computeSessionDayFitScore({ type: "long" }, nearlyBooked)).toBe(nearlyBooked.capacityScore);
   });
 });

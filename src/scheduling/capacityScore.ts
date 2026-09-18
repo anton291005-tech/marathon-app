@@ -11,6 +11,8 @@ export type DayCapacityScore = {
   capacityScore: number;
   isFullyBooked: boolean;
   isFullyFree: boolean;
+  /** Titles of blocks on this day that look like physical exertion (see `isPhysicalLoadTitle`); empty when none. */
+  physicalLoadBlockTitles: string[];
 };
 
 const WEEKDAY_WINDOW = { startMinutes: 6 * 60, endMinutes: 22 * 60 }; // 06:00-22:00
@@ -33,6 +35,52 @@ function timeStringToMinutes(time: string): number | null {
   const minutes = Number(match[2]);
   if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
   return hours * 60 + minutes;
+}
+
+/**
+ * Lower-case title keywords that mark a calendar block as physical exertion (sports, tournaments).
+ * Deliberately excludes generic words like "spiel" or "training". Extend here — matching is done by
+ * `isPhysicalLoadTitle`.
+ */
+export const PHYSICAL_LOAD_TITLE_KEYWORDS: readonly string[] = [
+  "fußball",
+  "fussball",
+  "football",
+  "soccer",
+  "turnier",
+  "wettkampf",
+  "match",
+  "handball",
+  "basketball",
+  "volleyball",
+  "hockey",
+  "tennis",
+  "badminton",
+  "squash",
+  "rugby",
+  "klettern",
+  "bouldern",
+  "triathlon",
+  "duathlon",
+];
+
+/** Keywords shorter than this only match as a whole word ("match" must not hit "Matcha"). */
+const MIN_COMPOUND_KEYWORD_LENGTH = 6;
+
+/**
+ * True when a word of the title (case-insensitive) equals a keyword or — for keywords of at least
+ * `MIN_COMPOUND_KEYWORD_LENGTH` chars — starts or ends with it, so German compounds like
+ * "Fußballturnier" or "Hallenfußball" match while mid-word hits do not.
+ */
+export function isPhysicalLoadTitle(title: string): boolean {
+  const words = title.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  return words.some((word) =>
+    PHYSICAL_LOAD_TITLE_KEYWORDS.some(
+      (keyword) =>
+        word === keyword ||
+        (keyword.length >= MIN_COMPOUND_KEYWORD_LENGTH && (word.startsWith(keyword) || word.endsWith(keyword))),
+    ),
+  );
 }
 
 function blockAppliesToDate(block: WeeklyScheduleBlock, dateIso: string, dayOfWeek: number): boolean {
@@ -84,12 +132,15 @@ export function computeDayCapacityScore(dateIso: string, blocks: WeeklyScheduleB
   const windowMinutes = window.endMinutes - window.startMinutes;
 
   const intervals: Array<[number, number]> = [];
+  const physicalLoadBlockTitles: string[] = [];
   for (const block of blocks) {
     if (!blockAppliesToDate(block, dateIso, dayOfWeek)) continue;
     const start = timeStringToMinutes(block.startTime);
     const end = timeStringToMinutes(block.endTime);
     if (start == null || end == null || end <= start) continue;
     intervals.push([start, end]);
+    const overlapsWindow = Math.min(end, window.endMinutes) > Math.max(start, window.startMinutes);
+    if (overlapsWindow && isPhysicalLoadTitle(block.title)) physicalLoadBlockTitles.push(block.title);
   }
 
   const busyMinutes = mergedBusyMinutes(intervals, window.startMinutes, window.endMinutes);
@@ -105,6 +156,7 @@ export function computeDayCapacityScore(dateIso: string, blocks: WeeklyScheduleB
     capacityScore,
     isFullyBooked: freeMinutes === 0,
     isFullyFree: busyMinutes === 0,
+    physicalLoadBlockTitles,
   };
 }
 
@@ -115,12 +167,27 @@ const HIGH_INTENSITY_SESSION_TYPES: ReadonlySet<SessionType> = new Set<SessionTy
 const LOW_INTENSITY_CAPACITY_WEIGHT = 0.1;
 
 /**
+ * Fit score cap for a high-intensity session on a day with a physically demanding block (e.g. a
+ * football tournament): time share alone (50 % booked) would call the day fine. Must stay below
+ * `MIN_FIT_SCORE_THRESHOLD` (assignSessionToBestCapacityDay.ts, 0.35) so the day counts as a conflict —
+ * not imported from there to avoid a circular import; the invariant is covered by a test.
+ */
+export const PHYSICAL_LOAD_DAY_FIT_SCORE = 0.2;
+
+/** True when a high-intensity session would land on a day with a physically demanding block. */
+export function isPhysicalLoadConflict(session: { type: SessionType }, dayCapacity: DayCapacityScore): boolean {
+  return HIGH_INTENSITY_SESSION_TYPES.has(session.type) && dayCapacity.physicalLoadBlockTitles.length > 0;
+}
+
+/**
  * Combines a day's raw calendar capacity with the intensity of the session that would be placed
  * there: high-intensity sessions are penalized in proportion to how booked the day is, easy/recovery
- * sessions are not — a busy day is still an acceptable home for a recovery run.
+ * sessions are not — a busy day is still an acceptable home for a recovery run. High-intensity
+ * sessions on a physical-load day are additionally capped at `PHYSICAL_LOAD_DAY_FIT_SCORE`.
  */
 export function computeSessionDayFitScore(session: { type: SessionType }, dayCapacity: DayCapacityScore): number {
   const capacity = dayCapacity.capacityScore;
+  if (isPhysicalLoadConflict(session, dayCapacity)) return Math.min(capacity, PHYSICAL_LOAD_DAY_FIT_SCORE);
   if (HIGH_INTENSITY_SESSION_TYPES.has(session.type)) return capacity;
   return 1 - (1 - capacity) * LOW_INTENSITY_CAPACITY_WEIGHT;
 }

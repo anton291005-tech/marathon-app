@@ -31,6 +31,7 @@ function capacity(dateIso: string, score: number): DayCapacityScore {
     capacityScore: score,
     isFullyBooked: score === 0,
     isFullyFree: score === 1,
+    physicalLoadBlockTitles: [],
   };
 }
 
@@ -253,5 +254,57 @@ describe("assignSessionToChosenDay", () => {
     const result = assignSessionToChosenDay(plan, "s-tue", "does-not-exist");
     expect(result.ok).toBe(false);
     expect(result.reason).toBe("no-candidates");
+  });
+});
+
+describe("Belastungstag als Zieltag", () => {
+  const loadDay = (dateIso: string): DayCapacityScore => ({
+    ...capacity(dateIso, 0.5),
+    physicalLoadBlockTitles: ["Fußballturnier"],
+  });
+
+  test("harte Session: Belastungstag wird trotz 50 % Capacity nie Auto-Pick-Ziel, freier Tag gewinnt", () => {
+    const plan = buildPlan(BASE_WEEK);
+    const candidates: SessionAssignmentCandidate[] = [
+      { targetSessionId: "s-sun", capacity: loadDay("2026-08-16") },
+      { targetSessionId: "s-thu", capacity: capacity("2026-08-13", 0.5) },
+    ];
+    // s-sat = long
+    const result = assignSessionToBestCapacityDay(plan, "s-sat", candidates);
+    expect(result.ok).toBe(true);
+    expect(result.chosenTargetSessionId).toBe("s-thu");
+
+    const ranked = rankCalendarReassignmentCandidates(plan, "s-sat", candidates);
+    expect(ranked.find((r) => r.targetSessionId === "s-sun")?.isConflict).toBe(true);
+    expect(ranked.find((r) => r.targetSessionId === "s-thu")?.isConflict).toBe(false);
+    expect(ranked[0].targetSessionId).toBe("s-thu");
+  });
+
+  test("ist der Belastungstag der einzige Kandidat, gibt es keinen Vorschlag (no-good-fit-candidate)", () => {
+    const plan = buildPlan(BASE_WEEK);
+    const candidates: SessionAssignmentCandidate[] = [{ targetSessionId: "s-sun", capacity: loadDay("2026-08-16") }];
+    const result = assignSessionToBestCapacityDay(plan, "s-sat", candidates);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("no-good-fit-candidate");
+  });
+
+  test("leichte Session darf auf den Belastungstag (kein Konflikt)", () => {
+    const plan = buildPlan(BASE_WEEK);
+    const candidates: SessionAssignmentCandidate[] = [{ targetSessionId: "s-sun", capacity: loadDay("2026-08-16") }];
+    // s-tue = easy, ersetzt s-sun (easy) -> beide Seiten leicht
+    const result = assignSessionToBestCapacityDay(plan, "s-tue", candidates);
+    expect(result.ok).toBe(true);
+    expect(result.chosenTargetSessionId).toBe("s-sun");
+  });
+
+  test("Swap-Gegenseite: verdrängte harte Session würde auf den Belastungs-Ursprungstag rutschen -> Konflikt", () => {
+    const plan = buildPlan(BASE_WEEK);
+    // s-tue (easy) auf Mittwoch (interval) tauschen: Intervall landet auf dem Ursprungstag Dienstag (Belastungstag).
+    const candidates: SessionAssignmentCandidate[] = [
+      { targetSessionId: "s-wed", capacity: capacity("2026-08-12", 1) },
+    ];
+    const result = assignSessionToBestCapacityDay(plan, "s-tue", candidates, loadDay("2026-08-11"));
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("no-good-fit-candidate");
   });
 });

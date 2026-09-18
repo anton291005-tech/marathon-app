@@ -1,6 +1,6 @@
 import type { AiPlanWeek, AiPlanSession } from "../../lib/ai/types";
 import type { WeeklyScheduleBlock } from "../../lib/supabase/services/weeklyScheduleBlocksService";
-import { computeDayCapacityScore, computeSessionDayFitScore } from "../../scheduling/capacityScore";
+import { computeDayCapacityScore, computeSessionDayFitScore, isPhysicalLoadConflict } from "../../scheduling/capacityScore";
 import { MIN_FIT_SCORE_THRESHOLD } from "./assignSessionToBestCapacityDay";
 import { parseSessionDateLabel } from "../../appSmartFeatures";
 import { getAppCalendarYmd } from "../../core/time/timeSystem";
@@ -20,6 +20,9 @@ function sessionDateIso(session: AiPlanSession): string | null {
 function describeConflict(session: AiPlanSession, fitScore: number, dayCapacity: ReturnType<typeof computeDayCapacityScore>): string {
   if (dayCapacity.isFullyBooked) {
     return `Tag ist durch Kalender-Termine komplett belegt (0 von ${dayCapacity.windowMinutes} Min. frei).`;
+  }
+  if (isPhysicalLoadConflict(session, dayCapacity)) {
+    return `Körperlich belastender Termin am selben Tag (${dayCapacity.physicalLoadBlockTitles.map((t) => `"${t}"`).join(", ")}) – "${session.title}" ist eine harte Einheit (Fit-Score ${fitScore.toFixed(2)}).`;
   }
   return `Kalender-Termine belegen ${dayCapacity.busyMinutes} von ${dayCapacity.windowMinutes} Min. – nur ${dayCapacity.freeMinutes} Min. frei für "${session.title}" (Fit-Score ${fitScore.toFixed(2)}).`;
 }
