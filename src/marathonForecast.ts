@@ -41,9 +41,6 @@ const WETTKAMPF_SESSION_TYPES = new Set(["tempo", "interval", "race"]);
 const AUSDAUER_SESSION_TYPES = new Set(["long", "easy"]);
 const WETTKAMPF_PACE_FACTOR = 1.04;
 const EASY_PACE_TO_RACE_FACTOR = 0.88;
-const PR_BLEND_TRAINING_WEIGHT = 0.65;
-const PR_BLEND_ANCHOR_WEIGHT = 0.35;
-const PR_ANCHOR_FACTOR = 1.08;
 const PR_MAX_SLOWDOWN_FACTOR = 1.15;
 
 /**
@@ -381,8 +378,13 @@ function baseSecondsFromSegmentedPaceSamples(samples: PaceRunSample[]): {
   };
 }
 
-function applyPersonalBestAnchor(
-  trainingBasedSeconds: number,
+/**
+ * A historical marathon PR is no longer blended into the base (it was pulling the forecast
+ * toward PR × 1.08 even when a fresh race anchor or current training data said otherwise).
+ * It now only caps how much slower the forecast is allowed to be than the PR suggests.
+ */
+function applyPersonalBestCap(
+  baseSeconds: number,
   personalBestSeconds: number | null | undefined,
 ): number {
   if (
@@ -390,13 +392,9 @@ function applyPersonalBestAnchor(
     !Number.isFinite(personalBestSeconds) ||
     personalBestSeconds <= 0
   ) {
-    return trainingBasedSeconds;
+    return baseSeconds;
   }
-
-  const prAnchorSeconds = personalBestSeconds * PR_ANCHOR_FACTOR;
-  const blended =
-    PR_BLEND_TRAINING_WEIGHT * trainingBasedSeconds + PR_BLEND_ANCHOR_WEIGHT * prAnchorSeconds;
-  return Math.min(blended, personalBestSeconds * PR_MAX_SLOWDOWN_FACTOR);
+  return Math.min(baseSeconds, personalBestSeconds * PR_MAX_SLOWDOWN_FACTOR);
 }
 
 function forecastMinSeconds(personalBestSeconds: number | null | undefined): number {
@@ -475,14 +473,24 @@ export function computeMarathonForecast(input: ForecastInput): MarathonForecast 
 
   let baseSeconds: number;
   if (raceAnchor != null) {
-    // Race result dominates — training paces only nudge it, they never dilute it away.
-    baseSeconds =
-      trainingBaseSeconds != null && Number.isFinite(trainingBaseSeconds)
-        ? RACE_ANCHOR_DOMINANT_WEIGHT * raceAnchor.predictedSeconds +
-          (1 - RACE_ANCHOR_DOMINANT_WEIGHT) * trainingBaseSeconds
-        : raceAnchor.predictedSeconds;
+    // Race result dominates — training paces may only pull it faster, never drag it slower.
+    if (trainingBaseSeconds != null && Number.isFinite(trainingBaseSeconds)) {
+      const blend =
+        RACE_ANCHOR_DOMINANT_WEIGHT * raceAnchor.predictedSeconds +
+        (1 - RACE_ANCHOR_DOMINANT_WEIGHT) * trainingBaseSeconds;
+      baseSeconds = Math.min(raceAnchor.predictedSeconds, blend);
+    } else {
+      baseSeconds = raceAnchor.predictedSeconds;
+    }
   } else if (trainingBaseSeconds != null && Number.isFinite(trainingBaseSeconds)) {
     baseSeconds = trainingBaseSeconds;
+  } else if (
+    input.personalBestSeconds != null &&
+    Number.isFinite(input.personalBestSeconds) &&
+    input.personalBestSeconds > 0
+  ) {
+    // Fallback: no race anchor and no training pace data — the historical PR is the only signal.
+    baseSeconds = input.personalBestSeconds;
   } else {
     return {
       ready: false,
@@ -501,7 +509,7 @@ export function computeMarathonForecast(input: ForecastInput): MarathonForecast 
     };
   }
 
-  let predictedSeconds = applyPersonalBestAnchor(baseSeconds, input.personalBestSeconds);
+  let predictedSeconds = applyPersonalBestCap(baseSeconds, input.personalBestSeconds);
   predictedSeconds *= volumeAdherenceTimeFactor(weeklyVolumeAdherence, window42Adherence);
   predictedSeconds *= longRunDepthFactor(maxLongRunKm);
   predictedSeconds *= recoveryTimeFactor(input.homeRecoveryScore0_100);

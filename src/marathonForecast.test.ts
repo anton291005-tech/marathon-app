@@ -260,6 +260,78 @@ describe("computeMarathonForecast", () => {
     expect(withOldRace.predictedSeconds).toBe(withoutRace.predictedSeconds);
   });
 
+  describe("race anchor may only improve on the training base, never worsen it", () => {
+    // now = Tue 16. Jun 2026 — current week Mon 15. – Sun 21. Jun.
+    const nowJune = new Date("2026-06-16T12:00:00.000Z");
+    const pace = 13298 / (0.88 * 42.195); // ~358.13 s/km — shared by every non-race sample
+                                            // so the training base averages to exactly 13298s
+                                            // regardless of each sample's own distance.
+    const raceDistanceKm = 21.0975;
+    const raceDurationSec = 10482 / Math.pow(42.195 / raceDistanceKm, 1.06); // riegel(...) === 10482
+    const priorWeekKm = 17.422222222222192; // solved so combined kmAdherence === 0.8421.. -> consistency 94
+
+    function buildRows(weekZeroActualKm: number, priorWeekActualKm: number) {
+      return [
+        // race anchor, 70 days back: outside the 56-day pace-sample lookback and outside the
+        // 42-day consistency window, but inside the 120-day race-anchor window.
+        { id: "race", date: "7. Apr", type: "race", km: 21, actualKm: raceDistanceKm, durationSec: raceDurationSec },
+        // sets maxLongRunKm to 26 (-> longRunDepthFactor 1), 50 days back: still inside the
+        // 56-day pace lookback, outside the 42-day consistency window.
+        { id: "long", date: "27. Apr", type: "long", km: 26, actualKm: 26, durationSec: 26 * pace },
+        // three preceding calendar weeks, each fully done -> completionRate 1, 4-week streak -> weekStreakFactor 1
+        { id: "w3", date: "26. Mai", type: "easy", km: priorWeekKm, actualKm: priorWeekActualKm, durationSec: priorWeekActualKm * pace },
+        { id: "w2", date: "2. Jun", type: "easy", km: priorWeekKm, actualKm: priorWeekActualKm, durationSec: priorWeekActualKm * pace },
+        { id: "w1", date: "9. Jun", type: "easy", km: priorWeekKm, actualKm: priorWeekActualKm, durationSec: priorWeekActualKm * pace },
+        // current week — its actual/planned ratio alone drives weeklyVolumeAdherence
+        { id: "w0", date: "16. Jun", type: "easy", km: 25, actualKm: weekZeroActualKm, durationSec: weekZeroActualKm * pace },
+      ];
+    }
+
+    function buildForecast(weekZeroActualKm: number, priorWeekActualKm: number) {
+      const rows = buildRows(weekZeroActualKm, priorWeekActualKm);
+      const plan = makePlan(rows);
+      const logs: Record<string, SessionLog> = {};
+      const healthRuns: StoredHealthRun[] = [];
+      for (const r of rows) {
+        logs[r.id] = doneLog({ runId: `${r.id}-run`, distanceKm: r.actualKm, durationSec: r.durationSec });
+        healthRuns.push(healthRun(`${r.id}-run`, r.durationSec, r.actualKm));
+      }
+      return computeMarathonForecast({
+        plan,
+        logs,
+        healthRuns,
+        now: nowJune,
+        personalBestSeconds: 10851,
+        homeRecoveryScore0_100: 52, // -> recoveryTimeFactor === 0.99848
+      });
+    }
+
+    it("keeps base at the race anchor when the training base is slower (base = min(anchor, blend))", () => {
+      // weekZeroActualKm=12.8 of 25 planned -> weeklyVolumeAdherence 0.512 -> volume penalty 1.0488
+      const forecast = buildForecast(12.8, priorWeekKm);
+      expect(forecast.ready).toBe(true);
+      expect(forecast.consistencyScore).toBe(94);
+      expect(forecast.weeklyVolumeAdherence).toBeCloseTo(0.512, 3);
+      // anchor 10482s, training base 13298s (worse) -> base stays 10482, not diluted upward.
+      // With vol 1.0488 * longRun 1 * rec 0.99848 + consistency penalty 7.2s -> ~10984s (3:03:04).
+      expect(forecast.predictedSeconds!).toBeGreaterThanOrEqual(10979);
+      expect(forecast.predictedSeconds!).toBeLessThanOrEqual(10989);
+    });
+
+    it("isolates the volume-adherence penalty: a neutral current week lands ~511s faster", () => {
+      // weekZeroActualKm=25 of 25 planned -> weeklyVolumeAdherence 1.0 -> no volume penalty;
+      // priorWeekActualKm rebalanced so the combined 42-day kmAdherence (and thus
+      // consistencyScore=94) stays identical to the case above.
+      const forecast = buildForecast(25, 13.355555555555526);
+      expect(forecast.ready).toBe(true);
+      expect(forecast.consistencyScore).toBe(94);
+      expect(forecast.weeklyVolumeAdherence).toBeCloseTo(1, 3);
+      // Same anchor (10482s) and cap logic, but volFactor=1 instead of 1.0488 -> ~10473s (2:54:33).
+      expect(forecast.predictedSeconds!).toBeGreaterThanOrEqual(10468);
+      expect(forecast.predictedSeconds!).toBeLessThanOrEqual(10478);
+    });
+  });
+
   it("clamps forecast between 2:20 and 5:00", () => {
     const plan = makePlan([
       { id: "a", date: "8. Mar", type: "long", km: 10 },
