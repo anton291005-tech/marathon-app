@@ -409,8 +409,13 @@ function forecastMinSeconds(personalBestSeconds: number | null | undefined): num
   return FORECAST_MIN_SECONDS;
 }
 
-function volumeAdherenceTimeFactor(weekly: number | null, window42: number | null): number {
-  const adherence = weekly ?? window42;
+/**
+ * Based on the 42-day window only. The weekly ratio of the running calendar week is deliberately
+ * not used: its actual km are measured against the full weekly plan, so the factor would swing
+ * with the weekday. (The window still counts sessions of this week that are already due.)
+ * Without enough history (window42 == null) the factor is neutral.
+ */
+function volumeAdherenceTimeFactor(adherence: number | null): number {
   if (adherence == null) return 1;
   if (adherence >= 0.88 && adherence <= 1.08) return 1;
   if (adherence < 0.88) {
@@ -510,7 +515,7 @@ export function computeMarathonForecast(input: ForecastInput): MarathonForecast 
   }
 
   let predictedSeconds = applyPersonalBestCap(baseSeconds, input.personalBestSeconds);
-  predictedSeconds *= volumeAdherenceTimeFactor(weeklyVolumeAdherence, window42Adherence);
+  predictedSeconds *= volumeAdherenceTimeFactor(window42Adherence);
   predictedSeconds *= longRunDepthFactor(maxLongRunKm);
   predictedSeconds *= recoveryTimeFactor(input.homeRecoveryScore0_100);
   predictedSeconds += ((100 - consistencyScore) / 100) * 120;

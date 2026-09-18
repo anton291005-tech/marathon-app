@@ -260,39 +260,50 @@ describe("computeMarathonForecast", () => {
     expect(withOldRace.predictedSeconds).toBe(withoutRace.predictedSeconds);
   });
 
-  describe("race anchor may only improve on the training base, never worsen it", () => {
+  describe("volume factor is driven by the 42-day window, not the running calendar week", () => {
     // now = Tue 16. Jun 2026 — current week Mon 15. – Sun 21. Jun.
     const nowJune = new Date("2026-06-16T12:00:00.000Z");
     const pace = 13298 / (0.88 * 42.195); // ~358.13 s/km — shared by every non-race sample
-                                            // so the training base averages to exactly 13298s
-                                            // regardless of each sample's own distance.
+                                            // so the training base averages to exactly 13298s.
     const raceDistanceKm = 21.0975;
     const raceDurationSec = 10482 / Math.pow(42.195 / raceDistanceKm, 1.06); // riegel(...) === 10482
-    const priorWeekKm = 17.422222222222192; // solved so combined kmAdherence === 0.8421.. -> consistency 94
 
-    function buildRows(weekZeroActualKm: number, priorWeekActualKm: number) {
+    // 42-day window: 6 done runs (planned = 100 km, actual = 100 km) + 1 open run (planned
+    // 14.548 km) -> window42Adherence = 100 / 114.548 = 0.873. Completion 6/7 and kmAdherence 1
+    // (done runs only) give consistencyScore = round(42*6/7 + 38 + 20) = 94.
+    // The 50 km of actual distance shared by the two most recent weeks is split by
+    // `weekZeroActualKm`, so the current-week ratio can vary without touching the window totals.
+    const WINDOW42 = 100 / (100 + 14.548);
+    const RECOVERY_FACTOR = 0.99848; // homeRecoveryScore 52
+    const CONSISTENCY_PENALTY = ((100 - 94) / 100) * 120; // 7.2s
+
+    function buildRows(weekZeroActualKm: number) {
       return [
-        // race anchor, 70 days back: outside the 56-day pace-sample lookback and outside the
-        // 42-day consistency window, but inside the 120-day race-anchor window.
+        // race anchor, 70 days back: outside the 42-day window, inside the 120-day anchor window.
         { id: "race", date: "7. Apr", type: "race", km: 21, actualKm: raceDistanceKm, durationSec: raceDurationSec },
-        // sets maxLongRunKm to 26 (-> longRunDepthFactor 1), 50 days back: still inside the
-        // 56-day pace lookback, outside the 42-day consistency window.
+        // sets maxLongRunKm to 26 (-> longRunDepthFactor 1), 50 days back: outside the 42-day window.
         { id: "long", date: "27. Apr", type: "long", km: 26, actualKm: 26, durationSec: 26 * pace },
-        // three preceding calendar weeks, each fully done -> completionRate 1, 4-week streak -> weekStreakFactor 1
-        { id: "w3", date: "26. Mai", type: "easy", km: priorWeekKm, actualKm: priorWeekActualKm, durationSec: priorWeekActualKm * pace },
-        { id: "w2", date: "2. Jun", type: "easy", km: priorWeekKm, actualKm: priorWeekActualKm, durationSec: priorWeekActualKm * pace },
-        { id: "w1", date: "9. Jun", type: "easy", km: priorWeekKm, actualKm: priorWeekActualKm, durationSec: priorWeekActualKm * pace },
-        // current week — its actual/planned ratio alone drives weeklyVolumeAdherence
+        { id: "w3a", date: "25. Mai", type: "easy", km: 10, actualKm: 10, durationSec: 10 * pace },
+        { id: "w3b", date: "26. Mai", type: "easy", km: 10, actualKm: 10, durationSec: 10 * pace },
+        { id: "w3c", date: "27. Mai", type: "easy", km: 10, actualKm: 10, durationSec: 10 * pace },
+        { id: "w3open", date: "28. Mai", type: "easy", km: 14.548, actualKm: null, durationSec: 0 },
+        { id: "w2", date: "2. Jun", type: "easy", km: 20, actualKm: 20, durationSec: 20 * pace },
+        { id: "w1", date: "9. Jun", type: "easy", km: 25, actualKm: 50 - weekZeroActualKm, durationSec: (50 - weekZeroActualKm) * pace },
+        // current week — its actual/planned ratio is what the old code used for the volume factor
         { id: "w0", date: "16. Jun", type: "easy", km: 25, actualKm: weekZeroActualKm, durationSec: weekZeroActualKm * pace },
       ];
     }
 
-    function buildForecast(weekZeroActualKm: number, priorWeekActualKm: number) {
-      const rows = buildRows(weekZeroActualKm, priorWeekActualKm);
+    type Row = ReturnType<typeof buildRows>[number] | {
+      id: string; date: string; type: string; km: number; actualKm: number | null; durationSec: number;
+    };
+
+    function forecastFromRows(rows: Row[], personalBestSeconds = 10851) {
       const plan = makePlan(rows);
       const logs: Record<string, SessionLog> = {};
       const healthRuns: StoredHealthRun[] = [];
       for (const r of rows) {
+        if (r.actualKm == null) continue; // open, not-done session
         logs[r.id] = doneLog({ runId: `${r.id}-run`, distanceKm: r.actualKm, durationSec: r.durationSec });
         healthRuns.push(healthRun(`${r.id}-run`, r.durationSec, r.actualKm));
       }
@@ -301,34 +312,56 @@ describe("computeMarathonForecast", () => {
         logs,
         healthRuns,
         now: nowJune,
-        personalBestSeconds: 10851,
+        personalBestSeconds,
         homeRecoveryScore0_100: 52, // -> recoveryTimeFactor === 0.99848
       });
     }
 
-    it("keeps base at the race anchor when the training base is slower (base = min(anchor, blend))", () => {
-      // weekZeroActualKm=12.8 of 25 planned -> weeklyVolumeAdherence 0.512 -> volume penalty 1.0488
-      const forecast = buildForecast(12.8, priorWeekKm);
+    // Expected value from the volume-factor formula (adherence < 0.88 branch): 1 + 0.1 * (1 - adherence).
+    // anchor 10482 * volume * longRun 1 * recovery 0.99848 + consistency penalty 7.2s.
+    const expectedWith42 = 10482 * (1 + 0.1 * (1 - WINDOW42)) * RECOVERY_FACTOR + CONSISTENCY_PENALTY; // ~10606s
+
+    it("uses window42Adherence (0.873 -> factor ~1.0127) while the current week is at 0.512", () => {
+      const forecast = forecastFromRows(buildRows(12.8));
       expect(forecast.ready).toBe(true);
       expect(forecast.consistencyScore).toBe(94);
       expect(forecast.weeklyVolumeAdherence).toBeCloseTo(0.512, 3);
-      // anchor 10482s, training base 13298s (worse) -> base stays 10482, not diluted upward.
-      // With vol 1.0488 * longRun 1 * rec 0.99848 + consistency penalty 7.2s -> ~10984s (3:03:04).
-      expect(forecast.predictedSeconds!).toBeGreaterThanOrEqual(10979);
-      expect(forecast.predictedSeconds!).toBeLessThanOrEqual(10989);
+      // anchor 10482s (training base 13298s is slower and must not dilute it).
+      expect(forecast.predictedSeconds!).toBeGreaterThanOrEqual(Math.floor(expectedWith42) - 2);
+      expect(forecast.predictedSeconds!).toBeLessThanOrEqual(Math.ceil(expectedWith42) + 2);
     });
 
-    it("isolates the volume-adherence penalty: a neutral current week lands ~511s faster", () => {
-      // weekZeroActualKm=25 of 25 planned -> weeklyVolumeAdherence 1.0 -> no volume penalty;
-      // priorWeekActualKm rebalanced so the combined 42-day kmAdherence (and thus
-      // consistencyScore=94) stays identical to the case above.
-      const forecast = buildForecast(25, 13.355555555555526);
-      expect(forecast.ready).toBe(true);
+    it("gives the same result when the current week is neutral (1.0)", () => {
+      const forecast = forecastFromRows(buildRows(25));
       expect(forecast.consistencyScore).toBe(94);
       expect(forecast.weeklyVolumeAdherence).toBeCloseTo(1, 3);
-      // Same anchor (10482s) and cap logic, but volFactor=1 instead of 1.0488 -> ~10473s (2:54:33).
-      expect(forecast.predictedSeconds!).toBeGreaterThanOrEqual(10468);
-      expect(forecast.predictedSeconds!).toBeLessThanOrEqual(10478);
+      expect(forecast.predictedSeconds!).toBeGreaterThanOrEqual(Math.floor(expectedWith42) - 2);
+      expect(forecast.predictedSeconds!).toBeLessThanOrEqual(Math.ceil(expectedWith42) + 2);
+    });
+
+    it("is independent of weeklyVolumeAdherence: 0.512 and 1.0 give identical predictions", () => {
+      const partialWeek = forecastFromRows(buildRows(12.8));
+      const neutralWeek = forecastFromRows(buildRows(25));
+      expect(partialWeek.weeklyVolumeAdherence).not.toBeCloseTo(neutralWeek.weeklyVolumeAdherence!, 2);
+      expect(partialWeek.predictedSeconds).toBe(neutralWeek.predictedSeconds);
+    });
+
+    it("applies a neutral volume factor (1.0) when window42Adherence is missing", () => {
+      // No running session inside the 42-day window -> window42Adherence null. A planned session
+      // later this week (Sat 20. Jun, not yet due) still gives weeklyVolumeAdherence 0 -> the old
+      // code would have applied 1 + 0.1 * (1 - 0.5) = 1.05.
+      const rows: Row[] = [
+        { id: "race", date: "7. Apr", type: "race", km: 21, actualKm: raceDistanceKm, durationSec: raceDurationSec },
+        { id: "long", date: "27. Apr", type: "long", km: 26, actualKm: 26, durationSec: 26 * pace },
+        { id: "future", date: "20. Jun", type: "easy", km: 25, actualKm: null, durationSec: 0 },
+      ];
+      const forecast = forecastFromRows(rows);
+      expect(forecast.ready).toBe(true);
+      expect(forecast.weeklyVolumeAdherence).toBeCloseTo(0, 3);
+      expect(forecast.consistencyScore).toBe(0); // no sessions in the window -> 120s penalty
+      const expected = 10482 * 1 * 1 * RECOVERY_FACTOR + 120; // ~10583s, volume factor exactly 1.0
+      expect(forecast.predictedSeconds!).toBeGreaterThanOrEqual(Math.floor(expected) - 2);
+      expect(forecast.predictedSeconds!).toBeLessThanOrEqual(Math.ceil(expected) + 2);
     });
   });
 
