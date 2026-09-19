@@ -12,6 +12,20 @@ import type { AiPlanWeek, AiPlanSession, SessionType } from "../../lib/ai/types"
 import type { RecurringScheduleBlock } from "../../lib/supabase/services/weeklyScheduleBlocksService";
 import type { DayCapacityScore } from "../../scheduling/capacityScore";
 
+// Aufzeichnender Wrapper (kein jest.fn: CRA setzt resetMocks) um die echte Implementierung: belegt, dass der
+// Einzel-Flow die Sperre an den Auto-Pick durchreicht.
+const mockAutoPickCalls: unknown[][] = [];
+jest.mock("./assignSessionToBestCapacityDay", () => {
+  const actual = jest.requireActual("./assignSessionToBestCapacityDay");
+  return {
+    ...actual,
+    assignSessionToBestCapacityDay: (...args: unknown[]) => {
+      mockAutoPickCalls.push(args);
+      return actual.assignSessionToBestCapacityDay(...args);
+    },
+  };
+});
+
 // Sperre für Kalender-Tausch: erledigte, übersprungene und vergangene Sessions sind weder Quelle noch Ziel.
 // Fixtures wie in den Nachbar-Tests: Montag 10. Aug .. Sonntag 16. Aug 2026 (parseSessionDateLabel: Jahr 2026).
 
@@ -296,6 +310,19 @@ describe("(c) Einzel-Flow (📅-Button)", () => {
       expect(result.patches.length).toBeGreaterThan(0);
       expect(result.candidates.length).toBeGreaterThan(0);
     }
+  });
+
+  test("Auto-Pick im Einzel-Flow bekommt lockedSessionIds durchgereicht (Guard im Produktivpfad verdrahtet)", () => {
+    mockAutoPickCalls.length = 0;
+    const week = buildWeek(BASE_WEEK);
+    const locked = new Set(["s-thu"]);
+
+    const result = proposeSingleSessionCalendarReassignment([week], week, "s-mon", [overloadedDay(1)], locked);
+
+    expect(result.status).toBe("proposal");
+    expect(mockAutoPickCalls).toHaveLength(1);
+    expect(mockAutoPickCalls[0][4]).toBeUndefined(); // phase
+    expect(mockAutoPickCalls[0][5]).toBe(locked);
   });
 
   test("gesperrte Session -> locked, kein Vorschlag", () => {

@@ -167,7 +167,7 @@ export function proposeSingleSessionCalendarReassignment(
   const inConflict = !!session && !!sourceDayCapacity && isSessionInCalendarConflict(session, sourceDayCapacity);
   if (!inConflict) return { status: "no-conflict", candidates: candidateViews };
 
-  const result = assignSessionToBestCapacityDay(plan, sessionId, candidates, sourceDayCapacity);
+  const result = assignSessionToBestCapacityDay(plan, sessionId, candidates, sourceDayCapacity, undefined, lockedSessionIds);
   const action = buildCalendarReassignmentAction(sessionId, result, plan);
   return { status: "proposal", action, patches: action ? result.patches : [], candidates: candidateViews };
 }
