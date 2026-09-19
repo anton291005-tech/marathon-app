@@ -40,6 +40,7 @@ import {
   resolveCurrentPlanWeekIndex,
   safeParseJSON,
 } from "./appSmartFeatures";
+import { getSessionStatus } from "./sessionStatus";
 import MarathonPredictionCard from "./components/MarathonPredictionCard";
 import RaceCalculator from "./components/RaceCalculator";
 import SurfaceCard from "./components/SurfaceCard";
@@ -928,12 +929,6 @@ function getFuelingHints(session){
     ];
   }
   return [];
-}
-
-function getSessionStatus(log){
-  if(log?.skipped)return "skipped";
-  if(isSessionLogDone(log))return "done";
-  return "open";
 }
 
 function getHeroTitle(session){
@@ -3029,7 +3024,10 @@ export default function AppMain(){
   });
   monitorMetricSource("progress_pct", "computeTrainingProgressPct", prepProgressPct);
   const dashboardLog = homeRunSession ? logs[homeRunSession.id] : null;
-  const dashboardDone = !!(homeRunSession && isSessionLogDone(dashboardLog));
+  const dashboardStatus = homeRunSession ? getSessionStatus(dashboardLog) : "open";
+  const dashboardDone = dashboardStatus === "done";
+  /** Erledigt nur über zugeordneten Health-Lauf (done ≠ true): quickCompleteSession würde `done` auf true setzen, ein "Rückgängig" wäre wirkungslos. */
+  const dashboardHealthOnlyDone = dashboardDone && dashboardLog?.done !== true;
   const dashboardHealthDone = !!(dashboardLog?.assignedRun?.runId);
   const healthSuggestPending = !!(dashboardLog?.suggestedHealthRunId && !dashboardLog?.assignedRun?.runId);
   const homeTodayHeadline = useMemo(() => {
@@ -3574,7 +3572,7 @@ export default function AppMain(){
     homeCoachAssessmentExpanded,
     view,
     homeRunSession,
-    dashboardDone,
+    dashboardStatus,
     isRestDay,
     prepProgressPct,
     wIdx,
@@ -3850,9 +3848,7 @@ export default function AppMain(){
                   >
                     {homeTodayHeadline}
                     {homeRunSession && (() => {
-                      const lg = logs[homeRunSession.id];
-                      const doneOrSynced = !!(isSessionLogDone(lg) || lg?.assignedRun?.runId);
-                      return doneOrSynced ? (
+                      return dashboardStatus === "done" ? (
                         <span
                           aria-label="Erledigt"
                           style={{
@@ -3901,7 +3897,7 @@ export default function AppMain(){
                   </div>
                 </div>
               ) : (
-                !isRestDay && (dashboardDone || !homeRunSession) ? (
+                !isRestDay ? (
                   <div
                     style={{
                       fontSize: 12,
@@ -3910,24 +3906,29 @@ export default function AppMain(){
                       letterSpacing: "0.02em",
                     }}
                   >
-                    {dashboardDone ? "Heute erledigt" : "Kein Training geplant"}
+                    Kein Training geplant
                   </div>
                 ) : null
               )}
             </div>
 
-            {/* Plan-Status (Kalender) — nur wenn Plan-Datum bekannt */}
-            {firstTrainingStart ? (
+            {/* Plan-Status (Kalender) — nur wenn Plan-Datum bekannt; nach Planstart nur bei erledigter/übersprungener Heute-Session */}
+            {firstTrainingStart && (!hasCalendarStarted || dashboardStatus !== "open") ? (
               <div style={{ position: "relative", display: "flex", justifyContent: "center", marginBottom: homeScrollLocked ? 4 : 6, flexShrink: 0, width: "100%" }}>
                 {!hasCalendarStarted ? (
                   <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--border-default)", border: "1px solid var(--border-default)", borderRadius: 999, padding: homeScrollLocked ? "2px 8px" : "3px 10px" }}>
                     <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#475569", display: "inline-block" }} />
                     <span style={{ fontSize: homeScrollLocked ? 10 : 11, color: "#475569", fontWeight: 700 }}>Plan startet am {blockStartLabel}</span>
                   </div>
+                ) : dashboardStatus === "done" ? (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.22)", borderRadius: 999, padding: homeScrollLocked ? "2px 8px" : "3px 10px" }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
+                    <span style={{ fontSize: homeScrollLocked ? 10 : 11, color: "#86efac", fontWeight: 700 }}>Heute erledigt ✓</span>
+                  </div>
                 ) : (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(56,189,248,0.08)", border: "1px solid rgba(56,189,248,0.16)", borderRadius: 999, padding: homeScrollLocked ? "2px 8px" : "3px 10px" }}>
-                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#38bdf8", boxShadow: "0 0 5px #38bdf8", display: "inline-block" }} />
-                    <span style={{ fontSize: homeScrollLocked ? 10 : 11, color: "#7dd3fc", fontWeight: 700 }}>Training läuft</span>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 999, padding: homeScrollLocked ? "2px 8px" : "3px 10px" }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#f87171", display: "inline-block" }} />
+                    <span style={{ fontSize: homeScrollLocked ? 10 : 11, color: "#fca5a5", fontWeight: 700 }}>Übersprungen</span>
                   </div>
                 )}
               </div>
@@ -4020,12 +4021,27 @@ export default function AppMain(){
                 flexShrink: 0,
               }}
             >
+              {dashboardStatus !== "skipped" && !dashboardHealthOnlyDone ? (
               <button
                 className="dashboard-action"
                 type="button"
                 onClick={() => homeRunSession && quickCompleteSession(homeRunSession)}
                 disabled={!homeRunSession}
-                style={{
+                aria-label={dashboardStatus === "done" ? "Erledigt-Markierung rückgängig machen" : undefined}
+                style={dashboardStatus === "done" ? {
+                  flex: 1,
+                  minWidth: 0,
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-default)",
+                  color: homeRunSession ? "var(--text-secondary)" : "#374151",
+                  borderRadius: 999,
+                  padding: "11px 12px",
+                  minHeight: 46,
+                  cursor: homeRunSession ? "pointer" : "not-allowed",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  boxSizing: "border-box",
+                } : {
                   flex: 1,
                   minWidth: 0,
                   background: "rgba(16,185,129,0.26)",
@@ -4041,14 +4057,30 @@ export default function AppMain(){
                   boxSizing: "border-box",
                 }}
               >
-                ✓ Done
+                {dashboardStatus === "done" ? "Rückgängig" : "✓ Done"}
               </button>
+              ) : null}
+              {dashboardStatus !== "done" ? (
               <button
                 className="dashboard-action"
                 type="button"
                 onClick={() => homeRunSession && quickSkipSession(homeRunSession)}
                 disabled={!homeRunSession}
-                style={{
+                aria-label={dashboardStatus === "skipped" ? "Übersprungen-Markierung rückgängig machen" : undefined}
+                style={dashboardStatus === "skipped" ? {
+                  flex: 1,
+                  minWidth: 0,
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-default)",
+                  color: homeRunSession ? "var(--text-secondary)" : "#374151",
+                  borderRadius: 999,
+                  padding: "11px 12px",
+                  minHeight: 46,
+                  cursor: homeRunSession ? "pointer" : "not-allowed",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  boxSizing: "border-box",
+                } : {
                   flex: 1,
                   minWidth: 0,
                   background: "rgba(239,68,68,0.18)",
@@ -4064,8 +4096,9 @@ export default function AppMain(){
                   boxSizing: "border-box",
                 }}
               >
-                Skip
+                {dashboardStatus === "skipped" ? "Rückgängig" : "Skip"}
               </button>
+              ) : null}
               <button
                 type="button"
                 className="dashboard-action"
