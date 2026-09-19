@@ -1,7 +1,8 @@
 import type { AiPlanWeek, AiPlanSession } from "../../lib/ai/types";
 import type { WeeklyScheduleBlock } from "../../lib/supabase/services/weeklyScheduleBlocksService";
 import { computeDayCapacityScore, computeSessionDayFitScore, isPhysicalLoadConflict } from "../../scheduling/capacityScore";
-import { MIN_FIT_SCORE_THRESHOLD } from "./assignSessionToBestCapacityDay";
+import { isSessionInCalendarConflict } from "./assignSessionToBestCapacityDay";
+import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 import { parseSessionDateLabel } from "../../appSmartFeatures";
 import { getAppCalendarYmd } from "../../core/time/timeSystem";
 
@@ -39,19 +40,24 @@ function describeConflict(session: AiPlanSession, fitScore: number, dayCapacity:
  * Erzeugt keinen PlanPatch und verändert nichts – dient nur der Erkennung, welche Tage der Woche
  * mit den hinterlegten Kalender-Blocks kollidieren. Der bestehende Einzel-Tag-📅-Handler
  * (`handleProposeCalendarReassignment` in AppMain.tsx) bleibt davon unberührt.
+ *
+ * Gesperrte Sessions (erledigt/übersprungen/vergangen, `buildLockedSessionIds`) sind nie Quelle eines
+ * Konflikts.
  */
 export function scanWeekForCalendarConflicts(
   week: AiPlanWeek,
   scheduleBlocks: WeeklyScheduleBlock[],
+  lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
 ): WeeklyCalendarConflict[] {
   const conflicts: WeeklyCalendarConflict[] = [];
   for (const session of week.s ?? []) {
+    if (lockedSessionIds.has(session.id)) continue;
     const dayIso = sessionDateIso(session);
     if (!dayIso) continue;
 
     const dayCapacity = computeDayCapacityScore(dayIso, scheduleBlocks);
+    if (!isSessionInCalendarConflict(session, dayCapacity)) continue;
     const fitScore = computeSessionDayFitScore(session, dayCapacity);
-    if (fitScore >= MIN_FIT_SCORE_THRESHOLD) continue;
 
     conflicts.push({
       sessionId: session.id,

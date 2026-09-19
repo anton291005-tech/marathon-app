@@ -6,6 +6,7 @@ import { validateMicroStructure } from "../validation/validateMicroStructure";
 import type { ValidationContext } from "../validation/validationContext";
 import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 import { swapWorkouts } from "./swapWorkouts";
+import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 import { computeSessionDayFitScore, type DayCapacityScore } from "../../scheduling/capacityScore";
 
 /**
@@ -25,7 +26,7 @@ export type SessionAssignmentResult = {
   chosenTargetSessionId: string | null;
   microStructureSeverity: number;
   warning: string | null;
-  reason?: "no-candidates" | "no-valid-candidates" | "integrity-violation" | "no-good-fit-candidate";
+  reason?: "no-candidates" | "no-valid-candidates" | "integrity-violation" | "no-good-fit-candidate" | "locked-session";
 };
 
 export const NEUTRAL_VALIDATION_CONTEXT: ValidationContext = {
@@ -52,6 +53,14 @@ const MICRO_STRUCTURE_WARN_THRESHOLD = 60;
  * override, since a genuinely better slot may simply not exist among the current candidates.
  */
 export const MIN_FIT_SCORE_THRESHOLD = 0.35;
+
+/**
+ * Kalenderkonflikt einer Session auf ihrem aktuellen Tag: Fit-Score unter `MIN_FIT_SCORE_THRESHOLD`.
+ * Gemeinsames Kriterium von Wochen-Scan und Einzel-📅-Handler.
+ */
+export function isSessionInCalendarConflict(session: Pick<AiPlanSession, "type">, dayCapacity: DayCapacityScore): boolean {
+  return computeSessionDayFitScore(session, dayCapacity) < MIN_FIT_SCORE_THRESHOLD;
+}
 
 export function findSessionById(plan: AiPlanWeek[], id: string): AiPlanSession | null {
   for (const week of plan) {
@@ -261,12 +270,16 @@ export function rankCalendarReassignmentCandidates(
  * `combinedFit` never hard-rejects here — the athlete already saw the candidate flagged via
  * `isConflict` and chose it anyway. `validatePlanIntegrity` still gates the result since that's a
  * structural invariant, not a quality judgment call the athlete can override.
+ *
+ * Guard: a swap touching a locked session (done / skipped / past, see `buildLockedSessionIds`) is
+ * rejected with `reason: "locked-session"` — `swapWorkouts` itself checks nothing, so this is the safety net.
  */
 export function assignSessionToChosenDay(
   plan: AiPlanWeek[],
   sessionId: string,
   targetSessionId: string,
   phase?: ValidationContext["phase"],
+  lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
 ): SessionAssignmentResult {
   const before: AiPlanWeek[] = deepClone(plan);
   const emptyResult: Omit<SessionAssignmentResult, "reason"> = {
@@ -282,6 +295,9 @@ export function assignSessionToChosenDay(
   const displacedSession = findSessionById(before, targetSessionId);
   if (!sessionId || !movedSession || !targetSessionId || !displacedSession) {
     return { ...emptyResult, reason: "no-candidates" };
+  }
+  if (lockedSessionIds.has(sessionId) || lockedSessionIds.has(targetSessionId)) {
+    return { ...emptyResult, reason: "locked-session" };
   }
 
   const context: ValidationContext = phase ? { ...NEUTRAL_VALIDATION_CONTEXT, phase } : NEUTRAL_VALIDATION_CONTEXT;

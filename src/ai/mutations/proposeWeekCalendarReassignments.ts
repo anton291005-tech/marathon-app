@@ -4,6 +4,7 @@ import type { WeeklyCalendarConflict } from "./scanWeekForCalendarConflicts";
 import { buildCalendarReassignmentCandidates, computeSourceDayCapacity } from "./buildCalendarReassignmentAction";
 import { rankCalendarReassignmentCandidates } from "./assignSessionToBestCapacityDay";
 import { computeSessionDayFitScore } from "../../scheduling/capacityScore";
+import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 
 export type WeekCalendarReassignmentProposal =
   | { sessionId: string; fromDayIso: string; toDayIso: string; reason: string }
@@ -51,11 +52,13 @@ function sortConflictsBySeverity(
  * hinter dem Einzel-Tag-📅-Button – dessen `isConflict`-Flag (Capacity-Fit UND Micro-Structure)
  * entscheidet, ob ein Kandidat als Lösung zählt. Erzeugt keinen PlanPatch, ruft weder
  * `assignSessionToBestCapacityDay` noch `buildCalendarReassignmentAction` auf – reine Vorschau.
+ * Gesperrte Sessions (`lockedSessionIds`) werden nie als Zieltag angeboten.
  */
 export function proposeWeekCalendarReassignments(
   conflicts: WeeklyCalendarConflict[],
   week: AiPlanWeek,
   scheduleBlocks: WeeklyScheduleBlock[],
+  lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
 ): WeekCalendarReassignmentProposal[] {
   const plan: AiPlanWeek[] = [week];
   const ordered = sortConflictsBySeverity(conflicts, week, scheduleBlocks);
@@ -63,7 +66,7 @@ export function proposeWeekCalendarReassignments(
   const proposals: WeekCalendarReassignmentProposal[] = [];
 
   for (const conflict of ordered) {
-    const allCandidates = buildCalendarReassignmentCandidates(week, conflict.sessionId, scheduleBlocks);
+    const allCandidates = buildCalendarReassignmentCandidates(week, conflict.sessionId, scheduleBlocks, lockedSessionIds);
     const availableCandidates = allCandidates.filter((c) => !takenTargetSessionIds.has(c.targetSessionId));
     const sourceDayCapacity = computeSourceDayCapacity(week, conflict.sessionId, scheduleBlocks);
     const ranked = rankCalendarReassignmentCandidates(plan, conflict.sessionId, availableCandidates, sourceDayCapacity);
