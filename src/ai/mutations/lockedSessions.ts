@@ -9,9 +9,10 @@ type SessionLogLike = Parameters<typeof getSessionStatus>[0];
 export const NO_LOCKED_SESSION_IDS: ReadonlySet<string> = new Set<string>();
 
 /**
- * Sessions, die weder Quelle noch Ziel eines Kalender-Tauschs sein dürfen: erledigt, übersprungen
- * (`getSessionStatus`, dieselbe Status-Ableitung wie Woche-/Heute-Tab) oder mit Datum vor heute.
- * Sessions ohne parsebares Datum werden nur über ihren Status gesperrt.
+ * Sessions, die weder Quelle noch Ziel eines Kalender-Tauschs sein dürfen: Renn-Sessions
+ * (`type === "race"`, wie im Plan-Modell überall erkannt — der Renntermin ist nicht verschiebbar),
+ * erledigt, übersprungen (`getSessionStatus`, dieselbe Status-Ableitung wie Woche-/Heute-Tab) oder mit
+ * Datum vor heute. Sessions ohne parsebares Datum werden nur über Typ und Status gesperrt.
  */
 export function buildLockedSessionIds(
   weeks: AiPlanWeek[],
@@ -21,7 +22,7 @@ export function buildLockedSessionIds(
   const locked = new Set<string>();
   for (const week of weeks) {
     for (const session of week.s ?? []) {
-      if (getSessionStatus(logs?.[session.id]) !== "open") {
+      if (session.type === "race" || getSessionStatus(logs?.[session.id]) !== "open") {
         locked.add(session.id);
         continue;
       }

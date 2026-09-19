@@ -105,6 +105,64 @@ describe("buildLockedSessionIds", () => {
   });
 });
 
+// Renn-Sessions (type "race") sind nicht verschiebbar: Sonntag 16. Aug ist Renntag.
+const RACE_WEEK: DaySpec[] = [
+  { id: "s-mon", type: "interval", date: "10. Aug", day: "Montag" },
+  { id: "s-tue", type: "easy", date: "11. Aug", day: "Dienstag" },
+  { id: "s-wed", type: "interval", date: "12. Aug", day: "Mittwoch" },
+  { id: "s-thu", type: "easy", date: "13. Aug", day: "Donnerstag" },
+  { id: "s-fri", type: "rest", date: "14. Aug", day: "Freitag" },
+  { id: "s-sat", type: "easy", date: "15. Aug", day: "Samstag" },
+  { id: "s-race", type: "race", date: "16. Aug", day: "Sonntag" },
+];
+
+describe("Renn-Session ist gesperrt (Quelle und Ziel)", () => {
+  const before = "2026-01-01"; // alles in der Zukunft: nur der Typ sperrt
+  const week = buildWeek(RACE_WEEK);
+  const locked = buildLockedSessionIds([week], {}, before);
+
+  test("buildLockedSessionIds: nur die offene, künftige Renn-Session ist gesperrt", () => {
+    expect([...locked]).toEqual(["s-race"]);
+  });
+
+  test("als Quelle: überlastete Renn-Session ist kein Konflikt, Einzel-Flow liefert locked", () => {
+    const blocks = [overloadedDay(0)]; // Sonntag überlastet
+    expect(scanWeekForCalendarConflicts(week, blocks).map((c) => c.sessionId)).toEqual(["s-race"]);
+    expect(scanWeekForCalendarConflicts(week, blocks, locked)).toEqual([]);
+    expect(proposeSingleSessionCalendarReassignment([week], week, "s-race", blocks, locked)).toEqual({ status: "locked" });
+  });
+
+  test("als Ziel: nie Kandidat, nie Ziel der manuellen Wahl, Guards lehnen ab", () => {
+    const candidates = buildCalendarReassignmentCandidates(week, "s-mon", [], locked).map((c) => c.targetSessionId);
+    expect(candidates).not.toContain("s-race");
+
+    const single = proposeSingleSessionCalendarReassignment([week], week, "s-mon", [overloadedDay(1)], locked);
+    expect(single.status).toBe("proposal");
+    if (single.status === "proposal") expect(single.candidates.map((c) => c.label).join("|")).not.toMatch(/Sonntag/);
+
+    const chosen = assignSessionToChosenDay([week], "s-mon", "s-race", undefined, locked);
+    expect(chosen.reason).toBe("locked-session");
+    expect(chosen.patches).toEqual([]);
+
+    const batch = validateWeekReassignmentBatch(
+      [{ sessionId: "s-mon", fromDayIso: "2026-08-10", toDayIso: "2026-08-16", reason: "Ausweichtag gefunden." }],
+      week,
+      undefined,
+      locked,
+    );
+    expect(batch.valid).toBe(false);
+  });
+
+  test("Kontrolle: normale offene Session bleibt verschiebbar", () => {
+    expect(locked.has("s-tue")).toBe(false);
+    const candidates = buildCalendarReassignmentCandidates(week, "s-mon", [], locked).map((c) => c.targetSessionId);
+    expect(candidates).toContain("s-tue");
+    const chosen = assignSessionToChosenDay([week], "s-mon", "s-tue", undefined, locked);
+    expect(chosen.ok).toBe(true);
+    expect(chosen.patches.length).toBeGreaterThan(0);
+  });
+});
+
 describe("(a) gesperrte Session als Quelle", () => {
   test("scanWeekForCalendarConflicts: überlastete, aber gesperrte Session ist kein Konflikt", () => {
     const week = buildWeek(BASE_WEEK);
