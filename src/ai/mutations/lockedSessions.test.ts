@@ -6,7 +6,7 @@ import {
   buildCalendarReassignmentCandidates,
   proposeSingleSessionCalendarReassignment,
 } from "./buildCalendarReassignmentAction";
-import { assignSessionToChosenDay, isSessionInCalendarConflict } from "./assignSessionToBestCapacityDay";
+import { assignSessionToBestCapacityDay, assignSessionToChosenDay, isSessionInCalendarConflict } from "./assignSessionToBestCapacityDay";
 import { freezeTimeForTests } from "../../core/time/timeSystem";
 import type { AiPlanWeek, AiPlanSession, SessionType } from "../../lib/ai/types";
 import type { RecurringScheduleBlock } from "../../lib/supabase/services/weeklyScheduleBlocksService";
@@ -173,6 +173,40 @@ describe("(b) Guard-Violation bei gesperrter ID", () => {
     expect(result.ok).toBe(false);
     expect(result.reason).toBe("locked-session");
     expect(result.patches).toEqual([]);
+  });
+
+  test("assignSessionToBestCapacityDay: gesperrte Quelle -> locked-session, keine Patches", () => {
+    const week = buildWeek(BASE_WEEK);
+    const candidates = buildCalendarReassignmentCandidates(week, "s-mon", []);
+    const result = assignSessionToBestCapacityDay([week], "s-mon", candidates, null, undefined, new Set(["s-mon"]));
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("locked-session");
+    expect(result.patches).toEqual([]);
+  });
+
+  test("assignSessionToBestCapacityDay: ungefilterte Kandidaten, gesperrter Gewinner -> locked-session, keine Patches", () => {
+    const week = buildWeek(BASE_WEEK);
+    const candidates = buildCalendarReassignmentCandidates(week, "s-mon", []); // ungefiltert
+    const free = assignSessionToBestCapacityDay([week], "s-mon", candidates);
+    expect(free.ok).toBe(true);
+
+    // Kontrolle: der Gewinner ohne Sperre ist gesperrt -> Guard greift statt Swap.
+    const result = assignSessionToBestCapacityDay(
+      [week], "s-mon", candidates, null, undefined, new Set([free.chosenTargetSessionId as string]),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("locked-session");
+    expect(result.patches).toEqual([]);
+  });
+
+  test("assignSessionToBestCapacityDay: Sperre auf unbeteiligter Session ändert nichts (Kontrolle)", () => {
+    const week = buildWeek(BASE_WEEK);
+    const candidates = buildCalendarReassignmentCandidates(week, "s-mon", []);
+    const free = assignSessionToBestCapacityDay([week], "s-mon", candidates);
+    const other = week.s.find((s) => s.id !== "s-mon" && s.id !== free.chosenTargetSessionId)!.id;
+    const result = assignSessionToBestCapacityDay([week], "s-mon", candidates, null, undefined, new Set([other]));
+    expect(result.ok).toBe(true);
+    expect(result.chosenTargetSessionId).toBe(free.chosenTargetSessionId);
   });
 
   test("assignSessionToChosenDay: ohne Sperre unverändert (Kontrolle)", () => {

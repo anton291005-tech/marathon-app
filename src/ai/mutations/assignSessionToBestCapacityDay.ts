@@ -109,6 +109,11 @@ export function diffToPatches(before: AiPlanWeek[], after: AiPlanWeek[], ids: st
  *
  * The result is produced via `applyPlanPatches` (not direct mutation) and gated by
  * `validatePlanIntegrity`, per the Phase-2-Roadmap acceptance criterion for Schritt 3.
+ *
+ * Guard (same as `assignSessionToChosenDay`): a locked moved session (done / skipped / past, see
+ * `buildLockedSessionIds`) or a locked winning target yields `reason: "locked-session"` without patches,
+ * even when the caller passed unfiltered candidates. Callers are still expected to filter candidates
+ * (`buildCalendarReassignmentCandidates`), since the guard rejects rather than skips a locked winner.
  */
 type ScoredCandidate = {
   candidate: SessionAssignmentCandidate;
@@ -179,6 +184,7 @@ export function assignSessionToBestCapacityDay(
   candidates: SessionAssignmentCandidate[],
   sourceDayCapacity: DayCapacityScore | null = null,
   phase?: ValidationContext["phase"],
+  lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
 ): SessionAssignmentResult {
   const before: AiPlanWeek[] = deepClone(plan);
   const emptyResult: Omit<SessionAssignmentResult, "reason"> = {
@@ -194,6 +200,9 @@ export function assignSessionToBestCapacityDay(
   if (!sessionId || !movedSession || candidates.length === 0) {
     return { ...emptyResult, reason: "no-candidates" };
   }
+  if (lockedSessionIds.has(sessionId)) {
+    return { ...emptyResult, reason: "locked-session" };
+  }
 
   const context: ValidationContext = phase ? { ...NEUTRAL_VALIDATION_CONTEXT, phase } : NEUTRAL_VALIDATION_CONTEXT;
   const scored = scoreAndRankCandidates(before, sessionId, movedSession, candidates, sourceDayCapacity, context);
@@ -203,6 +212,9 @@ export function assignSessionToBestCapacityDay(
   }
 
   const winner = scored[0];
+  if (lockedSessionIds.has(winner.candidate.targetSessionId)) {
+    return { ...emptyResult, reason: "locked-session" };
+  }
   if (winner.combinedFit < MIN_FIT_SCORE_THRESHOLD) {
     return { ...emptyResult, reason: "no-good-fit-candidate" };
   }
