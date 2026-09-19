@@ -63,7 +63,7 @@ Regelbasiert, transparent, kalibriert sich über Post-Workout-Feedback selbst na
 - Trigger ist on-demand (Button/Banner im Woche-Tab) — kein automatischer Scan beim Tab-Öffnen; "dauerhaft aktiv, erkennt neue Kalendereinträge sofort" ist bewusst nicht Teil dieses Schritts.
 - Diff wird im Woche-Screen sichtbar (nicht nur im Chat), zeigt pro verschobener Session alten vs. neuen Tag.
 - Warn-Level-Reassignments (Micro-Structure-Status "warn") blockieren das Batch nicht mehr hart, sondern werden mit Warnhinweis angezeigt — Athlet bestätigt aktiv. Nur echte strukturelle Verstöße (Session nicht gefunden, widersprüchliche Zuordnung, Integritätsverletzung) bleiben Hard-Block fürs gesamte Batch.
-- Partial Resolution: nicht automatisch lösbare Konflikte werden am Ende des Diff-Screens als Liste ausgewiesen, kein Blocker fürs restliche Batch — Einzelfall-Bearbeitung läuft über den bestehenden 📅-Button pro Session.
+- Partial Resolution: nicht automatisch lösbare Konflikte werden am Ende des Diff-Screens als Liste ausgewiesen, kein Blocker fürs restliche Batch — Einzelfall-Bearbeitung läuft über den bestehenden 📅-Button pro Session. Der Button ist nur für Sessions sichtbar, die nicht erledigt, übersprungen oder vergangen sind (diese sind als Quelle und Ziel jedes Kalender-Tauschs gesperrt), und schlägt nur bei einem Kalenderkonflikt der Session auf ihrem Tag einen Tausch vor; ohne Konflikt zeigt er "Kein Konflikt an diesem Tag" und bietet "Trotzdem Tag wählen" (manuelle Tageswahl bleibt immer erreichbar).
 - Verletzt keine bestehende Wochenansicht-Struktur (Scroll/Overlap-Pattern aus dem Bearbeiten-Fix vom 15. Sept wiederverwendet, nicht neu gebaut).
 
 ### 7. Post-Workout-Feedback-Loop zur Belastungsfaktor-Kalibrierung

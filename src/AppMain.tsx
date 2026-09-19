@@ -116,17 +116,9 @@ import {
   fetchStravaConnectionStatus,
   disconnectStrava,
 } from "./lib/supabase/services/stravaConnectionService";
-import {
-  assignSessionToBestCapacityDay,
-  rankCalendarReassignmentCandidates,
-  assignSessionToChosenDay,
-} from "./ai/mutations/assignSessionToBestCapacityDay";
-import {
-  buildCalendarReassignmentCandidates,
-  buildCalendarReassignmentAction,
-  buildCalendarReassignmentCandidateViews,
-  computeSourceDayCapacity,
-} from "./ai/mutations/buildCalendarReassignmentAction";
+import { assignSessionToChosenDay } from "./ai/mutations/assignSessionToBestCapacityDay";
+import { proposeSingleSessionCalendarReassignment } from "./ai/mutations/buildCalendarReassignmentAction";
+import { buildLockedSessionIds } from "./ai/mutations/lockedSessions";
 import { scanWeekForCalendarConflicts } from "./ai/mutations/scanWeekForCalendarConflicts";
 import { proposeWeekCalendarReassignments } from "./ai/mutations/proposeWeekCalendarReassignments";
 import { validateWeekReassignmentBatch } from "./ai/mutations/validateWeekReassignmentBatch";
@@ -2726,23 +2718,25 @@ export default function AppMain(){
     ? WEEK_DAYS_DE.slice(0, WEEK_DAYS_DE.indexOf(wSessions[0].day))
     : [];
 
+  // Erledigt/übersprungen/vergangen: weder Quelle noch Ziel eines Kalender-Tauschs.
+  const lockedSessionIds = buildLockedSessionIds(displayPlan, logs);
+
   const handleProposeCalendarReassignment = (sessionId)=>{
     if (!w) return;
-    const candidates = buildCalendarReassignmentCandidates(w, sessionId, scheduleBlocks);
-    const sourceDayCapacity = computeSourceDayCapacity(w, sessionId, scheduleBlocks);
-    const ranked = rankCalendarReassignmentCandidates(displayPlan, sessionId, candidates, sourceDayCapacity);
-    const candidateViews = buildCalendarReassignmentCandidateViews(w, ranked);
-    const result = assignSessionToBestCapacityDay(displayPlan, sessionId, candidates, sourceDayCapacity);
-    const action = buildCalendarReassignmentAction(sessionId, result, displayPlan);
-    if (!action) {
-      setPendingCalendarProposal({ sessionId, action: null, patches: [], candidates: candidateViews, mode: "preview" });
+    const proposal = proposeSingleSessionCalendarReassignment(displayPlan, w, sessionId, scheduleBlocks, lockedSessionIds);
+    if (proposal.status === "locked") return;
+    if (proposal.status === "no-conflict") {
+      setPendingCalendarProposal({ sessionId, action: null, patches: [], candidates: proposal.candidates, mode: "preview", noConflict: true });
       return;
     }
-    setPendingCalendarProposal({ sessionId, action, patches: result.patches, candidates: candidateViews, mode: "preview" });
+    setPendingCalendarProposal({ sessionId, action: proposal.action, patches: proposal.patches, candidates: proposal.candidates, mode: "preview" });
   };
 
+  // Zwischen Vorschlag und Bestätigung kann eine Session erledigt/übersprungen worden sein (✓-Button bleibt aktiv).
+  const touchesLockedSession = (patches)=> patches.some(patch => lockedSessionIds.has(patch.sessionId));
+
   const handleConfirmCalendarReassignment = ()=>{
-    if (pendingCalendarProposal?.patches?.length) {
+    if (pendingCalendarProposal?.patches?.length && !touchesLockedSession(pendingCalendarProposal.patches)) {
       handleAiApplyPlanPatches(null, null, pendingCalendarProposal.patches);
     }
     setPendingCalendarProposal(null);
@@ -2758,9 +2752,9 @@ export default function AppMain(){
 
   const handleSelectCalendarReassignmentTarget = (targetSessionId)=>{
     if (!pendingCalendarProposal) return;
-    const result = assignSessionToChosenDay(displayPlan, pendingCalendarProposal.sessionId, targetSessionId);
+    const result = assignSessionToChosenDay(displayPlan, pendingCalendarProposal.sessionId, targetSessionId, undefined, lockedSessionIds);
     if (!result.ok || !result.patches.length) {
-      setPendingCalendarProposal(prev => prev ? { ...prev, action: null, patches: [], mode: "preview" } : prev);
+      setPendingCalendarProposal(prev => prev ? { ...prev, action: null, patches: [], mode: "preview", noConflict: false } : prev);
       return;
     }
     handleAiApplyPlanPatches(null, null, result.patches);
@@ -2769,13 +2763,13 @@ export default function AppMain(){
 
   const handleScanWeekForCalendarConflicts = ()=>{
     if (!w) return;
-    const conflicts = scanWeekForCalendarConflicts(w, scheduleBlocks);
+    const conflicts = scanWeekForCalendarConflicts(w, scheduleBlocks, lockedSessionIds);
     if (conflicts.length === 0) {
       setWeekCalendarBatchProposal({ action: null, patches: [], status: "no-conflicts" });
       return;
     }
-    const proposals = proposeWeekCalendarReassignments(conflicts, w, scheduleBlocks);
-    const validation = validateWeekReassignmentBatch(proposals, w);
+    const proposals = proposeWeekCalendarReassignments(conflicts, w, scheduleBlocks, lockedSessionIds);
+    const validation = validateWeekReassignmentBatch(proposals, w, undefined, lockedSessionIds);
     if (!validation.valid) {
       setWeekCalendarBatchProposal({ action: null, patches: [], status: "blocked", blockedReasons: validation.violations });
       return;
@@ -2785,7 +2779,7 @@ export default function AppMain(){
   };
 
   const handleConfirmWeekCalendarBatch = ()=>{
-    if (weekCalendarBatchProposal?.patches?.length) {
+    if (weekCalendarBatchProposal?.patches?.length && !touchesLockedSession(weekCalendarBatchProposal.patches)) {
       handleAiApplyPlanPatches(null, null, weekCalendarBatchProposal.patches);
     }
     setWeekCalendarBatchProposal(null);
@@ -4705,8 +4699,13 @@ export default function AppMain(){
                       />
                     ) : (
                       <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,fontSize:13,color:"var(--text-secondary)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                        <span>Keine sinnvolle Alternative im Kalender gefunden.</span>
-                        <button onClick={handleCancelCalendarReassignment} style={{background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700}}>OK</button>
+                        <span>{pendingCalendarProposal.noConflict ? "Kein Konflikt an diesem Tag." : "Keine sinnvolle Alternative im Kalender gefunden."}</span>
+                        <span style={{display:"flex",gap:12,flexShrink:0}}>
+                          {pendingCalendarProposal.noConflict && (
+                            <button onClick={handleEditCalendarReassignment} style={{background:"transparent",border:"none",color:"#93c5fd",cursor:"pointer",fontWeight:700}}>Trotzdem Tag wählen</button>
+                          )}
+                          <button onClick={handleCancelCalendarReassignment} style={{background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700}}>OK</button>
+                        </span>
                       </div>
                     )}
                   </div>
@@ -4814,7 +4813,7 @@ export default function AppMain(){
                         ✓
                       </button>
                     )}
-                    {hasHint && scheduleBlocks.length > 0 && (
+                    {hasHint && scheduleBlocks.length > 0 && !lockedSessionIds.has(session.id) && (
                       <button
                         onClick={(e)=>{e.stopPropagation(); handleProposeCalendarReassignment(session.id);}}
                         style={{

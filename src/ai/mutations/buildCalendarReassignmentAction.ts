@@ -1,5 +1,11 @@
-import type { AiPlanWeek, AiPlanSession, AiAssistantAction, AiActionPreview } from "../../lib/ai/types";
+import type { AiPlanWeek, AiPlanSession, AiAssistantAction, AiActionPreview, PlanPatch } from "../../lib/ai/types";
 import type { SessionAssignmentCandidate, SessionAssignmentResult, RankedCalendarCandidate } from "./assignSessionToBestCapacityDay";
+import {
+  assignSessionToBestCapacityDay,
+  isSessionInCalendarConflict,
+  rankCalendarReassignmentCandidates,
+} from "./assignSessionToBestCapacityDay";
+import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 import type { WeeklyScheduleBlock } from "../../lib/supabase/services/weeklyScheduleBlocksService";
 import { computeDayCapacityScore, type DayCapacityScore } from "../../scheduling/capacityScore";
 import { parseSessionDateLabel } from "../../appSmartFeatures";
@@ -23,16 +29,19 @@ function findSessionById(plan: AiPlanWeek[], id: string): AiPlanSession | null {
 /**
  * Builds the N candidate days for `assignSessionToBestCapacityDay`: every other session in the
  * given week, scored by calendar capacity (Schritt 2). Sessions whose date label can't be parsed
- * are skipped defensively rather than passed to `computeDayCapacityScore` with a bogus date.
+ * are skipped defensively rather than passed to `computeDayCapacityScore` with a bogus date. Locked
+ * sessions (done / skipped / past, see `buildLockedSessionIds`) are never a target.
  */
 export function buildCalendarReassignmentCandidates(
   week: AiPlanWeek,
   sessionId: string,
   blocks: WeeklyScheduleBlock[],
+  lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
 ): SessionAssignmentCandidate[] {
   const candidates: SessionAssignmentCandidate[] = [];
   for (const session of week.s ?? []) {
     if (session.id === sessionId) continue;
+    if (lockedSessionIds.has(session.id)) continue;
     const dateIso = sessionDateIso(session);
     if (!dateIso) continue;
     candidates.push({ targetSessionId: session.id, capacity: computeDayCapacityScore(dateIso, blocks) });
@@ -127,4 +136,38 @@ export function buildCalendarReassignmentCandidateViews(
       warningReason: candidate.microStructureReason,
     };
   });
+}
+
+export type SingleSessionCalendarProposal =
+  | { status: "locked" }
+  | { status: "no-conflict"; candidates: CalendarReassignmentCandidateView[] }
+  | { status: "proposal"; action: AiAssistantAction | null; patches: PlanPatch[]; candidates: CalendarReassignmentCandidateView[] };
+
+/**
+ * Einzel-Flow des 📅-Buttons: schlägt nur dann einen Tausch vor, wenn die Session auf ihrem aktuellen
+ * Tag im Kalenderkonflikt ist (`isSessionInCalendarConflict`, dasselbe Kriterium wie der Wochen-Scan).
+ * Ohne Konflikt (oder ohne parsebares Datum, wie im Scan) kommt `no-conflict` mit den Kandidaten für die
+ * manuelle Tageswahl zurück — die bleibt also immer erreichbar. Gesperrte Sessions liefern `locked`.
+ */
+export function proposeSingleSessionCalendarReassignment(
+  plan: AiPlanWeek[],
+  week: AiPlanWeek,
+  sessionId: string,
+  blocks: WeeklyScheduleBlock[],
+  lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
+): SingleSessionCalendarProposal {
+  if (lockedSessionIds.has(sessionId)) return { status: "locked" };
+
+  const candidates = buildCalendarReassignmentCandidates(week, sessionId, blocks, lockedSessionIds);
+  const sourceDayCapacity = computeSourceDayCapacity(week, sessionId, blocks);
+  const ranked = rankCalendarReassignmentCandidates(plan, sessionId, candidates, sourceDayCapacity);
+  const candidateViews = buildCalendarReassignmentCandidateViews(week, ranked);
+
+  const session = findSessionById([week], sessionId);
+  const inConflict = !!session && !!sourceDayCapacity && isSessionInCalendarConflict(session, sourceDayCapacity);
+  if (!inConflict) return { status: "no-conflict", candidates: candidateViews };
+
+  const result = assignSessionToBestCapacityDay(plan, sessionId, candidates, sourceDayCapacity, undefined, lockedSessionIds);
+  const action = buildCalendarReassignmentAction(sessionId, result, plan);
+  return { status: "proposal", action, patches: action ? result.patches : [], candidates: candidateViews };
 }

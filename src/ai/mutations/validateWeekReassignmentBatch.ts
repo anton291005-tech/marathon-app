@@ -7,6 +7,7 @@ import { validatePlanIntegrity } from "../validation/validatePlanIntegrity";
 import { validateMicroStructure } from "../validation/validateMicroStructure";
 import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 import { swapWorkouts } from "./swapWorkouts";
+import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 import { diffToPatches, findSessionById, NEUTRAL_VALIDATION_CONTEXT } from "./assignSessionToBestCapacityDay";
 import { parseSessionDateLabel } from "../../appSmartFeatures";
 import { getAppCalendarYmd } from "../../core/time/timeSystem";
@@ -57,6 +58,9 @@ function findSessionIdForDayIso(week: AiPlanWeek, dayIso: string): string | null
  * Sessions). `applyPlanPatches` würde das per "last write wins" kommentarlos auflösen — hier wird das
  * stattdessen als eigene Batch-Violation erkannt, bevor überhaupt gemergt wird.
  *
+ * Guard: Berührt ein Swap eine gesperrte Session (erledigt/übersprungen/vergangen, `lockedSessionIds`),
+ * ist das eine Batch-Violation — `swapWorkouts` prüft das selbst nicht.
+ *
  * Wendet nichts auf echten State an (kein `applyPlanPatches`-Aufruf gegen den persistierten Plan) —
  * reine Berechnung/Prüfung. Bei jeder Violation werden nur die bereits unproblematisch aufgelösten
  * Patches zurückgegeben (zur Transparenz), nie teilweise angewendet.
@@ -65,6 +69,7 @@ export function validateWeekReassignmentBatch(
   proposals: WeekCalendarReassignmentProposal[],
   week: AiPlanWeek,
   phase?: ValidationContext["phase"],
+  lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
 ): WeekReassignmentBatchResult {
   const resolved = proposals.filter(isResolvedProposal);
   if (resolved.length === 0) return { valid: true, patches: [] };
@@ -78,6 +83,10 @@ export function validateWeekReassignmentBatch(
     const movedSession = findSessionById(original, proposal.sessionId);
     if (!movedSession) {
       violations.push(`Session ${proposal.sessionId} wurde in der Woche nicht gefunden.`);
+      continue;
+    }
+    if (lockedSessionIds.has(proposal.sessionId)) {
+      violations.push(`Session ${proposal.sessionId} ist erledigt, übersprungen oder vergangen und darf nicht verschoben werden.`);
       continue;
     }
     if (usedSessionIds.has(proposal.sessionId)) {
@@ -96,6 +105,10 @@ export function validateWeekReassignmentBatch(
     }
     if (targetSessionId === proposal.sessionId) {
       violations.push(`Session ${proposal.sessionId} kann nicht mit sich selbst getauscht werden.`);
+      continue;
+    }
+    if (lockedSessionIds.has(targetSessionId)) {
+      violations.push(`Session ${targetSessionId} ist erledigt, übersprungen oder vergangen und darf nicht Zieltag einer Verschiebung sein.`);
       continue;
     }
     if (usedSessionIds.has(targetSessionId)) {
