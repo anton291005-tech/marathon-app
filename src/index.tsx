@@ -1,3 +1,6 @@
+// Muss vor allem anderen laufen (insb. vor @sentry/react), damit Sentry den No-op wrappt
+// und nicht umgekehrt — siehe Modul-Doc.
+import "./ui/silenceDebugLogsInProduction";
 import "./i18n";
 import * as Sentry from "@sentry/react";
 import React, { useState } from 'react';
