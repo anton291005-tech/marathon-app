@@ -60,8 +60,12 @@ function readSearch(): string {
 
 function currentEnv(): string | undefined {
   try {
-    // CRA ersetzt process.env.NODE_ENV zur Build-Zeit.
-    return typeof process !== "undefined" && process.env ? process.env.NODE_ENV : undefined;
+    // CRA ersetzt genau das Muster "process.env.NODE_ENV" zur Build-Zeit textuell durch einen
+    // String-Literal (DefinePlugin) — das ist unabhängig davon, ob zur Laufzeit ein globales
+    // `process`-Objekt existiert. Im Browser existiert keins (kein Node-Polyfill seit Webpack 5),
+    // darum NICHT über `typeof process !== "undefined"` gaten — das macht die Bedingung im
+    // Production-Build im echten Browser immer false und der Shim greift nie.
+    return process.env.NODE_ENV;
   } catch {
     return undefined;
   }
