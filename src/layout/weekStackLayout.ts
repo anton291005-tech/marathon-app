@@ -17,9 +17,13 @@ export function shouldWeekStackScroll(state: WeekStackLayoutState): boolean {
   return state.hasExpandedSessionDesc || !!state.pendingCalendarProposal || !!state.weekCalendarBatchProposal;
 }
 
-/** Wrapper-Style einer Session-Zeile: im Scroll-Modus natürliche Höhe, sonst gleichmäßig verteilt. */
+/**
+ * Wrapper-Style einer Session-Zeile: im Scroll-Modus natürliche Höhe, sonst gleichmäßig verteilt —
+ * aber nie unter die Inhaltshöhe, sonst schneidet `overflow: hidden` mehrzeilige Zeilen (z. B. der
+ * lange Renntag-Titel bei 390px) ab.
+ */
 export function getWeekSessionRowWrapStyle(scrollMode: boolean): CSSProperties {
   return scrollMode
     ? { flex: "0 0 auto", minHeight: 0, overflow: "visible", display: "flex", flexDirection: "column" }
-    : { flex: "1 1 0%", minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" };
+    : { flex: "1 1 0%", minHeight: "min-content", overflow: "hidden", display: "flex", flexDirection: "column" };
 }

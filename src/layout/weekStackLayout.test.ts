@@ -30,6 +30,10 @@ describe("getWeekSessionRowWrapStyle", () => {
     expect(getWeekSessionRowWrapStyle(false)).toMatchObject({ flex: "1 1 0%", overflow: "hidden" });
   });
 
+  test("Standard: Zeile schrumpft nie unter ihre Inhaltshöhe (mehrzeiliger Renntag-Titel bei 390px)", () => {
+    expect(getWeekSessionRowWrapStyle(false)).toMatchObject({ minHeight: "min-content" });
+  });
+
   test("Scroll-Modus: Zeilen behalten natürliche Höhe (nicht gequetscht) und sind nicht abgeschnitten", () => {
     expect(getWeekSessionRowWrapStyle(true)).toMatchObject({ flex: "0 0 auto", overflow: "visible" });
   });
