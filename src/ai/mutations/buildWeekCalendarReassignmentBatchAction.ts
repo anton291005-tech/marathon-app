@@ -17,13 +17,21 @@ export function buildWeekCalendarReassignmentBatchAction(
 ): AiAssistantAction | null {
   if (!validation.valid || validation.patches.length === 0) return null;
 
+  // Nur aufgelöste Vorschläge: eine ungelöste Konflikt-Session kann als verdrängte Session in einem
+  // anderen Tausch stecken und darf dort nicht den eigenen Grund tragen.
+  const causeBySourceSessionId = new Map<string, string>();
+  for (const proposal of proposals) {
+    if ("toDayIso" in proposal && proposal.cause) causeBySourceSessionId.set(proposal.sessionId, proposal.cause);
+  }
+
   const items: string[] = [];
   for (const patch of validation.patches) {
     const base = findSessionById([week], patch.sessionId);
     if (!base) continue;
     const newDay = patch.changes.day ?? base.day;
     const newDate = patch.changes.date ?? base.date;
-    items.push(`${base.title}: ${base.day} → ${newDay} (${newDate})`);
+    const cause = causeBySourceSessionId.get(patch.sessionId);
+    items.push(`${base.title}: ${base.day} → ${newDay} (${newDate})${cause ? ` – ${cause}` : ""}`);
   }
   if (items.length === 0) return null;
 

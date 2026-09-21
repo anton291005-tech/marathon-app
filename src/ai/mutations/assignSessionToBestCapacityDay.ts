@@ -7,7 +7,7 @@ import type { ValidationContext } from "../validation/validationContext";
 import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 import { swapWorkouts } from "./swapWorkouts";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
-import { computeSessionDayFitScore, type DayCapacityScore } from "../../scheduling/capacityScore";
+import { computeSessionDayFitScore, isPhysicalLoadConflict, type DayCapacityScore } from "../../scheduling/capacityScore";
 
 /**
  * A candidate day to move `sessionId` into, identified by the session currently
@@ -60,6 +60,19 @@ export const MIN_FIT_SCORE_THRESHOLD = 0.35;
  */
 export function isSessionInCalendarConflict(session: Pick<AiPlanSession, "type">, dayCapacity: DayCapacityScore): boolean {
   return computeSessionDayFitScore(session, dayCapacity) < MIN_FIT_SCORE_THRESHOLD;
+}
+
+/**
+ * Klartext-Grund eines Kalenderkonflikts für den Tausch-Vorschlag: bei einem Belastungstag die
+ * Termin-Titel ("wegen Fußballturnier"), sonst generisch "wegen Kalendertermin" — auch wenn Titel
+ * fehlen oder leer sind.
+ */
+export function describeCalendarConflictCause(session: Pick<AiPlanSession, "type">, dayCapacity: DayCapacityScore): string {
+  if (isPhysicalLoadConflict(session, dayCapacity)) {
+    const titles = dayCapacity.physicalLoadBlockTitles.map((t) => (t ?? "").trim()).filter(Boolean);
+    if (titles.length > 0) return `wegen ${titles.join(", ")}`;
+  }
+  return "wegen Kalendertermin";
 }
 
 export function findSessionById(plan: AiPlanWeek[], id: string): AiPlanSession | null {

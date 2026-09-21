@@ -1,7 +1,7 @@
 import type { AiPlanWeek, AiPlanSession } from "../../lib/ai/types";
 import type { WeeklyScheduleBlock } from "../../lib/supabase/services/weeklyScheduleBlocksService";
 import { computeDayCapacityScore, computeSessionDayFitScore, isPhysicalLoadConflict } from "../../scheduling/capacityScore";
-import { isSessionInCalendarConflict } from "./assignSessionToBestCapacityDay";
+import { describeCalendarConflictCause, isSessionInCalendarConflict } from "./assignSessionToBestCapacityDay";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 import { parseSessionDateLabel } from "../../appSmartFeatures";
 import { getAppCalendarYmd } from "../../core/time/timeSystem";
@@ -10,6 +10,8 @@ export type WeeklyCalendarConflict = {
   sessionId: string;
   dayIso: string;
   conflictReason: string;
+  /** Klartext-Grund für den Tausch-Vorschlag, z.B. "wegen Fußballturnier" (`describeCalendarConflictCause`). */
+  cause: string;
 };
 
 function sessionDateIso(session: AiPlanSession): string | null {
@@ -63,6 +65,7 @@ export function scanWeekForCalendarConflicts(
       sessionId: session.id,
       dayIso,
       conflictReason: describeConflict(session, fitScore, dayCapacity),
+      cause: describeCalendarConflictCause(session, dayCapacity),
     });
   }
   return conflicts;

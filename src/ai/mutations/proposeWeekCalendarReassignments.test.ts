@@ -121,7 +121,7 @@ describe("proposeWeekCalendarReassignments", () => {
       recurring({ id: `job-${dayOfWeek}`, dayOfWeek, startTime: "06:00", endTime: "21:45" }),
     );
     const conflicts: WeeklyCalendarConflict[] = [
-      { sessionId: "s-mon", dayIso: "2026-08-10", conflictReason: "Kalender-Termine belegen fast den ganzen Tag." },
+      { sessionId: "s-mon", dayIso: "2026-08-10", conflictReason: "Kalender-Termine belegen fast den ganzen Tag.", cause: "wegen Kalendertermin" },
     ];
 
     const proposals = proposeWeekCalendarReassignments(conflicts, week, blocks);

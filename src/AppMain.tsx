@@ -2729,7 +2729,7 @@ export default function AppMain(){
       setPendingCalendarProposal({ sessionId, action: null, patches: [], candidates: proposal.candidates, mode: "preview", noConflict: true });
       return;
     }
-    setPendingCalendarProposal({ sessionId, action: proposal.action, patches: proposal.patches, candidates: proposal.candidates, mode: "preview" });
+    setPendingCalendarProposal({ sessionId, action: proposal.action, patches: proposal.patches, candidates: proposal.candidates, mode: "preview", conflictCause: proposal.conflictCause });
   };
 
   // Zwischen Vorschlag und Bestätigung kann eine Session erledigt/übersprungen worden sein (✓-Button bleibt aktiv).
@@ -4699,7 +4699,7 @@ export default function AppMain(){
                       />
                     ) : (
                       <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,fontSize:13,color:"var(--text-secondary)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                        <span>{pendingCalendarProposal.noConflict ? "Kein Konflikt an diesem Tag." : "Keine sinnvolle Alternative im Kalender gefunden."}</span>
+                        <span>{pendingCalendarProposal.noConflict ? "Kein Konflikt an diesem Tag." : `Keine sinnvolle Alternative im Kalender gefunden.${pendingCalendarProposal.conflictCause ? ` Konflikt ${pendingCalendarProposal.conflictCause}.` : ""}`}</span>
                         <span style={{display:"flex",gap:12,flexShrink:0}}>
                           {pendingCalendarProposal.noConflict && (
                             <button onClick={handleEditCalendarReassignment} style={{background:"transparent",border:"none",color:"#93c5fd",cursor:"pointer",fontWeight:700}}>Trotzdem Tag wählen</button>

@@ -7,8 +7,8 @@ import { computeSessionDayFitScore } from "../../scheduling/capacityScore";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 
 export type WeekCalendarReassignmentProposal =
-  | { sessionId: string; fromDayIso: string; toDayIso: string; reason: string }
-  | { sessionId: string; fromDayIso: string; unresolved: true; reason: string };
+  | { sessionId: string; fromDayIso: string; toDayIso: string; reason: string; cause?: string }
+  | { sessionId: string; fromDayIso: string; unresolved: true; reason: string; cause?: string };
 
 function findSessionInWeek(week: AiPlanWeek, sessionId: string) {
   return (week.s ?? []).find((s) => s.id === sessionId) ?? null;
@@ -77,6 +77,7 @@ export function proposeWeekCalendarReassignments(
         sessionId: conflict.sessionId,
         fromDayIso: conflict.dayIso,
         unresolved: true,
+        cause: conflict.cause,
         reason:
           availableCandidates.length === 0
             ? "Keine freien Ausweichtage mehr in dieser Woche – alle Alternativen sind bereits an schwerwiegendere Konflikte vergeben."
@@ -90,6 +91,7 @@ export function proposeWeekCalendarReassignments(
       sessionId: conflict.sessionId,
       fromDayIso: conflict.dayIso,
       toDayIso: winner.dateIso,
+      cause: conflict.cause,
       reason: `Ausweichtag ${winner.dateIso} gefunden (Fit-Score ${winner.combinedFit.toFixed(2)}).`,
     });
   }
