@@ -93,7 +93,7 @@ import {
   resolveWeekDisplayRunKm,
 } from "./weeklyAnalysis";
 import { readRemoteStorage, writeRemoteStorage } from "./storage";
-import { computePlanAdherenceScore, computePlanDueSessionCounts, planAdherenceTextColor } from "./coach/adherenceScore";
+import { computePlanAdherenceScore, computePlanDueSessionCounts, isSessionDueByYmd, planAdherenceTextColor } from "./coach/adherenceScore";
 import { getAiContext } from "./lib/ai/getAiContext";
 import { AI_COACH_AVAILABLE_SCREENS } from "./lib/ai/aiCoachAvailableScreens";
 import { loadProfile, saveProfile } from "./lib/supabase/services/profilesService";
@@ -833,6 +833,53 @@ export function resolveHalfMarathonRaceSignal({ activeSessions, logs, healthRunB
       : null;
 
   return { halfMarathonRacePaceScore, halfMarathonRaceDaysAgo };
+}
+
+/** Qualitaet der absolvierten Long Runs (Distanztreue + Gefuehl), 0..1; 0.4 als Default ohne Datenlage. */
+function getQualityLongRunScore(doneLongRunSessions, logs, healthRunById){
+  if (!doneLongRunSessions.length) return 0.4;
+  return doneLongRunSessions.reduce((sum, session, _, arr) => {
+    const log = logs[session.id];
+    const plannedLong = getSessionPlannedDistanceKm(session);
+    const actualKm = getSessionRunningActualKm(session, log, healthRunById);
+    const distanceScore = plannedLong >= 28 ? Math.min(1, actualKm / plannedLong) : 0.75;
+    const feelingScore = log?.feeling ? Math.max(0.45, log.feeling / 5) : 0.65;
+    return sum + ((distanceScore * 0.65) + (feelingScore * 0.35)) / arr.length;
+  }, 0);
+}
+
+/**
+ * Readiness-Eingaenge, beschraenkt auf die bis `now` faelligen Sessions.
+ *
+ * Ueber den GESAMTEN Plan gerechnet misst readiness, welcher Anteil des Plans abgehakt ist — also
+ * wie weit man im Block ist, nicht wie fit man ist. Mitten im Block ist der Nenner dadurch massiv
+ * zu gross (Woche 10: nur 40% des Plans war ueberhaupt faellig), und die Confidence bleibt
+ * kuenstlich auf „frueh im Block" haengen. Hier zaehlen deshalb nur Sessions, deren Kalendertag
+ * erreicht ist — Faelligkeitsregel geteilt mit coach/adherenceScore.ts.
+ *
+ * Bewusst getrennt von den kumulativen Fortschritts-Kacheln („Long X/Y done"), die weiterhin den
+ * Gesamtplan zeigen: die stellen Plan-Fortschritt dar, nicht Form.
+ */
+export function computeDueReadinessInputs({ activeSessions, longRunSessions, logs, healthRunById, now }){
+  const todayYmd = berlinWallClockYmd(now);
+  const isDue = (session) => isSessionDueByYmd(session, todayYmd);
+  const isHard = (session) => ["interval","tempo","race"].includes(session.type);
+  const dueActive = activeSessions.filter(isDue);
+  const dueLongRuns = longRunSessions.filter(isDue);
+  const doneDueActive = dueActive.filter((session) => isSessionLogDone(logs[session.id]));
+  const doneDueLongRuns = dueLongRuns.filter((session) => isSessionLogDone(logs[session.id]));
+
+  return {
+    longRuns: dueLongRuns.length,
+    doneLongRuns: doneDueLongRuns.length,
+    hardSessions: dueActive.filter(isHard).length,
+    doneHardSessions: doneDueActive.filter(isHard).length,
+    progressRatio: dueActive.length > 0 ? doneDueActive.length / dueActive.length : 0,
+    avgFeeling: doneDueActive.length
+      ? doneDueActive.reduce((sum, session) => sum + (logs[session.id]?.feeling || 3), 0) / doneDueActive.length
+      : 3,
+    qualityLongRunScore: getQualityLongRunScore(doneDueLongRuns, logs, healthRunById),
+  };
 }
 
 export function getPerformancePrediction({
@@ -2788,7 +2835,6 @@ export default function AppMain(){
   const handleCancelWeekCalendarBatch = ()=>{
     setWeekCalendarBatchProposal(null);
   };
-  const totalSess=ACTIVE_SESSIONS.length;
   const doneSessions = ACTIVE_SESSIONS.filter((session) => isSessionLogDone(logs[session.id]));
   const doneSess=doneSessions.length;
   const totalRunTargetKm = DISPLAY_PLAN_RUNNING_SESSIONS.reduce((sum, s) => sum + getSessionPlannedDistanceKm(s), 0);
@@ -2801,21 +2847,17 @@ export default function AppMain(){
   const doneLongRuns = LONG_RUN_SESSIONS.filter((session) => isSessionLogDone(logs[session.id])).length;
   const hardSessions = ACTIVE_SESSIONS.filter((session) => ["interval","tempo","race"].includes(session.type)).length;
   const doneHardSessions = ACTIVE_SESSIONS.filter((session) => ["interval","tempo","race"].includes(session.type) && isSessionLogDone(logs[session.id])).length;
-  const completedSessionRatio = totalSess > 0 ? doneSess / totalSess : 0;
-  const avgFeeling = doneSessions.length
-    ? doneSessions.reduce((sum, session) => sum + (logs[session.id]?.feeling || 3), 0) / doneSessions.length
-    : 3;
   const weeklyFatigue = getWeeklyFatigue(w);
-  const qualityLongRunScore = LONG_RUN_SESSIONS.filter((session) => isSessionLogDone(logs[session.id])).length
-    ? LONG_RUN_SESSIONS.filter((session) => isSessionLogDone(logs[session.id])).reduce((sum, session, _, arr) => {
-      const log = logs[session.id];
-      const plannedLong = getSessionPlannedDistanceKm(session);
-      const actualKm = getSessionRunningActualKm(session, log, healthRunById);
-      const distanceScore = plannedLong >= 28 ? Math.min(1, actualKm / plannedLong) : 0.75;
-      const feelingScore = log?.feeling ? Math.max(0.45, log.feeling / 5) : 0.65;
-      return sum + ((distanceScore * 0.65) + (feelingScore * 0.35)) / arr.length;
-    }, 0)
-    : 0.4;
+  // Nur fuer die Confidence-Prognose: Form misst sich an den bis heute faelligen Sessions.
+  // longRuns/doneLongRuns/hardSessions/doneHardSessions oben bleiben bewusst plan-weit — sie
+  // speisen die kumulativen Fortschritts-Kacheln.
+  const dueReadinessInputs = computeDueReadinessInputs({
+    activeSessions: ACTIVE_SESSIONS,
+    longRunSessions: LONG_RUN_SESSIONS,
+    logs,
+    healthRunById,
+    now: getAppNow(),
+  });
   const raceGoalFinish = preferences.raceGoal === "finish";
   const parsedTargetTime = parseTargetTimeToSeconds(preferences.targetTime);
   const targetSeconds = raceGoalFinish
@@ -2840,13 +2882,7 @@ export default function AppMain(){
     doneHardSessions,
   });
   const rawPerformancePrediction = getPerformancePrediction({
-    doneLongRuns,
-    longRuns,
-    doneHardSessions,
-    hardSessions,
-    avgFeeling,
-    progressRatio: completedSessionRatio,
-    qualityLongRunScore,
+    ...dueReadinessInputs,
     halfMarathonRacePaceScore,
     halfMarathonRaceDaysAgo,
     targetSeconds,

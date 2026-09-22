@@ -47,6 +47,22 @@ function sessionDateToYmd(s: PlanSession, year = 2026): string | null {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/**
+ * Fälligkeitsregel dieser Datei: eine Session zählt, sobald ihr Kalendertag erreicht ist.
+ * Sessions ohne parsebares Datum gelten als nicht fällig.
+ */
+function isYmdDueBy(ymd: string | null, todayYmd: string): boolean {
+  return ymd !== null && ymd <= todayYmd;
+}
+
+/**
+ * Dieselbe Fälligkeitsregel für Aufrufer, die nur die Session haben (z. B. die Readiness-Berechnung
+ * in AppMain) — damit es genau eine Definition von „bis heute fällig" gibt und nicht zwei.
+ */
+export function isSessionDueByYmd(s: PlanSession, todayYmd: string, year = 2026): boolean {
+  return isYmdDueBy(sessionDateToYmd(s, year), todayYmd);
+}
+
 const adhereRolling = { value: 8 };
 
 function plannedKmForSession(s: PlanSession): number {
@@ -163,7 +179,7 @@ function buildTrainingHistoryFromPlan(args: {
     for (const s of week.s ?? []) {
       if (s.type === "rest") continue;
       const ymd = sessionDateToYmd(s);
-      if (!ymd || ymd > todayYmd) continue;
+      if (ymd === null || !isYmdDueBy(ymd, todayYmd)) continue;
 
       const log = args.logs[s.id];
       const completed = isSessionLogDone(log);
