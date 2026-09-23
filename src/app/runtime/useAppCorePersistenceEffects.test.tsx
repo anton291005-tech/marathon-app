@@ -64,7 +64,7 @@ describe("useAppCorePersistenceEffects", () => {
       return undefined;
     });
 
-    const validPlan = buildTrainingPlanV2FromBasePlan(tinyBasePlan);
+    const validPlan = buildTrainingPlanV2FromBasePlan(tinyBasePlan, 2026);
     const stablePreferences = { targetTime: "x" };
     const stableRuns: unknown[] = [];
     const stableRecovery: unknown[] = [];
@@ -121,7 +121,7 @@ describe("useAppCorePersistenceEffects", () => {
   it("does not issue further localStorage writes when all slice identities stay stable across rerenders", () => {
     const setItem = jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => undefined);
 
-    const validPlan = buildTrainingPlanV2FromBasePlan(tinyBasePlan);
+    const validPlan = buildTrainingPlanV2FromBasePlan(tinyBasePlan, 2026);
     const stableSlices = {
       logs: { session: {} satisfies SessionLog } as PersistedMarathonLogs,
       preferences: { targetTime: "3:30:00" },

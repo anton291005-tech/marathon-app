@@ -1,0 +1,85 @@
+{
+  "_comment": "Gemeinsamer Testvektor für src/planV2/legacyYearAnchor.ts und api/_lib/legacyYearAnchor.js. Beide Implementierungen müssen ihn identisch erfüllen — siehe src/__tests__/legacyYearAnchorParity.test.js.",
+  "yearFromAnchorDate": [
+    { "input": "14.03.2026", "expected": 2026 },
+    { "input": "6.04.2026", "expected": 2026 },
+    { "input": "2026-03-14", "expected": 2026 },
+    { "input": "2026-03-14T12:00:00.000Z", "expected": 2026 },
+    { "input": "  27.09.2027  ", "expected": 2027 },
+    { "input": "0100-01-01", "expected": null },
+    { "input": "Mär 26", "expected": null },
+    { "input": "", "expected": null },
+    { "input": null, "expected": null }
+  ],
+  "sequences": [
+    {
+      "name": "raceDate 2027 verankert das Rennen am Sequenzende, Nov→Feb rollt das Jahr",
+      "months": [10, 10, 11, 0, 1, 1],
+      "input": { "raceDate": "14.02.2027", "raceIndex": 5, "lastIndex": 5, "currentYear": 2026 },
+      "expectedSource": "raceDate",
+      "expectedYears": [2026, 2026, 2026, 2027, 2027, 2027]
+    },
+    {
+      "name": "planStartDate verankert den Sequenzanfang und schlägt raceDate",
+      "months": [10, 10, 11, 0, 1, 1],
+      "input": {
+        "planStartDate": "2.11.2026",
+        "raceDate": "14.02.2030",
+        "raceIndex": 5,
+        "lastIndex": 5,
+        "currentYear": 2026
+      },
+      "expectedSource": "planStartDate",
+      "expectedYears": [2026, 2026, 2026, 2027, 2027, 2027]
+    },
+    {
+      "name": "ohne Anker greift das aktuelle Jahr am Sequenzanfang",
+      "months": [10, 10, 11, 0, 1, 1],
+      "input": { "lastIndex": 5, "currentYear": 2029 },
+      "expectedSource": "currentYear",
+      "expectedYears": [2029, 2029, 2029, 2030, 2030, 2030]
+    },
+    {
+      "name": "raceDate verankert eine Race-Session mitten in der Sequenz",
+      "months": [10, 11, 0, 1, 2, 3],
+      "input": { "raceDate": "2027-02-14", "raceIndex": 3, "lastIndex": 5, "currentYear": 2026 },
+      "expectedSource": "raceDate",
+      "expectedYears": [2026, 2026, 2027, 2027, 2027, 2027]
+    },
+    {
+      "name": "Plan innerhalb eines Jahres bleibt einjährig (ISO-Anker)",
+      "months": [3, 4, 5, 6, 7, 8],
+      "input": { "planStartDate": "2026-04-06", "lastIndex": 5, "currentYear": 2031 },
+      "expectedSource": "planStartDate",
+      "expectedYears": [2026, 2026, 2026, 2026, 2026, 2026]
+    },
+    {
+      "name": "leichter Rücksprung (Apr→Mär) ist kein Jahreswechsel",
+      "months": [3, 2, 3],
+      "input": { "planStartDate": "01.04.2026", "lastIndex": 2, "currentYear": 2026 },
+      "expectedSource": "planStartDate",
+      "expectedYears": [2026, 2026, 2026]
+    },
+    {
+      "name": "zwei Jahreswechsel in einer Sequenz",
+      "months": [11, 0, 11, 0],
+      "input": { "planStartDate": "01.12.2026", "lastIndex": 3, "currentYear": 2026 },
+      "expectedSource": "planStartDate",
+      "expectedYears": [2026, 2027, 2027, 2028]
+    },
+    {
+      "name": "raceIndex außerhalb der Sequenz fällt auf das Sequenzende zurück",
+      "months": [11, 0],
+      "input": { "raceDate": "10.01.2027", "raceIndex": -1, "lastIndex": 1, "currentYear": 2026 },
+      "expectedSource": "raceDate",
+      "expectedYears": [2026, 2027]
+    },
+    {
+      "name": "leere Sequenz",
+      "months": [],
+      "input": { "lastIndex": 0, "currentYear": 2026 },
+      "expectedSource": "currentYear",
+      "expectedYears": []
+    }
+  ]
+}

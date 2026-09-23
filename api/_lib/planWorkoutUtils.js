@@ -1,5 +1,7 @@
 "use strict";
 
+const { resolveLegacyYearAnchor, resolveLegacyYears } = require("./legacyYearAnchor");
+
 const GERMAN_MONTHS = {
   jan: 0,
   feb: 1,
@@ -60,7 +62,7 @@ function addDaysIso(startIso, days) {
   return d.toISOString();
 }
 
-function parseGermanDateLabel(label, fallbackYear) {
+function parseGermanDateLabelParts(label) {
   const match = String(label)
     .trim()
     .match(/^(\d{1,2})\.\s*([A-Za-zäöüÄÖÜ]+)/);
@@ -69,12 +71,16 @@ function parseGermanDateLabel(label, fallbackYear) {
   const monthKey = match[2].toLowerCase().replace(/\./g, "");
   const month = GERMAN_MONTHS[monthKey.slice(0, 3)];
   if (!Number.isFinite(day) || month == null) return null;
-  const year = Number(fallbackYear) || new Date().getFullYear();
-  const d = new Date(Date.UTC(year, month, day, 12, 0, 0));
+  return { day, month };
+}
+
+function germanLabelIso(parts, year) {
+  const d = new Date(Date.UTC(year, parts.month, parts.day, 12, 0, 0));
   return Number.isFinite(d.getTime()) ? d.toISOString() : null;
 }
 
-function resolveWorkoutDateIso(w, weeksById, profile) {
+/** Datiert ein Workout aus den Quellen, die das Jahr selbst mitbringen. */
+function resolveDatedWorkoutIso(w, weeksById) {
   if (w.dateIso && Number.isFinite(new Date(w.dateIso).getTime())) {
     return w.dateIso.includes("T") ? w.dateIso : `${w.dateIso.slice(0, 10)}T12:00:00.000Z`;
   }
@@ -86,16 +92,48 @@ function resolveWorkoutDateIso(w, weeksById, profile) {
     }
   }
 
-  const fallbackYear =
-    profile?.planStartDate?.slice(-4) ??
-    profile?.raceDate?.slice(-4) ??
-    new Date().getFullYear();
-  if (w.date) {
-    const parsed = parseGermanDateLabel(w.date, fallbackYear);
-    if (parsed) return parsed;
-  }
+  return null;
+}
 
-  return "";
+/**
+ * Jahre für die Workouts, die nur ein Anzeige-Label ("14. Mär") tragen:
+ * Ankerregel planStartDate → raceDate → aktuelles Jahr plus Jahreswechsel
+ * innerhalb der Sequenz. Regel und Spiegel: api/_lib/legacyYearAnchor.js.
+ */
+function resolveLabelDateIsoByIndex(raw, weeksById, profile) {
+  const pending = [];
+  raw.forEach((w, index) => {
+    if (resolveDatedWorkoutIso(w, weeksById) != null) return;
+    const parts = w.date ? parseGermanDateLabelParts(w.date) : null;
+    if (!parts) return;
+    pending.push({ index, parts, sessionType: String(w.sessionType ?? w.type ?? "") });
+  });
+
+  const byIndex = new Map();
+  if (pending.length === 0) return byIndex;
+
+  let raceIndex = -1;
+  pending.forEach((entry, i) => {
+    if (entry.sessionType === "race") raceIndex = i;
+  });
+
+  const anchor = resolveLegacyYearAnchor({
+    planStartDate: profile?.planStartDate,
+    raceDate: profile?.raceDate,
+    raceIndex,
+    lastIndex: pending.length - 1,
+    currentYear: new Date().getFullYear(),
+  });
+  const years = resolveLegacyYears(
+    pending.map((entry) => entry.parts.month),
+    anchor,
+  );
+
+  pending.forEach((entry, i) => {
+    const iso = germanLabelIso(entry.parts, years[i]);
+    if (iso) byIndex.set(entry.index, iso);
+  });
+  return byIndex;
 }
 
 function normalizeWorkouts(parsed, profile) {
@@ -107,9 +145,10 @@ function normalizeWorkouts(parsed, profile) {
   }
 
   const raw = Array.isArray(parsed?.workouts) ? parsed.workouts : [];
-  return raw.map((w) => ({
+  const labelIsoByIndex = resolveLabelDateIsoByIndex(raw, weeksById, profile);
+  return raw.map((w, index) => ({
     id: String(w.id ?? ""),
-    dateIso: resolveWorkoutDateIso(w, weeksById, profile),
+    dateIso: resolveDatedWorkoutIso(w, weeksById) ?? labelIsoByIndex.get(index) ?? "",
     sport: w.sport ?? sportFromSessionType(w.sessionType ?? w.type ?? "easy"),
     sessionType: String(w.sessionType ?? w.type ?? "easy"),
     title: String(w.title ?? ""),

@@ -560,6 +560,12 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
   ]},
 ];
 const BASE_PLAN = LEGACY_EMBEDDED_PLAN_WEEKS;
+/**
+ * Jahr, das die Labels von LEGACY_EMBEDDED_PLAN_WEEKS meinen ("6. Apr" …
+ * "27. Sep", dates-Zeilen sagen 2026). Explizit, damit der Demoplan nicht mehr
+ * vom 2026-Default in parseSessionDateLabel abhängt.
+ */
+const LEGACY_EMBEDDED_PLAN_YEAR = 2026;
 
 const ALL_SESSIONS = LEGACY_EMBEDDED_PLAN_WEEKS.flatMap((week) => getWeekSessionList(week));
 /** Plan-Einheiten (Lauf + Rennrad-Zeilen), die mit einem Apple-Health-Workout verknüpft werden dürfen; Zielauswahl ist aktivitätsspezifisch. */
@@ -1247,7 +1253,7 @@ export default function AppMain(){
   const [scheduleBlocks, setScheduleBlocks] = useState([]);
   const [pendingCalendarProposal, setPendingCalendarProposal] = useState(null);
   const [weekCalendarBatchProposal, setWeekCalendarBatchProposal] = useState(null);
-  const baseWeekMetaByStartIso = useMemo(() => buildWeekMetaMapFromBasePlan(BASE_PLAN), []);
+  const baseWeekMetaByStartIso = useMemo(() => buildWeekMetaMapFromBasePlan(BASE_PLAN, LEGACY_EMBEDDED_PLAN_YEAR), []);
   const [hasUserTrainingPlan, setHasUserTrainingPlan] = useState(() => {
     const raw = readStoredJson(TRAINING_PLAN_V2_STORAGE_KEY, null);
     const prefs = readStoredJson(MARATHON_PREFERENCES_KEY, {});
@@ -1257,7 +1263,7 @@ export default function AppMain(){
     const raw = readStoredJson(TRAINING_PLAN_V2_STORAGE_KEY, null);
     const normalized = normalizeTrainingPlan(raw);
     if (normalized.workouts.length > 0) return normalized;
-    return buildTrainingPlanV2FromBasePlan(BASE_PLAN);
+    return buildTrainingPlanV2FromBasePlan(BASE_PLAN, LEGACY_EMBEDDED_PLAN_YEAR);
   });
 
   const weekPhaseMap = useMemo(() => {

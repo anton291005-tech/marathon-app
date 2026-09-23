@@ -19,18 +19,18 @@ const twoSessionPlan: PlanWeek[] = [
 
 describe("trySwapWorkoutDatesInPlan", () => {
   it("noop for same id", () => {
-    const v2 = buildTrainingPlanV2FromBasePlan(twoSessionPlan);
+    const v2 = buildTrainingPlanV2FromBasePlan(twoSessionPlan, 2026);
     expect(trySwapWorkoutDatesInPlan(v2, "a", "a")).toEqual({ ok: false, reason: "noop" });
   });
 
   it("fails missing id", () => {
-    const v2 = buildTrainingPlanV2FromBasePlan(twoSessionPlan);
+    const v2 = buildTrainingPlanV2FromBasePlan(twoSessionPlan, 2026);
     expect(trySwapWorkoutDatesInPlan(v2, "a", "zzz").ok).toBe(false);
     expect(trySwapWorkoutDatesInPlan(v2, "a", "zzz")).toMatchObject({ reason: "missing_ids" });
   });
 
   it("deterministic swap: same inputs -> same date map fingerprint", () => {
-    const v2 = buildTrainingPlanV2FromBasePlan(twoSessionPlan);
+    const v2 = buildTrainingPlanV2FromBasePlan(twoSessionPlan, 2026);
     const r1 = trySwapWorkoutDatesInPlan(v2, "a", "b");
     const r2 = trySwapWorkoutDatesInPlan(v2, "a", "b");
     expect(r1.ok && r2.ok).toBe(true);

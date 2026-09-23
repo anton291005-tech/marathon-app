@@ -62,7 +62,7 @@ const tinyTwoSessionPlan: PlanWeek[] = [
 ];
 
 describe("deriveDisplayPlan", () => {
-  const v2 = buildTrainingPlanV2FromBasePlan(tinyBasePlan);
+  const v2 = buildTrainingPlanV2FromBasePlan(tinyBasePlan, 2026);
 
   it("same inputs yield same serialized output", () => {
     const patches: PlanPatch[] = [{ sessionId: "w01-di", changes: { title: "Patched title" } }];
@@ -92,7 +92,7 @@ describe("deriveDisplayPlan", () => {
   });
 
   it("disjoint patches: list order does not change merged display", () => {
-    const v2two = buildTrainingPlanV2FromBasePlan(tinyTwoSessionPlan);
+    const v2two = buildTrainingPlanV2FromBasePlan(tinyTwoSessionPlan, 2026);
     const ab: PlanPatch[] = [
       { sessionId: "w01-di", changes: { km: 5 } },
       { sessionId: "w01-mi", changes: { km: 6 } },
@@ -105,7 +105,7 @@ describe("deriveDisplayPlan", () => {
   });
 
   it("a day-swap patch re-sorts sessions into chronological order, not base-array order", () => {
-    const v2two = buildTrainingPlanV2FromBasePlan(tinyTwoSessionPlan);
+    const v2two = buildTrainingPlanV2FromBasePlan(tinyTwoSessionPlan, 2026);
     // w01-di is first in the base array (1. Jan); w01-mi is second (2. Jan).
     // A swap patches w01-di to the later date and w01-mi to the earlier one —
     // the base array order is now the reverse of the chronological order.
@@ -135,7 +135,7 @@ describe("deriveDisplayPlan", () => {
         ],
       },
     ];
-    const v2three = buildTrainingPlanV2FromBasePlan(threeSessionBase);
+    const v2three = buildTrainingPlanV2FromBasePlan(threeSessionBase, 2026);
     // Swap 1: Mi <-> Sa. Swap 2: Mo <-> Do (Do lands between Mi and Sa's new positions).
     const chainedPatches: PlanPatch[] = [
       { sessionId: "w01-mi", changes: { day: "Sa", date: "10. Jan" } },
@@ -147,7 +147,7 @@ describe("deriveDisplayPlan", () => {
   });
 
   it("a session with an unparseable date sorts to the end, not the front", () => {
-    const v2two = buildTrainingPlanV2FromBasePlan(tinyTwoSessionPlan);
+    const v2two = buildTrainingPlanV2FromBasePlan(tinyTwoSessionPlan, 2026);
     // w01-di is first in the base array (1. Jan) but its patched date is unparseable —
     // it must not be treated as epoch (which would keep it sorted first); the file's
     // own sortByDateAscending convention pushes unparseable dates to the end.

@@ -29,14 +29,14 @@ const tinyBasePlan: PlanWeek[] = [
 
 describe("useDisplayPlanFromTrainingState", () => {
   it("matches deriveDisplayPlan (parity with prior App inline useMemo)", () => {
-    const v2 = buildTrainingPlanV2FromBasePlan(tinyBasePlan);
+    const v2 = buildTrainingPlanV2FromBasePlan(tinyBasePlan, 2026);
     const patches = [{ sessionId: "w01-di", changes: { km: 42 } }];
     const { result } = renderHook(() => useDisplayPlanFromTrainingState(v2, patches));
     expect(JSON.stringify(result.current)).toBe(JSON.stringify(deriveDisplayPlan(v2, patches)));
   });
 
   it("returns the same array reference across rerenders when inputs are unchanged (useMemo parity)", () => {
-    const v2 = buildTrainingPlanV2FromBasePlan(tinyBasePlan);
+    const v2 = buildTrainingPlanV2FromBasePlan(tinyBasePlan, 2026);
     const patches = [{ sessionId: "w01-di", changes: { km: 42 } }] as const;
     const { result, rerender } = renderHook(() => useDisplayPlanFromTrainingState(v2, patches));
     const first = result.current;

@@ -42,7 +42,7 @@ const unknownPerms = (): { sleepPermission: PermissionState; hrvPermission: Perm
 describe("useRecoveryDomainRuntime", () => {
   it("still debounces committing recoveryInputVersion vs committedRecoveryVersion at 80ms", () => {
     jest.useFakeTimers();
-    const trainingPlanV2 = buildTrainingPlanV2FromBasePlan(tinyBasePlan);
+    const trainingPlanV2 = buildTrainingPlanV2FromBasePlan(tinyBasePlan, 2026);
     const displayPlan = deriveDisplayPlan(trainingPlanV2, []);
     const base = {
       displayPlan,

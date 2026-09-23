@@ -2,7 +2,7 @@ import type { PlanWeek } from "../marathonPrediction";
 import { buildTrainingPlanV2FromBasePlan } from "../planV2/fromBasePlan";
 import { computeSwapWorkoutsV2Result } from "./computeSwapWorkoutsV2Result";
 
-// Montag 10. Aug .. Freitag 14. Aug 2026 (parseSessionDateLabel default Jahr 2026)
+// Montag 10. Aug .. Freitag 14. Aug 2026 (Startjahr wird an buildTrainingPlanV2FromBasePlan übergeben)
 const WEEK: PlanWeek[] = [
   {
     wn: 1,
@@ -22,7 +22,7 @@ const WEEK: PlanWeek[] = [
 ];
 
 function buildPlan() {
-  return buildTrainingPlanV2FromBasePlan(WEEK);
+  return buildTrainingPlanV2FromBasePlan(WEEK, 2026);
 }
 
 describe("computeSwapWorkoutsV2Result", () => {
@@ -93,7 +93,7 @@ describe("computeSwapWorkoutsV2Result", () => {
         s: [{ id: "heavy", day: "Mo", date: "10. Aug", type: "long", title: "Long Run", km: 30, desc: "", pace: null }],
       },
     ];
-    const plan = buildTrainingPlanV2FromBasePlan(twoWeekPlan);
+    const plan = buildTrainingPlanV2FromBasePlan(twoWeekPlan, 2026);
     const result = computeSwapWorkoutsV2Result({ before: plan, sourceId: "light", targetId: "heavy" });
     expect(result.ok).toBe(true);
     if (!result.ok) return;

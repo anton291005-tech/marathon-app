@@ -26,7 +26,7 @@ const tinyBasePlan: PlanWeek[] = [
 ];
 
 describe("assertDisplayPlanInvariants", () => {
-  const v2 = buildTrainingPlanV2FromBasePlan(tinyBasePlan);
+  const v2 = buildTrainingPlanV2FromBasePlan(tinyBasePlan, 2026);
 
   it("accepts valid plan + patches", () => {
     expect(assertDisplayPlanInvariants(v2, [{ sessionId: "w01-di", changes: { km: 8 } }])).toEqual({ ok: true });

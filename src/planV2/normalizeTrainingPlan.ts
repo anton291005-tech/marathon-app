@@ -1,7 +1,9 @@
 import { parseSessionDateLabel } from "../appSmartFeatures";
 import { validateTrainingPlanV2Integrity } from "../ai/validation/validateTrainingPlanV2Integrity";
 import { rebuildPlanFromWorkouts } from "../core/deriveWeeksFromWorkouts";
+import { getAppNow } from "../core/time/timeSystem";
 import { mapSessionType } from "../lib/ai/mapSessionType";
+import { resolveLegacyYearAnchor, resolveLegacyYears } from "./legacyYearAnchor";
 import type { Intensity, TrainingPlanV2, WeekV2, WorkoutSport, WorkoutV2 } from "./types";
 import { normalizeTrainingPhase, trainingPhaseLabelDe } from "./trainingPhase";
 
@@ -73,23 +75,31 @@ function normalizeGermanDateLabel(label: string): string {
   return label.replace(/M[äa]r\b/gi, "Mar");
 }
 
-function parseLegacySessionDate(rawDate: unknown): Date | null {
+/**
+ * Probejahr, um Tag/Monat aus einem jahrlosen Label zu lesen. Schaltjahr, damit
+ * "29. Feb" nicht auf den 1. März rutscht.
+ */
+const LABEL_PROBE_YEAR = 2000;
+
+/** Parst ein Anzeige-Label ("14. Mär") in das explizit übergebene Jahr. */
+function parseLegacySessionDate(rawDate: unknown, year: number): Date | null {
   if (typeof rawDate !== "string" || !rawDate.trim()) return null;
-  const direct = parseSessionDateLabel(rawDate);
+  const direct = parseSessionDateLabel(rawDate, year);
   if (direct) return direct;
   const normalizedLabel = normalizeGermanDateLabel(rawDate);
   if (normalizedLabel !== rawDate) {
-    return parseSessionDateLabel(normalizedLabel);
+    return parseSessionDateLabel(normalizedLabel, year);
   }
   for (const alias of Object.keys(GERMAN_MONTH_ALIASES)) {
     if (rawDate.includes(alias)) {
-      return parseSessionDateLabel(rawDate.replace(alias, GERMAN_MONTH_ALIASES[alias]));
+      return parseSessionDateLabel(rawDate.replace(alias, GERMAN_MONTH_ALIASES[alias]), year);
     }
   }
   return null;
 }
 
-function dateIsoFromUnknown(rawDate: unknown, rawDay?: unknown): string | null {
+/** Nur die Datumsquellen, die das Jahr selbst mitbringen. */
+function isoDateIsoFromUnknown(rawDate: unknown): string | null {
   if (typeof rawDate === "string" && rawDate.includes("T")) {
     const parsed = new Date(rawDate);
     if (Number.isFinite(parsed.getTime())) return parsed.toISOString();
@@ -98,23 +108,33 @@ function dateIsoFromUnknown(rawDate: unknown, rawDay?: unknown): string | null {
     const parsed = new Date(`${rawDate.slice(0, 10)}T12:00:00`);
     if (Number.isFinite(parsed.getTime())) return parsed.toISOString();
   }
-  const legacyDate = parseLegacySessionDate(rawDate);
-  if (legacyDate) {
-    return new Date(
-      legacyDate.getFullYear(),
-      legacyDate.getMonth(),
-      legacyDate.getDate(),
-      12,
-      0,
-      0,
-      0,
-    ).toISOString();
-  }
+  return null;
+}
+
+function localNoonIso(date: Date): string {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    12,
+    0,
+    0,
+    0,
+  ).toISOString();
+}
+
+function dateIsoFromUnknown(
+  rawDate: unknown,
+  rawDay: unknown,
+  legacyYear: number,
+): string | null {
+  const iso = isoDateIsoFromUnknown(rawDate);
+  if (iso) return iso;
+  const legacyDate = parseLegacySessionDate(rawDate, legacyYear);
+  if (legacyDate) return localNoonIso(legacyDate);
   if (typeof rawDay === "string" && typeof rawDate === "string") {
-    const parsed = parseLegacySessionDate(rawDate);
-    if (parsed) {
-      return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 12, 0, 0, 0).toISOString();
-    }
+    const parsed = parseLegacySessionDate(rawDate, legacyYear);
+    if (parsed) return localNoonIso(parsed);
   }
   return null;
 }
@@ -131,20 +151,29 @@ function defaultTitleForSessionType(sessionType: string): string {
   return "Training";
 }
 
-function normalizeWorkout(raw: unknown, fallbackIndex: number): WorkoutV2 | null {
-  if (!isRecord(raw)) return null;
-
+function sessionTypeFromRaw(raw: Record<string, unknown>): string {
   const sessionTypeRaw =
     typeof raw.sessionType === "string" && raw.sessionType.trim()
       ? raw.sessionType.trim()
       : typeof raw.type === "string" && raw.type.trim()
         ? raw.type.trim()
         : "easy";
-  const sessionType = mapSessionType(sessionTypeRaw);
+  return mapSessionType(sessionTypeRaw);
+}
+
+function normalizeWorkout(
+  raw: unknown,
+  fallbackIndex: number,
+  legacyDates: LegacyDateResolution,
+): WorkoutV2 | null {
+  if (!isRecord(raw)) return null;
+
+  const sessionType = sessionTypeFromRaw(raw);
 
   const dateIso =
-    dateIsoFromUnknown(raw.dateIso, raw.day) ??
-    dateIsoFromUnknown(raw.date, raw.day);
+    legacyDates.byRawSession.get(raw) ??
+    dateIsoFromUnknown(raw.dateIso, raw.day, legacyDates.fallbackYear) ??
+    dateIsoFromUnknown(raw.date, raw.day, legacyDates.fallbackYear);
   if (!dateIso) return null;
 
   const idRaw = typeof raw.id === "string" ? raw.id.trim() : "";
@@ -218,10 +247,150 @@ function sessionsFromRawWeek(week: Record<string, unknown>): unknown[] {
   return [];
 }
 
+export type NormalizeTrainingPlanOptions = {
+  /** Deutsches (TT.MM.JJJJ) oder ISO-Datum; datiert den Sequenzanfang. */
+  planStartDate?: string | null;
+  /** Deutsches (TT.MM.JJJJ) oder ISO-Datum; datiert die Race-Session. */
+  raceDate?: string | null;
+};
+
+/**
+ * Vorab aufgelöste Jahre für Sessions, die nur ein Anzeige-Label ("14. Mär")
+ * tragen. `byRawSession` ist über die Objektidentität des rohen Payloads
+ * verschlüsselt, damit die Auflösung reihenfolgeunabhängig und idempotent ist —
+ * der Collector normalisiert dieselbe Session stellenweise mehrfach.
+ */
+type LegacyDateResolution = {
+  byRawSession: Map<Record<string, unknown>, string>;
+  /** Jahr für Labels, die der Vorlauf nicht erfasst hat (kein Raten auf 2026). */
+  fallbackYear: number;
+};
+
+/** Alle Session-Objekte des rohen Payloads in Dokumentreihenfolge. */
+function rawSessionsInDocumentOrder(raw: unknown): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  const pushAll = (list: unknown) => {
+    if (!Array.isArray(list)) return;
+    for (const entry of list) if (isRecord(entry)) out.push(entry);
+  };
+  const pushWeek = (week: unknown) => {
+    if (!isRecord(week)) return;
+    pushAll(week.s);
+    pushAll(week.workouts);
+  };
+
+  if (Array.isArray(raw)) {
+    raw.forEach(pushWeek);
+    return out;
+  }
+  if (!isRecord(raw)) return out;
+
+  pushAll(raw.workouts);
+  if (Array.isArray(raw.weeks)) raw.weeks.forEach(pushWeek);
+  return out;
+}
+
+function anchorDatesFromRaw(raw: unknown): NormalizeTrainingPlanOptions {
+  if (!isRecord(raw)) return {};
+  const profile = isRecord(raw.profile) ? raw.profile : {};
+  const pick = (value: unknown): string | undefined =>
+    typeof value === "string" && value.trim() ? value : undefined;
+  return {
+    planStartDate: pick(raw.planStartDate) ?? pick(profile.planStartDate),
+    raceDate: pick(raw.raceDate) ?? pick(profile.raceDate),
+  };
+}
+
+/**
+ * Löst die Jahre aller jahrlosen Anzeige-Labels im Payload auf: Ankerregel
+ * planStartDate → raceDate → aktuelles Jahr (identisch zum Server, siehe
+ * `legacyYearAnchor.ts`) plus Jahreswechsel innerhalb der Sequenz.
+ *
+ * Mehrfach vorkommende Sessions (Top-Level `workouts` *und* `weeks[].workouts`)
+ * werden über die Session-Id zusammengefasst, damit sie nicht als zweite
+ * Sequenz gelesen werden und einen Jahreswechsel vortäuschen.
+ */
+function buildLegacyDateResolution(
+  raw: unknown,
+  options: NormalizeTrainingPlanOptions | undefined,
+  currentYear: number,
+): LegacyDateResolution {
+  const byRawSession = new Map<Record<string, unknown>, string>();
+
+  type Entry = { day: number; month: number; sessionType: string; sessions: Record<string, unknown>[] };
+  const entries: Entry[] = [];
+  const entryByKey = new Map<string, Entry>();
+
+  for (const session of rawSessionsInDocumentOrder(raw)) {
+    if (isoDateIsoFromUnknown(session.dateIso) || isoDateIsoFromUnknown(session.date)) continue;
+    const probe =
+      parseLegacySessionDate(session.dateIso, LABEL_PROBE_YEAR) ??
+      parseLegacySessionDate(session.date, LABEL_PROBE_YEAR);
+    if (!probe) continue;
+
+    const key = typeof session.id === "string" && session.id.trim() ? session.id.trim() : null;
+    const existing = key ? entryByKey.get(key) : undefined;
+    if (existing) {
+      existing.sessions.push(session);
+      continue;
+    }
+
+    const entry: Entry = {
+      day: probe.getDate(),
+      month: probe.getMonth(),
+      sessionType: sessionTypeFromRaw(session),
+      sessions: [session],
+    };
+    entries.push(entry);
+    if (key) entryByKey.set(key, entry);
+  }
+
+  const fromPayload = anchorDatesFromRaw(raw);
+  const planStartDate = options?.planStartDate ?? fromPayload.planStartDate;
+  const raceDate = options?.raceDate ?? fromPayload.raceDate;
+
+  let raceIndex = -1;
+  entries.forEach((entry, index) => {
+    if (entry.sessionType === "race") raceIndex = index;
+  });
+
+  const anchor = resolveLegacyYearAnchor({
+    planStartDate,
+    raceDate,
+    raceIndex,
+    lastIndex: Math.max(0, entries.length - 1),
+    currentYear,
+  });
+
+  if (entries.length === 0) {
+    return { byRawSession, fallbackYear: anchor.year };
+  }
+
+  if (anchor.source === "currentYear") {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[normalizeTrainingPlan] ${entries.length} Legacy-Session(s) ohne Jahresanker — ` +
+        `Jahr auf ${currentYear} gesetzt (planStartDate/raceDate fehlen).`,
+    );
+  }
+
+  const years = resolveLegacyYears(
+    entries.map((entry) => entry.month),
+    anchor,
+  );
+  entries.forEach((entry, index) => {
+    const iso = new Date(years[index], entry.month, entry.day, 12, 0, 0, 0).toISOString();
+    for (const session of entry.sessions) byRawSession.set(session, iso);
+  });
+
+  return { byRawSession, fallbackYear: anchor.year };
+}
+
 function extractFromRawWeek(
   week: unknown,
   weekIndex: number,
   startIndex: number,
+  legacyDates: LegacyDateResolution,
 ): { workouts: WorkoutV2[]; meta: WeekV2["meta"]; startIso?: string } {
   if (!isRecord(week)) {
     return { workouts: [], meta: normalizeWeekMeta({}, weekIndex) };
@@ -230,7 +399,7 @@ function extractFromRawWeek(
   const workouts: WorkoutV2[] = [];
   let idx = startIndex;
   for (const session of sessionsFromRawWeek(week)) {
-    const normalized = normalizeWorkout(session, idx++);
+    const normalized = normalizeWorkout(session, idx++, legacyDates);
     if (normalized) workouts.push(normalized);
   }
 
@@ -256,7 +425,10 @@ function dedupeWorkouts(workouts: WorkoutV2[]): WorkoutV2[] {
   return out;
 }
 
-function collectWorkoutsAndMeta(raw: unknown): {
+function collectWorkoutsAndMeta(
+  raw: unknown,
+  legacyDates: LegacyDateResolution,
+): {
   workouts: WorkoutV2[];
   metaByWeekStart: Map<string, WeekV2["meta"]>;
 } {
@@ -265,7 +437,7 @@ function collectWorkoutsAndMeta(raw: unknown): {
   let globalIndex = 0;
 
   const ingestWeek = (week: unknown, weekIndex: number) => {
-    const extracted = extractFromRawWeek(week, weekIndex, globalIndex);
+    const extracted = extractFromRawWeek(week, weekIndex, globalIndex, legacyDates);
     globalIndex += extracted.workouts.length;
     workouts.push(...extracted.workouts);
 
@@ -288,7 +460,7 @@ function collectWorkoutsAndMeta(raw: unknown): {
 
   if (Array.isArray(raw.workouts)) {
     for (const workout of raw.workouts) {
-      const normalized = normalizeWorkout(workout, globalIndex++);
+      const normalized = normalizeWorkout(workout, globalIndex++, legacyDates);
       if (normalized) workouts.push(normalized);
     }
   }
@@ -299,11 +471,11 @@ function collectWorkoutsAndMeta(raw: unknown): {
 
       if (Array.isArray(week.workouts) && workouts.length === 0) {
         for (const workout of week.workouts) {
-          const normalized = normalizeWorkout(workout, globalIndex++);
+          const normalized = normalizeWorkout(workout, globalIndex++, legacyDates);
           if (normalized) workouts.push(normalized);
         }
       } else if (Array.isArray(week.s)) {
-        const extracted = extractFromRawWeek(week, weekIndex, globalIndex);
+        const extracted = extractFromRawWeek(week, weekIndex, globalIndex, legacyDates);
         globalIndex += extracted.workouts.length;
         workouts.push(...extracted.workouts);
       }
@@ -318,7 +490,7 @@ function collectWorkoutsAndMeta(raw: unknown): {
                 : Array.isArray(week.s)
                   ? week.s[0]
                   : null;
-              const normalizedFirst = normalizeWorkout(first, globalIndex);
+              const normalizedFirst = normalizeWorkout(first, globalIndex, legacyDates);
               return normalizedFirst ? mondayIsoFromDateIso(normalizedFirst.dateIso) : null;
             })();
       if (startIso) metaByWeekStart.set(startIso, meta);
@@ -357,10 +529,14 @@ export const EMPTY_TRAINING_PLAN_V2: TrainingPlanV2 = {
  * Repairs legacy/partial plan payloads into a structurally complete TrainingPlanV2.
  * Safe for null, empty objects, legacy PlanWeek[] arrays, and mixed V2/display shapes.
  */
-export function normalizeTrainingPlan(raw: unknown): TrainingPlanV2 {
+export function normalizeTrainingPlan(
+  raw: unknown,
+  options?: NormalizeTrainingPlanOptions,
+): TrainingPlanV2 {
   if (raw == null) return { ...EMPTY_TRAINING_PLAN_V2 };
 
-  const { workouts, metaByWeekStart } = collectWorkoutsAndMeta(raw);
+  const legacyDates = buildLegacyDateResolution(raw, options, getAppNow().getFullYear());
+  const { workouts, metaByWeekStart } = collectWorkoutsAndMeta(raw, legacyDates);
   const deduped = dedupeWorkouts(workouts);
 
   if (deduped.length === 0) {
@@ -382,8 +558,11 @@ export function normalizeTrainingPlan(raw: unknown): TrainingPlanV2 {
 }
 
 /** Returns null when normalization yields an empty plan (caller may keep a fallback). */
-export function normalizeTrainingPlanOrNull(raw: unknown): TrainingPlanV2 | null {
-  const plan = normalizeTrainingPlan(raw);
+export function normalizeTrainingPlanOrNull(
+  raw: unknown,
+  options?: NormalizeTrainingPlanOptions,
+): TrainingPlanV2 | null {
+  const plan = normalizeTrainingPlan(raw, options);
   if (plan.workouts.length === 0) return null;
   return plan;
 }
