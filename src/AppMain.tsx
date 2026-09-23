@@ -224,7 +224,7 @@ import {
   validateNoVerticalOverflow,
   validateSiblingStackNoOverlap,
 } from "./layout";
-import { getWeekSessionRowWrapStyle, shouldWeekStackScroll } from "./layout/weekStackLayout";
+import { getWeekSessionRowWrapStyle, getWeekStackContainerStyle, shouldWeekStackScroll } from "./layout/weekStackLayout";
 import {
   beginAppFrame,
   getAppNow,
@@ -4658,13 +4658,13 @@ export default function AppMain(){
                 minHeight: 0,
                 display: "flex",
                 flexDirection: "column",
-                justifyContent: weekStackShouldScroll ? "flex-start" : "space-evenly",
-                gap: weekStackShouldScroll ? 4 : 0,
                 marginTop: 2,
                 overflowX: "hidden",
-                overflowY: weekStackShouldScroll ? "auto" : "hidden",
-                WebkitOverflowScrolling: "touch",
                 overscrollBehaviorY: "contain",
+                ...getWeekStackContainerStyle({
+                  scrollMode: weekStackShouldScroll,
+                  hasSessionRows: wSessions.length > 0,
+                }),
               }}
             >
               {wSessions.length === 0 && (

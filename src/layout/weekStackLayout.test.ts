@@ -1,4 +1,4 @@
-import { getWeekSessionRowWrapStyle, shouldWeekStackScroll } from "./weekStackLayout";
+import { getWeekSessionRowWrapStyle, getWeekStackContainerStyle, shouldWeekStackScroll } from "./weekStackLayout";
 
 const none = { hasExpandedSessionDesc: false, pendingCalendarProposal: null, weekCalendarBatchProposal: null };
 
@@ -36,5 +36,37 @@ describe("getWeekSessionRowWrapStyle", () => {
 
   test("Scroll-Modus: Zeilen behalten natürliche Höhe (nicht gequetscht) und sind nicht abgeschnitten", () => {
     expect(getWeekSessionRowWrapStyle(true)).toMatchObject({ flex: "0 0 auto", overflow: "visible" });
+  });
+});
+
+describe("getWeekStackContainerStyle", () => {
+  test("Default-Fall (nichts aufgeklappt, kein Kalender-Panel): Stack ist trotzdem scrollbar", () => {
+    // Race Week: 7 Zeilen passen nicht in die Stackhoehe, ohne Scroll faellt die So-Zeile raus.
+    expect(getWeekStackContainerStyle({ scrollMode: false, hasSessionRows: true })).toMatchObject({
+      overflowY: "auto",
+      WebkitOverflowScrolling: "touch",
+    });
+  });
+
+  test("Scroll-Modus aendert nichts am Scrollen — overflowY bleibt in jedem Zustand 'auto'", () => {
+    for (const scrollMode of [false, true]) {
+      for (const hasSessionRows of [false, true]) {
+        expect(getWeekStackContainerStyle({ scrollMode, hasSessionRows }).overflowY).toBe("auto");
+      }
+    }
+  });
+
+  test("Mit Session-Zeilen nie 'space-evenly': dessen center-Fallback macht die erste Zeile unerreichbar", () => {
+    expect(getWeekStackContainerStyle({ scrollMode: false, hasSessionRows: true }).justifyContent).toBe("flex-start");
+    expect(getWeekStackContainerStyle({ scrollMode: true, hasSessionRows: true }).justifyContent).toBe("flex-start");
+  });
+
+  test("Leer-Zustand (keine Einheiten): Hinweiskarte bleibt gleichmaessig verteilt", () => {
+    expect(getWeekStackContainerStyle({ scrollMode: false, hasSessionRows: false }).justifyContent).toBe("space-evenly");
+  });
+
+  test("Gap folgt weiterhin dem Scroll-Modus", () => {
+    expect(getWeekStackContainerStyle({ scrollMode: false, hasSessionRows: true }).gap).toBe(0);
+    expect(getWeekStackContainerStyle({ scrollMode: true, hasSessionRows: true }).gap).toBe(4);
   });
 });
