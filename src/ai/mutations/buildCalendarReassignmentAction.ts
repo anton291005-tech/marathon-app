@@ -2,6 +2,7 @@ import type { AiPlanWeek, AiPlanSession, AiAssistantAction, AiActionPreview, Pla
 import type { SessionAssignmentCandidate, SessionAssignmentResult, RankedCalendarCandidate } from "./assignSessionToBestCapacityDay";
 import {
   assignSessionToBestCapacityDay,
+  describeCalendarConflictCause,
   isSessionInCalendarConflict,
   rankCalendarReassignmentCandidates,
 } from "./assignSessionToBestCapacityDay";
@@ -72,12 +73,14 @@ export function computeSourceDayCapacity(
  * `null` when there's nothing to propose (engine failure or no-op). `result.warning` is appended
  * as an extra informational line (never blocks confirmation), matching the existing
  * "swaps are never hard-blocked, only surfaced as a hint" pattern used by
- * `buildSwapAthleteFacingWarnings`.
+ * `buildSwapAthleteFacingWarnings`. `conflictCause` (z.B. "wegen Fußballturnier") wird nur an die Zeile
+ * der verschobenen Session gehängt, nicht an die der verdrängten.
  */
 export function buildCalendarReassignmentAction(
   sessionId: string,
   result: SessionAssignmentResult,
   beforePlan: AiPlanWeek[],
+  conflictCause?: string,
 ): AiAssistantAction | null {
   if (!result.ok || result.patches.length === 0) return null;
 
@@ -87,7 +90,8 @@ export function buildCalendarReassignmentAction(
     if (!base) continue;
     const newDay = patch.changes.day ?? base.day;
     const newDate = patch.changes.date ?? base.date;
-    items.push(`${base.title}: ${base.day} → ${newDay} (${newDate})`);
+    const cause = conflictCause && patch.sessionId === sessionId ? ` – ${conflictCause}` : "";
+    items.push(`${base.title}: ${base.day} → ${newDay} (${newDate})${cause}`);
   }
   if (items.length === 0) return null;
 
@@ -141,7 +145,14 @@ export function buildCalendarReassignmentCandidateViews(
 export type SingleSessionCalendarProposal =
   | { status: "locked" }
   | { status: "no-conflict"; candidates: CalendarReassignmentCandidateView[] }
-  | { status: "proposal"; action: AiAssistantAction | null; patches: PlanPatch[]; candidates: CalendarReassignmentCandidateView[] };
+  | {
+      status: "proposal";
+      action: AiAssistantAction | null;
+      patches: PlanPatch[];
+      candidates: CalendarReassignmentCandidateView[];
+      /** Klartext-Grund des Konflikts, auch wenn `action` null ist (keine Alternative gefunden). */
+      conflictCause: string;
+    };
 
 /**
  * Einzel-Flow des 📅-Buttons: schlägt nur dann einen Tausch vor, wenn die Session auf ihrem aktuellen
@@ -165,9 +176,10 @@ export function proposeSingleSessionCalendarReassignment(
 
   const session = findSessionById([week], sessionId);
   const inConflict = !!session && !!sourceDayCapacity && isSessionInCalendarConflict(session, sourceDayCapacity);
-  if (!inConflict) return { status: "no-conflict", candidates: candidateViews };
+  if (!inConflict || !session || !sourceDayCapacity) return { status: "no-conflict", candidates: candidateViews };
 
+  const conflictCause = describeCalendarConflictCause(session, sourceDayCapacity);
   const result = assignSessionToBestCapacityDay(plan, sessionId, candidates, sourceDayCapacity, undefined, lockedSessionIds);
-  const action = buildCalendarReassignmentAction(sessionId, result, plan);
-  return { status: "proposal", action, patches: action ? result.patches : [], candidates: candidateViews };
+  const action = buildCalendarReassignmentAction(sessionId, result, plan, conflictCause);
+  return { status: "proposal", action, patches: action ? result.patches : [], candidates: candidateViews, conflictCause };
 }
