@@ -2,7 +2,6 @@
  * Wochen-Rollups für Recovery-Verlauf — keine Rohdaten-Queries, nur Aggregation aus Engine-Series.
  */
 
-import { parseSessionDateLabel } from "../appSmartFeatures";
 import { getAppNow } from "../core/time/timeSystem";
 import type { PlanWeek, SessionLog } from "../marathonPrediction";
 import type {
@@ -14,7 +13,12 @@ import type {
   ScoreConfidence,
   SemanticUncertaintyState,
 } from "./recoveryTypes";
-import { buildPlanWeekToDateMap, computeDailyRecoverySeries, scoreConfidenceFromModel } from "./recoveryScoringEngine";
+import {
+  buildPlanWeekToDateMap,
+  computeDailyRecoverySeries,
+  scoreConfidenceFromModel,
+  weekDateBounds,
+} from "./recoveryScoringEngine";
 import { parseYmd, ymd, daysBetweenInclusive } from "./recoveryCalendarUtils";
 import { weeklyTrainingStressIndex } from "./planTrainingLoad";
 import { certaintyLabelDe, rollupAiReasoningMode, rollupSemanticUncertaintyState } from "./recoverySemanticLayer";
@@ -22,18 +26,6 @@ import { certaintyLabelDe, rollupAiReasoningMode, rollupSemanticUncertaintyState
 function mean(nums: number[]): number | null {
   if (nums.length === 0) return null;
   return nums.reduce((a, b) => a + b, 0) / nums.length;
-}
-
-function weekDateBounds(week: PlanWeek): { first: Date | null; last: Date | null } {
-  let first: Date | null = null;
-  let last: Date | null = null;
-  for (const s of week.s ?? []) {
-    const d = parseSessionDateLabel(s.date);
-    if (!d) continue;
-    if (!first || d < first) first = d;
-    if (!last || d > last) last = d;
-  }
-  return { first, last };
 }
 
 function rollupConfidence(daySeries: DailyRecoveryComputed[]): ScoreConfidence {

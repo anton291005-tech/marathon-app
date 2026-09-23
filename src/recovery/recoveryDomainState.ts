@@ -3,13 +3,14 @@
  * `REACT_APP_EXTENDED_RECOVERY` is read only inside this module (no `productFlags` re-export).
  */
 
-import { isSessionLogDone, parseSessionDateLabel } from "../appSmartFeatures";
+import { isSessionLogDone } from "../appSmartFeatures";
 import type { PlanWeek, SessionLog } from "../marathonPrediction";
 import { buildLast7InsightFromState } from "./aiInsightGenerator";
 import { buildRecoveryWeekRollups } from "./recoveryRollupBuilder";
 import { buildPlanWeekToDateMap, computeDailyRecoverySeries } from "./recoveryScoringEngine";
 import { computeHomeRecoveryScoreBreakdown, type HomeRecoveryScoreBreakdown } from "./homeRecoveryScore";
 import { last7CalendarDays, ymd } from "./recoveryCalendarUtils";
+import { sessionCalendarDate } from "./sessionCalendarDay";
 import { computeVariance } from "./latentRecoveryState";
 import {
   INSUFFICIENT_DATA_SESSION_RECOVERY,
@@ -242,7 +243,7 @@ function computeHasMinData(args: GetRecoveryDomainStateArgs): boolean {
       if (session.type === "rest") continue;
       const log = args.logs[session.id];
       if (!isSessionLogDone(log)) continue;
-      const d = parseSessionDateLabel(session.date);
+      const d = sessionCalendarDate(session);
       if (d && d.getTime() >= cutoffMs && d.getTime() <= now.getTime()) {
         recentRuns++;
       }

@@ -3,7 +3,6 @@
  * Dynamische Gewichtung wenn Teilmetriken fehlen; 7-Tage-Trend via EMA + Rolling-Blend.
  */
 
-import { parseSessionDateLabel } from "../appSmartFeatures";
 import { getAppNow } from "../core/time/timeSystem";
 import type { PlanWeek, SessionLog } from "../marathonPrediction";
 import {
@@ -13,6 +12,7 @@ import {
   type ScoreConfidence,
 } from "./recoveryTypes";
 import { daysBetweenInclusive, last7CalendarDays, parseYmd, ymd } from "./recoveryCalendarUtils";
+import { sessionCalendarDate } from "./sessionCalendarDay";
 import { buildDailyTrainingLoadByDate, trainingLoadSubscoreForDay } from "./trainingDailyLoad";
 import { metaWeight } from "./signalMetaUtils";
 import {
@@ -57,11 +57,12 @@ function activityLoadAdjustmentFromEnergyKcal(activeKcal: number | undefined, ba
   return rel * 6.5;
 }
 
-function weekDateBounds(week: PlanWeek): { first: Date | null; last: Date | null } {
+/** Erster/letzter Kalendertag einer Planwoche (Quelle: `session.dateIso`). */
+export function weekDateBounds(week: PlanWeek): { first: Date | null; last: Date | null } {
   let first: Date | null = null;
   let last: Date | null = null;
   for (const s of week.s ?? []) {
-    const d = parseSessionDateLabel(s.date);
+    const d = sessionCalendarDate(s);
     if (!d) continue;
     if (!first || d < first) first = d;
     if (!last || d > last) last = d;
@@ -73,7 +74,7 @@ function earliestPlanSessionDate(plan: PlanWeek[]): Date | null {
   let best: Date | null = null;
   for (const w of plan) {
     for (const s of w.s ?? []) {
-      const d = parseSessionDateLabel(s.date);
+      const d = sessionCalendarDate(s);
       if (!d) continue;
       if (!best || d < best) best = d;
     }

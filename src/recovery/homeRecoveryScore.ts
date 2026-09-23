@@ -3,11 +3,12 @@
  * Not anchored to Monday or plan week; independent of weekly aggregation.
  */
 
-import { isSessionLogDone, parseSessionDateLabel } from "../appSmartFeatures";
+import { isSessionLogDone } from "../appSmartFeatures";
 import { getAppNow } from "../core/time/timeSystem";
 import type { PlanWeek, SessionLog } from "../marathonPrediction";
 import type { DailyRecoveryComputed } from "./recoveryTypes";
 import { last7CalendarDays, ymd } from "./recoveryCalendarUtils";
+import { sessionDayIso } from "./sessionCalendarDay";
 import { buildDailyTrainingLoadByDate } from "./trainingDailyLoad";
 import {
   applyTrainingConsistencyGuard,
@@ -104,12 +105,6 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
 
-function sessionToYmd(session: { date: string }, year = 2026): string | null {
-  const d = parseSessionDateLabel(session.date, year);
-  if (!d) return null;
-  return ymd(d);
-}
-
 /** Non-rest sessions in plan whose calendar day falls in `window` and is on/before today. */
 function rollingPlanExecutionRatio(args: {
   plan: PlanWeek[];
@@ -123,7 +118,7 @@ function rollingPlanExecutionRatio(args: {
   for (const w of args.plan) {
     for (const s of w.s ?? []) {
       if (s.type === "rest") continue;
-      const d = sessionToYmd(s);
+      const d = sessionDayIso(s);
       if (!d || !set.has(d)) continue;
       due += 1;
       if (isSessionLogDone(args.logs[s.id])) done += 1;

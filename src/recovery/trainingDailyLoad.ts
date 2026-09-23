@@ -3,12 +3,12 @@
  * Erwartet den **aktuellen** `logs`-Stand (nach Save) — gleiche Reihenfolge wie UI: zuerst Log speichern, dann Score.
  */
 
-import { isSessionLogDone, parseSessionDateLabel } from "../appSmartFeatures";
+import { isSessionLogDone } from "../appSmartFeatures";
 import type { PlanSession, PlanWeek, SessionLog } from "../marathonPrediction";
 import { getEffectiveKm } from "../marathonPrediction";
 import { sanitizeDistance } from "../sanitizeDistance";
 import { weekPlannedRunningKm } from "../weeklyAnalysis";
-import { ymd } from "./recoveryCalendarUtils";
+import { sessionDayIso } from "./sessionCalendarDay";
 
 function intensityFactor(type: PlanSession["type"]): number {
   if (type === "interval" || type === "tempo" || type === "race") return 1.38;
@@ -28,13 +28,14 @@ export function buildDailyTrainingLoadByDate(plan: PlanWeek[], logs: Record<stri
     const weeklyAvgKm = wk > 0 ? wk / Math.max(1, weekSessions.filter((s) => s.type !== "rest").length) : wk;
     for (const session of weekSessions) {
       if (session.type === "rest") continue;
-      const d = parseSessionDateLabel(session.date);
-      if (!d) continue;
+      // Done-Check vor der Datumsauflösung: nur so warnt der Legacy-Pfad in
+      // `sessionDayIso` für Sessions, die hier überhaupt zählen.
       if (!isSessionLogDone(logs[session.id])) continue;
+      const key = sessionDayIso(session);
+      if (!key) continue;
       const raw = getEffectiveKm(session, logs[session.id]);
       const km = sanitizeDistance(raw, { weeklyAvgKm, rollingRef: rolling });
       const load = km * intensityFactor(session.type);
-      const key = ymd(d);
       m.set(key, (m.get(key) ?? 0) + load);
     }
   }
