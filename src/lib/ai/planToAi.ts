@@ -32,6 +32,7 @@ export function normalizePlanSessionToAi(session: PlanSession): AiPlanSession {
     id: typeof session?.id === "string" && session.id.trim() ? session.id.trim() : `session-${sessionType}`,
     day: typeof session?.day === "string" ? session.day : "",
     date: typeof session?.date === "string" ? session.date : "",
+    dateIso: typeof session?.dateIso === "string" ? session.dateIso : undefined,
     type: sessionType,
     title:
       typeof session?.title === "string" && session.title.trim()
@@ -48,6 +49,8 @@ export function normalizePlanSessionToAi(session: PlanSession): AiPlanSession {
     id: safeSession.id,
     day: safeSession.day,
     date: safeSession.date,
+    // Whitelist: ohne explizite Durchreichung verlöre der AI-Plan das Jahr wieder.
+    ...(safeSession.dateIso ? { dateIso: safeSession.dateIso } : {}),
     type: mapSessionType(safeSession.type),
     title: safeSession.title,
     km: getPlannedKmEquiv(safeSession),

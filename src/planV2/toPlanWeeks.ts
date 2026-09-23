@@ -9,6 +9,14 @@ function formatDateLabelDe(date: Date): string {
   return `${date.getDate()}. ${DE_MONTHS[date.getMonth()]}`;
 }
 
+/**
+ * Lokales Kalenderdatum als YYYY-MM-DD. Bewusst aus den lokalen Datums-Komponenten gebaut und nicht
+ * via `toISOString()`, das in Europe/Berlin auf den Vortag kippen kann.
+ */
+function toLocalYmd(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function toPlanSession(workout: WorkoutV2): PlanSession | null {
   const d = new Date(workout.dateIso);
   if (!Number.isFinite(d.getTime())) return null;
@@ -18,6 +26,8 @@ function toPlanSession(workout: WorkoutV2): PlanSession | null {
     id: workout.id,
     day,
     date,
+    // Das Label `date` verliert das Jahr — `dateIso` trägt es aus der SSOT weiter.
+    dateIso: toLocalYmd(d),
     type: workout.sessionType,
     title: workout.title,
     km: typeof workout.km === "number" && Number.isFinite(workout.km) ? workout.km : 0,

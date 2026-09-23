@@ -40,6 +40,8 @@ export type AiPlanSession = {
   id: string;
   day: string;
   date: string;
+  /** Kalendertag als YYYY-MM-DD (echtes Jahr aus der SSOT); siehe `PlanSession.dateIso`. */
+  dateIso?: string;
   type: SessionType;
   title: string;
   km: number;

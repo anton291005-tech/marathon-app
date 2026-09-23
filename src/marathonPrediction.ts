@@ -34,6 +34,12 @@ export type PlanSession = {
   id: string;
   day: string;
   date: string;
+  /**
+   * Kalendertag als YYYY-MM-DD — trägt das echte Jahr aus `WorkoutV2.dateIso` (SSOT), das im
+   * Anzeige-Label `date` ("14. Mär") fehlt. Optional, weil Legacy-Plandaten es nicht haben.
+   * Invariante: ist `dateIso` gesetzt, MUSS es zu `day`/`date` passen (siehe `swapWorkouts`).
+   */
+  dateIso?: string;
   type: string;
   title: string;
   km: number;

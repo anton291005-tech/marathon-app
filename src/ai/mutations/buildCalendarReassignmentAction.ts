@@ -9,14 +9,7 @@ import {
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 import type { WeeklyScheduleBlock } from "../../lib/supabase/services/weeklyScheduleBlocksService";
 import { computeDayCapacityScore, type DayCapacityScore } from "../../scheduling/capacityScore";
-import { parseSessionDateLabel } from "../../appSmartFeatures";
-import { getAppCalendarYmd } from "../../core/time/timeSystem";
-
-function sessionDateIso(session: AiPlanSession): string | null {
-  const parsed: Date | null = parseSessionDateLabel(session.date);
-  if (!parsed) return null;
-  return getAppCalendarYmd(parsed);
-}
+import { sessionDayIso } from "./sessionDayIso";
 
 function findSessionById(plan: AiPlanWeek[], id: string): AiPlanSession | null {
   for (const week of plan) {
@@ -43,7 +36,7 @@ export function buildCalendarReassignmentCandidates(
   for (const session of week.s ?? []) {
     if (session.id === sessionId) continue;
     if (lockedSessionIds.has(session.id)) continue;
-    const dateIso = sessionDateIso(session);
+    const dateIso = sessionDayIso(session);
     if (!dateIso) continue;
     candidates.push({ targetSessionId: session.id, capacity: computeDayCapacityScore(dateIso, blocks) });
   }
@@ -63,7 +56,7 @@ export function computeSourceDayCapacity(
 ): DayCapacityScore | null {
   const session = findSessionById([week], sessionId);
   if (!session) return null;
-  const dateIso = sessionDateIso(session);
+  const dateIso = sessionDayIso(session);
   if (!dateIso) return null;
   return computeDayCapacityScore(dateIso, blocks);
 }

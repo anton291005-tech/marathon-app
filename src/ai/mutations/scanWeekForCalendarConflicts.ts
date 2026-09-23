@@ -3,8 +3,7 @@ import type { WeeklyScheduleBlock } from "../../lib/supabase/services/weeklySche
 import { computeDayCapacityScore, computeSessionDayFitScore, isPhysicalLoadConflict } from "../../scheduling/capacityScore";
 import { describeCalendarConflictCause, isSessionInCalendarConflict } from "./assignSessionToBestCapacityDay";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
-import { parseSessionDateLabel } from "../../appSmartFeatures";
-import { getAppCalendarYmd } from "../../core/time/timeSystem";
+import { sessionDayIso } from "./sessionDayIso";
 
 export type WeeklyCalendarConflict = {
   sessionId: string;
@@ -13,12 +12,6 @@ export type WeeklyCalendarConflict = {
   /** Klartext-Grund für den Tausch-Vorschlag, z.B. "wegen Fußballturnier" (`describeCalendarConflictCause`). */
   cause: string;
 };
-
-function sessionDateIso(session: AiPlanSession): string | null {
-  const parsed: Date | null = parseSessionDateLabel(session.date);
-  if (!parsed) return null;
-  return getAppCalendarYmd(parsed);
-}
 
 function describeConflict(session: AiPlanSession, fitScore: number, dayCapacity: ReturnType<typeof computeDayCapacityScore>): string {
   if (dayCapacity.isFullyBooked) {
@@ -54,7 +47,7 @@ export function scanWeekForCalendarConflicts(
   const conflicts: WeeklyCalendarConflict[] = [];
   for (const session of week.s ?? []) {
     if (lockedSessionIds.has(session.id)) continue;
-    const dayIso = sessionDateIso(session);
+    const dayIso = sessionDayIso(session);
     if (!dayIso) continue;
 
     const dayCapacity = computeDayCapacityScore(dayIso, scheduleBlocks);

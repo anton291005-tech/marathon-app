@@ -1,7 +1,7 @@
 import type { AiPlanWeek } from "../../lib/ai/types";
 import { getSessionStatus } from "../../sessionStatus";
-import { parseSessionDateLabel } from "../../appSmartFeatures";
-import { getAppCalendarYmd, getAppTodayYmd } from "../../core/time/timeSystem";
+import { getAppTodayYmd } from "../../core/time/timeSystem";
+import { sessionDayIso } from "./sessionDayIso";
 
 type SessionLogLike = Parameters<typeof getSessionStatus>[0];
 
@@ -26,8 +26,8 @@ export function buildLockedSessionIds(
         locked.add(session.id);
         continue;
       }
-      const parsed: Date | null = parseSessionDateLabel(session.date);
-      if (parsed && getAppCalendarYmd(parsed) < todayYmd) locked.add(session.id);
+      const dayIso = sessionDayIso(session);
+      if (dayIso && dayIso < todayYmd) locked.add(session.id);
     }
   }
   return locked;

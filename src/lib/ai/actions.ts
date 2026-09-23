@@ -20,8 +20,24 @@ const HARD_TYPES = new Set(["interval", "tempo", "race"]);
 const DE_WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const DE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
+const YMD_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Kalendertag einer Session. Bevorzugt `dateIso` (echtes Jahr aus der SSOT); das Label `date`
+ * ("14. Mär") trägt kein Jahr und zwingt `parseSessionDateLabel` zum Raten, was über einen
+ * Jahreswechsel falsch sortiert. Label-Pfad bleibt Fallback für Legacy-Sessions ohne `dateIso`.
+ */
 function getSessionDate(session: AiPlanSession): Date | null {
+  const iso = session.dateIso;
+  if (typeof iso === "string" && YMD_PATTERN.test(iso)) {
+    const [y, m, d] = iso.split("-").map((part) => Number.parseInt(part, 10));
+    return new Date(y, m - 1, d, 12, 0, 0, 0);
+  }
   return parseSessionDateLabel(session.date);
+}
+
+function toLocalYmd(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function sortByDateAscending(a: AiPlanSession, b: AiPlanSession): number {
@@ -54,8 +70,10 @@ function shiftSessionDate(session: AiPlanSession, shiftDays: number): Partial<Ai
   const shifted = new Date(date);
   shifted.setDate(shifted.getDate() + shiftDays);
   return {
+    // dateIso wandert zwingend mit day/date mit (Invariante, siehe `swapWorkouts`).
     day: DE_WEEKDAYS[shifted.getDay()],
     date: formatDateLabel(shifted),
+    dateIso: toLocalYmd(shifted),
   };
 }
 
@@ -351,6 +369,39 @@ export function executeAiAction(action: AiAssistantAction, context: AiContext): 
   };
 }
 
+/**
+ * Hält die Invariante `date` <-> `dateIso` am einzigen Merge-Punkt zusammen. Ändert ein Patch nur
+ * das jahrlose Label (z.B. ein von der AI erzeugter Patch, der `dateIso` nicht kennt), wäre das
+ * bestehende `dateIso` danach veraltet und würde die Kapazitäts-Lookups auf den alten Tag schicken.
+ *
+ * Das Jahr wird deshalb am bisherigen `dateIso` neu verankert: ein Patch verschiebt eine Session um
+ * Tage, nie um ein Jahr — es gewinnt das Jahr mit dem kleinsten Abstand zum bisherigen Datum. Damit
+ * trägt auch ein Patch über den Jahreswechsel (31. Dez -> 2. Jan) korrekt ins neue Jahr.
+ *
+ * Patches, die `dateIso` selbst mitliefern (`diffToPatches`, `shiftSessionDate`), bleiben unberührt.
+ */
+function reconcilePatchedDateIso(
+  session: AiPlanSession,
+  changes: Partial<AiPlanSession>,
+): Partial<AiPlanSession> {
+  if (changes.date === undefined || changes.dateIso !== undefined) return changes;
+
+  const anchor = getSessionDate(session);
+  const label = parseSessionDateLabel(changes.date);
+  // Ohne Anker oder ohne parsebares Label lässt sich kein Jahr bestimmen — dann lieber gar kein
+  // dateIso als ein falsches; die Consumer fallen auf den (protokollierten) Label-Pfad zurück.
+  if (!anchor || !label) return { ...changes, dateIso: undefined };
+
+  let best: Date | null = null;
+  for (const year of [anchor.getFullYear() - 1, anchor.getFullYear(), anchor.getFullYear() + 1]) {
+    const candidate = new Date(year, label.getMonth(), label.getDate(), 12, 0, 0, 0);
+    const closer =
+      !best || Math.abs(candidate.getTime() - anchor.getTime()) < Math.abs(best.getTime() - anchor.getTime());
+    if (closer) best = candidate;
+  }
+  return { ...changes, dateIso: best ? toLocalYmd(best) : undefined };
+}
+
 export function applyPlanPatches(plan: AiPlanWeek[], patches: PlanPatch[]): AiPlanWeek[] {
   if (!patches.length) return plan;
   const patchById = new Map(patches.map((patch) => [patch.sessionId, patch.changes]));
@@ -360,7 +411,7 @@ export function applyPlanPatches(plan: AiPlanWeek[], patches: PlanPatch[]): AiPl
       .map((session) => {
         const changes = patchById.get(session.id);
         if (!changes) return session;
-        return { ...session, ...changes };
+        return { ...session, ...reconcilePatchedDateIso(session, changes) };
       })
       .sort(sortByDateAscending),
   }));

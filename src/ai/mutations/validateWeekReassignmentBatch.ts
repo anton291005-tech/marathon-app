@@ -9,8 +9,7 @@ import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 import { swapWorkouts } from "./swapWorkouts";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 import { diffToPatches, findSessionById, NEUTRAL_VALIDATION_CONTEXT } from "./assignSessionToBestCapacityDay";
-import { parseSessionDateLabel } from "../../appSmartFeatures";
-import { getAppCalendarYmd } from "../../core/time/timeSystem";
+import { sessionDayIso } from "./sessionDayIso";
 
 export type WeekReassignmentBatchResult =
   | { valid: true; patches: PlanPatch[]; warning?: string }
@@ -24,13 +23,11 @@ function isResolvedProposal(p: WeekCalendarReassignmentProposal): p is ResolvedP
 
 /** Reassignments sind Swaps ("jeder Kalendertag hat genau eine Session") — `toDayIso` muss auf die
  * Session zurückgeführt werden, die diesen Tag in der (unveränderten) Woche aktuell belegt, bevor ein
- * PlanPatch gebaut werden kann. Gleiches Muster wie `sessionDateIso` in
+ * PlanPatch gebaut werden kann. Gleiches Muster wie `sessionDayIso` in
  * `scanWeekForCalendarConflicts.ts`/`buildCalendarReassignmentAction.ts`, nur umgekehrt aufgelöst. */
 function findSessionIdForDayIso(week: AiPlanWeek, dayIso: string): string | null {
   for (const session of week.s ?? []) {
-    const parsed = parseSessionDateLabel(session.date);
-    if (!parsed) continue;
-    if (getAppCalendarYmd(parsed) === dayIso) return session.id;
+    if (sessionDayIso(session) === dayIso) return session.id;
   }
   return null;
 }

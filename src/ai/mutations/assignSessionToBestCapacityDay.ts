@@ -90,8 +90,12 @@ export function diffToPatches(before: AiPlanWeek[], after: AiPlanWeek[], ids: st
     const b = findSessionById(before, id);
     const a = findSessionById(after, id);
     if (!b || !a) continue;
-    if (b.day === a.day && b.date === a.date) continue;
-    patches.push({ sessionId: id, changes: { day: a.day, date: a.date } });
+    if (b.day === a.day && b.date === a.date && b.dateIso === a.dateIso) continue;
+    patches.push({
+      sessionId: id,
+      // dateIso gehört zwingend in denselben Patch wie day/date (Invariante, siehe `swapWorkouts`).
+      changes: { day: a.day, date: a.date, ...(a.dateIso ? { dateIso: a.dateIso } : {}) },
+    });
   }
   return patches;
 }
