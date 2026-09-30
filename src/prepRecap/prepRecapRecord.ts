@@ -103,3 +103,30 @@ export function applyPrepRecapUpdate(
       : {}),
   };
 }
+
+/**
+ * Anzeige-Stand aus lokalem Cache und Remote (Home-Hero/Leistung vor dem Öffnen des Rückblicks):
+ * Remote gewinnt — außer der Cache hält eine offline bestätigte Zeit und Remote nur einen
+ * unbestätigten Stand (gleiche Vorrangregel wie beim Nachreichen in ensurePrepRecapSnapshot).
+ */
+export function pickPrepRecapForDisplay(
+  cached: PrepRecapRecord | null,
+  remote: PrepRecapRecord | null,
+): PrepRecapRecord | null {
+  if (!remote) return cached;
+  if (!cached || cached.raceDate !== remote.raceDate) return remote;
+  if (
+    cached.finishTimeConfirmed &&
+    cached.finishTimeSeconds != null &&
+    cached.finishTimeSource != null &&
+    !remote.finishTimeConfirmed
+  ) {
+    return {
+      ...remote,
+      finishTimeSeconds: cached.finishTimeSeconds,
+      finishTimeSource: cached.finishTimeSource,
+      finishTimeConfirmed: true,
+    };
+  }
+  return remote;
+}

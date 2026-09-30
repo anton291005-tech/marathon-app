@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import PrepCompleteHeroCard from "./PrepCompleteHeroCard";
 import RaceResultCard from "./RaceResultCard";
 
@@ -20,9 +20,22 @@ describe("PrepCompleteHeroCard", () => {
     expect(screen.queryByText(/unter deinem Ziel/)).toBeNull();
   });
 
-  it("hat in diesem Schritt keine Buttons", () => {
+  it("hat ohne Handler keine Buttons", () => {
     render(<PrepCompleteHeroCard {...base} finish={{ seconds: 11637, confirmed: false }} />);
     expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("öffnet den Rückblick als einzige Aktion", () => {
+    const onOpenRecap = jest.fn();
+    render(<PrepCompleteHeroCard {...base} finish={{ seconds: 11637, confirmed: false }} onOpenRecap={onOpenRecap} />);
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Rückblick ansehen" }));
+    expect(onOpenRecap).toHaveBeenCalledTimes(1);
+  });
+
+  it("sperrt den Button, solange der Snapshot entsteht", () => {
+    render(<PrepCompleteHeroCard {...base} finish={null} onOpenRecap={jest.fn()} recapLoading />);
+    expect(screen.getByRole("button", { name: "Rückblick wird vorbereitet …" })).toBeDisabled();
   });
 
   it("lässt ohne Zeit die Zeitzeile weg und zeigt nie 0 oder N/A", () => {
@@ -68,6 +81,35 @@ describe("RaceResultCard", () => {
     render(<RaceResultCard {...base} completedBy="date_passed" finish={null} />);
     expect(screen.getByText("Renntag vorbei")).toBeInTheDocument();
     expect(screen.queryByText(/gelaufen/)).toBeNull();
+  });
+
+  it("bietet die Zeit-Aktion nur mit Handler an", () => {
+    const onEdit = jest.fn();
+    const { rerender } = render(<RaceResultCard {...done} finish={{ seconds: 11637, confirmed: false }} />);
+    expect(screen.queryByRole("button")).toBeNull();
+    rerender(
+      <RaceResultCard
+        {...done}
+        finish={{ seconds: 11637, confirmed: false }}
+        onEditFinishTime={onEdit}
+        editFinishTimeLabel="Zeit bestätigen"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Zeit bestätigen" }));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it("hat ohne Rennen keine Zeit-Aktion", () => {
+    render(
+      <RaceResultCard
+        {...base}
+        completedBy="plan_ended"
+        finish={null}
+        onEditFinishTime={jest.fn()}
+        editFinishTimeLabel="Zeit eintragen"
+      />,
+    );
+    expect(screen.queryByRole("button")).toBeNull();
   });
 
   it("benennt einen Plan ohne Race-Session passend", () => {

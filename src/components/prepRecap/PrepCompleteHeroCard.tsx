@@ -17,11 +17,15 @@ type Props = {
   /** true wenn die Vorbereitung ohne Race-Session endete (nur Planende). */
   planEndedWithoutRace?: boolean;
   compact?: boolean;
+  /** Öffnet den Rückblick; ohne Handler keine Aktion. */
+  onOpenRecap?: () => void;
+  /** Snapshot wird gerade angelegt/geladen. */
+  recapLoading?: boolean;
 };
 
 /**
  * Home im Zustand „Vorbereitung abgeschlossen" — ersetzt den Ruhetag-Fallback.
- * Aktionen (Rückblick, neue Vorbereitung) kommen erst mit Snapshot und Archivierung dazu.
+ * Einzige Aktion ist „Rückblick ansehen"; „Neue Vorbereitung starten" kommt mit der Archivierung.
  */
 export default function PrepCompleteHeroCard({
   raceName,
@@ -31,6 +35,8 @@ export default function PrepCompleteHeroCard({
   raceDistanceKm,
   planEndedWithoutRace = false,
   compact = false,
+  onOpenRecap,
+  recapLoading = false,
 }: Props) {
   const dateLabel = formatRaceDateDe(raceYmd);
   const title = raceName ?? (planEndedWithoutRace ? "Dein Trainingsplan" : "Dein Rennen");
@@ -102,6 +108,33 @@ export default function PrepCompleteHeroCard({
             <div style={{ fontSize: 12, fontWeight: 750, color: "#86efac" }}>{reachedLine}</div>
           ) : null}
         </div>
+      ) : null}
+      {onOpenRecap ? (
+        <button
+          type="button"
+          className="dashboard-action"
+          data-testid="prep-open-recap"
+          onClick={onOpenRecap}
+          disabled={recapLoading}
+          aria-busy={recapLoading}
+          style={{
+            marginTop: compact ? 6 : 10,
+            minHeight: compact ? 38 : 44,
+            padding: compact ? "0 18px" : "0 22px",
+            borderRadius: 999,
+            border: "1px solid rgba(253,230,138,0.45)",
+            background: "linear-gradient(135deg, rgba(250,204,21,0.22), rgba(34,197,94,0.18))",
+            color: "#fef9c3",
+            fontSize: compact ? 13 : 14,
+            fontWeight: 800,
+            letterSpacing: "0.01em",
+            cursor: recapLoading ? "default" : "pointer",
+            opacity: recapLoading ? 0.7 : 1,
+            boxShadow: "0 10px 26px rgba(250,204,21,0.12)",
+          }}
+        >
+          {recapLoading ? "Rückblick wird vorbereitet …" : "Rückblick ansehen"}
+        </button>
       ) : null}
     </div>
   );

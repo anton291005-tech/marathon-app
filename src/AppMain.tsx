@@ -22,7 +22,7 @@
  * in Inline-Handlern und älteren UI-Helfern). Reduktion nur **schrittweise** über echte Parameter-/Rückgabetypen oder
  * punktuelle `@ts-expect-error` auf einzelnen Zeilen — nicht durch globales Aufweichen von Domain-Typen.
  */
-import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, lazy, Suspense } from "react";
 import RecoveryVerlaufCard from "./components/RecoveryVerlaufCard";
 import BackupControls from "./BackupControls";
 import { Capacitor } from "@capacitor/core";
@@ -44,9 +44,20 @@ import { getSessionStatus } from "./sessionStatus";
 import MarathonPredictionCard from "./components/MarathonPredictionCard";
 import PrepCompleteHeroCard from "./components/prepRecap/PrepCompleteHeroCard";
 import RaceResultCard from "./components/prepRecap/RaceResultCard";
+import { finishTimeActionLabel } from "./components/prepRecap/finishTimeActionLabel";
+import type { PrepRecapEntry } from "./components/prepRecap/PrepRecapExperience";
 import { getPrepCompletionState } from "./prepRecap/prepCompletionState";
 import { detectRaceFinishTime } from "./prepRecap/detectRaceFinishTime";
 import { resolveRaceDistanceKm } from "./prepRecap/raceResultPresentation";
+import { buildPrepRecapSnapshot } from "./prepRecap/buildPrepRecapSnapshot";
+import {
+  createPrepRecapStore,
+  ensurePrepRecapSnapshot,
+  readPrepRecapCache,
+  savePrepRecapFinishTime,
+} from "./prepRecap/ensurePrepRecapSnapshot";
+import { pickPrepRecapForDisplay, type FinishTimePatch, type PrepRecapRecord } from "./prepRecap/prepRecapRecord";
+import { loadPrepRecaps } from "./lib/supabase/services/prepRecapService";
 import RaceCalculator from "./components/RaceCalculator";
 import SurfaceCard from "./components/SurfaceCard";
 import { AccountDeleteDialog } from "./components/AccountDeleteDialog";
@@ -243,6 +254,8 @@ import {
   productionMarkOncePerFrame,
   sanitizeOneSentence,
 } from "./ui/productionGuards";
+/** Rückblick-Story (inkl. Konfetti) erst nach Plan-Ende gebraucht — eigener Chunk statt Main-Bundle. */
+const PrepRecapExperience = lazy(() => import("./components/prepRecap/PrepRecapExperience"));
 const APPLE_HEALTH_CONNECTED_KEY = MARATHON_APPLE_HEALTH_CONNECTED_KEY;
 
 function readStoredJson(key, fallback) {
@@ -2953,17 +2966,112 @@ export default function AppMain(){
     ? resolveRaceDistanceKm(prepCompleted.raceSession, preferences.raceDistanceKm)
     : null;
   /** Nur Vorschlag aus Apple Health — bis zur Bestätigung im Rückblick immer „laut Apple Health". */
-  const prepFinishDisplay = useMemo(() => {
+  const prepDetectedFinish = useMemo(() => {
     if (!prepCompleted) return null;
-    const detected = detectRaceFinishTime({
+    return detectRaceFinishTime({
       raceSession: prepCompleted.raceSession,
       raceYmd: prepCompleted.raceYmd,
       raceLog: prepCompleted.raceSession ? logs[prepCompleted.raceSession.id] : undefined,
       healthRuns,
       raceDistanceKm: prepRaceDistanceKm,
     });
-    return detected ? { seconds: detected.seconds, confirmed: false } : null;
   }, [prepCompleted, logs, healthRuns, prepRaceDistanceKm]);
+  /** Gespeicherter Rückblick (Snapshot) des Zielrennens — Quelle einer bestätigten Zielzeit. */
+  const [prepRecapRecord, setPrepRecapRecord] = useState<PrepRecapRecord | null>(null);
+  const [prepRecapOverlay, setPrepRecapOverlay] = useState<PrepRecapEntry | null>(null);
+  const [prepRecapOpening, setPrepRecapOpening] = useState(false);
+  const prepRecapOpeningRef = useRef(false);
+  const prepRaceYmd = prepCompleted?.raceYmd ?? null;
+  const prepRecapUserId = user?.id ?? null;
+  useEffect(() => {
+    if (!prepRaceYmd) {
+      setPrepRecapRecord(null);
+      return;
+    }
+    // Nur lesen, nie anlegen: der Snapshot entsteht erst beim Öffnen des Rückblicks.
+    setPrepRecapRecord(readPrepRecapCache()[prepRaceYmd] ?? null);
+    if (!prepRecapUserId) return;
+    let cancelled = false;
+    void loadPrepRecaps(prepRecapUserId).then((list) => {
+      if (cancelled || !list) return;
+      const remote = list.find((r) => r.raceDate === prepRaceYmd) ?? null;
+      setPrepRecapRecord((current) => pickPrepRecapForDisplay(current, remote));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [prepRaceYmd, prepRecapUserId]);
+  const prepFinishDisplay = useMemo(() => {
+    if (!prepCompleted) return null;
+    if (prepRecapRecord?.raceDate === prepCompleted.raceYmd && prepRecapRecord.finishTimeSeconds != null) {
+      return { seconds: prepRecapRecord.finishTimeSeconds, confirmed: prepRecapRecord.finishTimeConfirmed };
+    }
+    return prepDetectedFinish ? { seconds: prepDetectedFinish.seconds, confirmed: false } : null;
+  }, [prepCompleted, prepRecapRecord, prepDetectedFinish]);
+  /** „Rückblick ansehen" / Zeit bearbeiten: Snapshot sicherstellen (einmal anlegen), dann Overlay öffnen. */
+  const openPrepRecap = useCallback(
+    async (entry: PrepRecapEntry) => {
+      if (!prepCompleted || prepRecapOpeningRef.current) return;
+      const completed = prepCompleted;
+      prepRecapOpeningRef.current = true;
+      setPrepRecapOpening(true);
+      try {
+        const record = await ensurePrepRecapSnapshot({
+          store: createPrepRecapStore(prepRecapUserId),
+          planId: allTrainingPlans.find((item) => item.is_active)?.id ?? null,
+          raceName: completed.raceName,
+          raceDate: completed.raceYmd,
+          detectedFinish: prepDetectedFinish,
+          buildStats: () =>
+            buildPrepRecapSnapshot({
+              plan: displayPlan,
+              logs,
+              healthRuns,
+              recoveryDailyRows,
+              raceSession: completed.raceSession,
+              raceYmd: completed.raceYmd,
+              raceName: completed.raceName,
+              raceDistanceKm: prepRaceDistanceKm,
+              goalSeconds: completed.goalSeconds,
+              completedBy: completed.completedBy,
+            }),
+        });
+        setPrepRecapRecord(record);
+        setPrepRecapOverlay(entry);
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          // eslint-disable-next-line no-console
+          console.warn("[prepRecap] open failed", error);
+        }
+      } finally {
+        prepRecapOpeningRef.current = false;
+        setPrepRecapOpening(false);
+      }
+    },
+    [
+      prepCompleted,
+      prepRecapUserId,
+      allTrainingPlans,
+      prepDetectedFinish,
+      displayPlan,
+      logs,
+      healthRuns,
+      recoveryDailyRows,
+      prepRaceDistanceKm,
+    ],
+  );
+  const handlePrepRecapSaveFinish = useCallback(
+    async (finish: FinishTimePatch) => {
+      if (!prepRecapRecord) return;
+      const next = await savePrepRecapFinishTime({
+        store: createPrepRecapStore(prepRecapUserId),
+        record: prepRecapRecord,
+        finish,
+      });
+      setPrepRecapRecord(next);
+    },
+    [prepRecapRecord, prepRecapUserId],
+  );
   const homeOverallPrepLines = useMemo(() => {
     const now = appNow;
     const counts = computePlanDueSessionCounts({ plan: displayPlan, logs, healthRuns, now });
@@ -3872,6 +3980,8 @@ export default function AppMain(){
                   raceDistanceKm={prepRaceDistanceKm}
                   planEndedWithoutRace={prepCompleted.completedBy === "plan_ended"}
                   compact={homeScrollLocked}
+                  onOpenRecap={() => void openPrepRecap("story")}
+                  recapLoading={prepRecapOpening}
                 />
               ) : (
               <>
@@ -4983,6 +5093,12 @@ export default function AppMain(){
                   finish={prepFinishDisplay}
                   raceDistanceKm={prepRaceDistanceKm}
                   completedBy={prepCompleted.completedBy}
+                  onEditFinishTime={() => void openPrepRecap("editTime")}
+                  editFinishTimeLabel={finishTimeActionLabel({
+                    finishTimeSeconds: prepFinishDisplay?.seconds ?? null,
+                    finishTimeConfirmed: prepFinishDisplay?.confirmed ?? false,
+                  })}
+                  editFinishTimeLoading={prepRecapOpening}
                 />
               ) : (
               <MarathonPredictionCard
@@ -6426,6 +6542,17 @@ export default function AppMain(){
           }}
           onTabChange={(tab) => navigateToView(tab)}
         />
+      ) : null}
+
+      {prepRecapOverlay && prepRecapRecord ? (
+        <Suspense fallback={null}>
+          <PrepRecapExperience
+            record={prepRecapRecord}
+            entry={prepRecapOverlay}
+            onSaveFinish={handlePrepRecapSaveFinish}
+            onClose={() => setPrepRecapOverlay(null)}
+          />
+        </Suspense>
       ) : null}
 
       {accountDeleteStep > 0 ? (

@@ -18,6 +18,10 @@ type Props = {
   raceDistanceKm: number | null;
   completedBy: PrepCompletedBy;
   style?: CSSProperties;
+  /** Zielzeit bestätigen/eintragen/bearbeiten; ohne Handler keine Aktion. */
+  onEditFinishTime?: () => void;
+  editFinishTimeLabel?: string;
+  editFinishTimeLoading?: boolean;
 };
 
 /**
@@ -57,6 +61,9 @@ export default function RaceResultCard({
   raceDistanceKm,
   completedBy,
   style,
+  onEditFinishTime,
+  editFinishTimeLabel,
+  editFinishTimeLoading = false,
 }: Props) {
   const dateLabel = formatRaceDateDe(raceYmd);
   const goalLabel = goalSeconds != null ? formatGoalLabel(goalSeconds) : null;
@@ -163,6 +170,31 @@ export default function RaceResultCard({
           ) : null}
         </>
       )}
+      {onEditFinishTime && editFinishTimeLabel && completedBy !== "plan_ended" ? (
+        <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
+          <button
+            type="button"
+            className="dashboard-action"
+            data-testid="race-result-edit-time"
+            onClick={onEditFinishTime}
+            disabled={editFinishTimeLoading}
+            style={{
+              minHeight: 40,
+              padding: "0 18px",
+              borderRadius: 999,
+              border: "1px solid rgba(148,163,184,0.28)",
+              background: "rgba(148,163,184,0.08)",
+              color: "#e2e8f0",
+              fontSize: 13,
+              fontWeight: 750,
+              cursor: editFinishTimeLoading ? "default" : "pointer",
+              opacity: editFinishTimeLoading ? 0.6 : 1,
+            }}
+          >
+            {editFinishTimeLabel}
+          </button>
+        </div>
+      ) : null}
     </SurfaceCard>
   );
 }
