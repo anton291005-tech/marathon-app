@@ -1,6 +1,7 @@
 import type { PlanSession } from "../marathonPrediction";
 import {
   finishTimeSourceNote,
+  formatGoalDelta,
   formatRaceDateDe,
   formatRacePace,
   goalReachedLine,
@@ -42,8 +43,16 @@ describe("raceResultPresentation", () => {
 
   it("zeigt den Abstand nur bei erreichtem Ziel", () => {
     expect(isGoalReached(10000, 10190)).toBe(true);
-    expect(goalReachedLine(10000, 10190)).toBe("3:10 unter deinem Ziel");
+    expect(goalReachedLine(10000, 10190)).toBe("3 Min 10 Sek unter deinem Ziel");
     expect(goalReachedLine(10190, 10190)).toBe("Punktlandung auf dein Ziel");
+  });
+
+  it("schreibt den Abstand in Worten statt als Uhrzeit (kein „3:10“)", () => {
+    expect(goalReachedLine(10190 - 45, 10190)).toBe("45 Sek unter deinem Ziel");
+    expect(goalReachedLine(10190 - 180, 10190)).toBe("3 Min unter deinem Ziel");
+    expect(goalReachedLine(10190 - 190, 10190)).toBe("3 Min 10 Sek unter deinem Ziel");
+    expect(formatGoalDelta(3600 + 5 * 60)).toBe("1 Std 5 Min");
+    expect(formatGoalDelta(0.4)).toBe("0 Sek");
   });
 
   it("formuliert ein verpasstes Ziel nie als Rückstand", () => {

@@ -23,6 +23,7 @@ const slides = buildRecapSlides({
   raceName: "Warschau Marathon",
   finishSeconds: 10000,
   finishConfirmed: true,
+  todayYmd: "2026-09-30",
 });
 // intro, volume, sessions, race, outro
 
@@ -120,6 +121,7 @@ describe("PrepRecapStory", () => {
       raceName: "Warschau Marathon",
       finishSeconds: 11637,
       finishConfirmed: true,
+      todayYmd: "2026-09-30",
     });
     const raceIndex = missed.findIndex((s) => s.id === "race");
     render(<PrepRecapStory slides={missed} initialIndex={raceIndex} onClose={jest.fn()} />);

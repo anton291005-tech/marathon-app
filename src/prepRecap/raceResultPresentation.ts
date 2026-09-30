@@ -81,11 +81,20 @@ export function isGoalReached(finishSeconds: number, goalSeconds: number | null)
   return goalSeconds != null && goalSeconds > 0 && finishSeconds <= goalSeconds;
 }
 
-function formatDelta(seconds: number): string {
+/**
+ * Abstand in Worten („3 Min 10 Sek"), nie als „3:10" — das liest sich neben einer
+ * Marathonzeit wie eine Stundenzeit. Nullteile entfallen („3 Min", „45 Sek").
+ */
+export function formatGoalDelta(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
-  if (s >= 3600) return formatDuration(s);
-  const m = Math.floor(s / 60);
-  return `${m}:${String(s % 60).padStart(2, "0")}`;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h} Std`);
+  if (m > 0) parts.push(`${m} Min`);
+  if (sec > 0 || parts.length === 0) parts.push(`${sec} Sek`);
+  return parts.join(" ");
 }
 
 /** Nur bei erreichtem Ziel eine Zeile, sonst null (siehe Modulkommentar). */
@@ -93,5 +102,5 @@ export function goalReachedLine(finishSeconds: number, goalSeconds: number | nul
   if (!isGoalReached(finishSeconds, goalSeconds)) return null;
   const delta = (goalSeconds as number) - finishSeconds;
   if (Math.round(delta) === 0) return "Punktlandung auf dein Ziel";
-  return `${formatDelta(delta)} unter deinem Ziel`;
+  return `${formatGoalDelta(delta)} unter deinem Ziel`;
 }

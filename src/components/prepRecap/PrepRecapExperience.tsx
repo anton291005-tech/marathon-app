@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { getAppTodayYmd } from "../../core/time/timeSystem";
 import type { FinishTimePatch, PrepRecapRecord } from "../../prepRecap/prepRecapRecord";
 import { buildRecapSlides } from "./buildRecapSlides";
 import { finishTimeActionLabel } from "./finishTimeActionLabel";
@@ -48,6 +49,7 @@ export default function PrepRecapExperience({ record, entry, onSaveFinish, onClo
         raceName: record.raceName ?? record.stats.race.name,
         finishSeconds: record.finishTimeSeconds,
         finishConfirmed: record.finishTimeConfirmed,
+        todayYmd: getAppTodayYmd(),
       }),
     [record],
   );

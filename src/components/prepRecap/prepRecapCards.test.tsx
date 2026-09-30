@@ -47,7 +47,7 @@ describe("PrepCompleteHeroCard", () => {
 
   it("feiert ein erreichtes Ziel", () => {
     render(<PrepCompleteHeroCard {...base} finish={{ seconds: 10000, confirmed: true }} />);
-    expect(screen.getByText("3:10 unter deinem Ziel")).toBeInTheDocument();
+    expect(screen.getByText("3 Min 10 Sek unter deinem Ziel")).toBeInTheDocument();
     expect(screen.getByText("3:57/km")).toBeInTheDocument();
   });
 });

@@ -4,13 +4,12 @@
  * Regeln:
  * - Eine Aussage pro Slide, eine Kernzahl (oder eine Visualisierung) pro Slide.
  * - Slides ohne Daten entfallen (der Snapshot setzt leere Blöcke auf null) — nie „0" oder „0 von X".
- * - Ein gelaufenes Rennen wird immer gefeiert; ein Abstand zum Ziel erscheint nur bei erreichtem
- *   Ziel. Bei verpasstem Ziel bleibt die Zielvorgabe reiner Kontext (siehe raceResultPresentation).
+ * - Ein gelaufenes Rennen wird immer gefeiert. Die Zielvorgabe erscheint auf der Renn-Slide nur bei
+ *   erreichtem Ziel (als Abstand); verpasst oder ohne Zeit steht sie dort gar nicht.
  * - Ist nur das Renndatum vorbei (kein Haken, keine Zeit), wird kein Lauf behauptet: keine Renn-Slide.
  */
 
 import type { PrepRecapStats } from "../../prepRecap/buildPrepRecapSnapshot";
-import { formatGoalLabel } from "../../prepRecap/prepCompletionState";
 import {
   finishTimeSourceNote,
   formatFinishTime,
@@ -62,7 +61,12 @@ export type RecapSlidesInput = {
   raceName: string | null;
   finishSeconds: number | null;
   finishConfirmed: boolean;
+  /** Heute (YYYY-MM-DD) — entscheidet, ob das Outro noch von Erholung spricht. */
+  todayYmd: string;
 };
+
+/** Bis so viele Tage nach dem Rennen spricht das Outro von Erholung (Tag 0 = Renntag). */
+export const RECOVERY_WINDOW_DAYS = 14;
 
 /** Ab so vielen Trainingstagen lohnt die Serie eine eigene Slide. */
 export const MIN_STREAK_DAYS_FOR_SLIDE = 3;
@@ -133,6 +137,30 @@ function dateRangeLabel(fromYmd: string, toYmd: string): string | null {
 function joinDetail(parts: Array<string | null | undefined>): string | null {
   const kept = parts.filter((p): p is string => typeof p === "string" && p.length > 0);
   return kept.length > 0 ? kept.join(" · ") : null;
+}
+
+function ymdToUtcDay(ymd: string): number | null {
+  const m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) / 86_400_000;
+}
+
+/**
+ * Liegt heute noch im Erholungsfenster nach dem Rennen (0 … RECOVERY_WINDOW_DAYS Tage danach)?
+ * Der Rückblick ist Monate später noch aus den Einstellungen erreichbar — dann passt „Jetzt ist
+ * Erholung dran." nicht mehr. Ungültige Daten → false (zeitloser Text ist immer richtig).
+ */
+export function isWithinRecoveryWindow(raceYmd: string, todayYmd: string): boolean {
+  const race = ymdToUtcDay(raceYmd);
+  const today = ymdToUtcDay(todayYmd);
+  if (race == null || today == null) return false;
+  const days = today - race;
+  return days >= 0 && days <= RECOVERY_WINDOW_DAYS;
+}
+
+/** „1 Phase, ein Ziel." / „3 Phasen, ein Ziel." */
+export function phasesHeadline(count: number): string {
+  return `${count} ${count === 1 ? "Phase" : "Phasen"}, ein Ziel.`;
 }
 
 /** Hat der Athlet das Rennen gelaufen? Zeit bekannt oder Rennen abgehakt. */
@@ -206,7 +234,6 @@ function raceSlide(input: RecapSlidesInput): RecapSlide | null {
   if (!recapRaceWasRun(stats, finishSeconds)) return null;
   const eyebrow = raceName ?? "Renntag";
   const headline = finisherLabel(race.distanceKm);
-  const goalLabel = race.goalSeconds != null ? formatGoalLabel(race.goalSeconds) : null;
 
   if (finishSeconds == null) {
     return {
@@ -216,7 +243,7 @@ function raceSlide(input: RecapSlidesInput): RecapSlide | null {
       heroUnit: "km",
       headline,
       subline: "Die ganze Distanz. Bis ins Ziel.",
-      detail: goalLabel,
+      detail: null,
       celebration: "base",
     };
   }
@@ -230,8 +257,8 @@ function raceSlide(input: RecapSlidesInput): RecapSlide | null {
     hero: { kind: "duration", seconds: finishSeconds },
     headline,
     subline: reached ? goalReachedLine(finishSeconds, race.goalSeconds) : "Die ganze Distanz. Bis ins Ziel.",
-    // Verpasst: Zielvorgabe nur als Kontext, nie als Abstand.
-    detail: joinDetail([pace, reached ? null : goalLabel, sourceNote]),
+    // Ziel nur als Abstand bei erreichtem Ziel (subline); verpasst → keine Zielzeile.
+    detail: joinDetail([pace, sourceNote]),
     celebration: reached ? "goal" : "base",
   };
 }
@@ -248,11 +275,20 @@ function outroSlide(input: RecapSlidesInput): RecapSlide {
 
   const ran = recapRaceWasRun(stats, finishSeconds);
   const base = { id: "outro" as const, eyebrow: "Das bleibt", hero: null, detail: null, celebration: null, summary };
-  if (ran) {
+  if (ran && isWithinRecoveryWindow(stats.race.ymd, input.todayYmd)) {
     return {
       ...base,
       headline: "Jetzt ist Erholung dran.",
       subline: "Die nächsten Tage gehören der Regeneration. Du hast sie dir verdient.",
+    };
+  }
+  if (ran) {
+    // Eyebrow weicht aus, damit „Das bleibt" nicht doppelt über der Headline steht.
+    return {
+      ...base,
+      eyebrow: "Deine Vorbereitung",
+      headline: "Das bleibt.",
+      subline: "Jede Woche davon steckt jetzt in deinen Beinen.",
     };
   }
   return {
@@ -323,7 +359,7 @@ export function buildRecapSlides(input: RecapSlidesInput): RecapSlide[] {
       id: "phases",
       eyebrow: "Die Reise",
       hero: null,
-      headline: `${stats.phases.length} Phasen, ein Ziel.`,
+      headline: phasesHeadline(stats.phases.length),
       subline: "Vom Fundament bis zum Feinschliff.",
       detail: null,
       celebration: null,
