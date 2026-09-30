@@ -52,6 +52,26 @@ describe("PrepCompleteHeroCard", () => {
   });
 });
 
+describe("PrepCompleteHeroCard — Neue Vorbereitung", () => {
+  it("bietet den Start nur mit Handler an", () => {
+    const onStartNewPrep = jest.fn();
+    const { rerender } = render(<PrepCompleteHeroCard {...base} finish={null} />);
+    expect(screen.queryByTestId("prep-start-new")).toBeNull();
+    rerender(<PrepCompleteHeroCard {...base} finish={null} onStartNewPrep={onStartNewPrep} />);
+    fireEvent.click(screen.getByRole("button", { name: "Neue Vorbereitung starten" }));
+    expect(onStartNewPrep).toHaveBeenCalledTimes(1);
+  });
+
+  it("sperrt während der Snapshot gesichert wird und zeigt einen Abbruch verständlich an", () => {
+    const { rerender } = render(<PrepCompleteHeroCard {...base} finish={null} onStartNewPrep={jest.fn()} newPrepStarting />);
+    expect(screen.getByTestId("prep-start-new")).toBeDisabled();
+    rerender(
+      <PrepCompleteHeroCard {...base} finish={null} onStartNewPrep={jest.fn()} newPrepError="Es wurde nichts verändert." />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Es wurde nichts verändert.");
+  });
+});
+
 describe("RaceResultCard", () => {
   const done = { ...base, completedBy: "race_done" as const };
 

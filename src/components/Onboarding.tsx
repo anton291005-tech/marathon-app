@@ -163,9 +163,14 @@ export type OnboardingProps = {
   ) => void | Promise<void>;
   /** Supabase-User-ID für Kalender-Import/Preset-Writes in Schritt 4 (Nutzer ist beim Onboarding bereits authentifiziert). */
   userId?: string | null;
+  /**
+   * Wizard ohne Ergebnis verlassen (neuer Plan / neue Vorbereitung). Ohne Handler kein Button —
+   * das Erst-Onboarding ist nicht abbrechbar.
+   */
+  onCancel?: () => void;
 };
 
-export function Onboarding({ onComplete, userId = null }: OnboardingProps) {
+export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingProps) {
   const { t } = useTranslation();
   const [step, setStep] = useState<OnboardingStep>(1);
   const [shortcutId, setShortcutId] = useState<DistanceShortcutId | null>(null);
@@ -520,6 +525,7 @@ export function Onboarding({ onComplete, userId = null }: OnboardingProps) {
         phase={planGenPhase}
         errorMessage={generateError}
         onRetry={() => void handleFinish()}
+        onCancel={onCancel}
       />
     );
   }
@@ -1160,6 +1166,28 @@ export function Onboarding({ onComplete, userId = null }: OnboardingProps) {
             </button>
           )}
         </div>
+
+        {onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isGenerating}
+            style={{
+              display: "block",
+              margin: "14px auto 0",
+              padding: "8px 12px",
+              fontSize: 14,
+              fontWeight: 600,
+              border: "none",
+              background: "transparent",
+              color: "var(--text-secondary)",
+              cursor: isGenerating ? "not-allowed" : "pointer",
+              opacity: isGenerating ? 0.6 : 1,
+            }}
+          >
+            Abbrechen
+          </button>
+        ) : null}
       </div>
     </div>
   );

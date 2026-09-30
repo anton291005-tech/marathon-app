@@ -21,11 +21,17 @@ type Props = {
   onOpenRecap?: () => void;
   /** Snapshot wird gerade angelegt/geladen. */
   recapLoading?: boolean;
+  /** „Neue Vorbereitung starten" (Snapshot → Wizard → Archivierung); ohne Handler keine Aktion. */
+  onStartNewPrep?: () => void;
+  /** Snapshot für die neue Vorbereitung wird gerade gesichert. */
+  newPrepStarting?: boolean;
+  /** Verständliche Meldung, wenn der Start abgebrochen wurde (nichts verändert). */
+  newPrepError?: string | null;
 };
 
 /**
  * Home im Zustand „Vorbereitung abgeschlossen" — ersetzt den Ruhetag-Fallback.
- * Einzige Aktion ist „Rückblick ansehen"; „Neue Vorbereitung starten" kommt mit der Archivierung.
+ * Aktionen: „Rückblick ansehen" und (dezenter) „Neue Vorbereitung starten".
  */
 export default function PrepCompleteHeroCard({
   raceName,
@@ -37,6 +43,9 @@ export default function PrepCompleteHeroCard({
   compact = false,
   onOpenRecap,
   recapLoading = false,
+  onStartNewPrep,
+  newPrepStarting = false,
+  newPrepError = null,
 }: Props) {
   const dateLabel = formatRaceDateDe(raceYmd);
   const title = raceName ?? (planEndedWithoutRace ? "Dein Trainingsplan" : "Dein Rennen");
@@ -135,6 +144,40 @@ export default function PrepCompleteHeroCard({
         >
           {recapLoading ? "Rückblick wird vorbereitet …" : "Rückblick ansehen"}
         </button>
+      ) : null}
+      {onStartNewPrep ? (
+        <button
+          type="button"
+          data-testid="prep-start-new"
+          onClick={onStartNewPrep}
+          disabled={newPrepStarting || recapLoading}
+          aria-busy={newPrepStarting}
+          style={{
+            marginTop: compact ? 2 : 4,
+            minHeight: compact ? 34 : 40,
+            padding: "0 16px",
+            border: "none",
+            background: "transparent",
+            color: "rgba(226,232,240,0.85)",
+            fontSize: compact ? 12 : 13,
+            fontWeight: 700,
+            textDecoration: "underline",
+            textUnderlineOffset: 3,
+            cursor: newPrepStarting || recapLoading ? "default" : "pointer",
+            opacity: newPrepStarting || recapLoading ? 0.6 : 1,
+          }}
+        >
+          {newPrepStarting ? "Rückblick wird gesichert …" : "Neue Vorbereitung starten"}
+        </button>
+      ) : null}
+      {newPrepError ? (
+        <div
+          role="alert"
+          data-testid="prep-start-new-error"
+          style={{ fontSize: 12, fontWeight: 600, color: "#fca5a5", lineHeight: 1.4, maxWidth: 320 }}
+        >
+          {newPrepError}
+        </div>
       ) : null}
     </div>
   );

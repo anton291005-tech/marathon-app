@@ -161,3 +161,22 @@ export async function updatePrepRecapFinishTime(
   }
   return true;
 }
+
+/**
+ * Verknüpft den Rückblick eines Renntags mit dem Plan, der gleich archiviert wird — darüber findet
+ * „Meine Trainingspläne" den Rückblick zum archivierten Plan wieder. true nur, wenn eine Zeile
+ * tatsächlich geändert wurde (ein Update ohne Treffer ist in Postgres kein Fehler).
+ */
+export async function linkPrepRecapToPlan(userId: string, raceDate: string, planId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from(TABLE)
+    .update({ plan_id: planId })
+    .eq("user_id", userId)
+    .eq("race_date", raceDate)
+    .select("id");
+  if (error) {
+    warnDev("linkPrepRecapToPlan", error.message);
+    return false;
+  }
+  return Array.isArray(data) && data.length > 0;
+}

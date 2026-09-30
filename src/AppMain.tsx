@@ -48,7 +48,9 @@ import { finishTimeActionLabel } from "./components/prepRecap/finishTimeActionLa
 import type { PrepRecapEntry } from "./components/prepRecap/PrepRecapExperience";
 import { getPrepCompletionState } from "./prepRecap/prepCompletionState";
 import { detectRaceFinishTime } from "./prepRecap/detectRaceFinishTime";
-import { resolveRaceDistanceKm } from "./prepRecap/raceResultPresentation";
+import { formatRaceDateDe, resolveRaceDistanceKm } from "./prepRecap/raceResultPresentation";
+import { useNewPrepFlow } from "./prepRecap/useNewPrepFlow";
+import { runOnboardingCompletion } from "./prepRecap/newPrepFlow";
 import { buildPrepRecapSnapshot } from "./prepRecap/buildPrepRecapSnapshot";
 import {
   createPrepRecapStore,
@@ -57,7 +59,7 @@ import {
   savePrepRecapFinishTime,
 } from "./prepRecap/ensurePrepRecapSnapshot";
 import { pickPrepRecapForDisplay, type FinishTimePatch, type PrepRecapRecord } from "./prepRecap/prepRecapRecord";
-import { loadPrepRecaps } from "./lib/supabase/services/prepRecapService";
+import { linkPrepRecapToPlan, loadPrepRecaps } from "./lib/supabase/services/prepRecapService";
 import RaceCalculator from "./components/RaceCalculator";
 import SurfaceCard from "./components/SurfaceCard";
 import { AccountDeleteDialog } from "./components/AccountDeleteDialog";
@@ -142,14 +144,18 @@ import { buildWeekCalendarReassignmentBatchAction } from "./ai/mutations/buildWe
 import AiActionCard from "./components/ai/AiActionCard";
 import { loadSessionLogs, saveSessionLog } from "./lib/supabase/services/sessionLogsService";
 import {
+  archiveTrainingPlan,
   deletePlan,
   loadAllTrainingPlans,
+  loadArchivedTrainingPlans,
   loadTrainingPlan,
+  MAX_ACTIVE_PLANS,
+  restoreArchivedTrainingPlan,
   saveTrainingPlan,
   setActivePlan,
   type TrainingPlanListItem,
 } from "./lib/supabase/services/trainingPlanService";
-import { PlanSwitcher } from "./components/PlanSwitcher";
+import { PlanSwitcher, type ArchivedPrepListItem } from "./components/PlanSwitcher";
 import { loadHealthWorkouts, saveHealthWorkout } from "./lib/supabase/services/healthWorkoutsService";
 import { loadRecoveryDaily, saveRecoveryDay } from "./lib/supabase/services/recoveryDailyService";
 import { loadCoachMemory } from "./lib/supabase/services/coachMemoryService";
@@ -3008,35 +3014,52 @@ export default function AppMain(){
     }
     return prepDetectedFinish ? { seconds: prepDetectedFinish.seconds, confirmed: false } : null;
   }, [prepCompleted, prepRecapRecord, prepDetectedFinish]);
-  /** „Rückblick ansehen" / Zeit bearbeiten: Snapshot sicherstellen (einmal anlegen), dann Overlay öffnen. */
+  const activePlanId = allTrainingPlans.find((item) => item.is_active)?.id ?? null;
+  /** Snapshot der abgeschlossenen Vorbereitung sicherstellen (beim ersten Aufruf EINMAL anlegen). */
+  const ensureCurrentPrepSnapshot = useCallback(async (): Promise<PrepRecapRecord> => {
+    if (!prepCompleted) throw new Error("Vorbereitung ist nicht abgeschlossen");
+    const completed = prepCompleted;
+    const record = await ensurePrepRecapSnapshot({
+      store: createPrepRecapStore(prepRecapUserId),
+      planId: activePlanId,
+      raceName: completed.raceName,
+      raceDate: completed.raceYmd,
+      detectedFinish: prepDetectedFinish,
+      buildStats: () =>
+        buildPrepRecapSnapshot({
+          plan: displayPlan,
+          logs,
+          healthRuns,
+          recoveryDailyRows,
+          raceSession: completed.raceSession,
+          raceYmd: completed.raceYmd,
+          raceName: completed.raceName,
+          raceDistanceKm: prepRaceDistanceKm,
+          goalSeconds: completed.goalSeconds,
+          completedBy: completed.completedBy,
+        }),
+    });
+    setPrepRecapRecord(record);
+    return record;
+  }, [
+    prepCompleted,
+    prepRecapUserId,
+    activePlanId,
+    prepDetectedFinish,
+    displayPlan,
+    logs,
+    healthRuns,
+    recoveryDailyRows,
+    prepRaceDistanceKm,
+  ]);
+  /** „Rückblick ansehen" / Zeit bearbeiten: Snapshot sicherstellen, dann Overlay öffnen. */
   const openPrepRecap = useCallback(
     async (entry: PrepRecapEntry) => {
       if (!prepCompleted || prepRecapOpeningRef.current) return;
-      const completed = prepCompleted;
       prepRecapOpeningRef.current = true;
       setPrepRecapOpening(true);
       try {
-        const record = await ensurePrepRecapSnapshot({
-          store: createPrepRecapStore(prepRecapUserId),
-          planId: allTrainingPlans.find((item) => item.is_active)?.id ?? null,
-          raceName: completed.raceName,
-          raceDate: completed.raceYmd,
-          detectedFinish: prepDetectedFinish,
-          buildStats: () =>
-            buildPrepRecapSnapshot({
-              plan: displayPlan,
-              logs,
-              healthRuns,
-              recoveryDailyRows,
-              raceSession: completed.raceSession,
-              raceYmd: completed.raceYmd,
-              raceName: completed.raceName,
-              raceDistanceKm: prepRaceDistanceKm,
-              goalSeconds: completed.goalSeconds,
-              completedBy: completed.completedBy,
-            }),
-        });
-        setPrepRecapRecord(record);
+        await ensureCurrentPrepSnapshot();
         setPrepRecapOverlay(entry);
       } catch (error) {
         if (process.env.NODE_ENV === "development") {
@@ -3048,17 +3071,83 @@ export default function AppMain(){
         setPrepRecapOpening(false);
       }
     },
-    [
-      prepCompleted,
-      prepRecapUserId,
-      allTrainingPlans,
-      prepDetectedFinish,
-      displayPlan,
-      logs,
-      healthRuns,
-      recoveryDailyRows,
-      prepRaceDistanceKm,
-    ],
+    [prepCompleted, ensureCurrentPrepSnapshot],
+  );
+  /**
+   * „Neue Vorbereitung starten": Snapshot → Merker → Wizard → beim Abschluss archivieren, dann
+   * neuen Plan anlegen (Reihenfolge und Abbruchpfade siehe prepRecap/newPrepFlow.ts).
+   */
+  const newPrep = useNewPrepFlow({
+    getPlanIdToArchive: () => activePlanId,
+    ensureSnapshot: ensureCurrentPrepSnapshot,
+    linkSnapshotToPlan: (raceDate, planId) =>
+      prepRecapUserId ? linkPrepRecapToPlan(prepRecapUserId, raceDate, planId) : Promise.resolve(false),
+    archivePlan: (planId) => {
+      if (!prepRecapUserId) return Promise.reject(new Error("Nicht angemeldet"));
+      return archiveTrainingPlan(prepRecapUserId, planId);
+    },
+    restorePlan: (planId, previous) => {
+      if (!prepRecapUserId) return Promise.reject(new Error("Nicht angemeldet"));
+      return restoreArchivedTrainingPlan(prepRecapUserId, planId, previous);
+    },
+  });
+  const startNewPrep = newPrep.start;
+  const completeNewPrep = newPrep.complete;
+  const newPrepPendingRef = newPrep.pendingRef;
+
+  /** Abgeschlossene Vorbereitungen (archivierte Pläne) + ihre Rückblicke für „Meine Trainingspläne". */
+  const [archivedTrainingPlans, setArchivedTrainingPlans] = useState<TrainingPlanListItem[]>([]);
+  const [archivedPrepRecaps, setArchivedPrepRecaps] = useState<PrepRecapRecord[]>([]);
+  const [archivedRecapOpen, setArchivedRecapOpen] = useState<PrepRecapRecord | null>(null);
+  const refreshArchivedPreps = useCallback(async () => {
+    if (!prepRecapUserId) {
+      setArchivedTrainingPlans([]);
+      setArchivedPrepRecaps([]);
+      return;
+    }
+    const [plans, recaps] = await Promise.all([
+      loadArchivedTrainingPlans(prepRecapUserId),
+      loadPrepRecaps(prepRecapUserId),
+    ]);
+    setArchivedTrainingPlans(plans);
+    if (recaps) setArchivedPrepRecaps(recaps);
+  }, [prepRecapUserId]);
+  useEffect(() => {
+    void refreshArchivedPreps();
+  }, [refreshArchivedPreps]);
+  const archivedPrepItems = useMemo<ArchivedPrepListItem[]>(
+    () =>
+      archivedTrainingPlans.map((plan) => {
+        const recap = archivedPrepRecaps.find((r) => r.planId === plan.id) ?? null;
+        return {
+          planId: plan.id,
+          name: recap?.raceName ?? plan.plan_name,
+          dateLabel: recap ? formatRaceDateDe(recap.raceDate) : null,
+          canOpen: recap != null,
+        };
+      }),
+    [archivedTrainingPlans, archivedPrepRecaps],
+  );
+  /** Aus dem Archiv geöffnet: gespeicherter Snapshot, nie neu gebaut (die Logs sind inzwischen gekürzt). */
+  const openArchivedPrepRecap = useCallback(
+    (planId: string) => {
+      const recap = archivedPrepRecaps.find((r) => r.planId === planId) ?? null;
+      if (recap) setArchivedRecapOpen(recap);
+    },
+    [archivedPrepRecaps],
+  );
+  const handleArchivedRecapSaveFinish = useCallback(
+    async (finish: FinishTimePatch) => {
+      if (!archivedRecapOpen) return;
+      const next = await savePrepRecapFinishTime({
+        store: createPrepRecapStore(prepRecapUserId),
+        record: archivedRecapOpen,
+        finish,
+      });
+      setArchivedRecapOpen(next);
+      setArchivedPrepRecaps((list) => list.map((r) => (r.raceDate === next.raceDate ? next : r)));
+    },
+    [archivedRecapOpen, prepRecapUserId],
   );
   const handlePrepRecapSaveFinish = useCallback(
     async (finish: FinishTimePatch) => {
@@ -3313,8 +3402,9 @@ export default function AppMain(){
     }
   }, [resetOnboardingFlag]);
   const onboardingHydrationReady = planRemoteReady && prefsRemoteReady;
+  const newPrepWizardOpen = newPrep.wizardOpen;
   const showOnboarding = useMemo(() => {
-    if (onboardingForNewPlan) return true;
+    if (onboardingForNewPlan || newPrepWizardOpen) return true;
     if (!onboardingHydrationReady) return false;
     return needsOnboarding({
       prefs: preferences,
@@ -3324,6 +3414,7 @@ export default function AppMain(){
   }, [
     onboardingHydrationReady,
     onboardingForNewPlan,
+    newPrepWizardOpen,
     preferences,
     hasUserTrainingPlan,
     resetOnboardingFlag,
@@ -3363,9 +3454,16 @@ export default function AppMain(){
   );
 
   const handleAddNewPlan = useCallback(() => {
-    if (allTrainingPlans.length >= 5) return;
+    if (allTrainingPlans.length >= MAX_ACTIVE_PLANS) return;
     setOnboardingForNewPlan(true);
   }, [allTrainingPlans.length]);
+
+  /** Wizard abbrechen („Neuer Trainingsplan" / „Neue Vorbereitung"): nichts ändern, Merker zurücksetzen. */
+  const cancelNewPrep = newPrep.cancel;
+  const handleOnboardingCancel = useCallback(() => {
+    setOnboardingForNewPlan(false);
+    cancelNewPrep();
+  }, [cancelNewPrep]);
 
   const handleDeletePlan = useCallback(
     async (planId: string) => {
@@ -3417,77 +3515,100 @@ export default function AppMain(){
     async (patch, plan, patches, planName?: string) => {
       // eslint-disable-next-line no-console
       console.log("[AppMain] handleOnboardingComplete called, plan:", !!plan, "patches:", patches?.length);
-      try {
-        setOnboardingForNewPlan(false);
-        skipRemotePlanHydrationRef.current = true;
-        skipRemotePatchesHydrationRef.current = true;
-        skipRemotePrefsHydrationRef.current = true;
+      const planLabel =
+        planName?.trim() ||
+        [patch?.raceDistanceLabel ?? "Marathon", patch?.raceName, patch?.raceDate].filter(Boolean).join(" – ");
 
-        const isolatedPrefs = buildIsolatedOnboardingPreferences(patch);
-        const detachedLogs = detachSessionLogsFromPlan(logs, plan);
+      // „Neue Vorbereitung starten": ZUERST remote alten Plan archivieren und neuen anlegen, erst dann
+      // lokal umstellen (Preferences ersetzen, Logs kürzen). Scheitert das, wirft der Handler: der
+      // Wizard zeigt den Fehler (erneut versuchen / abbrechen), lokal und remote bleibt alles beim Alten.
+      await runOnboardingCompletion({
+        newPrepPending: newPrepPendingRef.current != null,
+        userId: user?.id ?? null,
+        plan: plan ? normalizeTrainingPlan(plan) : null,
+        isPlanUsable: (p) => validateTrainingPlanV2Integrity(p) && p.workouts.length > 0,
+        completeNewPrep,
+        insertNewPlan: (userId, p) => saveTrainingPlan(userId, p, planLabel || "Neue Vorbereitung"),
+        applyLocally: async ({ savedRemotely }) => {
+          if (savedRemotely) void refreshArchivedPreps();
+          try {
+            setOnboardingForNewPlan(false);
+            skipRemotePlanHydrationRef.current = true;
+            skipRemotePatchesHydrationRef.current = true;
+            skipRemotePrefsHydrationRef.current = true;
 
-        if (typeof localStorage !== "undefined") {
-          localStorage.removeItem(RESET_ONBOARDING_STORAGE_KEY);
-          localStorage.removeItem(MIGRATION_TO_SUPABASE_DONE_KEY);
-          localStorage.removeItem(SESSION_LOGS_MIGRATION_DONE_KEY);
-          localStorage.setItem(MARATHON_AI_PLAN_PATCHES_KEY, JSON.stringify([]));
-          localStorage.setItem(MARATHON_PREFERENCES_KEY, JSON.stringify(isolatedPrefs));
-          localStorage.setItem(MARATHON_LOGS_KEY, JSON.stringify(detachedLogs));
-          if (plan && validateTrainingPlanV2Integrity(normalizeTrainingPlan(plan))) {
-            localStorage.setItem(
-              TRAINING_PLAN_V2_STORAGE_KEY,
-              JSON.stringify(normalizeTrainingPlan(plan)),
-            );
-          }
-        }
+            const isolatedPrefs = buildIsolatedOnboardingPreferences(patch);
+            const detachedLogs = detachSessionLogsFromPlan(logs, plan);
 
-        setAiPlanPatches([]);
-        setLogs(detachedLogs);
-        setPreferences(isolatedPrefs);
-        if (user?.id) {
-          void saveProfile(user.id, isolatedPrefs);
-          // Onboarding-Schritt 4 (Kalender/Preset) schreibt Blöcke während des Onboardings —
-          // ohne Reload wären sie erst nach App-Neustart im State sichtbar.
-          void loadWeeklyScheduleBlocks(user.id).then((blocks) => {
-            if (blocks) setScheduleBlocks(blocks);
-          });
-        }
+            if (typeof localStorage !== "undefined") {
+              localStorage.removeItem(RESET_ONBOARDING_STORAGE_KEY);
+              localStorage.removeItem(MIGRATION_TO_SUPABASE_DONE_KEY);
+              localStorage.removeItem(SESSION_LOGS_MIGRATION_DONE_KEY);
+              localStorage.setItem(MARATHON_AI_PLAN_PATCHES_KEY, JSON.stringify([]));
+              localStorage.setItem(MARATHON_PREFERENCES_KEY, JSON.stringify(isolatedPrefs));
+              localStorage.setItem(MARATHON_LOGS_KEY, JSON.stringify(detachedLogs));
+              if (plan && validateTrainingPlanV2Integrity(normalizeTrainingPlan(plan))) {
+                localStorage.setItem(
+                  TRAINING_PLAN_V2_STORAGE_KEY,
+                  JSON.stringify(normalizeTrainingPlan(plan)),
+                );
+              }
+            }
 
-        if (plan) {
-          const normalizedPlan = normalizeTrainingPlan(plan);
-          if (validateTrainingPlanV2Integrity(normalizedPlan) && normalizedPlan.workouts.length > 0) {
-            setTrainingPlanV2(normalizedPlan);
-            setHasUserTrainingPlan(true);
+            setAiPlanPatches([]);
+            setLogs(detachedLogs);
+            setPreferences(isolatedPrefs);
             if (user?.id) {
-              const label =
-                planName?.trim() ||
-                [patch?.raceDistanceLabel ?? "Marathon", patch?.raceName, patch?.raceDate]
-                  .filter(Boolean)
-                  .join(" – ");
-              await saveTrainingPlan(user.id, normalizedPlan, label || undefined);
-              await refreshAllTrainingPlans();
+              void saveProfile(user.id, isolatedPrefs);
+              // Onboarding-Schritt 4 (Kalender/Preset) schreibt Blöcke während des Onboardings —
+              // ohne Reload wären sie erst nach App-Neustart im State sichtbar.
+              void loadWeeklyScheduleBlocks(user.id).then((blocks) => {
+                if (blocks) setScheduleBlocks(blocks);
+              });
             }
-            // eslint-disable-next-line no-console
-            console.log("[AppMain] saveTrainingPlan done");
-            if (patches?.length) {
-              handleAiApplyPlanPatches("", null, patches);
-            }
-          } else {
-            // eslint-disable-next-line no-console
-            console.error("[ONBOARDING] generated plan failed integrity check");
-          }
-        }
 
-        if (typeof localStorage !== "undefined") {
-          localStorage.setItem(MIGRATION_TO_SUPABASE_DONE_KEY, "1");
-          localStorage.setItem(SESSION_LOGS_MIGRATION_DONE_KEY, "1");
-        }
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error("[AppMain] handleOnboardingComplete error:", e);
-      }
+            if (plan) {
+              const normalizedPlan = normalizeTrainingPlan(plan);
+              if (validateTrainingPlanV2Integrity(normalizedPlan) && normalizedPlan.workouts.length > 0) {
+                setTrainingPlanV2(normalizedPlan);
+                setHasUserTrainingPlan(true);
+                if (user?.id) {
+                  if (!savedRemotely) {
+                    await saveTrainingPlan(user.id, normalizedPlan, planLabel || undefined);
+                  }
+                  await refreshAllTrainingPlans();
+                }
+                // eslint-disable-next-line no-console
+                console.log("[AppMain] saveTrainingPlan done");
+                if (patches?.length) {
+                  handleAiApplyPlanPatches("", null, patches);
+                }
+              } else {
+                // eslint-disable-next-line no-console
+                console.error("[ONBOARDING] generated plan failed integrity check");
+              }
+            }
+
+            if (typeof localStorage !== "undefined") {
+              localStorage.setItem(MIGRATION_TO_SUPABASE_DONE_KEY, "1");
+              localStorage.setItem(SESSION_LOGS_MIGRATION_DONE_KEY, "1");
+            }
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.error("[AppMain] handleOnboardingComplete error:", e);
+          }
+        },
+      });
     },
-    [handleAiApplyPlanPatches, logs, refreshAllTrainingPlans, user?.id],
+    [
+      handleAiApplyPlanPatches,
+      logs,
+      refreshAllTrainingPlans,
+      user?.id,
+      newPrepPendingRef,
+      completeNewPrep,
+      refreshArchivedPreps,
+    ],
   );
   const postWorkoutMaxHeartRateBpm = (() => {
     const raw = preferences?.maxHeartRateBpm ?? preferencesRef.current?.maxHeartRateBpm;
@@ -3982,6 +4103,9 @@ export default function AppMain(){
                   compact={homeScrollLocked}
                   onOpenRecap={() => void openPrepRecap("story")}
                   recapLoading={prepRecapOpening}
+                  onStartNewPrep={prepRecapUserId ? () => void startNewPrep() : undefined}
+                  newPrepStarting={newPrep.starting}
+                  newPrepError={newPrep.error}
                 />
               ) : (
               <>
@@ -5522,7 +5646,7 @@ export default function AppMain(){
 
           <CollapsibleSettingsCard
             title="Meine Trainingspläne"
-            subtitle={`${allTrainingPlans.length}/5 Pläne`}
+            subtitle={`${allTrainingPlans.length}/${MAX_ACTIVE_PLANS} Pläne`}
             expanded={settingsCards.trainingPlans}
             onToggle={() => toggleSettingsCard("trainingPlans")}
           >
@@ -5531,6 +5655,9 @@ export default function AppMain(){
               onSwitch={(planId) => void handleSwitchPlan(planId)}
               onAddNew={handleAddNewPlan}
               onDelete={(planId) => void handleDeletePlan(planId)}
+              maxPlans={MAX_ACTIVE_PLANS}
+              archivedPreps={archivedPrepItems}
+              onOpenArchived={openArchivedPrepRecap}
             />
           </CollapsibleSettingsCard>
 
@@ -6531,7 +6658,11 @@ export default function AppMain(){
       ))}
 
       {showOnboarding ? (
-        <Onboarding onComplete={handleOnboardingComplete} userId={user?.id ?? null} />
+        <Onboarding
+          onComplete={handleOnboardingComplete}
+          userId={user?.id ?? null}
+          onCancel={onboardingForNewPlan || newPrepWizardOpen ? handleOnboardingCancel : undefined}
+        />
       ) : null}
 
       {!showOnboarding && showTour && user ? (
@@ -6551,6 +6682,27 @@ export default function AppMain(){
             entry={prepRecapOverlay}
             onSaveFinish={handlePrepRecapSaveFinish}
             onClose={() => setPrepRecapOverlay(null)}
+            onStartNewPrep={
+              prepRecapUserId
+                ? () => {
+                    setPrepRecapOverlay(null);
+                    void startNewPrep();
+                  }
+                : undefined
+            }
+          />
+        </Suspense>
+      ) : null}
+
+      {archivedRecapOpen ? (
+        <Suspense fallback={null}>
+          {/* Aus dem Archiv: kein „Neue Vorbereitung starten", nur „Fertig" + Zeit bearbeiten. */}
+          <PrepRecapExperience
+            key={archivedRecapOpen.raceDate}
+            record={archivedRecapOpen}
+            entry="story"
+            onSaveFinish={handleArchivedRecapSaveFinish}
+            onClose={() => setArchivedRecapOpen(null)}
           />
         </Suspense>
       ) : null}

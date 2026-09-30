@@ -7,6 +7,7 @@ import type { PrepRecapRecord } from "../../../prepRecap/prepRecapRecord";
 import {
   dbRowToPrepRecap,
   insertPrepRecapIfAbsent,
+  linkPrepRecapToPlan,
   prepRecapToInsertPayload,
   updatePrepRecapFinishTime,
   type DbPrepRecapRow,
@@ -112,5 +113,31 @@ describe("updatePrepRecapFinishTime", () => {
     const { is } = setup();
     await updatePrepRecapFinishTime(USER_ID, "2026-09-27", { seconds: 11590, source: "manual", confirmed: true });
     expect(is).not.toHaveBeenCalled();
+  });
+});
+
+describe("linkPrepRecapToPlan", () => {
+  function setup(result: { data: unknown; error: unknown }) {
+    const query: Record<string, jest.Mock> = {};
+    query.eq = jest.fn(() => query);
+    query.select = jest.fn(async () => result);
+    const update = jest.fn(() => query);
+    (supabase.from as jest.Mock).mockReturnValue({ update });
+    return { update, query };
+  }
+
+  it("setzt plan_id für den Renntag und meldet eine geänderte Zeile", async () => {
+    const { update, query } = setup({ data: [{ id: "row-1" }], error: null });
+    expect(await linkPrepRecapToPlan(USER_ID, "2026-09-27", "plan-1")).toBe(true);
+    expect(update).toHaveBeenCalledWith({ plan_id: "plan-1" });
+    expect(query.eq).toHaveBeenCalledWith("user_id", USER_ID);
+    expect(query.eq).toHaveBeenCalledWith("race_date", "2026-09-27");
+  });
+
+  it("Update ohne Treffer oder mit Fehler gilt als nicht verknüpft (Flow bricht ab)", async () => {
+    setup({ data: [], error: null });
+    expect(await linkPrepRecapToPlan(USER_ID, "2026-09-27", "plan-1")).toBe(false);
+    setup({ data: null, error: { message: "boom" } });
+    expect(await linkPrepRecapToPlan(USER_ID, "2026-09-27", "plan-1")).toBe(false);
   });
 });

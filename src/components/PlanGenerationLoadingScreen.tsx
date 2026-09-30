@@ -56,6 +56,8 @@ export type PlanGenerationLoadingScreenProps = {
   phase: PlanGenerationPhase;
   errorMessage?: string | null;
   onRetry: () => void;
+  /** Nur im Fehlerzustand: Wizard verlassen, ohne etwas zu ändern (ohne Handler kein Button). */
+  onCancel?: () => void;
 };
 
 export function PlanGenerationLoadingScreen({
@@ -63,6 +65,7 @@ export function PlanGenerationLoadingScreen({
   phase,
   errorMessage,
   onRetry,
+  onCancel,
 }: PlanGenerationLoadingScreenProps) {
   const estimatedSeconds = estimatePlanGenerationSeconds(weekCount);
   const [percent, setPercent] = useState(0);
@@ -191,6 +194,26 @@ export function PlanGenerationLoadingScreen({
             >
               Erneut versuchen
             </button>
+            {onCancel ? (
+              <button
+                type="button"
+                onClick={onCancel}
+                style={{
+                  width: "100%",
+                  marginTop: 10,
+                  padding: "12px 16px",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  borderRadius: 14,
+                  border: "1px solid rgba(148, 163, 184, 0.2)",
+                  background: "transparent",
+                  color: "var(--text-secondary)",
+                  cursor: "pointer",
+                }}
+              >
+                Abbrechen
+              </button>
+            ) : null}
           </>
         ) : (
           <>

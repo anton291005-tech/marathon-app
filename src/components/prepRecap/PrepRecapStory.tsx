@@ -26,6 +26,8 @@ type Props = {
   onClose: () => void;
   /** Aktion auf der Outro-Slide (Zielzeit eintragen/bestätigen/bearbeiten). */
   outroAction?: { label: string; onPress: () => void } | null;
+  /** „Neue Vorbereitung starten" auf der Outro-Slide — nur vom Home-Rückblick, nie aus dem Archiv. */
+  onStartNewPrep?: (() => void) | null;
 };
 
 type Gesture = {
@@ -169,7 +171,13 @@ function BodyRows({ rows, accent }: { rows: NonNullable<RecapSlide["body"]>; acc
  * Vollbild-Story „Deine Vorbereitung". Tap rechts ⅔ weiter, links ⅓ zurück, Halten (> 250 ms)
  * pausiert, nach unten wischen (> 80 px) oder ✕ schließt. 6 s pro Slide, letzte Slide ohne Auto-Advance.
  */
-export default function PrepRecapStory({ slides, initialIndex = 0, onClose, outroAction = null }: Props) {
+export default function PrepRecapStory({
+  slides,
+  initialIndex = 0,
+  onClose,
+  outroAction = null,
+  onStartNewPrep = null,
+}: Props) {
   const player = useStoryPlayer({ count: slides.length, initialIndex });
   const { index, next, prev, setHeld, paused, running, isLast, durationMs } = player;
   const slide = slides[index];
@@ -504,6 +512,11 @@ export default function PrepRecapStory({ slides, initialIndex = 0, onClose, outr
               <button type="button" onClick={onClose} style={recapPrimaryButtonStyle}>
                 Fertig
               </button>
+              {onStartNewPrep ? (
+                <button type="button" onClick={onStartNewPrep} style={recapSecondaryButtonStyle}>
+                  Neue Vorbereitung starten
+                </button>
+              ) : null}
               {outroAction ? (
                 <button type="button" onClick={outroAction.onPress} style={recapSecondaryButtonStyle}>
                   {outroAction.label}

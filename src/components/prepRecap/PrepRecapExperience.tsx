@@ -14,6 +14,8 @@ type Props = {
   entry: PrepRecapEntry;
   onSaveFinish: (patch: FinishTimePatch) => Promise<void>;
   onClose: () => void;
+  /** Nur vom Home-Rückblick. Aus dem Archiv (Einstellungen) weglassen: dort nur „Fertig" + Zeit. */
+  onStartNewPrep?: () => void;
 };
 
 type Step =
@@ -39,7 +41,7 @@ function initialStep(record: PrepRecapRecord, entry: PrepRecapEntry): Step {
  * Ablauf „Rückblick ansehen": solange die Zielzeit unbestätigt ist, zuerst die Bestätigung
  * (überspringbar, Überspringen bestätigt nicht), dann die Story aus dem Snapshot.
  */
-export default function PrepRecapExperience({ record, entry, onSaveFinish, onClose }: Props) {
+export default function PrepRecapExperience({ record, entry, onSaveFinish, onClose, onStartNewPrep }: Props) {
   const [step, setStep] = useState<Step>(() => initialStep(record, entry));
 
   const slides = useMemo(
@@ -88,6 +90,7 @@ export default function PrepRecapExperience({ record, entry, onSaveFinish, onClo
       slides={slides}
       initialIndex={step.initialIndex}
       onClose={onClose}
+      onStartNewPrep={onStartNewPrep ?? null}
       outroAction={
         recordHasRace(record)
           ? {

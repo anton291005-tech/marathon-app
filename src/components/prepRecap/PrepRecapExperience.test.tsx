@@ -22,11 +22,13 @@ function Harness({
   entry = "story",
   onSave,
   onClose = jest.fn(),
+  onStartNewPrep,
 }: {
   initial: PrepRecapRecord;
   entry?: PrepRecapEntry;
   onSave: jest.Mock;
   onClose?: jest.Mock;
+  onStartNewPrep?: jest.Mock;
 }) {
   const [record, setRecord] = useState(initial);
   return (
@@ -34,6 +36,7 @@ function Harness({
       record={record}
       entry={entry}
       onClose={onClose}
+      onStartNewPrep={onStartNewPrep}
       onSaveFinish={async (patch: FinishTimePatch) => {
         onSave(patch);
         setRecord((r) => ({
@@ -108,6 +111,35 @@ describe("PrepRecapExperience", () => {
     await waitFor(() => expect(screen.getByTestId("recap-slide-outro")).toBeInTheDocument());
     expect(onSave).toHaveBeenCalledWith({ seconds: 11577, source: "manual", confirmed: true });
     expect(screen.getByText("3:12:57")).toBeInTheDocument();
+  });
+
+  function tapToOutro() {
+    for (let i = 0; i < 12; i += 1) {
+      const stage = screen.getByTestId("recap-stage");
+      fireEvent.pointerDown(stage, { clientX: 900, clientY: 300 });
+      fireEvent.pointerUp(stage, { clientX: 900, clientY: 300 });
+    }
+    expect(screen.getByTestId("recap-slide-outro")).toBeInTheDocument();
+  }
+
+  it("vom Home: Outro bietet „Neue Vorbereitung starten“", () => {
+    const onStartNewPrep = jest.fn();
+    render(<Harness initial={recapRecord({ finishTimeConfirmed: true })} onSave={jest.fn()} onStartNewPrep={onStartNewPrep} />);
+    tapToOutro();
+    fireEvent.click(screen.getByRole("button", { name: "Neue Vorbereitung starten" }));
+    expect(onStartNewPrep).toHaveBeenCalledTimes(1);
+  });
+
+  it("aus dem Archiv: Outro nur „Fertig“ + Zeit bearbeiten, kein Neustart", () => {
+    render(<Harness initial={recapRecord({ finishTimeConfirmed: true })} onSave={jest.fn()} />);
+    tapToOutro();
+    expect(screen.queryByRole("button", { name: "Neue Vorbereitung starten" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Fertig" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Zeit bearbeiten" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button").map((b) => b.textContent).filter((t) => t === "Fertig" || t === "Zeit bearbeiten" || t === "Neue Vorbereitung starten")).toEqual([
+      "Fertig",
+      "Zeit bearbeiten",
+    ]);
   });
 
   it("Einstieg über die Ergebnis-Karte: nur die Zeit, danach schließen", async () => {

@@ -1,5 +1,15 @@
 import { useCallback, useState, type CSSProperties } from "react";
-import type { TrainingPlanListItem } from "../lib/supabase/services/trainingPlanService";
+import { MAX_ACTIVE_PLANS, type TrainingPlanListItem } from "../lib/supabase/services/trainingPlanService";
+
+/** Archivierter Plan (abgeschlossene Vorbereitung) mit seinem Rückblick. */
+export type ArchivedPrepListItem = {
+  planId: string;
+  name: string;
+  /** z. B. Renndatum „27. September 2026". */
+  dateLabel: string | null;
+  /** false, wenn zu diesem Plan kein Rückblick gespeichert ist. */
+  canOpen: boolean;
+};
 
 export type PlanSwitcherProps = {
   plans: TrainingPlanListItem[];
@@ -7,6 +17,8 @@ export type PlanSwitcherProps = {
   onAddNew: () => void;
   onDelete: (planId: string) => void;
   maxPlans?: number;
+  archivedPreps?: ArchivedPrepListItem[];
+  onOpenArchived?: (planId: string) => void;
 };
 
 const rowStyle: CSSProperties = {
@@ -57,7 +69,9 @@ export function PlanSwitcher({
   onSwitch,
   onAddNew,
   onDelete,
-  maxPlans = 5,
+  maxPlans = MAX_ACTIVE_PLANS,
+  archivedPreps = [],
+  onOpenArchived,
 }: PlanSwitcherProps) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const atMax = plans.length >= maxPlans;
@@ -148,7 +162,7 @@ export function PlanSwitcher({
       <button
         type="button"
         disabled={atMax}
-        title={atMax ? "Maximal 5 Trainingspläne" : undefined}
+        title={atMax ? `Maximal ${maxPlans} Trainingspläne` : undefined}
         onClick={onAddNew}
         style={{
           marginTop: 12,
@@ -167,6 +181,63 @@ export function PlanSwitcher({
       >
         + Neuer Trainingsplan
       </button>
+
+      {archivedPreps.length > 0 ? (
+        <div data-testid="archived-preps" style={{ marginTop: 18 }}>
+          <div
+            style={{
+              fontSize: 11,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              color: "#7c8aa5",
+              fontWeight: 700,
+              marginBottom: 4,
+            }}
+          >
+            Abgeschlossene Vorbereitungen
+          </div>
+          {archivedPreps.map((prep) => (
+            <div key={prep.planId} style={rowStyle}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: "#cbd5e1",
+                    lineHeight: 1.35,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  🏁 {prep.name}
+                </div>
+                {prep.dateLabel ? (
+                  <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{prep.dateLabel}</div>
+                ) : null}
+              </div>
+              {prep.canOpen && onOpenArchived ? (
+                <button
+                  type="button"
+                  aria-label={`Rückblick ${prep.name} ansehen`}
+                  onClick={() => onOpenArchived(prep.planId)}
+                  style={{
+                    ...iconButtonStyle,
+                    width: "auto",
+                    padding: "0 12px",
+                    fontSize: 12,
+                    background: "rgba(250,204,21,0.12)",
+                    border: "1px solid rgba(253,230,138,0.35)",
+                    color: "#fef9c3",
+                  }}
+                >
+                  Rückblick
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {pendingDeleteId ? (
         <div
