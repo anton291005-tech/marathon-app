@@ -1,0 +1,108 @@
+import {
+  finishTimeSourceNote,
+  formatFinishTime,
+  formatRaceDateDe,
+  formatRacePace,
+  goalReachedLine,
+  type RaceFinishDisplay,
+} from "../../prepRecap/raceResultPresentation";
+import { formatGoalLabel } from "../../prepRecap/prepCompletionState";
+
+type Props = {
+  raceName: string | null;
+  raceYmd: string;
+  goalSeconds: number | null;
+  finish: RaceFinishDisplay | null;
+  raceDistanceKm: number | null;
+  /** true wenn die Vorbereitung ohne Race-Session endete (nur Planende). */
+  planEndedWithoutRace?: boolean;
+  compact?: boolean;
+};
+
+/**
+ * Home im Zustand „Vorbereitung abgeschlossen" — ersetzt den Ruhetag-Fallback.
+ * Aktionen (Rückblick, neue Vorbereitung) kommen erst mit Snapshot und Archivierung dazu.
+ */
+export default function PrepCompleteHeroCard({
+  raceName,
+  raceYmd,
+  goalSeconds,
+  finish,
+  raceDistanceKm,
+  planEndedWithoutRace = false,
+  compact = false,
+}: Props) {
+  const dateLabel = formatRaceDateDe(raceYmd);
+  const title = raceName ?? (planEndedWithoutRace ? "Dein Trainingsplan" : "Dein Rennen");
+  const goalLabel = goalSeconds != null ? formatGoalLabel(goalSeconds) : null;
+  const pace = finish ? formatRacePace(finish.seconds, raceDistanceKm) : null;
+  const sourceNote = finish ? finishTimeSourceNote(finish) : null;
+  const reachedLine = finish ? goalReachedLine(finish.seconds, goalSeconds) : null;
+
+  return (
+    <div
+      data-testid="prep-complete-hero"
+      style={{
+        width: "100%",
+        maxWidth: "min(100%, 340px)",
+        margin: "0 auto",
+        boxSizing: "border-box",
+        textAlign: "center",
+        padding: compact ? "6px 8px 8px" : "10px 10px 12px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: compact ? 4 : 6,
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 10,
+          textTransform: "uppercase",
+          letterSpacing: "0.1em",
+          color: "#86efac",
+          fontWeight: 800,
+        }}
+      >
+        🏁 Vorbereitung abgeschlossen
+      </div>
+      <div
+        style={{
+          fontSize: compact ? 23 : 26,
+          fontWeight: 800,
+          color: "#f8fafc",
+          lineHeight: 1.15,
+          letterSpacing: "-0.03em",
+          overflowWrap: "anywhere",
+          maxWidth: "100%",
+        }}
+      >
+        {title}
+      </div>
+      {dateLabel || goalLabel ? (
+        <div style={{ fontSize: 12, fontWeight: 650, color: "rgba(148,163,184,0.95)", overflowWrap: "anywhere" }}>
+          {[dateLabel, goalLabel].filter(Boolean).join(" · ")}
+        </div>
+      ) : null}
+      {finish ? (
+        <div style={{ marginTop: compact ? 2 : 4, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+          <div
+            data-testid="prep-complete-hero-time"
+            style={{ fontSize: compact ? 28 : 32, fontWeight: 850, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.05 }}
+          >
+            {formatFinishTime(finish.seconds)}
+          </div>
+          {pace || sourceNote ? (
+            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(148,163,184,0.9)" }}>
+              {[pace, sourceNote].filter(Boolean).join(" · ")}
+            </div>
+          ) : null}
+          {reachedLine ? (
+            <div style={{ fontSize: 12, fontWeight: 750, color: "#86efac" }}>{reachedLine}</div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}

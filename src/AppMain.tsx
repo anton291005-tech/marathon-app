@@ -42,6 +42,11 @@ import {
 } from "./appSmartFeatures";
 import { getSessionStatus } from "./sessionStatus";
 import MarathonPredictionCard from "./components/MarathonPredictionCard";
+import PrepCompleteHeroCard from "./components/prepRecap/PrepCompleteHeroCard";
+import RaceResultCard from "./components/prepRecap/RaceResultCard";
+import { getPrepCompletionState } from "./prepRecap/prepCompletionState";
+import { detectRaceFinishTime } from "./prepRecap/detectRaceFinishTime";
+import { resolveRaceDistanceKm } from "./prepRecap/raceResultPresentation";
 import RaceCalculator from "./components/RaceCalculator";
 import SurfaceCard from "./components/SurfaceCard";
 import { AccountDeleteDialog } from "./components/AccountDeleteDialog";
@@ -227,6 +232,7 @@ import {
 import { getWeekSessionRowWrapStyle, getWeekStackContainerStyle, shouldWeekStackScroll } from "./layout/weekStackLayout";
 import {
   beginAppFrame,
+  getAppCalendarYmd,
   getAppNow,
   getAppNowEpochMs,
   getAppTodayYmd,
@@ -2929,6 +2935,35 @@ export default function AppMain(){
       recoveryDomain.homeRecoveryScore0_100,
     ],
   );
+  /** „Vorbereitung abgeschlossen": Zielrennen erledigt oder Renndatum vorbei (siehe prepCompletionState). */
+  const activePlanName = allTrainingPlans.find((item) => item.is_active)?.plan_name ?? null;
+  const prepCompletion = useMemo(
+    () =>
+      getPrepCompletionState({
+        plan: displayPlan,
+        logs,
+        todayYmd: getAppCalendarYmd(appNow),
+        preferences,
+        planName: activePlanName,
+      }),
+    [displayPlan, logs, appNow, preferences, activePlanName],
+  );
+  const prepCompleted = prepCompletion.status === "completed" ? prepCompletion : null;
+  const prepRaceDistanceKm = prepCompleted
+    ? resolveRaceDistanceKm(prepCompleted.raceSession, preferences.raceDistanceKm)
+    : null;
+  /** Nur Vorschlag aus Apple Health — bis zur Bestätigung im Rückblick immer „laut Apple Health". */
+  const prepFinishDisplay = useMemo(() => {
+    if (!prepCompleted) return null;
+    const detected = detectRaceFinishTime({
+      raceSession: prepCompleted.raceSession,
+      raceYmd: prepCompleted.raceYmd,
+      raceLog: prepCompleted.raceSession ? logs[prepCompleted.raceSession.id] : undefined,
+      healthRuns,
+      raceDistanceKm: prepRaceDistanceKm,
+    });
+    return detected ? { seconds: detected.seconds, confirmed: false } : null;
+  }, [prepCompleted, logs, healthRuns, prepRaceDistanceKm]);
   const homeOverallPrepLines = useMemo(() => {
     const now = appNow;
     const counts = computePlanDueSessionCounts({ plan: displayPlan, logs, healthRuns, now });
@@ -2946,7 +2981,9 @@ export default function AppMain(){
       lines.push(`Ø Long Run Pace letzte 4 Wochen: ${mm}:${ss}/km (Trend: ${lr.trend})`);
     }
 
-    if (marathonPrediction.ready && marathonPrediction.predictedTime && marathonPrediction.predictedSeconds != null) {
+    if (prepCompleted) {
+      // Nach dem Zielrennen keine Prognose für ein vergangenes Rennen (Leistung zeigt das Ergebnis).
+    } else if (marathonPrediction.ready && marathonPrediction.predictedTime && marathonPrediction.predictedSeconds != null) {
       const timeStr = marathonPrediction.predictedTime;
       const predSec = marathonPrediction.predictedSeconds;
       let subTag;
@@ -2983,6 +3020,7 @@ export default function AppMain(){
     planAdherence.dueCompleted,
     planAdherence.dueTotal,
     marathonPrediction,
+    prepCompleted,
     uiRecoveryScore0_100,
     homeRecoveryRhr7dDisplay,
   ]);
@@ -3825,6 +3863,18 @@ export default function AppMain(){
                 gap: hs.statusStackGap,
               }}
             >
+              {prepCompleted ? (
+                <PrepCompleteHeroCard
+                  raceName={prepCompleted.raceName}
+                  raceYmd={prepCompleted.raceYmd}
+                  goalSeconds={prepCompleted.goalSeconds}
+                  finish={prepFinishDisplay}
+                  raceDistanceKm={prepRaceDistanceKm}
+                  planEndedWithoutRace={prepCompleted.completedBy === "plan_ended"}
+                  compact={homeScrollLocked}
+                />
+              ) : (
+              <>
               <div
                 style={{
                   width: "100%",
@@ -3946,6 +3996,8 @@ export default function AppMain(){
                   </div>
                 ) : null
               )}
+              </>
+              )}
             </div>
 
             {/* Plan-Status (Kalender) — nur wenn Plan-Datum bekannt; nach Planstart nur bei erledigter/übersprungener Heute-Session */}
@@ -4045,6 +4097,7 @@ export default function AppMain(){
             </div>
 
             {/* Done / Skip / Session-Details — Info rechts, nicht in der Einschätzungs-Card */}
+            {prepCompleted ? null : (
             <div
               style={{
                 display: "flex",
@@ -4162,6 +4215,7 @@ export default function AppMain(){
                 ⓘ
               </button>
             </div>
+            )}
           </div>
 
           {/* ── Coach + Metriken: scrollbare Tail-Säule (verhindert äußeren Home-Scroll) ─ */}
@@ -4921,6 +4975,16 @@ export default function AppMain(){
             }}
           >
             <div data-tour="performance-card" style={{ flexShrink: 0 }}>
+              {prepCompleted ? (
+                <RaceResultCard
+                  raceName={prepCompleted.raceName}
+                  raceYmd={prepCompleted.raceYmd}
+                  goalSeconds={prepCompleted.goalSeconds}
+                  finish={prepFinishDisplay}
+                  raceDistanceKm={prepRaceDistanceKm}
+                  completedBy={prepCompleted.completedBy}
+                />
+              ) : (
               <MarathonPredictionCard
                 variant="full"
                 prediction={marathonPrediction}
@@ -4944,6 +5008,7 @@ export default function AppMain(){
                     : null
                 }
               />
+              )}
             </div>
 
             <div
