@@ -81,3 +81,23 @@ export function calculatePlanAwareStreak(
 
   return streak;
 }
+
+/**
+ * Längste Serie über einen abgeschlossenen Zeitraum — dieselbe Tages-Semantik wie
+ * `calculatePlanAwareStreak` (Home-Kachel „Serie"): Tage mit erledigtem Training zählen,
+ * Tage ohne geplantes Training (Ruhetage) unterbrechen nicht, ein offener Trainingstag beendet die Serie.
+ * `statuses` in Kalenderreihenfolge (ein Eintrag pro Tag).
+ */
+export function calculateLongestPlanAwareStreak(statuses: readonly PlanDayStreakStatus[]): number {
+  let longest = 0;
+  let current = 0;
+  for (const status of statuses) {
+    if (status === "completed") {
+      current += 1;
+      if (current > longest) longest = current;
+    } else if (status === "incomplete_planned") {
+      current = 0;
+    }
+  }
+  return longest;
+}

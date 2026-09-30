@@ -1,0 +1,105 @@
+/**
+ * Ein gespeicherter Prep-Rückblick (Zeile in `prep_recaps`) und die reine Entscheidungslogik,
+ * was beim Öffnen damit zu tun ist.
+ *
+ * Regeln (mit Anton abgestimmt):
+ * - Existiert noch kein Snapshot: einmal bauen und speichern; eine erkannte Health-Zeit wird dabei
+ *   als UNBESTÄTIGTER Vorschlag übernommen.
+ * - Älteres `schemaVersion`: Stats neu bauen und überschreiben — Zeitfelder bleiben unangetastet.
+ * - Snapshot ohne Zeit, Health findet später eine: als unbestätigter Vorschlag nachtragen.
+ *   Eine vorhandene Zeit (bestätigt oder nicht) wird nie überschrieben.
+ */
+
+import type { DetectedRaceFinish } from "./detectRaceFinishTime";
+import { PREP_RECAP_SCHEMA_VERSION, type PrepRecapStats } from "./buildPrepRecapSnapshot";
+
+export type FinishTimeSource = "health" | "manual";
+
+export type PrepRecapRecord = {
+  id?: string;
+  planId: string | null;
+  raceName: string | null;
+  /** YYYY-MM-DD — eindeutig pro Nutzer. */
+  raceDate: string;
+  finishTimeSeconds: number | null;
+  finishTimeSource: FinishTimeSource | null;
+  finishTimeConfirmed: boolean;
+  schemaVersion: number;
+  stats: PrepRecapStats;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type FinishTimePatch = {
+  seconds: number;
+  source: FinishTimeSource;
+  confirmed: boolean;
+};
+
+export type PrepRecapAction =
+  | { kind: "create"; record: PrepRecapRecord }
+  | {
+      kind: "update";
+      /** Neu gebaute Stats (nur bei älterer schemaVersion). */
+      stats: PrepRecapStats | null;
+      /** Unbestätigter Health-Vorschlag (nur wenn bisher keine Zeit gespeichert ist). */
+      finish: FinishTimePatch | null;
+    }
+  | { kind: "none" };
+
+export function decidePrepRecapAction(args: {
+  existing: PrepRecapRecord | null;
+  buildStats: () => PrepRecapStats;
+  detectedFinish: DetectedRaceFinish | null;
+  planId: string | null;
+  raceName: string | null;
+  raceDate: string;
+  currentSchemaVersion?: number;
+}): PrepRecapAction {
+  const version = args.currentSchemaVersion ?? PREP_RECAP_SCHEMA_VERSION;
+  const { existing, detectedFinish } = args;
+
+  if (!existing) {
+    return {
+      kind: "create",
+      record: {
+        planId: args.planId,
+        raceName: args.raceName,
+        raceDate: args.raceDate,
+        finishTimeSeconds: detectedFinish?.seconds ?? null,
+        finishTimeSource: detectedFinish ? "health" : null,
+        finishTimeConfirmed: false,
+        schemaVersion: version,
+        stats: args.buildStats(),
+      },
+    };
+  }
+
+  const stats = existing.schemaVersion < version ? args.buildStats() : null;
+  const finish: FinishTimePatch | null =
+    existing.finishTimeSeconds == null && detectedFinish
+      ? { seconds: detectedFinish.seconds, source: "health", confirmed: false }
+      : null;
+
+  if (!stats && !finish) return { kind: "none" };
+  return { kind: "update", stats, finish };
+}
+
+/** Wendet eine Update-Aktion lokal auf den Datensatz an (für Cache und Rückgabe). */
+export function applyPrepRecapUpdate(
+  existing: PrepRecapRecord,
+  action: Extract<PrepRecapAction, { kind: "update" }>,
+  currentSchemaVersion: number = PREP_RECAP_SCHEMA_VERSION,
+): PrepRecapRecord {
+  return {
+    ...existing,
+    ...(action.stats ? { stats: action.stats, schemaVersion: currentSchemaVersion } : {}),
+    ...(action.finish
+      ? {
+          finishTimeSeconds: action.finish.seconds,
+          finishTimeSource: action.finish.source,
+          finishTimeConfirmed: action.finish.confirmed,
+        }
+      : {}),
+  };
+}

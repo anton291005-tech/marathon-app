@@ -8,6 +8,7 @@ require("dotenv").config();
 require("dotenv").config({ path: ".env.local", override: true });
 
 const USER_DATA_TABLES = [
+  "prep_recaps",
   "plan_patches",
   "session_logs",
   "training_plans",

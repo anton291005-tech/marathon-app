@@ -17,6 +17,8 @@ export const MARATHON_AI_PLAN_PATCHES_KEY = "marathonAiPlanPatches";
 export const TRAINING_PLAN_V2_STORAGE_KEY = "training_plan_v2";
 export const MARATHON_APPLE_HEALTH_CONNECTED_KEY = "marathonAppleHealthConnected";
 export const MARATHON_USER_ID_KEY = "marathonUserId";
+/** Prep-Rückblick-Snapshots (Cache/Offline-Kopie von `prep_recaps`), Map raceDate → Datensatz. */
+export const PREP_RECAPS_CACHE_KEY = "prepRecaps";
 
 /**
  * Read-only catalog for docs / debug (order is not normative).
@@ -34,4 +36,5 @@ export const KNOWN_MY_RACE_STORAGE_KEYS: readonly string[] = [
   RECOVERY_BOOT_PHASE_COMPLETE_KEY,
   MARATHON_APPLE_HEALTH_CONNECTED_KEY,
   MARATHON_USER_ID_KEY,
+  PREP_RECAPS_CACHE_KEY,
 ];
