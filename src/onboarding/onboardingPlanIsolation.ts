@@ -1,6 +1,7 @@
 import type { PersistedMarathonPreferences } from "../app/runtime/runtimePersistenceTypes";
 import type { SessionLog } from "../marathonPrediction";
 import type { TrainingPlanV2 } from "../planV2/types";
+import { scopeSessionLogsToPlan } from "../sessionLogs/scopeSessionLogsToPlan";
 
 /** Preferences written after onboarding — no merge with legacy local/remote fields. */
 export function buildIsolatedOnboardingPreferences(
@@ -40,15 +41,20 @@ export function collectPlanSessionIds(plan: TrainingPlanV2 | null | undefined): 
   return ids;
 }
 
-/** Keeps completion logs only for sessions that exist in the new plan. */
+/**
+ * Keeps completion logs only for sessions that exist in the new plan — and never logs from before
+ * `notBefore` (for a just-generated plan: now — it has no logs of its own yet): AI plans reuse ids like
+ * `w5-mo`, so an id match alone would carry a previous prep over.
+ */
 export function detachSessionLogsFromPlan(
   logs: Record<string, SessionLog>,
   plan: TrainingPlanV2 | null | undefined,
+  notBefore?: string | null,
 ): Record<string, SessionLog> {
   const ids = collectPlanSessionIds(plan);
   if (!ids.size) return {};
   const out: Record<string, SessionLog> = {};
-  for (const [sessionId, log] of Object.entries(logs)) {
+  for (const [sessionId, log] of Object.entries(scopeSessionLogsToPlan(logs, plan, notBefore))) {
     if (ids.has(sessionId)) out[sessionId] = log;
   }
   return out;

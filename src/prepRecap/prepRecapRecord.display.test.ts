@@ -1,5 +1,5 @@
 import { recapRecord } from "../components/prepRecap/recapTestFixtures";
-import { pickPrepRecapForDisplay } from "./prepRecapRecord";
+import { isPrepRecapOfPlan, pickPrepRecapForDisplay } from "./prepRecapRecord";
 
 describe("pickPrepRecapForDisplay", () => {
   it("nimmt Remote, wenn es keinen Cache gibt, und den Cache ohne Remote", () => {
@@ -31,5 +31,18 @@ describe("pickPrepRecapForDisplay", () => {
     const cached = recapRecord({ raceDate: "2026-08-30", finishTimeConfirmed: true });
     const remote = recapRecord({ finishTimeConfirmed: false });
     expect(pickPrepRecapForDisplay(cached, remote)).toBe(remote);
+  });
+});
+
+describe("isPrepRecapOfPlan", () => {
+  it("lässt nur den Rückblick des aktiven Plans durch", () => {
+    expect(isPrepRecapOfPlan(recapRecord({ planId: "plan-warschau" }), "plan-warschau")).toBe(true);
+    expect(isPrepRecapOfPlan(recapRecord({ planId: "plan-warschau" }), "plan-neu")).toBe(false);
+  });
+
+  it("entscheidet ohne Verknüpfung oder ohne bekannten aktiven Plan allein über das Renndatum", () => {
+    expect(isPrepRecapOfPlan(recapRecord({ planId: null }), "plan-neu")).toBe(true);
+    expect(isPrepRecapOfPlan(recapRecord({ planId: "plan-warschau" }), null)).toBe(true);
+    expect(isPrepRecapOfPlan(null, "plan-neu")).toBe(false);
   });
 });

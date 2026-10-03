@@ -105,6 +105,16 @@ export function applyPrepRecapUpdate(
 }
 
 /**
+ * Gehört der Rückblick zum aktiven Plan? Ein mit einem anderen (z. B. archivierten) Plan verknüpfter
+ * Snapshot darf Home/Leistung des aktiven Plans nicht speisen. Ohne Verknüpfung oder ohne bekannten
+ * aktiven Plan entscheidet allein das Renndatum.
+ */
+export function isPrepRecapOfPlan(record: PrepRecapRecord | null | undefined, planId: string | null): boolean {
+  if (!record) return false;
+  return record.planId == null || planId == null || record.planId === planId;
+}
+
+/**
  * Anzeige-Stand aus lokalem Cache und Remote (Home-Hero/Leistung vor dem Öffnen des Rückblicks):
  * Remote gewinnt — außer der Cache hält eine offline bestätigte Zeit und Remote nur einen
  * unbestätigten Stand (gleiche Vorrangregel wie beim Nachreichen in ensurePrepRecapSnapshot).

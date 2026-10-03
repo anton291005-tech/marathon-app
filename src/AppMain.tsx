@@ -58,7 +58,7 @@ import {
   readPrepRecapCache,
   savePrepRecapFinishTime,
 } from "./prepRecap/ensurePrepRecapSnapshot";
-import { pickPrepRecapForDisplay, type FinishTimePatch, type PrepRecapRecord } from "./prepRecap/prepRecapRecord";
+import { isPrepRecapOfPlan, pickPrepRecapForDisplay, type FinishTimePatch, type PrepRecapRecord } from "./prepRecap/prepRecapRecord";
 import { linkPrepRecapToPlan, loadPrepRecaps } from "./lib/supabase/services/prepRecapService";
 import RaceCalculator from "./components/RaceCalculator";
 import SurfaceCard from "./components/SurfaceCard";
@@ -180,6 +180,11 @@ import {
 } from "./persistence/marathonLocalStorageKeys";
 import { safeReadLocalStorageItem } from "./persistence/safeLocalStorage";
 import { hydrateMarathonLogsFromStorage } from "./sessionLogs/hydrateMarathonLogs";
+import {
+  logsNotBeforeForSuccessorPlan,
+  mergeWithLogsOutsidePlanScope,
+  scopeSessionLogsToPlan,
+} from "./sessionLogs/scopeSessionLogsToPlan";
 import { trainingPhaseColor, type TrainingPhase } from "./planV2/trainingPhase";
 import {
   getStoredHealthRunCanonicalType,
@@ -1269,11 +1274,12 @@ export default function AppMain(){
   beginAppFrame();
   // const appFrameMs = getAppNowEpochMs(); // unused (removed)
   const [wIdx,setWIdx]=useState(0);
-  const [logs, setLogs] = useState(() =>
+  /** Alle gespeicherten Logs (auch früherer Pläne) — gelesen wird über `logs` (an den aktiven Plan gebunden). */
+  const [storedLogs, setLogs] = useState(() =>
     hydrateMarathonLogsFromStorage(readStoredJson(MARATHON_LOGS_KEY, {})),
   );
-  const logsRef = useRef(logs);
-  logsRef.current = logs;
+  const storedLogsRef = useRef(storedLogs);
+  storedLogsRef.current = storedLogs;
   const [aiPlanPatches, setAiPlanPatches] = useState(() => readStoredJson(MARATHON_AI_PLAN_PATCHES_KEY, []));
   const [scheduleBlocks, setScheduleBlocks] = useState([]);
   const [pendingCalendarProposal, setPendingCalendarProposal] = useState(null);
@@ -1335,6 +1341,22 @@ export default function AppMain(){
   const [overviewPhaseExpandedByKey, setOverviewPhaseExpandedByKey] = useState(() => ({}));
   const [aiNavHint,setAiNavHint]=useState(null);
   const [allTrainingPlans, setAllTrainingPlans] = useState<TrainingPlanListItem[]>([]);
+  /** Abgeschlossene Vorbereitungen (archivierte Pläne) — auch Grenze für die Logs ihres Nachfolgers. */
+  const [archivedTrainingPlans, setArchivedTrainingPlans] = useState<TrainingPlanListItem[]>([]);
+  // Session-IDs wiederholen sich zwischen Plänen (`w5-mo`): Logs von vor dem Plan (Starttag bzw.
+  // Archivierung des Vorgängers) gehören zu einer früheren Vorbereitung und dürfen Hero,
+  // Fortschritt, km und Serie nicht speisen.
+  const activePlanCreatedAt = allTrainingPlans.find((item) => item.is_active)?.created_at ?? null;
+  const logsNotBefore = useMemo(
+    () => logsNotBeforeForSuccessorPlan(activePlanCreatedAt, archivedTrainingPlans),
+    [activePlanCreatedAt, archivedTrainingPlans],
+  );
+  const logs = useMemo(
+    () => scopeSessionLogsToPlan(storedLogs, trainingPlanV2, logsNotBefore),
+    [storedLogs, trainingPlanV2, logsNotBefore],
+  );
+  const logsRef = useRef(logs);
+  logsRef.current = logs;
   const [onboardingForNewPlan, setOnboardingForNewPlan] = useState(false);
   const [settingsCards, setSettingsCards] = useState({
     einstellungen: false,
@@ -1694,7 +1716,7 @@ export default function AppMain(){
   }, [view]);
 
   useAppCorePersistenceEffects({
-    logs,
+    logs: storedLogs,
     preferences,
     aiPlanPatches,
     trainingPlanV2,
@@ -2129,7 +2151,8 @@ export default function AppMain(){
     })();
   },[]);
 
-  const save = async (newLogs, syncSessionIds) => {
+  const save = async (planLogs, syncSessionIds) => {
+    const newLogs = mergeWithLogsOutsidePlanScope(storedLogsRef.current, logsRef.current, planLogs);
     setLogs(newLogs);
     await writeRemoteStorage("mwaw26-logs", JSON.stringify(newLogs));
     if (!user?.id || !syncSessionIds?.length) return;
@@ -2956,6 +2979,7 @@ export default function AppMain(){
   );
   /** „Vorbereitung abgeschlossen": Zielrennen erledigt oder Renndatum vorbei (siehe prepCompletionState). */
   const activePlanName = allTrainingPlans.find((item) => item.is_active)?.plan_name ?? null;
+  const activePlanId = allTrainingPlans.find((item) => item.is_active)?.id ?? null;
   const prepCompletion = useMemo(
     () =>
       getPrepCompletionState({
@@ -2995,18 +3019,20 @@ export default function AppMain(){
       return;
     }
     // Nur lesen, nie anlegen: der Snapshot entsteht erst beim Öffnen des Rückblicks.
-    setPrepRecapRecord(readPrepRecapCache()[prepRaceYmd] ?? null);
+    // Nur Rückblicke des aktiven Plans — nie den eines anderen (archivierten) Plans.
+    const cached = readPrepRecapCache()[prepRaceYmd] ?? null;
+    setPrepRecapRecord(isPrepRecapOfPlan(cached, activePlanId) ? cached : null);
     if (!prepRecapUserId) return;
     let cancelled = false;
     void loadPrepRecaps(prepRecapUserId).then((list) => {
       if (cancelled || !list) return;
-      const remote = list.find((r) => r.raceDate === prepRaceYmd) ?? null;
+      const remote = list.find((r) => r.raceDate === prepRaceYmd && isPrepRecapOfPlan(r, activePlanId)) ?? null;
       setPrepRecapRecord((current) => pickPrepRecapForDisplay(current, remote));
     });
     return () => {
       cancelled = true;
     };
-  }, [prepRaceYmd, prepRecapUserId]);
+  }, [prepRaceYmd, prepRecapUserId, activePlanId]);
   const prepFinishDisplay = useMemo(() => {
     if (!prepCompleted) return null;
     if (prepRecapRecord?.raceDate === prepCompleted.raceYmd && prepRecapRecord.finishTimeSeconds != null) {
@@ -3014,7 +3040,6 @@ export default function AppMain(){
     }
     return prepDetectedFinish ? { seconds: prepDetectedFinish.seconds, confirmed: false } : null;
   }, [prepCompleted, prepRecapRecord, prepDetectedFinish]);
-  const activePlanId = allTrainingPlans.find((item) => item.is_active)?.id ?? null;
   /** Snapshot der abgeschlossenen Vorbereitung sicherstellen (beim ersten Aufruf EINMAL anlegen). */
   const ensureCurrentPrepSnapshot = useCallback(async (): Promise<PrepRecapRecord> => {
     if (!prepCompleted) throw new Error("Vorbereitung ist nicht abgeschlossen");
@@ -3095,8 +3120,7 @@ export default function AppMain(){
   const completeNewPrep = newPrep.complete;
   const newPrepPendingRef = newPrep.pendingRef;
 
-  /** Abgeschlossene Vorbereitungen (archivierte Pläne) + ihre Rückblicke für „Meine Trainingspläne". */
-  const [archivedTrainingPlans, setArchivedTrainingPlans] = useState<TrainingPlanListItem[]>([]);
+  /** Rückblicke der abgeschlossenen Vorbereitungen für „Meine Trainingspläne". */
   const [archivedPrepRecaps, setArchivedPrepRecaps] = useState<PrepRecapRecord[]>([]);
   const [archivedRecapOpen, setArchivedRecapOpen] = useState<PrepRecapRecord | null>(null);
   const refreshArchivedPreps = useCallback(async () => {
@@ -3538,7 +3562,7 @@ export default function AppMain(){
             skipRemotePrefsHydrationRef.current = true;
 
             const isolatedPrefs = buildIsolatedOnboardingPreferences(patch);
-            const detachedLogs = detachSessionLogsFromPlan(logs, plan);
+            const detachedLogs = detachSessionLogsFromPlan(logs, plan, getAppNow().toISOString());
 
             if (typeof localStorage !== "undefined") {
               localStorage.removeItem(RESET_ONBOARDING_STORAGE_KEY);
@@ -6295,7 +6319,7 @@ export default function AppMain(){
             onToggle={() => toggleSettingsCard("backup")}
           >
             <div style={{marginTop:12}}>
-              <BackupControls logs={logs} onImportSuccess={handleBackupLogsImport} />
+              <BackupControls logs={storedLogs} onImportSuccess={handleBackupLogsImport} />
             </div>
           </CollapsibleSettingsCard>
 
