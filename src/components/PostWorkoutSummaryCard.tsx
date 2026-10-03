@@ -127,6 +127,9 @@ function intervalPaceDeltaVersusTarget(
   return { text: `${sign}${abs}s/km vs Ziel`, color };
 }
 
+/** Gleiche Skala wie das Gefühl-Feld im Bearbeiten-Formular (1–5). */
+const LOG_FEELING_LABELS = ["", "😓 Sehr schwer", "😕 Schlecht", "😐 Okay", "😊 Gut", "🔥 Fantastisch!"];
+
 const RING_R = 50;
 const RING_CX = 62;
 const RING_CY = 62;
@@ -347,6 +350,8 @@ export function PostWorkoutSummaryCard(props: {
   open: boolean;
   summary: PostWorkoutSummary;
   onDone: () => void;
+  /** Rückblick auf eine erledigte Session: öffnet das Bearbeiten-Formular. Ohne Handler kein Button. */
+  onEdit?: () => void;
 }) {
   const [ringFilled, setRingFilled] = useState(false);
 
@@ -470,6 +475,21 @@ export function PostWorkoutSummaryCard(props: {
 
   const scoreLabel =
     score >= 80 ? "Stark umgesetzt" : score >= 60 ? "Solide" : "Deutlich off-plan";
+
+  // Nur aus dem Log gebaut (kein Health-Workout): fehlende Metriken ausblenden statt "—"/"0"/"Keine Daten".
+  const isLogOnly = summary.source === "log";
+  const showPaceTile =
+    !isLogOnly || (isBikeSession ? summary.actual.durationSec != null : paceTileActual !== "—");
+  const showDistanceTile = !isLogOnly || summary.actual.distanceKm != null;
+  const showHrTile = !isLogOnly || hrCompareActual != null;
+  const visibleTileCount = [showPaceTile, showDistanceTile, showHrTile].filter(Boolean).length;
+  const showScoreRing =
+    !isLogOnly || statuses.pace !== "na" || statuses.distance !== "na" || statuses.hr !== "na";
+  const logFeeling = isLogOnly ? summary.logDetails?.feeling ?? null : null;
+  const logFeelingLabel =
+    logFeeling != null ? LOG_FEELING_LABELS[Math.max(1, Math.min(5, logFeeling))] ?? null : null;
+  const logNotes = isLogOnly ? summary.logDetails?.notes ?? null : null;
+  const showCoachBlock = !isLogOnly || !!coachMessage;
 
   return (
     <>
@@ -599,6 +619,7 @@ export function PostWorkoutSummaryCard(props: {
             }}
           >
             {/* Score ring */}
+            {showScoreRing ? (
             <div
               style={{
                 display: "flex",
@@ -632,16 +653,20 @@ export function PostWorkoutSummaryCard(props: {
                 {scoreLabel}
               </div>
             </div>
+            ) : null}
 
             {/* Metric tiles */}
+            {visibleTileCount > 0 ? (
             <div
+              data-testid="pws-metric-tiles"
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gridTemplateColumns: `repeat(${visibleTileCount}, minmax(0, 1fr))`,
                 gap: 8,
                 marginBottom: 14,
               }}
             >
+              {showPaceTile ? (
               <MetricTile
                 label={paceTileLabel}
                 planned={paceTilePlanned}
@@ -649,24 +674,64 @@ export function PostWorkoutSummaryCard(props: {
                 status={statuses.pace}
                 extra={deltaExtra}
                 compactActual={summaryIsInterval && !isBikeSession}
+                hidePlanned={isLogOnly && (!paceTilePlanned || paceTilePlanned === "—")}
               />
+              ) : null}
+              {showDistanceTile ? (
               <MetricTile
                 label={isBikeSession ? "Gefahren" : "Distanz"}
                 planned={fmtKm(summary.planned.distanceKm)}
                 actual={fmtKm(summary.actual.distanceKm)}
                 status={statuses.distance}
-                hidePlanned={isBikeSession}
+                hidePlanned={isBikeSession || (isLogOnly && summary.planned.distanceKm == null)}
               />
+              ) : null}
+              {showHrTile ? (
               <MetricTile
                 label="Puls"
                 planned={plannedHrDisplay}
                 actual={renderHrActualNode(summary.hrPresentation, summary.actual.hrBpm)}
                 status={statuses.hr}
                 extra={hrDeltaExtra}
+                hidePlanned={isLogOnly && plannedHrDisplay === "–"}
               />
+              ) : null}
             </div>
+            ) : null}
+
+            {/* Log-Werte (nur ohne Health-Workout): Gefühl + Notiz */}
+            {logFeelingLabel || logNotes ? (
+              <div
+                data-testid="pws-log-details"
+                style={{
+                  marginBottom: 14,
+                  padding: "12px 14px",
+                  borderRadius: 14,
+                  background: "rgba(15,23,42,0.65)",
+                  border: "1px solid rgba(148,163,184,0.1)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                {logFeelingLabel ? (
+                  <div style={{ fontSize: 14, color: "#f8fafc", fontWeight: 800 }}>{logFeelingLabel}</div>
+                ) : null}
+                {logNotes ? (
+                  <div style={{ fontSize: 13, color: "#e2e8f0", lineHeight: 1.5, overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>
+                    {logNotes}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {isLogOnly && visibleTileCount === 0 && !logFeelingLabel && !logNotes ? (
+              <div style={{ fontSize: 13, color: "rgba(148,163,184,0.75)", lineHeight: 1.5, marginBottom: 14 }}>
+                Als erledigt markiert, ohne aufgezeichnete Werte.
+              </div>
+            ) : null}
 
             {/* AI Coach */}
+            {showCoachBlock ? (
             <div
               style={{
                 marginBottom: 18,
@@ -712,6 +777,7 @@ export function PostWorkoutSummaryCard(props: {
                 </div>
               )}
             </div>
+            ) : null}
           </div>
 
           {/* ── Footer ── */}
@@ -720,13 +786,35 @@ export function PostWorkoutSummaryCard(props: {
               padding: `12px 18px calc(18px + env(safe-area-inset-bottom, 0px))`,
               borderTop: "1px solid rgba(148,163,184,0.1)",
               background: "rgba(2,6,23,0.18)",
+              display: "flex",
+              gap: 10,
             }}
           >
+            {props.onEdit ? (
+              <button
+                type="button"
+                onClick={props.onEdit}
+                style={{
+                  flex: "0 0 auto",
+                  border: "1px solid rgba(148,163,184,0.28)",
+                  background: "rgba(15,23,42,0.8)",
+                  color: "#cbd5e1",
+                  borderRadius: 14,
+                  padding: "14px 18px",
+                  fontSize: 15,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                Bearbeiten
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={props.onDone}
               style={{
-                width: "100%",
+                flex: 1,
+                minWidth: 0,
                 border: "none",
                 background: "linear-gradient(180deg,#10b981,#059669)",
                 color: "#fff",

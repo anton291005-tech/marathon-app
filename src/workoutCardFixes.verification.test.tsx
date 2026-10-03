@@ -164,6 +164,16 @@ describe("TEST BLOCK 3 — Info card switching (static + hook contract)", () => 
     expect(APP_TSX).toContain("Session Details");
   });
 
+  test("9b. Erledigt: Bearbeiten in der Card wechselt ins Formular; jedes Öffnen/Schließen startet wieder mit der Card", () => {
+    expect(APP_TSX).toContain("modal && modalWeek && modalWorkout && !modalEditMode");
+    expect(APP_TSX).toContain("onEdit={() => setModalEditMode(true)}");
+    expect(APP_TSX).toMatch(/const openModal=\(session\)=>\{\s*setModalEditMode\(false\);/);
+    expect(APP_TSX).toMatch(/const closeModal=\(\)=>\{setModal\(null\);setModalEditMode\(false\);\};/);
+    expect(APP_TSX).toContain("postWorkoutSummary.getStoredSessionConclusion(modal.id)");
+    // Ansehen schreibt nicht: das Enrichment im Rückblick läuft mit No-op-Persist.
+    expect(APP_TSX).toMatch(/modalCompletionSummaryEnriched = usePostWorkoutHrEnrichment\([\s\S]{0,400}persistWorkoutHeartRate: noopPersistWorkoutHeartRate/);
+  });
+
   test("10. Skipped: completion summary gate is getSessionStatus !== done (skipped yields Session path)", () => {
     expect(APP_TSX).toContain("getSessionStatus(modalLog) !== \"done\"");
   });

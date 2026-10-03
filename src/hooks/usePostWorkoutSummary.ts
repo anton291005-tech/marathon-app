@@ -111,6 +111,14 @@ export type PostWorkoutSummary = {
   } | null;
   /** User HFmax from marathonPreferences / profile — used for zone BPM display on the card. */
   maxHeartRateBpm?: number | null;
+  /**
+   * "log": nur aus dem gespeicherten Log gebaut (manuell abgehakt oder Health-Workout nicht mehr
+   * vorhanden) — die Card blendet dann fehlende Metriken aus statt "—"/"0" zu zeigen.
+   * Fehlt das Feld, stammt die Zusammenfassung aus dem verknüpften Health-Workout.
+   */
+  source?: "health" | "log";
+  /** Nur bei `source: "log"`: Gefühl (1–5) und Notiz aus dem Log. */
+  logDetails?: { feeling: number | null; notes: string | null } | null;
 };
 
 export function isEligibleWorkout(type: string): boolean {
@@ -324,6 +332,104 @@ export function intervalPlanDescription(desc: string | null | undefined, pace: s
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
+type ConclusionPlanSession = {
+  id: string;
+  date: string;
+  type: string;
+  title: string;
+  pace?: string | null;
+  desc?: string | null;
+  km?: number;
+};
+
+/**
+ * Conclusion Card allein aus dem gespeicherten Log (pure, keine Persistenz): für abgeschlossene
+ * Sessions ohne verknüpftes Health-Workout. Was das Log nicht enthält, bleibt `null` — nie 0.
+ */
+export function buildLogOnlyConclusion(
+  session: ConclusionPlanSession,
+  log: Record<string, any> | null | undefined,
+  maxHeartRateBpm?: number | null,
+): PostWorkoutSummary | null {
+  if (!session || !isSessionLogDone(log)) return null;
+  const ar = log?.assignedRun;
+  const positive = (v: unknown): number | null => {
+    const n = numOrNull(v);
+    return n != null && n > 0 ? n : null;
+  };
+  const actualDistanceKm =
+    positive(ar?.distanceKm) ?? positive(parseFloat(String(log?.actualKm ?? "").replace(",", ".")));
+  const durationSec = positive(ar?.duration);
+  const paceSecPerKm =
+    durationSec != null && actualDistanceKm != null
+      ? positive(
+          resolveSessionPaceSecPerKm({
+            sessionType: session.type,
+            durationSec,
+            distanceKm: actualDistanceKm,
+            laps: ar?.laps,
+          }),
+        )
+      : null;
+  const hrBpm = positive(ar?.avgHeartRateBpm);
+
+  const plannedDistanceKm = (() => {
+    if (session.type === "bike") return null;
+    try {
+      const km = getSessionPlannedDistanceKm(session as any);
+      return typeof km === "number" && Number.isFinite(km) && km > 0 ? km : null;
+    } catch {
+      return null;
+    }
+  })();
+  const plannedPace = parsePlannedPaceRangeSecPerKm(session.pace ?? null);
+  const plannedHrFields = getPostWorkoutPlannedHr({ type: session.type }, maxHeartRateBpm ?? null);
+
+  const hasActual = actualDistanceKm != null || paceSecPerKm != null || hrBpm != null;
+  const adherence = hasActual
+    ? computePlanAdherenceScore({
+        plannedPaceSecPerKm: plannedPace,
+        actualPaceSecPerKm: paceSecPerKm,
+        plannedDistanceKm,
+        actualDistanceKm,
+        plannedHrBpm: plannedHrFields.hrBpm,
+        actualHrBpm: hrBpm,
+        sessionType: session.type,
+      })
+    : EMPTY_ADHERENCE;
+
+  const feeling = positive(log?.feeling);
+  const notes = typeof log?.notes === "string" && log.notes.trim() ? log.notes.trim() : null;
+  const atIso = typeof log?.at === "string" && log.at ? log.at : null;
+  const linkedRunId = typeof ar?.runId === "string" && ar.runId ? ar.runId : null;
+
+  return {
+    workoutId: linkedRunId ?? `log:${session.id}`,
+    workoutYmd: atIso ? toLocalDayKey(new Date(atIso)) : session.date || session.id,
+    completedAtIso: atIso ?? `log:${session.id}`,
+    session: {
+      id: session.id,
+      type: session.type,
+      title: session.title,
+      desc: session.desc ?? null,
+      paceLabel: session.pace ?? null,
+      dateLabel: session.date,
+    },
+    planned: {
+      distanceKm: plannedDistanceKm,
+      paceSecPerKm: plannedPace,
+      hrBpm: plannedHrFields.hrBpm,
+      hrZoneLabel: plannedHrFields.hrZoneLabel,
+    },
+    actual: { distanceKm: actualDistanceKm, paceSecPerKm, hrBpm, durationSec },
+    adherence,
+    ai: null,
+    maxHeartRateBpm: maxHeartRateBpm ?? null,
+    source: "log",
+    logDetails: { feeling: feeling != null ? Math.round(feeling) : null, notes },
+  };
+}
+
 type HookArgs = {
   activeView: string;
   planSessions: Array<{ id: string; date: string; type: string; title: string; pace?: string | null; desc?: string | null; km?: number }>;
@@ -341,6 +447,8 @@ export function usePostWorkoutSummary(args: HookArgs): {
   summary: PostWorkoutSummary | null;
   dismiss: () => void;
   getPostWorkoutSummary: (workoutId: string, dayKey: string) => PostWorkoutSummary | null;
+  /** Rückblick auf eine erledigte Session — nur aus gespeicherten Daten, ohne Abschluss-Event. */
+  getStoredSessionConclusion: (sessionId: string) => PostWorkoutSummary | null;
 } {
   const appliedKeyRef = useRef<string | null>(null);
   const [summary, setSummary] = useState<PostWorkoutSummary | null>(null);
@@ -1159,6 +1267,34 @@ export function usePostWorkoutSummary(args: HookArgs): {
     setVisible(false);
   }, []);
 
-  return { visible, summary, dismiss, getPostWorkoutSummary: computeSummaryForWorkoutId };
+  /**
+   * Liest nur (kein saveState, kein setSummary): 1) verknüpftes Health-Workout → volle Auswertung, am
+   * Tag des Workouts statt am geplanten Tag (ein nachgeholter Lauf bekam sonst keine Card);
+   * 2) sonst die Werte aus dem Log.
+   */
+  const getStoredSessionConclusion = useCallback(
+    (sessionId: string): PostWorkoutSummary | null => {
+      const session = (args.planSessions || []).find((s) => s.id === sessionId);
+      const log = args.logs?.[sessionId];
+      if (!session || !isSessionLogDone(log)) return null;
+      const runId = typeof log?.assignedRun?.runId === "string" ? log.assignedRun.runId : "";
+      const health = runId ? healthById.get(runId) ?? null : null;
+      const end = health ? workoutEndDate(health) : null;
+      if (runId && end) {
+        const full = computeSummaryForWorkoutId(runId, toLocalDayKey(end));
+        if (full && full.session.id === sessionId) return { ...full, source: "health" };
+      }
+      return buildLogOnlyConclusion(session, log, resolveMaxHeartRateBpm(args.maxHeartRateBpm));
+    },
+    [args.logs, args.maxHeartRateBpm, args.planSessions, computeSummaryForWorkoutId, healthById],
+  );
+
+  return {
+    visible,
+    summary,
+    dismiss,
+    getPostWorkoutSummary: computeSummaryForWorkoutId,
+    getStoredSessionConclusion,
+  };
 }
 
