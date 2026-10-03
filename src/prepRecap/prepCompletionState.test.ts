@@ -1,4 +1,6 @@
 import type { PlanSession, PlanWeek, SessionLog } from "../marathonPrediction";
+import { buildOnboardingPreferencesPatch } from "../onboarding/marathonPreferencesOnboarding";
+import { buildIsolatedOnboardingPreferences } from "../onboarding/onboardingPlanIsolation";
 import {
   cleanRaceTitle,
   findGoalRaceSession,
@@ -145,6 +147,65 @@ describe("Rennname-Kaskade", () => {
     expect(resolveRaceName({ preferences: prefs, raceSession, planName: "Marathon – Anders – 2026-09-27" })).toBe(
       "Warschau Marathon",
     );
+  });
+
+  it("ignoriert preferences.raceName eines anderen Plans (Renndatum passt nicht zum Renntag)", () => {
+    const other = { raceName: "Testplan Archiv-Flow", raceDate: "18.04.2027" };
+    expect(resolveRaceName({ preferences: other, raceSession, raceYmd: "2026-09-27" })).toBe("Warschau Marathon");
+    expect(resolveRaceName({ preferences: other, raceSession: null, planName: "Marathon – Berlin Marathon – 2026-09-27", raceYmd: "2026-09-27" })).toBe(
+      "Berlin Marathon",
+    );
+  });
+
+  it("nimmt preferences.raceName, wenn das Renndatum zum Plan passt oder fehlt (Alt-Bestand)", () => {
+    expect(resolveRaceName({ preferences: { raceName: "Mein Lauf", raceDate: "27.09.2026" }, raceSession, raceYmd: "2026-09-27" })).toBe("Mein Lauf");
+    expect(resolveRaceName({ preferences: { raceName: "Mein Lauf", raceDate: "2026-09-27" }, raceSession, raceYmd: "2026-09-27" })).toBe("Mein Lauf");
+    expect(resolveRaceName({ preferences: { raceName: "Mein Lauf" }, raceSession, raceYmd: "2026-09-27" })).toBe("Mein Lauf");
+  });
+
+  it("behält preferences.raceName, wenn das Rennen des eigenen Plans nicht auf dem Renndatum liegt", () => {
+    const own = { raceName: "Testplan Archiv-Flow", raceDate: "18.04.2027" };
+    const moved = session("w28-sa", "2027-04-17", "race", { title: "Marathon" });
+    expect(
+      resolveRaceName({ preferences: own, raceSession: moved, planName: "Marathon – Testplan Archiv-Flow – 18.04.2027", raceYmd: "2027-04-17" }),
+    ).toBe("Testplan Archiv-Flow");
+  });
+
+  it("Plan A abgeschlossen, Plan B per Wizard angelegt, zurück auf Plan A: Titel ist der von Plan A", () => {
+    const before = getPrepCompletionState({ plan: warsawPlan, logs: {}, todayYmd: "2026-10-03", preferences: prefs });
+    expect(before).toMatchObject({ status: "completed", raceName: "Warschau Marathon" });
+
+    // Der Wizard ersetzt die Preferences vollständig durch die von Plan B.
+    const wizardPrefs = buildIsolatedOnboardingPreferences(
+      buildOnboardingPreferencesPatch({
+        raceDistanceLabel: "Marathon",
+        raceDistanceKm: 42.195,
+        raceGoal: "time",
+        raceTargetTime: "3:30",
+        raceName: "Testplan Archiv-Flow",
+        raceDate: "18.04.2027",
+        planStartDate: "03.10.2026",
+        weeklyKmRange: "40-60",
+        userPreferences: [],
+      }),
+    );
+    expect(wizardPrefs.raceName).toBe("Testplan Archiv-Flow");
+
+    // Planwechsel zurück auf A: Plan und Logs sind wieder die von A, die Preferences bleiben die von B.
+    const back = getPrepCompletionState({
+      plan: warsawPlan,
+      logs: {},
+      todayYmd: "2026-10-03",
+      preferences: wizardPrefs,
+      planName: "Marathon – Warschau Marathon – 27.09.2026",
+    });
+    expect(back).toMatchObject({ status: "completed", raceYmd: "2026-09-27", raceName: "Warschau Marathon" });
+
+    // Plan B selbst behält seinen Namen aus den Preferences.
+    const planB = plan([session("w28-so", "2027-04-18", "race", { title: "Marathon", km: 42.2 })]);
+    expect(
+      getPrepCompletionState({ plan: planB, logs: {}, todayYmd: "2027-04-19", preferences: wizardPrefs }),
+    ).toMatchObject({ status: "completed", raceName: "Testplan Archiv-Flow" });
   });
 
   it("nimmt sonst den bereinigten Race-Titel", () => {
