@@ -20,7 +20,7 @@ const samplePlan: TrainingPlanV2 = {
 };
 
 describe("buildIsolatedOnboardingPreferences", () => {
-  it("does not carry legacy targetTime or maxHeartRateBpm for finish goal", () => {
+  it("does not carry a legacy targetTime for finish goal", () => {
     const isolated = buildIsolatedOnboardingPreferences({
       raceDistanceLabel: "Marathon",
       raceDistanceKm: 42.2,
@@ -35,7 +35,6 @@ describe("buildIsolatedOnboardingPreferences", () => {
     });
     expect(isolated.planStartDate).toBe("1.06.2026");
     expect(isolated.targetTime).toBeNull();
-    expect(isolated.maxHeartRateBpm).toBeNull();
     expect(isolated.raceGoal).toBe("finish");
   });
 
@@ -53,7 +52,38 @@ describe("buildIsolatedOnboardingPreferences", () => {
       targetTime: "3:30:00",
     });
     expect(isolated.targetTime).toBe("3:30:00");
-    expect(isolated.maxHeartRateBpm).toBeNull();
+  });
+
+  it("keeps everything the wizard does not ask for (PR, HFmax, unknown extras)", () => {
+    const current = {
+      personalBestTime: "2:58:10",
+      maxHeartRateBpm: 191,
+      notificationsEnabled: true,
+      targetTime: "2:49:50",
+      raceName: "Warschau Marathon",
+      raceDate: "27.09.2026",
+      raceDistanceKm: 42.195,
+      userPreferences: ["kein Montag"],
+    } as Parameters<typeof buildIsolatedOnboardingPreferences>[1];
+    const isolated = buildIsolatedOnboardingPreferences(
+      {
+        raceDistanceLabel: "Halbmarathon",
+        raceDistanceKm: 21.1,
+        raceGoal: "finish",
+        raceTargetTime: null,
+        raceName: "Testplan Archiv-Flow",
+        raceDate: "18.04.2027",
+        planStartDate: null,
+        weeklyKmRange: "20–40 km",
+        onboardingComplete: true,
+        targetTime: null,
+      },
+      current,
+    );
+    expect(isolated).toMatchObject({ personalBestTime: "2:58:10", maxHeartRateBpm: 191, notificationsEnabled: true });
+    // plan-eigene Felder kommen nur aus dem Wizard — nichts vom alten Plan bleibt hängen
+    expect(isolated).toMatchObject({ raceName: "Testplan Archiv-Flow", raceDistanceKm: 21.1, targetTime: null });
+    expect("userPreferences" in isolated).toBe(false);
   });
 });
 

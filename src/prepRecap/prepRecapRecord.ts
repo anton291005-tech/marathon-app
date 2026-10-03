@@ -12,6 +12,7 @@
 
 import type { DetectedRaceFinish } from "./detectRaceFinishTime";
 import { PREP_RECAP_SCHEMA_VERSION, type PrepRecapStats } from "./buildPrepRecapSnapshot";
+import type { PrepCompletionState } from "./prepCompletionState";
 
 export type FinishTimeSource = "health" | "manual";
 
@@ -112,6 +113,29 @@ export function applyPrepRecapUpdate(
 export function isPrepRecapOfPlan(record: PrepRecapRecord | null | undefined, planId: string | null): boolean {
   if (!record) return false;
   return record.planId == null || planId == null || record.planId === planId;
+}
+
+/**
+ * Ziel und Distanz des abgeschlossenen Plans: zuerst aus den Preferences — sofern sie zu diesem Plan
+ * gehören —, sonst aus dem Snapshot DIESES Plans (Plan-Verknüpfung und Renndatum müssen passen).
+ * „Finishen" hat nie eine Zielzeile.
+ */
+export function resolveCompletedPrepGoal(args: {
+  completed: Extract<PrepCompletionState, { status: "completed" }>;
+  raceGoal: "finish" | "time" | undefined;
+  preferredDistanceKm: number | null | undefined;
+  record: PrepRecapRecord | null;
+  planId: string | null;
+}): { goalSeconds: number | null; preferredDistanceKm: number | null; snapshotDistanceKm: number | null } {
+  const { completed, record } = args;
+  const snapshot =
+    record && record.raceDate === completed.raceYmd && isPrepRecapOfPlan(record, args.planId) ? record.stats.race : null;
+  const finishOnly = completed.preferencesOwned && args.raceGoal === "finish";
+  return {
+    goalSeconds: finishOnly ? null : completed.goalSeconds ?? snapshot?.goalSeconds ?? null,
+    preferredDistanceKm: completed.preferencesOwned ? args.preferredDistanceKm ?? null : null,
+    snapshotDistanceKm: snapshot?.distanceKm ?? null,
+  };
 }
 
 /**

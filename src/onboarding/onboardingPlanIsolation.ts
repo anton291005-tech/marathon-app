@@ -1,25 +1,31 @@
 import type { PersistedMarathonPreferences } from "../app/runtime/runtimePersistenceTypes";
 import type { SessionLog } from "../marathonPrediction";
 import type { TrainingPlanV2 } from "../planV2/types";
+import { replacePlanOwnedPreferences } from "./planOwnedPreferences";
 import { scopeSessionLogsToPlan } from "../sessionLogs/scopeSessionLogsToPlan";
 
-/** Preferences written after onboarding — no merge with legacy local/remote fields. */
+/**
+ * Preferences nach dem Wizard: die plan-eigenen Felder kommen ausschließlich aus dem Wizard (kein
+ * Merge mit denen des alten Plans). Alles, was der Wizard nicht abfragt (PR, HFmax, …), bleibt.
+ */
 export function buildIsolatedOnboardingPreferences(
   patch: PersistedMarathonPreferences,
+  current: PersistedMarathonPreferences = {},
 ): PersistedMarathonPreferences {
   return {
-    raceDistanceLabel: patch.raceDistanceLabel,
-    raceDistanceKm: patch.raceDistanceKm ?? null,
-    raceGoal: patch.raceGoal,
-    raceTargetTime: patch.raceTargetTime ?? null,
-    raceName: patch.raceName ?? null,
-    raceDate: patch.raceDate ?? null,
-    planStartDate: patch.planStartDate ?? null,
-    weeklyKmRange: patch.weeklyKmRange,
-    ...(patch.userPreferences?.length ? { userPreferences: [...patch.userPreferences] } : {}),
+    ...replacePlanOwnedPreferences(current, {
+      raceDistanceLabel: patch.raceDistanceLabel,
+      raceDistanceKm: patch.raceDistanceKm ?? null,
+      raceGoal: patch.raceGoal,
+      raceTargetTime: patch.raceTargetTime ?? null,
+      raceName: patch.raceName ?? null,
+      raceDate: patch.raceDate ?? null,
+      planStartDate: patch.planStartDate ?? null,
+      weeklyKmRange: patch.weeklyKmRange,
+      ...(patch.userPreferences?.length ? { userPreferences: [...patch.userPreferences] } : {}),
+      targetTime: patch.raceGoal === "finish" ? null : patch.targetTime ?? null,
+    }),
     onboardingComplete: true,
-    targetTime: patch.raceGoal === "finish" ? null : patch.targetTime ?? null,
-    maxHeartRateBpm: null,
   };
 }
 

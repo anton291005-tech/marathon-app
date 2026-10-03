@@ -19,6 +19,8 @@ export const MARATHON_APPLE_HEALTH_CONNECTED_KEY = "marathonAppleHealthConnected
 export const MARATHON_USER_ID_KEY = "marathonUserId";
 /** Prep-Rückblick-Snapshots (Cache/Offline-Kopie von `prep_recaps`), Map raceDate → Datensatz. */
 export const PREP_RECAPS_CACHE_KEY = "prepRecaps";
+/** Plan-eigene Preferences (Rennen, Ziel, Umfang) je Plan-ID — siehe `planOwnedPreferences`. */
+export const PLAN_OWNED_PREFERENCES_KEY = "marathonPlanOwnedPreferences";
 
 /**
  * Read-only catalog for docs / debug (order is not normative).
@@ -37,4 +39,5 @@ export const KNOWN_MY_RACE_STORAGE_KEYS: readonly string[] = [
   MARATHON_APPLE_HEALTH_CONNECTED_KEY,
   MARATHON_USER_ID_KEY,
   PREP_RECAPS_CACHE_KEY,
+  PLAN_OWNED_PREFERENCES_KEY,
 ];

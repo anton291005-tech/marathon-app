@@ -26,8 +26,13 @@ export type PrepCompletionState =
       /** Renntag bzw. — ohne Race-Session — letzter Plan-Workout-Tag (YYYY-MM-DD). */
       raceYmd: string;
       raceName: string | null;
-      /** Zielvorgabe in exakten Sekunden; null bei „Finishen" oder fehlender/ungültiger Zielzeit. */
+      /**
+       * Zielvorgabe in exakten Sekunden; null bei „Finishen", fehlender/ungültiger Zielzeit oder wenn
+       * die Preferences einem anderen Plan gehören.
+       */
       goalSeconds: number | null;
+      /** false: die Preferences beschreiben einen anderen Plan — Ziel/Distanz nicht daraus lesen. */
+      preferencesOwned: boolean;
     };
 
 type CompletionPreferences = Pick<PersistedMarathonPreferences, "raceName" | "raceDate" | "raceGoal" | "targetTime">;
@@ -111,14 +116,18 @@ function preferencesRaceYmd(raceDate: string | null | undefined): string | null 
 }
 
 /**
- * Preferences sind global, nicht pro Plan: der Wizard ersetzt sie beim Anlegen eines Plans, ein
- * Planwechsel stellt sie nicht zurück. Tragen sie ein Renndatum, das nicht der Renntag dieses Plans
- * ist, beschreiben sie einen anderen Plan (Ausnahme: `plan_name`, siehe `resolveRaceName`). Ohne
- * Renndatum (Alt-Bestand) gelten sie weiter.
+ * Preferences sind global, nicht pro Plan. Gehören sie zu diesem Plan? Ja, wenn sie kein Renndatum
+ * tragen (Alt-Bestand), ihr Renndatum der Renntag des Plans ist, oder ihr Rennname im `plan_name`
+ * steht (der Wizard bildet ihn daraus — fängt KI-Pläne und verschobene Rennen).
  */
-function preferencesDescribePlan(preferences: CompletionPreferences, raceYmd: string | null | undefined): boolean {
+export function preferencesBelongToPlan(
+  preferences: Pick<CompletionPreferences, "raceName" | "raceDate">,
+  plan: { raceYmd?: string | null; planName?: string | null },
+): boolean {
   const prefsYmd = preferencesRaceYmd(preferences.raceDate);
-  return prefsYmd == null || raceYmd == null || prefsYmd === raceYmd;
+  if (prefsYmd == null || plan.raceYmd == null || prefsYmd === plan.raceYmd) return true;
+  const name = typeof preferences.raceName === "string" ? preferences.raceName.trim() : "";
+  return name !== "" && raceNameFromPlanName(plan.planName) === name;
 }
 
 export function resolveRaceName(args: {
@@ -129,11 +138,7 @@ export function resolveRaceName(args: {
   raceYmd?: string | null;
 }): string | null {
   const fromPrefs = typeof args.preferences.raceName === "string" ? args.preferences.raceName.trim() : "";
-  // Der Wizard bildet `plan_name` aus dem Rennnamen: passt der, gehören die Preferences auch dann zum
-  // Plan, wenn dessen Rennen nicht (mehr) auf dem Renndatum liegt (KI-Plan, verschobenes Rennen).
-  const ownPlan =
-    preferencesDescribePlan(args.preferences, args.raceYmd) || raceNameFromPlanName(args.planName) === fromPrefs;
-  if (fromPrefs && ownPlan) return fromPrefs;
+  if (fromPrefs && preferencesBelongToPlan(args.preferences, args)) return fromPrefs;
   const fromTitle = cleanRaceTitle(args.raceSession?.title);
   if (fromTitle) return fromTitle;
   return raceNameFromPlanName(args.planName);
@@ -161,31 +166,34 @@ export function getPrepCompletionState(args: {
   planName?: string | null;
 }): PrepCompletionState {
   const { plan, logs, todayYmd, preferences, planName } = args;
-  const goalSeconds = resolveGoalSeconds(preferences);
   const race = findGoalRaceSession(plan);
 
   if (race) {
     const raceDone = isSessionLogDone(logs?.[race.session.id]);
     const datePassed = todayYmd > race.ymd;
     if (!raceDone && !datePassed) return { status: "active" };
+    const preferencesOwned = preferencesBelongToPlan(preferences, { raceYmd: race.ymd, planName });
     return {
       status: "completed",
       completedBy: raceDone ? "race_done" : "date_passed",
       raceSession: race.session,
       raceYmd: race.ymd,
       raceName: resolveRaceName({ preferences, raceSession: race.session, planName, raceYmd: race.ymd }),
-      goalSeconds,
+      goalSeconds: preferencesOwned ? resolveGoalSeconds(preferences) : null,
+      preferencesOwned,
     };
   }
 
   const lastYmd = lastWorkoutYmd(plan);
   if (!lastYmd || todayYmd <= lastYmd) return { status: "active" };
+  const preferencesOwned = preferencesBelongToPlan(preferences, { raceYmd: lastYmd, planName });
   return {
     status: "completed",
     completedBy: "plan_ended",
     raceSession: null,
     raceYmd: lastYmd,
     raceName: resolveRaceName({ preferences, raceSession: null, planName, raceYmd: lastYmd }),
-    goalSeconds,
+    goalSeconds: preferencesOwned ? resolveGoalSeconds(preferences) : null,
+    preferencesOwned,
   };
 }

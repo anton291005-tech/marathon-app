@@ -1,6 +1,7 @@
 import type { PlanSession, PlanWeek, SessionLog } from "../marathonPrediction";
 import { buildOnboardingPreferencesPatch } from "../onboarding/marathonPreferencesOnboarding";
 import { buildIsolatedOnboardingPreferences } from "../onboarding/onboardingPlanIsolation";
+import { resolveCompletedPrepGoal, type PrepRecapRecord } from "./prepRecapRecord";
 import {
   cleanRaceTitle,
   findGoalRaceSession,
@@ -241,5 +242,67 @@ describe("formatGoalLabel", () => {
     expect(formatGoalLabel(10800)).toBe("Ziel: Sub 3:00");
     expect(formatGoalLabel(10741)).toBe("Ziel: Sub 3:00");
     expect(formatGoalLabel(3 * 3600 + 29 * 60 + 1)).toBe("Ziel: Sub 3:30");
+  });
+});
+
+describe("Ziel und Distanz des abgeschlossenen Plans", () => {
+  const foreignPrefs = {
+    raceName: "Testplan Archiv-Flow",
+    raceDate: "18.04.2027",
+    raceGoal: "time" as const,
+    targetTime: "3:30:00",
+    raceDistanceKm: 21.1,
+  };
+  const completedWith = (preferences: Parameters<typeof getPrepCompletionState>[0]["preferences"]) => {
+    const state = getPrepCompletionState({ plan: warsawPlan, logs: {}, todayYmd: "2026-10-03", preferences });
+    if (state.status !== "completed") throw new Error("expected completed");
+    return state;
+  };
+  const snapshot = (planId: string | null, goalSeconds: number | null): PrepRecapRecord =>
+    ({
+      planId,
+      raceName: "Warschau Marathon",
+      raceDate: "2026-09-27",
+      finishTimeSeconds: null,
+      finishTimeSource: null,
+      finishTimeConfirmed: false,
+      schemaVersion: 1,
+      stats: { race: { name: "Warschau Marathon", ymd: "2026-09-27", distanceKm: 42.195, goalSeconds, completedBy: "race_done" } },
+    }) as PrepRecapRecord;
+
+  it("liest Ziel und Distanz nie aus Preferences eines anderen Plans", () => {
+    const completed = completedWith(foreignPrefs);
+    expect(completed).toMatchObject({ preferencesOwned: false, goalSeconds: null });
+    expect(
+      resolveCompletedPrepGoal({ completed, raceGoal: "time", preferredDistanceKm: 21.1, record: null, planId: "plan-a" }),
+    ).toEqual({ goalSeconds: null, preferredDistanceKm: null, snapshotDistanceKm: null });
+  });
+
+  it("fällt auf den Snapshot DIESES Plans zurück, nicht auf den eines anderen", () => {
+    const completed = completedWith(foreignPrefs);
+    const args = { completed, raceGoal: "time" as const, preferredDistanceKm: 21.1 };
+    expect(resolveCompletedPrepGoal({ ...args, record: snapshot("plan-a", 10190), planId: "plan-a" })).toEqual({
+      goalSeconds: 10190,
+      preferredDistanceKm: null,
+      snapshotDistanceKm: 42.195,
+    });
+    expect(resolveCompletedPrepGoal({ ...args, record: snapshot("plan-x", 10190), planId: "plan-a" }).goalSeconds).toBeNull();
+    const otherDate = { ...snapshot("plan-a", 10190), raceDate: "2026-08-30" };
+    expect(resolveCompletedPrepGoal({ ...args, record: otherDate, planId: "plan-a" }).goalSeconds).toBeNull();
+  });
+
+  it("nimmt die eigenen Preferences vor dem Snapshot", () => {
+    const completed = completedWith(prefs);
+    expect(
+      resolveCompletedPrepGoal({ completed, raceGoal: "time", preferredDistanceKm: 42.195, record: snapshot("plan-a", 9999), planId: "plan-a" }),
+    ).toMatchObject({ goalSeconds: 10190, preferredDistanceKm: 42.195 });
+  });
+
+  it("hat bei Ziel Finishen keine Zielzeile, auch wenn ein Snapshot ein Ziel trägt", () => {
+    const completed = completedWith({ raceGoal: "finish", targetTime: null });
+    expect(
+      resolveCompletedPrepGoal({ completed, raceGoal: "finish", preferredDistanceKm: null, record: snapshot("plan-a", 10190), planId: "plan-a" })
+        .goalSeconds,
+    ).toBeNull();
   });
 });

@@ -46,7 +46,12 @@ import PrepCompleteHeroCard from "./components/prepRecap/PrepCompleteHeroCard";
 import RaceResultCard from "./components/prepRecap/RaceResultCard";
 import { finishTimeActionLabel } from "./components/prepRecap/finishTimeActionLabel";
 import type { PrepRecapEntry } from "./components/prepRecap/PrepRecapExperience";
-import { getPrepCompletionState } from "./prepRecap/prepCompletionState";
+import {
+  findGoalRaceSession,
+  getPrepCompletionState,
+  preferencesBelongToPlan,
+  raceNameFromPlanName,
+} from "./prepRecap/prepCompletionState";
 import { detectRaceFinishTime } from "./prepRecap/detectRaceFinishTime";
 import { formatRaceDateDe, resolveRaceDistanceKm } from "./prepRecap/raceResultPresentation";
 import { useNewPrepFlow } from "./prepRecap/useNewPrepFlow";
@@ -58,7 +63,13 @@ import {
   readPrepRecapCache,
   savePrepRecapFinishTime,
 } from "./prepRecap/ensurePrepRecapSnapshot";
-import { isPrepRecapOfPlan, pickPrepRecapForDisplay, type FinishTimePatch, type PrepRecapRecord } from "./prepRecap/prepRecapRecord";
+import {
+  isPrepRecapOfPlan,
+  pickPrepRecapForDisplay,
+  resolveCompletedPrepGoal,
+  type FinishTimePatch,
+  type PrepRecapRecord,
+} from "./prepRecap/prepRecapRecord";
 import { linkPrepRecapToPlan, loadPrepRecaps } from "./lib/supabase/services/prepRecapService";
 import RaceCalculator from "./components/RaceCalculator";
 import SurfaceCard from "./components/SurfaceCard";
@@ -73,6 +84,14 @@ import {
   buildIsolatedOnboardingPreferences,
   detachSessionLogsFromPlan,
 } from "./onboarding/onboardingPlanIsolation";
+import {
+  assignPlanPreferencesOwner,
+  forgetPlanPreferences,
+  readPlanPreferencesStore,
+  stashPlanPreferencesBeforeWizard,
+  switchPlanPreferences,
+  writePlanPreferencesStore,
+} from "./onboarding/planOwnedPreferences";
 import {
   MIGRATION_TO_SUPABASE_DONE_KEY,
   SESSION_LOGS_MIGRATION_DONE_KEY,
@@ -2992,9 +3011,23 @@ export default function AppMain(){
     [displayPlan, logs, appNow, preferences, activePlanName],
   );
   const prepCompleted = prepCompletion.status === "completed" ? prepCompletion : null;
-  const prepRaceDistanceKm = prepCompleted
-    ? resolveRaceDistanceKm(prepCompleted.raceSession, preferences.raceDistanceKm)
+  /** Gespeicherter Rückblick (Snapshot) des Zielrennens — Quelle einer bestätigten Zielzeit. */
+  const [prepRecapRecord, setPrepRecapRecord] = useState<PrepRecapRecord | null>(null);
+  /** Ziel/Distanz gehören dem Plan: Preferences nur, wenn sie seine sind, sonst sein Snapshot. */
+  const prepGoal = prepCompleted
+    ? resolveCompletedPrepGoal({
+        completed: prepCompleted,
+        raceGoal: preferences.raceGoal,
+        preferredDistanceKm: preferences.raceDistanceKm,
+        record: prepRecapRecord,
+        planId: activePlanId,
+      })
     : null;
+  const prepGoalSeconds = prepGoal?.goalSeconds ?? null;
+  const prepRaceDistanceKm =
+    prepCompleted && prepGoal
+      ? resolveRaceDistanceKm(prepCompleted.raceSession, prepGoal.preferredDistanceKm) ?? prepGoal.snapshotDistanceKm
+      : null;
   /** Nur Vorschlag aus Apple Health — bis zur Bestätigung im Rückblick immer „laut Apple Health". */
   const prepDetectedFinish = useMemo(() => {
     if (!prepCompleted) return null;
@@ -3006,8 +3039,6 @@ export default function AppMain(){
       raceDistanceKm: prepRaceDistanceKm,
     });
   }, [prepCompleted, logs, healthRuns, prepRaceDistanceKm]);
-  /** Gespeicherter Rückblick (Snapshot) des Zielrennens — Quelle einer bestätigten Zielzeit. */
-  const [prepRecapRecord, setPrepRecapRecord] = useState<PrepRecapRecord | null>(null);
   const [prepRecapOverlay, setPrepRecapOverlay] = useState<PrepRecapEntry | null>(null);
   const [prepRecapOpening, setPrepRecapOpening] = useState(false);
   const prepRecapOpeningRef = useRef(false);
@@ -3060,7 +3091,7 @@ export default function AppMain(){
           raceYmd: completed.raceYmd,
           raceName: completed.raceName,
           raceDistanceKm: prepRaceDistanceKm,
-          goalSeconds: completed.goalSeconds,
+          goalSeconds: prepGoalSeconds,
           completedBy: completed.completedBy,
         }),
     });
@@ -3076,6 +3107,7 @@ export default function AppMain(){
     healthRuns,
     recoveryDailyRows,
     prepRaceDistanceKm,
+    prepGoalSeconds,
   ]);
   /** „Rückblick ansehen" / Zeit bearbeiten: Snapshot sicherstellen, dann Overlay öffnen. */
   const openPrepRecap = useCallback(
@@ -3456,6 +3488,42 @@ export default function AppMain(){
     setAllTrainingPlans(list);
   }, [user?.id]);
 
+  /** Plan-eigene Preferences (Rennen, Ziel, Umfang) je Plan-ID — siehe planOwnedPreferences. */
+  const planPreferencesStoreRef = useRef(null);
+  if (planPreferencesStoreRef.current == null) planPreferencesStoreRef.current = readPlanPreferencesStore();
+  const activePlanDescribesPreferences = prepCompleted
+    ? prepCompleted.preferencesOwned
+    : preferencesBelongToPlan(preferences, {
+        raceYmd: findGoalRaceSession(displayPlan)?.ymd ?? null,
+        planName: activePlanName,
+      });
+  /** Preferences auf den neu aktiven Plan umstellen: Felder des bisherigen merken, die des neuen einsetzen. */
+  const movePreferencesToPlan = useCallback(
+    (toPlanId: string, options?: { deletedFromPlan?: boolean }) => {
+      if (toPlanId === activePlanId) return;
+      const current = preferencesRef.current ?? {};
+      const toPlanName = allTrainingPlans.find((item) => item.id === toPlanId)?.plan_name ?? null;
+      const next = switchPlanPreferences({
+        preferences: current,
+        store: planPreferencesStoreRef.current,
+        from: { planId: activePlanId, describesPreferences: activePlanDescribesPreferences },
+        to: {
+          planId: toPlanId,
+          // Ohne gemerkten Besitzer: der Wizard bildet plan_name aus dem Rennnamen — das genügt als Nachweis.
+          describesPreferences:
+            typeof current.raceName === "string" &&
+            current.raceName.trim() !== "" &&
+            raceNameFromPlanName(toPlanName) === current.raceName.trim(),
+        },
+        stash: !options?.deletedFromPlan,
+      });
+      planPreferencesStoreRef.current = next.store;
+      writePlanPreferencesStore(next.store);
+      setPreferences(next.preferences);
+    },
+    [activePlanId, activePlanDescribesPreferences, allTrainingPlans],
+  );
+
   const handleSwitchPlan = useCallback(
     async (planId: string) => {
       if (!user?.id) return;
@@ -3467,6 +3535,7 @@ export default function AppMain(){
           setHasUserTrainingPlan(
             isUserTrainingPlan(remotePlan, preferencesRef.current, { trustedSource: true }),
           );
+          movePreferencesToPlan(planId);
         }
         await refreshAllTrainingPlans();
       } catch (e) {
@@ -3474,7 +3543,7 @@ export default function AppMain(){
         console.error("[AppMain] handleSwitchPlan error:", e);
       }
     },
-    [refreshAllTrainingPlans, user?.id],
+    [refreshAllTrainingPlans, user?.id, movePreferencesToPlan],
   );
 
   const handleAddNewPlan = useCallback(() => {
@@ -3501,7 +3570,11 @@ export default function AppMain(){
             setHasUserTrainingPlan(
               isUserTrainingPlan(remotePlan, preferencesRef.current, { trustedSource: true }),
             );
+            movePreferencesToPlan(activatedPlanId, { deletedFromPlan: true });
           }
+        } else {
+          planPreferencesStoreRef.current = forgetPlanPreferences(planPreferencesStoreRef.current, planId);
+          writePlanPreferencesStore(planPreferencesStoreRef.current);
         }
         await refreshAllTrainingPlans();
       } catch (e) {
@@ -3509,7 +3582,7 @@ export default function AppMain(){
         console.error("[AppMain] handleDeletePlan error:", e);
       }
     },
-    [allTrainingPlans.length, refreshAllTrainingPlans, user?.id],
+    [allTrainingPlans.length, refreshAllTrainingPlans, user?.id, movePreferencesToPlan],
   );
   const handleAccountDeleteCancel = useCallback(() => {
     if (accountDeleteBusy) return;
@@ -3561,7 +3634,15 @@ export default function AppMain(){
             skipRemotePatchesHydrationRef.current = true;
             skipRemotePrefsHydrationRef.current = true;
 
-            const isolatedPrefs = buildIsolatedOnboardingPreferences(patch);
+            // Nur die plan-eigenen Felder ersetzen: PR, HFmax & Co. fragt der Wizard nicht ab.
+            const previousPrefs = preferencesRef.current ?? {};
+            const isolatedPrefs = buildIsolatedOnboardingPreferences(patch, previousPrefs);
+            planPreferencesStoreRef.current = stashPlanPreferencesBeforeWizard(
+              planPreferencesStoreRef.current,
+              previousPrefs,
+              { planId: activePlanId, describesPreferences: activePlanDescribesPreferences },
+            );
+            writePlanPreferencesStore(planPreferencesStoreRef.current);
             const detachedLogs = detachSessionLogsFromPlan(logs, plan, getAppNow().toISOString());
 
             if (typeof localStorage !== "undefined") {
@@ -3600,7 +3681,17 @@ export default function AppMain(){
                   if (!savedRemotely) {
                     await saveTrainingPlan(user.id, normalizedPlan, planLabel || undefined);
                   }
-                  await refreshAllTrainingPlans();
+                  const plansAfterSave = await loadAllTrainingPlans(user.id);
+                  setAllTrainingPlans(plansAfterSave);
+                  const newPlanId = plansAfterSave.find((item) => item.is_active)?.id ?? null;
+                  if (newPlanId) {
+                    planPreferencesStoreRef.current = assignPlanPreferencesOwner(
+                      planPreferencesStoreRef.current,
+                      newPlanId,
+                      isolatedPrefs,
+                    );
+                    writePlanPreferencesStore(planPreferencesStoreRef.current);
+                  }
                 }
                 // eslint-disable-next-line no-console
                 console.log("[AppMain] saveTrainingPlan done");
@@ -3627,11 +3718,12 @@ export default function AppMain(){
     [
       handleAiApplyPlanPatches,
       logs,
-      refreshAllTrainingPlans,
       user?.id,
       newPrepPendingRef,
       completeNewPrep,
       refreshArchivedPreps,
+      activePlanId,
+      activePlanDescribesPreferences,
     ],
   );
   const postWorkoutMaxHeartRateBpm = (() => {
@@ -4120,7 +4212,7 @@ export default function AppMain(){
                 <PrepCompleteHeroCard
                   raceName={prepCompleted.raceName}
                   raceYmd={prepCompleted.raceYmd}
-                  goalSeconds={prepCompleted.goalSeconds}
+                  goalSeconds={prepGoalSeconds}
                   finish={prepFinishDisplay}
                   raceDistanceKm={prepRaceDistanceKm}
                   planEndedWithoutRace={prepCompleted.completedBy === "plan_ended"}
@@ -5237,7 +5329,7 @@ export default function AppMain(){
                 <RaceResultCard
                   raceName={prepCompleted.raceName}
                   raceYmd={prepCompleted.raceYmd}
-                  goalSeconds={prepCompleted.goalSeconds}
+                  goalSeconds={prepGoalSeconds}
                   finish={prepFinishDisplay}
                   raceDistanceKm={prepRaceDistanceKm}
                   completedBy={prepCompleted.completedBy}
