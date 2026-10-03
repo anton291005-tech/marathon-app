@@ -2,8 +2,9 @@ import { createContext, useContext, useEffect, useState } from "react";
 import {
   loadNotificationSettings,
   saveNotificationSettings,
-  scheduleTrainingReminder,
+  cancelLegacyDailyReminder,
   cancelTrainingReminder,
+  requestNotificationPermission,
   type NotificationSettings,
 } from "../services/notificationService";
 
@@ -20,22 +21,27 @@ const NotificationContext = createContext<NotificationContextType>({
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<NotificationSettings>(loadNotificationSettings);
 
+  /**
+   * Geplant wird nicht hier: der Provider kennt den Plan nicht. `useTrainingReminderSync` (AppMain)
+   * plant aus Einstellungen + aktivem Plan neu, sobald sich `settings` ändert.
+   */
   const updateSettings = async (partial: Partial<NotificationSettings>) => {
     const next = { ...settings, ...partial };
-    setSettings(next);
     saveNotificationSettings(next);
-    if (next.enabled) {
-      await scheduleTrainingReminder(next);
-    } else {
+    if (!next.enabled) {
+      setSettings(next);
       await cancelTrainingReminder();
+      return;
     }
+    // Erst die Berechtigung klären, dann den Zustand setzen — sonst plant der Sync ins Leere.
+    if (!settings.enabled) await requestNotificationPermission();
+    setSettings(next);
   };
 
   useEffect(() => {
-    if (settings.enabled) {
-      void scheduleTrainingReminder(settings);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Altbestand: die täglich wiederholende id 1001 kennt keinen Plan und muss weg, auch wenn AppMain
+    // (und damit die Neuplanung) gar nicht geladen wird, z. B. ausgeloggt.
+    void cancelLegacyDailyReminder();
   }, []);
 
   return (

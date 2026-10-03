@@ -114,6 +114,7 @@ import { useAuth } from "./contexts/AuthContext";
 import { useTheme } from "./context/ThemeContext";
 import { useLanguage } from "./context/LanguageContext";
 import { useNotifications } from "./context/NotificationContext";
+import { useTrainingReminderSync } from "./app/runtime/useTrainingReminderSync";
 import { useTranslation } from "react-i18next";
 import {
   formatKm,
@@ -1263,6 +1264,9 @@ function marathonLogRecordsDiffSyncKeys(prev, next) {
   }
   return changed;
 }
+
+/** Stabile leere Planreferenz für die Trainings-Erinnerungen, solange es keinen eigenen Plan gibt. */
+const NO_REMINDER_PLAN: never[] = [];
 
 export default function AppMain(){
   const { user, signOut } = useAuth();
@@ -3016,6 +3020,15 @@ export default function AppMain(){
     [displayPlan, logs, appNow, preferences, activePlanName],
   );
   const prepCompleted = prepCompletion.status === "completed" ? prepCompletion : null;
+  /** Trainings-Erinnerungen: nur Tage mit offener Session des aktiven Plans, nach Plan-Ende keine. */
+  useTrainingReminderSync({
+    settings: notificationSettings,
+    // Ohne eigenen Plan ist `displayPlan` der eingebettete Beispielplan — dafür nie erinnern.
+    plan: hasUserTrainingPlan ? displayPlan : NO_REMINDER_PLAN,
+    logs,
+    prepCompleted: prepCompleted != null,
+    todayYmd: getAppCalendarYmd(appNow),
+  });
   /** Gespeicherter Rückblick (Snapshot) des Zielrennens — Quelle einer bestätigten Zielzeit. */
   const [prepRecapRecord, setPrepRecapRecord] = useState<PrepRecapRecord | null>(null);
   /** Ziel/Distanz gehören dem Plan: Preferences nur, wenn sie seine sind, sonst sein Snapshot. */

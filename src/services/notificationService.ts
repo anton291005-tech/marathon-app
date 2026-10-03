@@ -1,6 +1,10 @@
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
-import { getAppNow } from "../core/time/timeSystem";
+import {
+  allTrainingReminderIds,
+  LEGACY_DAILY_REMINDER_ID,
+  type PlannedTrainingReminder,
+} from "./trainingReminderSchedule";
 
 export type NotificationSettings = {
   enabled: boolean;
@@ -9,7 +13,6 @@ export type NotificationSettings = {
 };
 
 const STORAGE_KEY = "myrace-notification-settings";
-const NOTIFICATION_ID = 1001;
 
 export function loadNotificationSettings(): NotificationSettings {
   try {
@@ -29,54 +32,64 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return display === "granted";
 }
 
-export async function scheduleTrainingReminder(
+async function hasNotificationPermission(): Promise<boolean> {
+  const { display } = await LocalNotifications.checkPermissions();
+  return display === "granted";
+}
+
+async function cancelIds(ids: number[]): Promise<void> {
+  try {
+    await LocalNotifications.cancel({ notifications: ids.map((id) => ({ id })) });
+  } catch {}
+}
+
+/** Läufe nacheinander: ein Storno darf nie eine gerade laufende Neuplanung überholen. */
+let queue: Promise<void> = Promise.resolve();
+
+function enqueue(job: () => Promise<void>): Promise<void> {
+  queue = queue.then(job).catch((e) => {
+    // eslint-disable-next-line no-console
+    console.warn("[trainingReminder] sync failed", e);
+  });
+  return queue;
+}
+
+/**
+ * Ersetzt alle ausstehenden Trainings-Erinnerungen durch `reminders` (Einzel-Notifications, keine
+ * Wiederholung). Storniert immer zuerst — auch die alte tägliche id 1001. Schalter aus, keine
+ * Berechtigung oder leere Liste: es bleibt nichts ausstehend.
+ */
+export function syncTrainingReminders(
   settings: NotificationSettings,
-  todayWorkoutTitle?: string
+  reminders: readonly PlannedTrainingReminder[],
 ): Promise<void> {
-  if (!Capacitor.isNativePlatform()) return;
-
-  await cancelTrainingReminder();
-
-  if (!settings.enabled) return;
-
-  const permission = await requestNotificationPermission();
-  if (!permission) return;
-
-  const body = todayWorkoutTitle
-    ? `Heute: ${todayWorkoutTitle}`
-    : "Dein Training wartet auf dich 💪";
-
-  const now = getAppNow();
-  const scheduled = new Date(now.getTime());
-  scheduled.setHours(settings.hour, settings.minute, 0, 0);
-  if (scheduled <= now) {
-    scheduled.setDate(scheduled.getDate() + 1);
-  }
-
-  await LocalNotifications.schedule({
-    notifications: [
-      {
-        id: NOTIFICATION_ID,
+  if (!Capacitor.isNativePlatform()) return Promise.resolve();
+  return enqueue(async () => {
+    await cancelIds(allTrainingReminderIds());
+    if (!settings.enabled || reminders.length === 0) return;
+    if (!(await hasNotificationPermission())) return;
+    await LocalNotifications.schedule({
+      notifications: reminders.map((reminder) => ({
+        id: reminder.id,
         title: "MyRace 🏃",
-        body,
-        schedule: {
-          at: scheduled,
-          repeats: true,
-          every: "day",
-        },
+        body: "Dein Training wartet auf dich 💪",
+        schedule: { at: reminder.at },
         sound: undefined,
         smallIcon: "ic_stat_icon_config_sample",
         iconColor: "#3b82f6",
-      },
-    ],
+      })),
+    });
   });
 }
 
-export async function cancelTrainingReminder(): Promise<void> {
-  if (!Capacitor.isNativePlatform()) return;
-  try {
-    await LocalNotifications.cancel({
-      notifications: [{ id: NOTIFICATION_ID }],
-    });
-  } catch {}
+/** Storniert alle Trainings-Erinnerungen (alt + Fenster). */
+export function cancelTrainingReminder(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return Promise.resolve();
+  return enqueue(() => cancelIds(allTrainingReminderIds()));
+}
+
+/** Nur die alte, täglich wiederholende Erinnerung stornieren (Altbestand, auch ohne geladenen Plan). */
+export function cancelLegacyDailyReminder(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return Promise.resolve();
+  return enqueue(() => cancelIds([LEGACY_DAILY_REMINDER_ID]));
 }
