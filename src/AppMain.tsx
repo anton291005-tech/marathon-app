@@ -1159,19 +1159,8 @@ function CollapsibleSettingsCard({ title, subtitle, expanded, onToggle, children
   );
 }
 
-/** Lokaler Kalendertag (en-CA) der Plan-Session aus training_plan_v2 — für Post-Workout-Summary / Health-Tag-Abgleich. */
-function planWorkoutLocalDayKey(trainingPlanV2, sessionId) {
-  const weeks = trainingPlanV2?.weeks ?? [];
-  for (const week of weeks) {
-    const wo = week.workouts?.find((w) => w.id === sessionId);
-    if (wo?.dateIso) {
-      const d = new Date(wo.dateIso);
-      if (!Number.isFinite(d.getTime())) return null;
-      return d.toLocaleDateString("en-CA");
-    }
-  }
-  return null;
-}
+/** Rückblick im Session-Modal: nachgeladener Puls wird nur angezeigt, nie ins Log geschrieben. */
+function noopPersistWorkoutHeartRate() {}
 
 const SUB3H_TARGET_SECONDS_UI = 3 * 3600;
 
@@ -1355,6 +1344,8 @@ export default function AppMain(){
   }, [baseWeekMetaByStartIso, trainingPlanV2]);
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({feeling:0,actualKm:"",notes:"",done:false,skipped:false});
+  /** Erledigte Session: Modal zeigt die Conclusion Card; „Bearbeiten" wechselt ins Formular. */
+  const [modalEditMode,setModalEditMode]=useState(false);
   const [view,setView]=useState(DEFAULT_VIEW);
   /** Übersicht „Alle Wochen“: pro Trainingsphase ein-/ausklappbar */
   const [overviewPhaseExpandedByKey, setOverviewPhaseExpandedByKey] = useState(() => ({}));
@@ -2341,12 +2332,13 @@ export default function AppMain(){
   };
 
   const openModal=(session)=>{
+    setModalEditMode(false);
     const ex=logs[session.id]||{};
     setForm({feeling:ex.feeling||0,actualKm:ex.actualKm||"",notes:ex.notes||"",done:ex.done||false,skipped:ex.skipped||false});
     setModal(session);
   };
 
-  const closeModal=()=>setModal(null);
+  const closeModal=()=>{setModal(null);setModalEditMode(false);};
 
   const navigateToView = (nextView, forcedDirection = null)=>{
     const currentView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
@@ -3789,23 +3781,29 @@ export default function AppMain(){
     { logs, healthRuns, persistWorkoutHeartRate },
   );
 
+  /**
+   * Rückblick: erledigte Session → Conclusion Card aus gespeicherten Daten (Log + verknüpftes
+   * Health-Workout, sonst nur Log). Reines Lesen — kein Abschluss-Event, keine Persistenz.
+   */
   const modalCompletionSummary =
-    modal && modalWeek && modalWorkout
+    modal && modalWeek && modalWorkout && !modalEditMode
       ? (() => {
           const modalLog = logs[modal.id];
           if (getSessionStatus(modalLog) !== "done") return null;
-          const dayKey = planWorkoutLocalDayKey(trainingPlanV2, modal.id);
-          const runId = modalLog?.assignedRun?.runId;
-          if (!runId || !dayKey) return null;
-          return postWorkoutSummary.getPostWorkoutSummary(runId, dayKey);
+          return postWorkoutSummary.getStoredSessionConclusion(modal.id);
         })()
       : null;
+  const modalCompletionIsLogOnly = modalCompletionSummary?.source === "log";
 
-  const modalCompletionSummaryDisplay = usePostWorkoutHrEnrichment(
-    modalCompletionSummary,
-    !!(modal && modalWeek && modalWorkout && modalCompletionSummary),
-    { logs, healthRuns, persistWorkoutHeartRate },
+  // Ansehen schreibt nichts: der nachgeladene Puls wird hier nur angezeigt, nicht ins Log übernommen.
+  const modalCompletionSummaryEnriched = usePostWorkoutHrEnrichment(
+    modalCompletionIsLogOnly ? null : modalCompletionSummary,
+    !!(modal && modalWeek && modalWorkout && modalCompletionSummary && !modalCompletionIsLogOnly),
+    { logs, healthRuns, persistWorkoutHeartRate: noopPersistWorkoutHeartRate },
   );
+  const modalCompletionSummaryDisplay = modalCompletionIsLogOnly
+    ? modalCompletionSummary
+    : modalCompletionSummaryEnriched;
 
   /** Eingeklappte Einschätzung: kompaktere Home-Card-Paddings (Scroll siehe Main-Area — temporär aktiv). */
   const homeScrollLocked = activeView === "home" && !homeCoachAssessmentExpanded;
@@ -6594,7 +6592,7 @@ export default function AppMain(){
       </div>
 
       {modal&&modalWeek&&modalWorkout&&(modalCompletionSummaryDisplay ? (
-        <PostWorkoutSummaryCard open summary={modalCompletionSummaryDisplay} onDone={closeModal} />
+        <PostWorkoutSummaryCard open summary={modalCompletionSummaryDisplay} onDone={closeModal} onEdit={() => setModalEditMode(true)} />
       ) : (
         <div onClick={closeModal} style={{position:"fixed",inset:0,background:"rgba(2,6,23,0.82)",display:"flex",alignItems:"stretch",justifyContent:"center",padding:0,zIndex:1000}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(180deg,#0c1020 0%, #090d18 100%)",width:"100%",maxWidth:720,height:"100%",overflowY:"auto",borderLeft:"1px solid var(--border-default)",borderRight:"1px solid var(--border-default)"}}>
