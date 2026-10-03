@@ -461,7 +461,7 @@ function normalizeAiResponseForFrontend(payload, { userInput = "", context = {} 
   message = enforceCoachTone(message);
 
   const actionType = inferActionType(payload?.action, risk);
-  if (!actionType) {
+  if (!actionType || (pickPrepStatus(context) && PLAN_MUTATING_ACTIONS.includes(actionType))) {
     return { mode, message, action: null };
   }
 
@@ -587,10 +587,12 @@ function toCoachSessionObject(session) {
 function findCurrentPlanWeek(weeks, today, year) {
   let bestWeek = null;
   let bestDistance = Infinity;
+  let anyParsed = false;
   for (const week of weeks) {
     for (const session of Array.isArray(week?.s) ? week.s : []) {
       const parsed = parseSessionDateLabel(session?.date, year);
       if (!parsed) continue;
+      anyParsed = true;
       const diffMs = normalizeCalendarDay(parsed).getTime() - today.getTime();
       if (diffMs >= 0 && diffMs < bestDistance) {
         bestDistance = diffMs;
@@ -598,7 +600,91 @@ function findCurrentPlanWeek(weeks, today, year) {
       }
     }
   }
-  return bestWeek || weeks[0] || null;
+  if (bestWeek) return bestWeek;
+  // Keine künftige Session: Plan vorbei → letzte Woche (nie zurück auf Woche 1). Woche 1 nur, wenn
+  // sich gar kein Datum lesen lässt (dann ist „vorbei" nicht entscheidbar).
+  return (anyParsed ? weeks[weeks.length - 1] : weeks[0]) || null;
+}
+
+/** Aktionen, die den Plan umbauen — nach Plan-Ende gibt es nichts mehr zu tapern oder zu verschieben. */
+const PLAN_MUTATING_ACTIONS = [
+  "adjust_plan_for_illness",
+  "replace_bike_with_run",
+  "convert_workout_to_run",
+  "shift_race_date",
+  "shift_plan_start_date",
+  "taper_before_race",
+  "boost_next_week_volume",
+  "adapt_plan_injury_no_run",
+  "swap_training_days",
+];
+
+const PREP_RECAP_WEEKS = 3;
+
+const NO_CURRENT_WEEK_NOTE =
+  "Es gibt keine aktuelle Trainingswoche und kein heutiges Training; keine Taper- oder Renn-Verschiebungs-Vorschläge.";
+
+const PREP_FOCUS_GUIDANCE = {
+  recovery: `Vorbereitung abgeschlossen, das Rennen liegt höchstens 14 Tage zurück: Fokus auf Erholung. ${NO_CURRENT_WEEK_NOTE}`,
+  ready_for_new_prep: `Vorbereitung abgeschlossen, die Erholungsphase ist vorbei: der User ist bereit für eine neue Vorbereitung. ${NO_CURRENT_WEEK_NOTE}`,
+  plan_over: `Der Trainingsplan ist vorbei; ob ein Rennen gelaufen wurde, ist nicht bekannt — nicht von einem gelaufenen Rennen oder einer Zielzeit ausgehen. Der User kann eine neue Vorbereitung starten. ${NO_CURRENT_WEEK_NOTE}`,
+};
+
+function finiteOrNull(v) {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+function stringOrNull(v) {
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+/**
+ * Abschluss-Zustand des AKTIVEN Plans, vom Client aus `getPrepCompletionState` + Rückblick-Snapshot
+ * gebaut (`src/lib/ai/coachPrepStatus.ts`). Hier nur in feste Felder/Reihenfolge gebracht: der Block
+ * steht im gecachten Prompt-Teil und enthält nichts, was feiner als ein Tag wechselt.
+ */
+function pickPrepStatus(context) {
+  const raw = context?.prepStatus;
+  if (!raw || typeof raw !== "object" || raw.status !== "completed") return null;
+  const raceYmd = typeof raw.raceYmd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.raceYmd) ? raw.raceYmd : null;
+  if (!raceYmd) return null;
+  const result = raw.result && typeof raw.result === "object" ? raw.result : {};
+  const finishTimeSeconds = finiteOrNull(result.finishTimeSeconds);
+  const completedBy = ["race_done", "date_passed", "plan_ended"].includes(raw.completedBy) ? raw.completedBy : null;
+  // „Gelaufen" wie im Rückblick: nie bei plan_ended, sonst nur mit Zeit oder abgehaktem Rennen.
+  const raceRun =
+    raw.raceRun === true && completedBy !== "plan_ended" && (finishTimeSeconds != null || completedBy === "race_done");
+  const focus = !raceRun ? "plan_over" : raw.focus === "recovery" ? "recovery" : "ready_for_new_prep";
+  return {
+    status: "completed",
+    completedBy,
+    raceYmd,
+    raceName: stringOrNull(raw.raceName),
+    raceRun,
+    result: {
+      finishTime: raceRun && finishTimeSeconds != null ? stringOrNull(result.finishTime) : null,
+      finishTimeSeconds: raceRun ? finishTimeSeconds : null,
+      finishTimeConfirmed: raceRun && finishTimeSeconds != null && result.finishTimeConfirmed === true,
+      goal: stringOrNull(result.goal),
+      goalSeconds: finiteOrNull(result.goalSeconds),
+      pacePerKm: raceRun && finishTimeSeconds != null ? stringOrNull(result.pacePerKm) : null,
+      distanceKm: finiteOrNull(result.distanceKm),
+    },
+    focus,
+    coachGuidance: PREP_FOCUS_GUIDANCE[focus],
+  };
+}
+
+/** Rückblick statt Vorschau: die letzten Planwochen, ohne Ruhetage. */
+function buildPrepRecapWeeks(weeks) {
+  return weeks.slice(-PREP_RECAP_WEEKS).map((week) => ({
+    week: typeof week?.wn === "number" ? week.wn : weeks.indexOf(week) + 1,
+    phase: week?.phase || week?.label || "unknown",
+    km: typeof week?.km === "number" ? week.km : null,
+    sessions: (Array.isArray(week?.s) ? week.s : [])
+      .filter((session) => session && session.type !== "rest")
+      .map((session) => toCoachSessionObject(session)),
+  }));
 }
 
 function computeAvgWeeklyKmRemaining(weeks, today, year) {
@@ -623,6 +709,26 @@ function buildTrimmedTrainingPlan(context) {
   const today = normalizeCalendarDay(Number.isFinite(now.getTime()) ? now : new Date());
   const year = today.getFullYear();
   const goals = context?.goals && typeof context.goals === "object" ? context.goals : {};
+  const raceDateIso =
+    context?.raceDateIso === null || typeof context?.raceDateIso === "string" ? context.raceDateIso : null;
+
+  // Plan abgeschlossen: keine „aktuelle Woche", kein Fenster um heute — nur der Rückblick.
+  if (pickPrepStatus(context)) {
+    return {
+      status: "completed",
+      next14Days: [],
+      last7Days: [],
+      recapLastWeeks: buildPrepRecapWeeks(weeks),
+      planSummary: {
+        totalWeeks: weeks.length,
+        currentPhase: "abgeschlossen",
+        raceDateIso,
+        targetTime: goals.targetTime || "nicht gesetzt",
+        avgWeeklyKmRemaining: null,
+      },
+    };
+  }
+
   const currentWeek = findCurrentPlanWeek(weeks, today, year);
 
   const datedSessions = weeks.flatMap((week) =>
@@ -655,10 +761,7 @@ function buildTrimmedTrainingPlan(context) {
     planSummary: {
       totalWeeks: weeks.length,
       currentPhase: currentWeek?.phase || currentWeek?.label || "unknown",
-      raceDateIso:
-        context?.raceDateIso === null || typeof context?.raceDateIso === "string"
-          ? context.raceDateIso
-          : null,
+      raceDateIso,
       targetTime: goals.targetTime || "nicht gesetzt",
       avgWeeklyKmRemaining: computeAvgWeeklyKmRemaining(weeks, today, year),
     },
@@ -792,6 +895,7 @@ function buildCoachContextData(context) {
   const healthRunsLast10Days = trimHealthRunsLast10Days(context);
   return {
     todayIso,
+    prepStatus: pickPrepStatus(context),
     raceDateIso,
     goals,
     maxHeartRateBpm,
@@ -834,7 +938,28 @@ function buildContextSummary(context) {
 
   const trimmedPlan = buildTrimmedTrainingPlan(context);
   const summary = trimmedPlan.planSummary;
-  if (summary.totalWeeks > 0) {
+  const prepStatus = pickPrepStatus(context);
+  if (prepStatus) {
+    const { result } = prepStatus;
+    const goalNote = result.goal ? `, ${result.goal}` : "";
+    if (prepStatus.completedBy === "plan_ended") {
+      lines.push(`Trainingsplan abgeschlossen: letzter Trainingstag ${prepStatus.raceYmd} (${summary.totalWeeks} Planwochen), kein Rennen im Plan.`);
+    } else if (!prepStatus.raceRun) {
+      lines.push(
+        `Trainingsplan abgeschlossen: Renntag ${prepStatus.raceName || "des Zielrennens"} war am ${prepStatus.raceYmd} (${summary.totalWeeks} Planwochen); kein Ergebnis und kein abgehaktes Rennen bekannt${goalNote}.`,
+      );
+    } else {
+      lines.push(
+        `Vorbereitung abgeschlossen: ${prepStatus.raceName || "Zielrennen"} am ${prepStatus.raceYmd} (${summary.totalWeeks} Planwochen).`,
+      );
+      lines.push(
+        result.finishTime
+          ? `Rennergebnis: ${result.finishTime} (${result.finishTimeConfirmed ? "bestätigt" : "laut Apple Health, unbestätigt"})${result.pacePerKm ? `, Pace ${result.pacePerKm}` : ""}${goalNote}`
+          : `Rennergebnis: Rennen gelaufen, keine Zeit bekannt${goalNote}`,
+      );
+    }
+    lines.push(prepStatus.coachGuidance);
+  } else if (summary.totalWeeks > 0) {
     lines.push(
       `Trainingsplan: ${summary.totalWeeks} Wochen gesamt, aktuelle Phase: ${summary.currentPhase}, Ø ${summary.avgWeeklyKmRemaining ?? "?"} km/Woche restlich`,
     );

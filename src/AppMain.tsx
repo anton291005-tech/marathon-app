@@ -55,6 +55,7 @@ import {
 import { detectRaceFinishTime } from "./prepRecap/detectRaceFinishTime";
 import { formatRaceDateDe, resolveRaceDistanceKm } from "./prepRecap/raceResultPresentation";
 import { useNewPrepFlow } from "./prepRecap/useNewPrepFlow";
+import { buildCoachPrepStatus } from "./lib/ai/coachPrepStatus";
 import { runOnboardingCompletion } from "./prepRecap/newPrepFlow";
 import { buildPrepRecapSnapshot } from "./prepRecap/buildPrepRecapSnapshot";
 import {
@@ -3076,6 +3077,22 @@ export default function AppMain(){
     }
     return prepDetectedFinish ? { seconds: prepDetectedFinish.seconds, confirmed: false } : null;
   }, [prepCompleted, prepRecapRecord, prepDetectedFinish]);
+  /** Coach-Kontext nach Plan-Ende: Abschluss + Rennergebnis des AKTIVEN Plans statt aktueller Woche. */
+  const coachPrepStatus = useMemo(
+    () =>
+      buildCoachPrepStatus({
+        completion: prepCompletion,
+        finish: prepFinishDisplay,
+        goalSeconds: prepGoalSeconds,
+        raceDistanceKm: prepRaceDistanceKm,
+        todayYmd: getAppCalendarYmd(appNow),
+      }),
+    [prepCompletion, prepFinishDisplay, prepGoalSeconds, prepRaceDistanceKm, appNow],
+  );
+  const buildCoachAiContext = useCallback(
+    () => ({ ...buildCurrentAiContext(), prepStatus: coachPrepStatus }),
+    [buildCurrentAiContext, coachPrepStatus],
+  );
   /** Snapshot der abgeschlossenen Vorbereitung sicherstellen (beim ersten Aufruf EINMAL anlegen). */
   const ensureCurrentPrepSnapshot = useCallback(async (): Promise<PrepRecapRecord> => {
     if (!prepCompleted) throw new Error("Vorbereitung ist nicht abgeschlossen");
@@ -5558,7 +5575,7 @@ export default function AppMain(){
         <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,gap:6,...viewTransitionStyle}}>
           <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",padding:"0 10px"}}>
             <AiCoachPanel
-              getContext={buildCurrentAiContext}
+              getContext={buildCoachAiContext}
               onApplyPlanPatches={handleAiApplyPlanPatches}
               onReplaceTrainingPlanV2={handleAiReplaceTrainingPlanV2}
               onNavigate={handleAiNavigate}
