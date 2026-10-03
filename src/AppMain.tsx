@@ -106,6 +106,7 @@ import {
   useAiCoachChatMessagesState,
   useAppCorePersistenceEffects,
   useDisplayPlanFromTrainingState,
+  useAppleHealthAutoSync,
   useIosHealthKitBootstrap,
   useRecoveryDomainRuntime,
 } from "./app/runtime";
@@ -1790,6 +1791,7 @@ export default function AppMain(){
       );
       return stats.syncedTotal;
     } catch (e) {
+      console.warn("[appleHealth] Workouts konnten nicht geladen werden", e);
       setAppleHealthFetchStats({
         fetchedTotal: 0,
         syncedTotal: 0,
@@ -1803,6 +1805,12 @@ export default function AppMain(){
     }
   };
 
+  /**
+   * Automatischer Sync (Kaltstart + Rückkehr in den Vordergrund): gedrosselt, nie parallel, mit frischer
+   * App-Uhr. Der manuelle Button (`reloadHealthRunsFromApple`) ruft weiter direkt den Fetch auf.
+   */
+  const appleHealthAutoSync = useAppleHealthAutoSync(() => fetchRunningWorkoutsLast7Days());
+
   useIosHealthKitBootstrap({
     appleHealthConnectedStorageKey: APPLE_HEALTH_CONNECTED_KEY,
     setHealthKitAvailable,
@@ -1814,25 +1822,12 @@ export default function AppMain(){
     onRecoveryDailyMerged: (next, incoming) => {
       onRecoveryDailyMergedRef.current(next, incoming);
     },
-    fetchRunningWorkoutsLast7Days,
+    // Kaltstart: derselbe Controller wie beim Resume — ein Resume während des Starts läuft nicht parallel.
+    fetchRunningWorkoutsLast7Days: async () => {
+      await appleHealthAutoSync.trigger("cold-start");
+      return 0;
+    },
   });
-
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-    let lastFetchTime = 0;
-    const DEBOUNCE_MS = 30_000;
-    const listenerPromise = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
-      if (!isActive) return;
-      const now = getAppNowEpochMs();
-      if (now - lastFetchTime < DEBOUNCE_MS) return;
-      lastFetchTime = now;
-      void fetchRunningWorkoutsLast7Days();
-    });
-    return () => {
-      listenerPromise.then((l) => l.remove());
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchRunningWorkoutsLast7Days stable ref from mount
-  }, []);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -1894,8 +1889,9 @@ export default function AppMain(){
         setSleepPermission(grantedSleep);
         setHrvPermission(grantedHrv);
         setRhrPermission(grantedRhr);
-      } catch {
+      } catch (e) {
         // best-effort
+        console.warn("[appleHealth] Berechtigungs-Check nach dem Verbinden fehlgeschlagen", e);
       }
 
       // Re-fetch recovery data now that permissions are freshly granted.
@@ -1954,13 +1950,15 @@ export default function AppMain(){
                 hrvDaysUsed: rH.length, rhrDaysUsed: rR.length,
                 sleepPermission: grantedSleep, hrvPermission: grantedHrv, rhrPermission: grantedRhr,
               });
-            } catch {
-              // ignore (single best-effort retry only)
+            } catch (e) {
+              // single best-effort retry only
+              console.warn("[appleHealth] Recovery-Retry nach dem Verbinden fehlgeschlagen", e);
             }
           }, 500);
         }
-      } catch {
-        // ignore — recovery hydration is best-effort after connect
+      } catch (e) {
+        // recovery hydration is best-effort after connect
+        console.warn("[appleHealth] Recovery-Daten nach dem Verbinden nicht geladen", e);
       }
 
       setAppleHealthConnectFeedback({
@@ -1970,12 +1968,14 @@ export default function AppMain(){
       try {
         await fetchRunningWorkoutsLast7Days();
       } catch (fetchErr) {
+        console.warn("[appleHealth] Workouts nach dem Verbinden nicht geladen", fetchErr);
         setAppleHealthLoadFeedback({
           tone: "err",
           text: "Aktivitäten konnten nicht geladen werden. Bitte „Aktivitäten aktualisieren“ nutzen.",
         });
       }
     } catch (err) {
+      console.warn("[appleHealth] Verbinden fehlgeschlagen", err);
       setAppleHealthConnectFeedback({
         tone: "err",
         text: "Apple Health konnte nicht verbunden werden. Bitte in iOS Health-Zugriff prüfen.",
@@ -2139,6 +2139,7 @@ export default function AppMain(){
       try {
         await fetchRunningWorkoutsLast7Days(options);
       } catch (err) {
+        console.warn("[appleHealth] manuelles Aktualisieren fehlgeschlagen", err);
         setAppleHealthLoadFeedback({
           tone: "err",
           text: "Bitte zuerst Apple-Health-Zugriff erlauben (Workouts, Distanz, Rad-Distanz, Puls, Aktivenergie).",
@@ -2150,6 +2151,7 @@ export default function AppMain(){
         text: options?.forceLastThreeCalendarDays ? "Aktivitäten aktualisiert (3 Tage neu geladen)." : "Aktivitäten aktualisiert.",
       });
     } catch (err) {
+        console.warn("[appleHealth] manuelles Aktualisieren fehlgeschlagen", err);
       setAppleHealthLoadFeedback({
         tone: "err",
         text: "Bitte zuerst Apple-Health-Zugriff erlauben (Workouts, Distanz, Rad-Distanz, Puls, Aktivenergie).",

@@ -515,7 +515,8 @@ export async function healthKitFetchWorkoutsForAppStorage(
         ascending: true,
       });
       hrPoints = (hr.samples || []).map((s) => ({ startDate: s.startDate, value: s.value }));
-    } catch {
+    } catch (e) {
+      console.warn(`[appleHealthService] ${logTag} heart rate samples failed — workouts sync without HR`, e);
       hrPoints = [];
     }
 

@@ -50,6 +50,11 @@ export interface IosHealthKitBootstrapApi {
  * - **Stale closures sind akzeptiert**: Es werden nur Referenzen aus dem **ersten Render** verwendet; spätere
  *   Render‑Identitäten von Settern/`fetchRunningWorkoutsLast7Days` werden ignoriert (bewusst).
  * - **Erste Render‑Referenzen sind gewollt**: Neuere Callback-Implementierungen nach Mount werden nicht nachgezogen.
+ * - **Ausnahme seit 2026-10-03 (`fix/health-auto-sync`)**: `fetchRunningWorkoutsLast7Days` ist in `AppMain` ein
+ *   Wrapper um den Auto-Sync-Controller (`useAppleHealthAutoSync`). Der Wrapper selbst stammt weiter aus dem ersten
+ *   Render, der Controller liest die Fetch-Funktion aber pro Lauf aus einem Ref — der Kaltstart führt also die
+ *   Fetch-Funktion des aktuellen Renders aus. Heute ohne Wirkung (sie nutzt nur Setter, Refs und Modulfunktionen);
+ *   der Effekt selbst, seine Bedingungen und die Hydration bleiben unverändert mount-only.
  *
  * ### Was passiert bei Re-Runs des Effekts (deshalb verboten)?
  *
@@ -218,7 +223,8 @@ export function useIosHealthKitBootstrap(api: IosHealthKitBootstrapApi): void {
               });
             }
             return count;
-          } catch {
+          } catch (e) {
+            console.warn("[appleHealthService] recovery hydration failed", e);
             // eslint-disable-next-line no-console
             console.log("[RECOVERY_PIPELINE][hydration]", {
               retryUsed: opts.retryUsed,
@@ -266,16 +272,19 @@ export function useIosHealthKitBootstrap(api: IosHealthKitBootstrapApi): void {
             setSleepPermission(resolvedSleep);
             setHrvPermission(resolvedHrv);
             setRhrPermission(resolvedRhr);
-          } catch {
+          } catch (e) {
             // best-effort
+            console.warn("[appleHealthService] permission check on launch failed", e);
           }
           try {
             await fetchRunningWorkoutsLast7Days();
           } catch (e) {
-            // ignore (best-effort)
+            // best-effort — der Start darf daran nicht scheitern, aber nicht still.
+            console.warn("[appleHealthService] cold-start workout sync failed", e);
           }
         }
       } catch (e) {
+        console.warn("[appleHealthService] HealthKit bootstrap failed", e);
         if (!cancelled) setHealthKitAvailable(false);
       }
     })();

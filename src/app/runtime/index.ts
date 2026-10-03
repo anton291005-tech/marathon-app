@@ -21,6 +21,7 @@ export { useAiCoachChatMessagesState } from "./useAiCoachChatMessagesState";
 export { useDisplayPlanFromTrainingState } from "./useDisplayPlanFromTrainingState";
 export { useRecoveryDomainRuntime } from "./useRecoveryDomainRuntime";
 export { useIosHealthKitBootstrap } from "./useIosHealthKitBootstrap";
+export { useAppleHealthAutoSync } from "./useAppleHealthAutoSync";
 export {
   asLegacyPlanWeekFromDisplaySlice,
   asLegacyPlanWeeksMutable,
