@@ -44,4 +44,28 @@ export function validateSiblingStackNoOverlap(elements: HTMLElement[], screen: s
   }
 }
 
+/**
+ * Warn if content reaches under the floating tab bar: the bottom edge of `content` (the scroll/clip
+ * box, not its scrolled children) must end at or above the top edge of `bottomNav`.
+ * Returns the overlap in px (0 = frei), damit Tests ohne console-Spy prüfen können.
+ */
+export function validateClearOfBottomNav(
+  content: HTMLElement | null,
+  bottomNav: HTMLElement | null,
+  screen: string,
+  tolerancePx = 0.5,
+): number {
+  if (!content || !bottomNav) return 0;
+  if (typeof process !== "undefined" && process.env.NODE_ENV === "production") return 0;
+  const navRect = bottomNav.getBoundingClientRect();
+  // Bar nicht gelayoutet (display none / Test ohne Layout): nichts zu prüfen.
+  if (navRect.height <= 0) return 0;
+  const overlap = content.getBoundingClientRect().bottom - navRect.top;
+  if (overlap > tolerancePx) {
+    warnLayoutBudgetViolation(screen, `content reaches ~${Math.round(overlap)}px under the bottom nav`);
+    return overlap;
+  }
+  return 0;
+}
+
 export { LAYOUT_BUDGET };

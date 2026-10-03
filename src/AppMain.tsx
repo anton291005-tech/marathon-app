@@ -266,9 +266,16 @@ import {
 import {
   LAYOUT_SPACING,
   getCompactScreenSpacing,
+  HOME_DENSITY_SCALES,
+  getBottomNavBottomOffset,
+  getBottomNavContentPadding,
+  getHomeBaseDensity,
   getHomeSpacing,
+  nextHomeDensity,
+  validateClearOfBottomNav,
   validateNoVerticalOverflow,
   validateSiblingStackNoOverlap,
+  BOTTOM_NAV_HEIGHT_PX,
 } from "./layout";
 import { getWeekSessionRowWrapStyle, getWeekStackContainerStyle, shouldWeekStackScroll } from "./layout/weekStackLayout";
 import {
@@ -1561,8 +1568,12 @@ export default function AppMain(){
   const [viewMotionDir,setViewMotionDir]=useState(0);
   /** Home: „Vorbereitungs Einschätzung“ — Details standardmäßig eingeklappt */
   const [homeCoachAssessmentExpanded, setHomeCoachAssessmentExpanded] = useState(false);
-  /** Layout: Viewport-Budget — kompaktere Abstände + Auto-Collapse Sekundärinfos */
-  const [homeViewportTight, setHomeViewportTight] = useState(false);
+  /** Layout: Viewport-Budget — Dichte-Stufe (0 comfortable · 1 compact · 2 dense) + Auto-Collapse Sekundärinfos */
+  const [homeDensity, setHomeDensity] = useState(0);
+  const homeViewportTight = homeDensity >= 1;
+  const homeDensityViewportHeightRef = useRef(0);
+  const mainContentAreaRef = useRef(null);
+  const bottomNavRef = useRef(null);
   const homeMainColumnRef = useRef(null);
   const homeUpperRef = useRef(null);
   const homeTailRef = useRef(null);
@@ -3809,7 +3820,7 @@ export default function AppMain(){
 
   /** Eingeklappte Einschätzung: kompaktere Home-Card-Paddings (Scroll siehe Main-Area — temporär aktiv). */
   const homeScrollLocked = activeView === "home" && !homeCoachAssessmentExpanded;
-  const homeScale = homeViewportTight ? "compact" : "comfortable";
+  const homeScale = HOME_DENSITY_SCALES[homeDensity] ?? "comfortable";
   const hs = getHomeSpacing(homeScale, homeCoachAssessmentExpanded);
   /** Prep-Ring-Box; Abstand Ring→primäre Actions (Done/Skip), dann Card. */
   const HOME_PREP_RING_PX = hs.ringPx;
@@ -3821,8 +3832,8 @@ export default function AppMain(){
   const compactScreen = getCompactScreenSpacing();
   const spacing = { xs: LAYOUT_SPACING.xs, sm: LAYOUT_SPACING.sm, md: LAYOUT_SPACING.md };
   const safeTopPad = "max(44px, env(safe-area-inset-top, 44px))";
-  /** Tabbar ~72px + Abstand; zu groß = Leerraum über fixer Nav, zu klein = Content verdeckt */
-  const safeBottomContentPad = "calc(86px + env(safe-area-inset-bottom, 0px))";
+  /** Platz für die schwebende Tab-Bar — eine Quelle für alle Tabs (`layout/bottomNavLayout.ts`). */
+  const safeBottomContentPad = getBottomNavContentPadding();
   const appRootBackground = theme === "light"
     ? { backgroundColor: "var(--bg-primary)" }
     : {
@@ -3959,26 +3970,59 @@ export default function AppMain(){
     // no console logging in production path
   }, []);
 
+  /** Dichte zurücksetzen, sobald sich der Home-Zustand ändert — `nextHomeDensity` verdichtet nur. */
+  const homePrepCompleted = !!prepCompleted;
+  useLayoutEffect(() => {
+    if (activeView !== "home") return;
+    const vh = window.visualViewport?.height ?? window.innerHeight;
+    setHomeDensity(getHomeBaseDensity(vh));
+    // Auf-/Zuklappen der Einschätzung setzt bewusst nicht zurück: sonst würde das Aufklappen auf engen
+    // Screens einen frischen Übergang „tight" erzeugen und sofort wieder einklappen.
+  }, [activeView, homePrepCompleted]);
+
   useLayoutEffect(() => {
     if (activeView !== "home") return;
     const main = homeMainColumnRef.current;
     const upper = homeUpperRef.current;
-    if (!main || !upper) return;
+    const tail = homeTailRef.current;
+    if (!main || !upper || !tail) return;
     const measure = () => {
       const vh = window.visualViewport?.height ?? window.innerHeight;
       // Ignore changes caused by keyboard open/close (>150px offset) —
       // @capacitor/keyboard with resize:'body' handles those separately.
       const keyboardOffset = window.innerHeight - vh;
       if (keyboardOffset > 150) return;
-      const budget = main.clientHeight;
-      const upperH = upper.getBoundingClientRect().height;
-      const reserveTail = 168;
-      setHomeViewportTight(upperH + reserveTail > budget + 2 || vh < 664);
+      const base = getHomeBaseDensity(vh);
+      const viewportChanged = Math.abs(vh - homeDensityViewportHeightRef.current) > 1;
+      homeDensityViewportHeightRef.current = vh;
+      // Neuer Viewport: zurück auf die Basisstufe; gemessen wird im nächsten Lauf (homeDensity ist Dep).
+      if (viewportChanged && homeDensity !== base) {
+        setHomeDensity(base);
+        return;
+      }
+      // Überlänge der Tail-Säule = das, was unten (direkt über der Tab-Bar) abgeschnitten würde.
+      const overflowPx = tail.scrollHeight - tail.clientHeight;
+      // Bisherige Heuristik bleibt: Kopf-Säule lässt der Tail-Säule zu wenig Platz → mindestens kompakt.
+      const headerTight = upper.getBoundingClientRect().height + 168 > main.clientHeight + 2;
+      // resize/visualViewport/ResizeObserver feuern im selben Frame auf demselben DOM: nur von der Stufe
+      // aus verdichten, mit der gemessen wurde — sonst zählt ein Überlauf doppelt (0 → 1 → 2).
+      setHomeDensity((prev) =>
+        prev !== homeDensity
+          ? prev
+          : nextHomeDensity(prev, {
+              overflowPx,
+              viewportHeightPx: vh,
+              coachExpanded: homeCoachAssessmentExpanded,
+              headerTight,
+            }),
+      );
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(main);
     ro.observe(upper);
+    ro.observe(tail);
+    if (tail.firstElementChild) ro.observe(tail.firstElementChild);
     window.addEventListener("resize", measure);
     window.visualViewport?.addEventListener("resize", measure);
     return () => {
@@ -3989,6 +4033,7 @@ export default function AppMain(){
   }, [
     activeView,
     homeCoachAssessmentExpanded,
+    homeDensity,
     view,
     homeRunSession,
     dashboardStatus,
@@ -4015,7 +4060,13 @@ export default function AppMain(){
       );
       if (cards.length >= 2) validateSiblingStackNoOverlap(cards, "week-sessions");
     }
-  }, [activeView, homeCoachAssessmentExpanded, weekTabDescExpandedById, wIdx, view, pendingCalendarProposal, weekCalendarBatchProposal]);
+    // Jeder Tab: der Inhaltsbereich endet oberhalb der schwebenden Tab-Bar.
+    validateClearOfBottomNav(mainContentAreaRef.current, bottomNavRef.current, `bottom-nav:${activeView}`);
+    // Home in dichtester Stufe: was jetzt noch überläuft, muss gescrollt werden (nur kleine Geräte erwartet).
+    if (activeView === "home" && !homeCoachAssessmentExpanded && homeDensity === 2 && homeTailRef.current) {
+      validateNoVerticalOverflow(homeTailRef.current, "home-tail-dense", 2);
+    }
+  }, [activeView, homeDensity, homeCoachAssessmentExpanded, weekTabDescExpandedById, wIdx, view, pendingCalendarProposal, weekCalendarBatchProposal]);
 
   return(
     <div
@@ -4094,6 +4145,8 @@ export default function AppMain(){
         }
       `}</style>
       <div
+        ref={mainContentAreaRef}
+        data-layout-main-content="1"
         style={
           activeView === "performance" || activeView === "week"
             ? mainScrollAreaStyleNoVert
@@ -4432,7 +4485,7 @@ export default function AppMain(){
                       transform: "translate(-50%, -50%)",
                       margin: 0,
                       padding: 0,
-                    fontSize: 33,
+                    fontSize: hs.ringFontPx,
                     fontWeight: 800,
                     color: "#f8fafc",
                     letterSpacing: "-0.03em",
@@ -4914,7 +4967,7 @@ export default function AppMain(){
             {/* Metrics group — cleaner, softer and less boxy */}
             <div style={{display:"flex",flexDirection:"column",gap: homeScrollLocked ? 5 : 6,padding: homeScrollLocked ? "6px 8px" : "8px 10px",borderRadius:18,background:"linear-gradient(160deg,rgba(15,23,42,0.33),rgba(12,18,34,0.2))",border:"1px solid var(--border-default)",width:"100%",minWidth:0,boxSizing:"border-box"}}>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:4}}>
-                <div style={{padding:"6px 5px",textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
+                <div style={{padding:hs.metricsTopTilePadding,textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Erholung</div>
                   <div style={{fontSize:15,fontWeight:800,color:recoveryPresentation.session.toneHex,lineHeight:1.1}}>
                     {isRecoveryHydrating && recoveryPresentation.session.label === "Keine Daten"
@@ -4922,11 +4975,11 @@ export default function AppMain(){
                       : recoveryPresentation.session.label}
                   </div>
                 </div>
-                <div style={{padding:"6px 5px",textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
+                <div style={{padding:hs.metricsTopTilePadding,textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Belastung</div>
                   <div style={{fontSize:15,fontWeight:800,color:weeklyFatigue.color,lineHeight:1}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
                 </div>
-                <div style={{padding:"6px 5px",textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
+                <div style={{padding:hs.metricsTopTilePadding,textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Serie</div>
                   <div style={{fontSize:16,fontWeight:800,color:"#c4b5fd",lineHeight:1}}>
                     {consistencyStats.sessionStreak}<span style={{fontSize:10,color:"rgba(148,163,184,0.48)",marginLeft:2}}>×</span>
@@ -4944,7 +4997,7 @@ export default function AppMain(){
                   <div
                     key={m.label}
                     style={{
-                      padding: "7px 7px",
+                      padding: hs.metricsTilePadding,
                       borderRadius: 12,
                       background: "rgba(15,23,42,0.28)",
                       display: "flex",
@@ -4952,7 +5005,7 @@ export default function AppMain(){
                       justifyContent: "center",
                       alignItems: "center",
                       textAlign: "center",
-                      gap: 3,
+                      gap: hs.metricsTileGap,
                     }}
                   >
                     <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700}}>{m.label}</div>
@@ -6502,8 +6555,8 @@ export default function AppMain(){
         />
       ) : null}
 
-      <div style={{position:"fixed",left:"calc(12px + env(safe-area-inset-left, 0px))",right:"calc(12px + env(safe-area-inset-right, 0px))",bottom:"calc(12px + env(safe-area-inset-bottom, 0px))",zIndex:90}}>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:6,background:"rgba(9,12,22,0.72)",border:"1px solid var(--border-default)",borderRadius:24,padding:"10px 8px 11px",boxShadow:"0 20px 50px rgba(2,6,23,0.32)",backdropFilter:"blur(22px)"}}>
+      <div ref={bottomNavRef} data-layout-bottom-nav="1" style={{position:"fixed",left:"calc(12px + env(safe-area-inset-left, 0px))",right:"calc(12px + env(safe-area-inset-right, 0px))",bottom:getBottomNavBottomOffset(),zIndex:90}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:6,height:BOTTOM_NAV_HEIGHT_PX,boxSizing:"border-box",background:"rgba(9,12,22,0.72)",border:"1px solid var(--border-default)",borderRadius:24,padding:"10px 8px 11px",boxShadow:"0 20px 50px rgba(2,6,23,0.32)",backdropFilter:"blur(22px)"}}>
           {[
             { key: "home", label: homeTabLabel, icon: null },
             { key: "week", label: t("plan.week_label"), icon: "▤" },
