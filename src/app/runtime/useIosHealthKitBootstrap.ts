@@ -50,6 +50,15 @@ export interface IosHealthKitBootstrapApi {
  * - **Stale closures sind akzeptiert**: Es werden nur Referenzen aus dem **ersten Render** verwendet; spätere
  *   Render‑Identitäten von Settern/`fetchRunningWorkoutsLast7Days` werden ignoriert (bewusst).
  * - **Erste Render‑Referenzen sind gewollt**: Neuere Callback-Implementierungen nach Mount werden nicht nachgezogen.
+ * - **Freigegebene Ausnahme (2026-10-03, `fix/health-auto-sync`, Sign-off Anton)**: `fetchRunningWorkoutsLast7Days`
+ *   ist in `AppMain` ein Wrapper um den Auto-Sync-Controller (`useAppleHealthAutoSync`). Der Wrapper stammt weiter aus
+ *   dem ersten Render, der Controller liest die eigentliche Fetch-Funktion aber pro Lauf aus einem Ref — der
+ *   Kaltstart führt also die Fetch-Funktion des **aktuellen** Renders aus. Das ist genau die eine Stelle, an der
+ *   „ref lesen im async-Pfad" erlaubt ist; alles andere unten bleibt verboten.
+ *   - Unverändert: der Effekt ist mount-only, seine Bedingungen (nur iOS, nur mit Connected-Marker), Auth-Zyklus,
+ *     Recovery-Hydration und Retry-Timer.
+ *   - Bedingung der Freigabe: der Kaltstart-Sync läuft pro App-Start **genau einmal**, auch bei Re-Renders —
+ *     abgesichert durch `appleHealthColdStartSync.test.tsx`. Wer die Verdrahtung ändert, muss diesen Test grün halten.
  *
  * ### Was passiert bei Re-Runs des Effekts (deshalb verboten)?
  *
@@ -66,6 +75,7 @@ export interface IosHealthKitBootstrapApi {
  * ███ DO NOT CONVERT (Phase 1F guardrails — requires explicit Phase-2 sign-off) ███
  * - Do NOT replace the mount-only effect with "sync API to refs each render + read refs inside async":
  *   that can change which `fetchRunningWorkoutsLast7Days` runs after late re-renders.
+ *   (Signed-off exception: the workout fetch itself, via the auto-sync controller — see "Freigegebene Ausnahme" above.)
  * - Do NOT reset `hasTriggeredHealthKitAuthThisSession` from React lifecycle (module scope is intentional).
  * - Do NOT change the recovery hydration retry delay (`1700` ms) or the "single retry" shape.
  * - Do NOT add dependency arrays that re-enter this effect on each render (state setters are unstable).
@@ -218,7 +228,8 @@ export function useIosHealthKitBootstrap(api: IosHealthKitBootstrapApi): void {
               });
             }
             return count;
-          } catch {
+          } catch (e) {
+            console.warn("[appleHealthService] recovery hydration failed", e);
             // eslint-disable-next-line no-console
             console.log("[RECOVERY_PIPELINE][hydration]", {
               retryUsed: opts.retryUsed,
@@ -266,16 +277,19 @@ export function useIosHealthKitBootstrap(api: IosHealthKitBootstrapApi): void {
             setSleepPermission(resolvedSleep);
             setHrvPermission(resolvedHrv);
             setRhrPermission(resolvedRhr);
-          } catch {
+          } catch (e) {
             // best-effort
+            console.warn("[appleHealthService] permission check on launch failed", e);
           }
           try {
             await fetchRunningWorkoutsLast7Days();
           } catch (e) {
-            // ignore (best-effort)
+            // best-effort — der Start darf daran nicht scheitern, aber nicht still.
+            console.warn("[appleHealthService] cold-start workout sync failed", e);
           }
         }
       } catch (e) {
+        console.warn("[appleHealthService] HealthKit bootstrap failed", e);
         if (!cancelled) setHealthKitAvailable(false);
       }
     })();

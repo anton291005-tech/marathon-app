@@ -101,9 +101,7 @@ export async function saveHealthWorkout(userId: string, run: StoredHealthRun): P
   const { error } = await supabase.from("health_workouts").upsert(row, { onConflict: "user_id,source_id" });
 
   if (error) {
-    if (process.env.NODE_ENV === "development") {
-      // eslint-disable-next-line no-console
-      console.warn("[healthWorkoutsService] saveHealthWorkout", error.message);
-    }
+    // Auch im Release sichtbar: ein fehlgeschlagener Upsert heißt, das Workout fehlt auf anderen Geräten.
+    console.warn("[healthWorkoutsService] saveHealthWorkout", error.message);
   }
 }

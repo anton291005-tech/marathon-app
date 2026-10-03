@@ -12,7 +12,8 @@ export function loadHealthAnchors(): HealthAnchorState {
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
+  } catch (e) {
+    console.warn("[healthAnchorStore] stored anchors unreadable — syncing without anchor", e);
     return {};
   }
 }
@@ -21,7 +22,8 @@ export function saveHealthAnchors(state: HealthAnchorState): void {
   if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
+  } catch (e) {
     // quota / private mode
+    console.warn("[healthAnchorStore] anchors not persisted", e);
   }
 }
