@@ -121,6 +121,21 @@ Regelbasiert, transparent, kalibriert sich über Post-Workout-Feedback selbst na
 - Migration `007_profiles_personal_best_seconds.sql`: nur Befund — Anwendung in Production nicht bestätigt, prüfen.
 - Duplikate „Ist-km einer Session" (`getEffectiveKm`, `getLoggedKm`, `extractDistanceKm`, `extractActualKm`, `extractDistanceKmForPace` neben `getSessionRunningActualKm`) konsolidieren.
 
+## Gerätetest 2026-10-03 — Tab-Bar-Überlappung (`fix/bottom-nav-overlap`)
+**Befund:** Der Platz für die schwebende Tab-Bar war schon zentral reserviert (Inhalts-Wrapper in `AppMain.tsx`, 86 pt + Safe Area), die Bar brauchte aber 87 pt — 1 pt Überlappung, keine Luft, auf allen sechs Tabs. Der sichtbare Abschnitt auf Home kam nicht daher: im Abschluss-Hero-Zustand braucht Home rechnerisch ~724 pt bei 677 pt Budget (844 − 47 − 120); die Tail-Säule (Einschätzung + Kacheln) scrollt intern und schnitt die Kachel-Karte direkt an der Bar-Kante ab. Die alte Kompakt-Heuristik (`upperH + 168 > budget`) griff dort nicht.
+**Umsetzung:** `src/layout/bottomNavLayout.ts` ist die eine Quelle für Bar-Höhe (75 pt, jetzt fest gesetzt), Randabstand (12) und Luft (8) → Reserve 95 pt + `env(safe-area-inset-bottom)` für alle Tabs. Home verdichtet in Stufen (`comfortable` → `compact` → `dense`, `nextHomeDensity`) anhand der gemessenen Überlänge der Tail-Säule; `dense` verkleinert nur Ring (104 pt) und Abstände, keine Inhalte, keine neue Schrift unter 11 pt. Dev-Guard `validateClearOfBottomNav` (`data-layout-main-content` / `data-layout-bottom-nav`) warnt auf jedem Tab, wenn der Inhaltsbereich unter die Bar reicht.
+**Grenzen:**
+- Höhenbilanz ist aus den Styles gerechnet, nicht gemessen — AppMain braucht Login, es gibt keinen Render-Test. **Abnahme nur auf dem iPhone 13** (Safe Areas sind im Browser 0).
+- Leistung: aus dem Code ließ sich über die 1 pt hinaus keine Überdeckung der Recovery-Erklärung herleiten (Container scrollt, 14 pt Innenabstand unten). Falls sie auf dem Gerät nach diesem Fix weiter besteht, liegt die Ursache woanders (Scroll-Geste/WebKit) und braucht eine Gerätediagnose.
+- Die Dichte wird nur verdichtet, nie gelockert; zurückgesetzt wird bei Tab-Wechsel, Wechsel Heute ↔ Abschluss-Hero und Viewport-Änderung (nicht beim Auf-/Zuklappen der Einschätzung). Schrumpft der Inhalt ohne diese Auslöser, bleibt Home bis zum nächsten Tab-Wechsel dichter als nötig.
+- iPhone SE (667 pt): Home passt auch in `dense` nicht ganz, die Tail-Säule scrollt; sie endet über der Bar.
+- Die bestehenden 10-pt-Labels auf Home (Kachel-Titel) sind unverändert — vorbestehend, UI-Umbau ist Out of Scope.
+- Die Reserve wächst von 86 auf 95 pt: jeder Tab hat 9 pt weniger Höhe. Passte die Heute-Ansicht bisher nur knapp (z. B. zweizeiliger Titel + Status-Pille), fällt sie jetzt auf `compact` (Ring 118 statt 138) — auf dem Gerät ansehen.
+- `PrepCompleteHeroCard` kennt nur `compact`, keine `dense`-Stufe; die Karte selbst wird nicht kleiner.
+- `AppTour.tsx:95` kodiert weiter eine eigene Tab-Bar-Höhe (`TAB_BAR_H = 90`, real 121 pt auf dem iPhone 13) für die Tooltip-Platzierung — vorbestehend, nicht angefasst.
+- Reset-Effekt, Messung und ResizeObserver in `AppMain.tsx` haben keinen Test, nur die Pure-Funktionen. Pro Wechsel auf Home sind bis zu drei synchrone Renders möglich.
+- Der Guard prüft die Kante des Inhaltsbereichs, nicht einzelne Karten; ein `position: fixed`-Element außerhalb des Wrappers erkennt er nicht.
+
 ## Harte Regel (nicht verhandelbar)
 Wissenschaftliche Planqualität ist die Leitplanke. Kalender-Constraints optimieren nur INNERHALB der Trainingsplan-Regeln — sie dürfen diese niemals überschreiben. Bei Konflikt gewinnt immer die Trainingsplan-Regel, nicht der Kalender.
 
