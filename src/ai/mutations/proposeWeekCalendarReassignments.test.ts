@@ -162,6 +162,41 @@ describe("proposeWeekCalendarReassignments", () => {
   });
 });
 
+// Ursprüngliche Fixture (vor core/loadClass): Long Run am Samstag, Freitag ist der Ruhetag. Ein Intervall vom
+// Montag auf den Freitag läge direkt vor dem Long Run — die Regel "harte Einheit am Vortag eines Long Runs"
+// (Schweregrad 75, validateMicroStructure) muss hier feuern. Bleibt als eigener Test erhalten.
+const LONG_ON_SATURDAY_WEEK: DaySpec[] = [
+  { id: "s-mon", type: "interval", date: "10. Aug", day: "Montag", title: "Intervalle" },
+  { id: "s-tue", type: "easy", date: "11. Aug", day: "Dienstag", title: "Easy Run" },
+  { id: "s-wed", type: "interval", date: "12. Aug", day: "Mittwoch", title: "Intervalle" },
+  { id: "s-thu", type: "easy", date: "13. Aug", day: "Donnerstag", title: "Easy Run" },
+  { id: "s-fri", type: "rest", date: "14. Aug", day: "Freitag", title: "Ruhetag" },
+  { id: "s-sat", type: "long", date: "15. Aug", day: "Samstag", title: "Long Run" },
+  { id: "s-sun", type: "easy", date: "16. Aug", day: "Sonntag", title: "Easy Run" },
+];
+
+describe("proposeWeekCalendarReassignments – Intervall direkt vor Long Run (ursprüngliche Fixture)", () => {
+  const week = buildPlan(LONG_ON_SATURDAY_WEEK)[0];
+  const blocks = [recurring({ id: "job-mon", dayOfWeek: 1, startTime: "06:00", endTime: "22:00" })];
+
+  test("der Freitag (Intervall vor dem Long Run) ist als Kandidat ein Konflikt mit Schweregrad 75 und nennt den Long Run", () => {
+    const candidates = buildCalendarReassignmentCandidates(week, "s-mon", blocks);
+    const ranked = rankCalendarReassignmentCandidates([week], "s-mon", candidates, computeSourceDayCapacity(week, "s-mon", blocks));
+    const friday = ranked.find((r) => r.targetSessionId === "s-fri");
+    expect(friday).toBeDefined();
+    expect(friday?.microStructureSeverity).toBeGreaterThanOrEqual(75);
+    expect(friday?.isConflict).toBe(true);
+    expect(friday?.microStructureReason).toMatch(/Long Run/);
+  });
+
+  test("der Wochen-Batch legt das Intervall deshalb nicht auf den Freitag", () => {
+    const conflicts = scanWeekForCalendarConflicts(week, blocks);
+    const proposals = proposeWeekCalendarReassignments(conflicts, week, blocks);
+    const monProposal = proposals.find((p) => p.sessionId === "s-mon");
+    expect(monProposal && "toDayIso" in monProposal ? monProposal.toDayIso : null).not.toBe("2026-08-14");
+  });
+});
+
 // Montag 14. Sep 2026 .. Sonntag 20. Sep 2026 — Long Run 18 km MP am Sonntag (20.09.), Fußballturnier 11–19 Uhr.
 const TOURNAMENT_WEEK: DaySpec[] = [
   { id: "s-mon", type: "easy", date: "14. Sep", day: "Montag", title: "Easy Run" },
