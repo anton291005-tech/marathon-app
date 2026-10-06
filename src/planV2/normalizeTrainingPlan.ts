@@ -1,6 +1,7 @@
 import { parseSessionDateLabel } from "../appSmartFeatures";
 import { validateTrainingPlanV2Integrity } from "../ai/validation/validateTrainingPlanV2Integrity";
 import { rebuildPlanFromWorkouts } from "../core/deriveWeeksFromWorkouts";
+import { resolveLoadClass } from "../core/loadClass";
 import { getAppNow } from "../core/time/timeSystem";
 import { mapSessionType } from "../lib/ai/mapSessionType";
 import { resolveLegacyYearAnchor, resolveLegacyYears } from "./legacyYearAnchor";
@@ -30,15 +31,19 @@ function normalizeSport(raw: unknown, sessionType: string): WorkoutSport {
   return sportFromSessionType(sessionType);
 }
 
-function normalizeIntensity(raw: unknown, sessionType: string): Intensity | undefined {
-  if (typeof raw === "string" && VALID_INTENSITIES.has(raw as Intensity)) {
-    return raw as Intensity;
-  }
-  const key = sessionType.trim().toLowerCase();
-  if (key === "interval" || key === "race") return "high";
-  if (key === "tempo") return "medium";
-  if (key === "rest") return undefined;
-  return "low";
+/**
+ * Belastungsklasse kommt aus `core/loadClass` (einzige Quelle). Für Lauf-Sessions wird sie immer neu
+ * abgeleitet und überschreibt einen gespeicherten Wert — so heilen ältere Pläne (`long → low`,
+ * `tempo → medium`) beim nächsten Laden ohne Migration. Rad/Kraft/Schwimmen behalten einen gültigen
+ * gespeicherten Wert.
+ */
+function normalizeIntensity(
+  raw: unknown,
+  workout: { sessionType: string; sport: WorkoutSport; title: string; desc: string | null },
+): Intensity | undefined {
+  if (workout.sport === "rest" || workout.sessionType.trim().toLowerCase() === "rest") return undefined;
+  const stored = typeof raw === "string" && VALID_INTENSITIES.has(raw as Intensity) ? (raw as Intensity) : undefined;
+  return resolveLoadClass({ ...workout, intensity: stored });
 }
 
 function normalizeKm(raw: unknown): number {
@@ -182,15 +187,18 @@ function normalizeWorkout(
   const titleRaw = typeof raw.title === "string" ? raw.title.trim() : "";
   const title = titleRaw || defaultTitleForSessionType(sessionType);
 
+  const sport = normalizeSport(raw.sport, sessionType);
+  const desc = normalizeOptionalString(raw.desc);
+
   return {
     id,
     dateIso,
-    sport: normalizeSport(raw.sport, sessionType),
+    sport,
     sessionType,
-    intensity: normalizeIntensity(raw.intensity, sessionType),
+    intensity: normalizeIntensity(raw.intensity, { sessionType, sport, title, desc }),
     title,
     km: normalizeKm(raw.km),
-    desc: normalizeOptionalString(raw.desc),
+    desc,
     pace: normalizeOptionalString(raw.pace),
     structured: raw.structured ?? null,
   };

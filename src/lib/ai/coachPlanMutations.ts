@@ -3,6 +3,7 @@
  */
 import { parseSessionDateLabel } from "../../appSmartFeatures";
 import { rebuildPlanFromWorkouts } from "../../core/deriveWeeksFromWorkouts";
+import { classifyLoad } from "../../core/loadClass";
 import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 import type { Intensity, TrainingPlanV2, WeekV2, WorkoutSport, WorkoutV2 } from "../../planV2/types";
 import { type TrainingPhase, normalizeTrainingPhase, trainingPhaseLabelDe } from "../../planV2/trainingPhase";
@@ -389,9 +390,7 @@ function isoDateOf(d: Date): string {
 }
 
 function intensityFor(sessionType: string): Intensity {
-  if (sessionType === "interval" || sessionType === "tempo" || sessionType === "race") return "high";
-  if (sessionType === "long") return "medium";
-  return "low";
+  return classifyLoad({ sessionType });
 }
 
 function sportFor(sessionType: string): WorkoutSport {

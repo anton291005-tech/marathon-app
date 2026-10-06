@@ -264,7 +264,9 @@ describe("Belastungstag als Zieltag", () => {
   });
 
   test("harte Session: Belastungstag wird trotz 50 % Capacity nie Auto-Pick-Ziel, freier Tag gewinnt", () => {
-    const plan = buildPlan(BASE_WEEK);
+    // Mittwoch locker statt Intervall: ein Long Run am Donnerstag direkt nach einem Intervall wäre ein
+    // Befund (Schweregrad zuerst) und würde den Belastungstag über die Rangfolge nach vorn bringen.
+    const plan = buildPlan(BASE_WEEK.map((d) => (d.id === "s-wed" ? { ...d, type: "easy" as const } : d)));
     const candidates: SessionAssignmentCandidate[] = [
       { targetSessionId: "s-sun", capacity: loadDay("2026-08-16") },
       { targetSessionId: "s-thu", capacity: capacity("2026-08-13", 0.5) },

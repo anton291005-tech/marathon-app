@@ -229,3 +229,56 @@ describe("normalizeTrainingPlan", () => {
     expect(plan.workouts[0].pace).toBe("easy");
   });
 });
+
+describe("normalizeTrainingPlan: Belastungsklasse (core/loadClass)", () => {
+  const w = (over: Record<string, unknown>) => ({
+    id: String(over.id),
+    dateIso: "2026-06-01T11:00:00.000Z",
+    sport: "run",
+    title: "x",
+    km: 10,
+    ...over,
+  });
+  const norm = (workouts: unknown[]) => normalizeTrainingPlan({ version: 2, workouts, weeks: [] }).workouts;
+
+  it("leitet Lauf-Sessions ohne intensity ab: long=medium, tempo=high, interval=high, easy=low", () => {
+    const out = norm([
+      w({ id: "a", sessionType: "long" }),
+      w({ id: "b", sessionType: "tempo", dateIso: "2026-06-02T11:00:00.000Z" }),
+      w({ id: "c", sessionType: "interval", dateIso: "2026-06-03T11:00:00.000Z" }),
+      w({ id: "d", sessionType: "easy", dateIso: "2026-06-04T11:00:00.000Z" }),
+    ]);
+    expect(out.map((x) => x.intensity)).toEqual(["medium", "high", "high", "low"]);
+  });
+
+  it("überschreibt veraltete gespeicherte Werte (Claude-Plan: long=low, tempo=medium)", () => {
+    const out = norm([
+      w({ id: "a", sessionType: "long", intensity: "low" }),
+      w({ id: "b", sessionType: "tempo", intensity: "medium", dateIso: "2026-06-02T11:00:00.000Z" }),
+    ]);
+    expect(out.map((x) => x.intensity)).toEqual(["medium", "high"]);
+  });
+
+  it("Long Run mit Renntempo-Anteil im Titel → high, 'Tempodauerlauf' löst nichts aus", () => {
+    const out = norm([
+      w({ id: "a", sessionType: "long", title: "Long Run 28 km mit MP" }),
+      w({ id: "b", sessionType: "easy", title: "Tempodauerlauf locker", dateIso: "2026-06-02T11:00:00.000Z" }),
+    ]);
+    expect(out.map((x) => x.intensity)).toEqual(["high", "low"]);
+  });
+
+  it("Ruhetag hat keine Intensität, Rad behält einen gültigen gespeicherten Wert", () => {
+    const out = norm([
+      w({ id: "a", sessionType: "rest", sport: "rest", km: 0 }),
+      w({ id: "b", sessionType: "bike", sport: "bike", intensity: "medium", dateIso: "2026-06-02T11:00:00.000Z" }),
+    ]);
+    expect(out[0].intensity).toBeUndefined();
+    expect(out[1].intensity).toBe("medium");
+  });
+
+  it("ist idempotent", () => {
+    const once = norm([w({ id: "a", sessionType: "long", intensity: "low" })]);
+    const twice = normalizeTrainingPlan({ version: 2, workouts: once, weeks: [] }).workouts;
+    expect(twice).toEqual(once);
+  });
+});

@@ -1,4 +1,5 @@
 import { inferIntensity } from "../../ai/validation/validateMicroStructure";
+import { classifyLoad } from "../../core/loadClass";
 import type { Intensity, WorkoutSport, WorkoutV2 } from "../../planV2/types";
 
 /**
@@ -83,9 +84,7 @@ function mapBikeIntensityToRunSession(intensity: Intensity): RunSessionType {
 }
 
 function mapRunSessionToIntensity(sessionType: RunSessionType): Intensity {
-  if (sessionType === "interval") return "high";
-  if (sessionType === "tempo") return "medium";
-  return "low";
+  return classifyLoad({ sessionType, sport: "run" });
 }
 
 function formatMinutesLabel(minutes: number): string {

@@ -188,6 +188,7 @@ import { migrateLocalDataToSupabase } from "./lib/supabase/migrations/migrateLoc
 import { configureCoachMemoryRemoteSync, setCoachMemory } from "./lib/ai/memory/coachMemory";
 import { buildTrainingPlanV2FromBasePlan, buildWeekMetaMapFromBasePlan } from "./planV2/fromBasePlan";
 import { normalizeTrainingPlan } from "./planV2/normalizeTrainingPlan";
+import { classifyLoad } from "./core/loadClass";
 import { isUserTrainingPlan } from "./planV2/isUserTrainingPlan";
 import { validateTrainingPlanV2Integrity } from "./ai/validation/validateTrainingPlanV2Integrity";
 import { applyConversionToPlan } from "./ai/validation/validateConversion";
@@ -2680,8 +2681,12 @@ export default function AppMain(){
             ? payload.targetTitle.trim()
             : "Lauf";
         const targetDesc = typeof payload.targetDesc === "string" ? payload.targetDesc : null;
-        const targetIntensity =
-          targetSessionType === "interval" ? "high" : targetSessionType === "tempo" ? "medium" : "low";
+        const targetIntensity = classifyLoad({
+          sessionType: targetSessionType,
+          sport: "run",
+          title: targetTitle,
+          desc: targetDesc,
+        });
 
         setTrainingPlanV2((prev) => {
           if (!prev?.workouts?.length) return prev;

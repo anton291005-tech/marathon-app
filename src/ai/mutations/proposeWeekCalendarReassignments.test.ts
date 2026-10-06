@@ -26,8 +26,11 @@ const BASE_WEEK: DaySpec[] = [
   { id: "s-wed", type: "interval", date: "12. Aug", day: "Mittwoch", title: "Intervalle" },
   { id: "s-thu", type: "easy", date: "13. Aug", day: "Donnerstag", title: "Easy Run" },
   { id: "s-fri", type: "rest", date: "14. Aug", day: "Freitag", title: "Ruhetag" },
-  { id: "s-sat", type: "long", date: "15. Aug", day: "Samstag", title: "Long Run" },
-  { id: "s-sun", type: "easy", date: "16. Aug", day: "Sonntag", title: "Easy Run" },
+  // Long Run am Sonntag, Samstag locker: Ein Intervall am Samstag wäre ein Befund "harte Einheit am Vortag
+  // eines Long Runs" (core/loadClass: long = medium) — die Fixture soll die Rangfolge über Kalender-Kapazität
+  // testen, nicht über diese Regel.
+  { id: "s-sat", type: "easy", date: "15. Aug", day: "Samstag", title: "Easy Run" },
+  { id: "s-sun", type: "long", date: "16. Aug", day: "Sonntag", title: "Long Run" },
 ];
 
 // Zwei "tempo"-Konflikttage (Montag, Donnerstag), sonst nur "easy" -> keine Back-to-back-Intensity-

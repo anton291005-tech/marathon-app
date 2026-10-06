@@ -49,8 +49,9 @@ const BASE_WEEK: DaySpec[] = [
   { id: "s-wed", type: "interval", date: "12. Aug", day: "Mittwoch" },
   { id: "s-thu", type: "easy", date: "13. Aug", day: "Donnerstag" },
   { id: "s-fri", type: "rest", date: "14. Aug", day: "Freitag" },
-  { id: "s-sat", type: "long", date: "15. Aug", day: "Samstag" },
-  { id: "s-sun", type: "easy", date: "16. Aug", day: "Sonntag" },
+  // Long Run am Sonntag, Samstag locker: Intervall am Vortag eines Long Runs wäre ein Befund (core/loadClass).
+  { id: "s-sat", type: "easy", date: "15. Aug", day: "Samstag" },
+  { id: "s-sun", type: "long", date: "16. Aug", day: "Sonntag" },
 ];
 
 const HARMLESS_WEEK: DaySpec[] = [
@@ -59,8 +60,8 @@ const HARMLESS_WEEK: DaySpec[] = [
   { id: "s-wed", type: "easy", date: "12. Aug", day: "Mittwoch" },
   { id: "s-thu", type: "rest", date: "13. Aug", day: "Donnerstag" },
   { id: "s-fri", type: "easy", date: "14. Aug", day: "Freitag" },
-  { id: "s-sat", type: "long", date: "15. Aug", day: "Samstag" },
-  { id: "s-sun", type: "easy", date: "16. Aug", day: "Sonntag" },
+  { id: "s-sat", type: "easy", date: "15. Aug", day: "Samstag" },
+  { id: "s-sun", type: "long", date: "16. Aug", day: "Sonntag" },
 ];
 
 /** Job-Block (Werktagsfenster 06:00–22:00) fast komplett belegt -> harte Session dort im Konflikt. */

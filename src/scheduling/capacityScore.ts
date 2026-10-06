@@ -1,5 +1,6 @@
 import type { WeeklyScheduleBlock } from "../lib/supabase/services/weeklyScheduleBlocksService";
 import type { SessionType } from "../lib/ai/types";
+import { classifyLoad } from "../core/loadClass";
 
 export type DayCapacityScore = {
   dateIso: string;
@@ -159,8 +160,13 @@ export function computeDayCapacityScore(dateIso: string, blocks: WeeklyScheduleB
   };
 }
 
-/** interval/tempo/race need real free time; "long" is treated the same way for now — its volume alone is already a load, finer per-type grading is a later iteration. */
-const HIGH_INTENSITY_SESSION_TYPES: ReadonlySet<SessionType> = new Set<SessionType>(["tempo", "interval", "race", "long"]);
+/**
+ * Sessions mit Belastungsklasse medium oder high (`core/loadClass`: interval/tempo/race/long) brauchen echte
+ * freie Zeit; "long" zählt allein durch sein Volumen als Last. Feinere Abstufung medium vs. high ist eine spätere Iteration.
+ */
+function isHighIntensitySessionType(type: SessionType): boolean {
+  return classifyLoad({ sessionType: type }) !== "low";
+}
 
 /** Easy/recovery sessions fit onto a busy day almost as well as a free one, so calendar load barely moves their score. */
 const LOW_INTENSITY_CAPACITY_WEIGHT = 0.1;
@@ -175,7 +181,7 @@ export const PHYSICAL_LOAD_DAY_FIT_SCORE = 0.2;
 
 /** True when a high-intensity session would land on a day with a physically demanding block. */
 export function isPhysicalLoadConflict(session: { type: SessionType }, dayCapacity: DayCapacityScore): boolean {
-  return HIGH_INTENSITY_SESSION_TYPES.has(session.type) && dayCapacity.physicalLoadBlockTitles.length > 0;
+  return isHighIntensitySessionType(session.type) && dayCapacity.physicalLoadBlockTitles.length > 0;
 }
 
 /**
@@ -187,6 +193,6 @@ export function isPhysicalLoadConflict(session: { type: SessionType }, dayCapaci
 export function computeSessionDayFitScore(session: { type: SessionType }, dayCapacity: DayCapacityScore): number {
   const capacity = dayCapacity.capacityScore;
   if (isPhysicalLoadConflict(session, dayCapacity)) return Math.min(capacity, PHYSICAL_LOAD_DAY_FIT_SCORE);
-  if (HIGH_INTENSITY_SESSION_TYPES.has(session.type)) return capacity;
+  if (isHighIntensitySessionType(session.type)) return capacity;
   return 1 - (1 - capacity) * LOW_INTENSITY_CAPACITY_WEIGHT;
 }

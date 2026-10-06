@@ -1,6 +1,7 @@
 "use strict";
 
 const { rebuildPlanFromWorkouts, applyLongRunCapPerWeek } = require("./planWorkoutUtils");
+const { classifyLoad } = require("./loadClass");
 
 const DE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
@@ -52,9 +53,7 @@ function isoDateOf(d) {
 }
 
 function intensityFor(sessionType) {
-  if (sessionType === "interval" || sessionType === "tempo" || sessionType === "race") return "high";
-  if (sessionType === "long") return "medium";
-  return "low";
+  return classifyLoad({ sessionType });
 }
 
 function sportFor(sessionType) {

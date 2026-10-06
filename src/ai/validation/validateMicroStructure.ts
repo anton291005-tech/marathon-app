@@ -1,6 +1,7 @@
 import type { TrainingPlanV2, WorkoutV2, Intensity } from "../../planV2/types";
 import { allow, axis, joinReasons, warn, type ValidationResult } from "./validationResult";
 import type { ValidationContext } from "./validationContext";
+import { isLongRunType, resolveLoadClass } from "../../core/loadClass";
 
 function startOfIsoWeekMonday(date: Date): Date {
   const d = new Date(date);
@@ -24,12 +25,13 @@ function dayDiff(aIso: string, bIso: string): number {
   return Math.round((db - da) / (24 * 60 * 60 * 1000));
 }
 
+/** Belastungsklasse eines Workouts — dünner Wrapper um `core/loadClass` (einzige Quelle). */
 export function inferIntensity(w: WorkoutV2): Intensity {
-  if (w.intensity) return w.intensity;
-  if (w.sessionType === "interval" || w.sessionType === "tempo" || w.sessionType === "race") return "high";
-  if (w.sessionType === "long") return "medium";
-  return "low";
+  return resolveLoadClass(w);
 }
+
+/** Schweregrad „harte Einheit am Vortag eines Long Runs" — phasenunabhängig über der Warnschwelle (60). */
+export const KEY_SESSION_EVE_SEVERITY = 75;
 
 function groupByWeek(workouts: WorkoutV2[]): Map<string, WorkoutV2[]> {
   const map = new Map<string, WorkoutV2[]>();
@@ -117,7 +119,15 @@ export function validateMicroStructure(plan: TrainingPlanV2, context: Validation
           });
         }
         const sev = isPeak ? 80 : isBase ? 40 : 55;
-        pushWarn("Warnung: Nach einer intensiven Einheit ist ein Erholungstag am nächsten Tag empfehlenswert.", sev);
+        if (isLongRunType(next.sessionType)) {
+          // Harte Einheit am Vortag einer Schlüsseleinheit (Long Run): in jeder Phase mindestens Warnschwelle.
+          pushWarn(
+            "Warnung: Harte Einheit direkt vor einem Long Run — der Long Run braucht frische Beine.",
+            Math.max(sev, KEY_SESSION_EVE_SEVERITY),
+          );
+        } else {
+          pushWarn("Warnung: Nach einer intensiven Einheit ist ein Erholungstag am nächsten Tag empfehlenswert.", sev);
+        }
       }
 
       // RULE 2: long run spacing (phase-dependent)
@@ -141,7 +151,10 @@ export function validateMicroStructure(plan: TrainingPlanV2, context: Validation
     if (!uniq.has(item.reason)) uniq.set(item.reason, item);
     else uniq.set(item.reason, { ...item, severity: Math.max(item.severity, uniq.get(item.reason)!.severity) });
   }
-  const top = Array.from(uniq.values()).slice(0, 3);
+  // Schwerste zuerst: sonst verdrängen früh gefundene leichte Hinweise (z. B. „kein Ruhetag") einen schweren Befund.
+  const top = Array.from(uniq.values())
+    .sort((a, b) => b.severity - a.severity)
+    .slice(0, 3);
   const reason = joinReasons(top.map((t) => t.reason), " ");
   const score = top.reduce((m, t) => Math.max(m, t.severity), 0);
   const axes = reason ? { micro: axis(score, reason) } : {};
