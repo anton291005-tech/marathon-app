@@ -3,6 +3,7 @@ import type { TrainingPlanV2 } from "../../planV2/types";
 import type { RecoveryDomainState } from "../../recovery/recoveryDomainState";
 import type { RecoverySummary } from "./recoverySummary";
 import type { CoachRuntimeSnapshot } from "./coachRuntimeSnapshotTypes";
+import type { CoachPrepStatus } from "./coachPrepStatus";
 
 export type AiMode = "coach" | "navigator" | "support";
 
@@ -116,6 +117,8 @@ export type AiContext = {
   coachKnowledgeDigest?: string;
   coachRuntimePromptBlock?: string;
   coachSnapshot?: CoachRuntimeSnapshot;
+  /** Nur nach Plan-Ende des aktiven Plans gesetzt (siehe `buildCoachPrepStatus`). */
+  prepStatus?: CoachPrepStatus | null;
 };
 
 export type PlanPatch = {

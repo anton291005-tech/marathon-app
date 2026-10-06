@@ -61,6 +61,7 @@ export function toRemoteCoachPayload(context: AiContext) {
     logsLast30Days: sliceLogsLast30Days(context.logs || {}, nowDate),
     healthRunsLast30Days: [...(context.healthRuns || [])],
     recoveryDomain: context.recoveryDomain ?? { domainKind: "initial" as const },
+    prepStatus: context.prepStatus ?? null,
   };
 }
 
