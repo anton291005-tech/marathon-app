@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m 'feat\\(calendar\\): add source column \\('\\\\''manual'\\\\''|'\\\\''eventkit'\\\\''|'\\\\''preset'\\\\''\\) to weekly_schedule_blocks *)",
+      "Bash(npm view *)",
+      "Bash(xcodebuild -workspace App.xcworkspace -scheme App -destination \"generic/platform=iOS Simulator\" -quiet build)",
+      "Bash(xcodebuild -project App.xcodeproj -scheme App -destination \"generic/platform=iOS Simulator\" -quiet build)",
+      "Bash(xcodebuild -project App.xcodeproj -list)",
+      "Bash(xcodebuild -project App.xcodeproj -scheme App -sdk iphonesimulator -configuration Debug build CODE_SIGNING_ALLOWED=NO -quiet)",
+      "Bash(python3 -c ' *)",
+      "Bash(git commit -m 'feat\\(onboarding\\): step 4 '\\\\''Kalender verbinden'\\\\'' with EventKit connect + preset fallback *)",
+      "Bash(git commit -m 'docs\\(roadmap\\): step 4 EventKit import — decisions, implementation state, open device-E2E items *)"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}\"/.claude/hooks/build-test-gate.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
