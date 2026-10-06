@@ -1,5 +1,4 @@
 # CLAUDE.md
-
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Commands
@@ -56,68 +55,36 @@ An ESLint `no-restricted-imports` rule blocks any `src/**/*.{ts,tsx}` file (outs
 ### Persistence
 `src/persistence/**` wraps `localStorage` access (namespaced keys, safe get/set, a full clear helper). `supabase/migrations/**` defines the remote Postgres schema (training plans, session logs, profiles — versioned, unique-constrained per user). `src/app/boot/repairPersistedStateOnBoot.ts` runs plan/state repair (via `normalizeTrainingPlan`) at app startup, before either persistence path is trusted.
 
-## Projekt-Kontext
-MyRace App – React + TypeScript + Capacitor (iOS) + Express :8787 + Supabase + Claude API + OpenAI
-
-Coding Agent: Cursor mit Composer
-Build-Check: CI=false npm run build
-Test-Device: iPhone 13
-
-Stack:
-- Frontend: React/TypeScript, CRA
-- Backend: Express :8787, Proxy via setupProxy.js (/api/* → :8787)
-- DB: Supabase (7 Tabellen, RLS aktiv)
-- Plan-Gen: Option A (phased Claude generation) — Haiku für Phasen-Calls, Sonnet für den Structure-Call
-- AI Coach Chat: primär Claude Sonnet 4.6, OpenAI nur noch für daily-coach und preferences-patches
-
-Offene Punkte (MVP in ~1 Monat):
-- Email-Verifizierung
-- Sign in with Apple
-- Password Reset
-- Onboarding Plan-Qualität
-- Plan-Generation-Qualität
-- Account-Deletion Test
-
-Workflow: Diagnose-first → Fix → CI=false npm run build → erst dann committen.
-Nach jedem Fix: git add -A && git commit, danach git push nicht vergessen.
+## Aktuelle Roadmap
+Lies vor jeder Arbeit an Phase 2 (Kalenderintegration) docs/roadmap.md.
+Das dort dokumentierte Akzeptanzkriterium ist bindend, nicht der Chat-Verlauf.
 
 ## Projekt-Kontext (Anton)
-Coding Agent: Cursor mit Composer
-Test-Device: iPhone 13
+Coding Agent: Cursor mit Composer (claude-sonnet oder GPT-4.1)
+Test-Device: iPhone 13 (nie Simulator für device-kritische Fixes)
 
-Offene Punkte (MVP in ~1 Monat, TestFlight Mitte Juli):
-- Email-Verifizierung (kein dedizierter type=signup-Branch im Deep-Link — bekannter Bug)
+### Offene Punkte (MVP)
+- Email-Verifizierung (kein `type=signup`-Branch im Deep-Link — bekannter Bug)
 - Sign in with Apple
 - Password Reset
-- Onboarding Plan-Qualität
-- Plan-Generation-Qualität (Long-Run-Cap 30%/33% noch kein harter Code-Clamp)
+- Onboarding-Plan-Qualität weiter verbessern
+- AI Coach: funktioniert, aber Antwortqualität noch nicht optimal — kein Blocker mehr, weiter verbessern
 - Account-Deletion Test
+- Strava-Integration: Backend komplett, On-Device-Test auf iPhone 13 noch offen
 
-Workflow: Diagnose-first (keine Code-Änderung) → Fix-Vorschlag → CI=false npm run build → erst dann committen.
-Nach jedem Fix: git add -A && git commit, danach git push nicht vergessen — das wurde in der Vergangenheit öfter vergessen.
+### Erledigt (nicht mehr offen)
+- Long-Run-Cap 30%/33% ist als harter Code-Clamp umgesetzt, nicht mehr nur Prompt-Regel
+- Privacy Policy Link ist im App-Store-Review-Flow eingebunden
 
-## Projekt-Kontext (Anton)
-Coding Agent: Cursor mit Composer
-Test-Device: iPhone 13
-
-Offene Punkte (MVP in ~1 Monat, TestFlight Mitte Juli):
-- AI Coach antwortet nicht (Bug, höchste Priorität)
-- Email-Verifizierung (kein type=signup-Branch im Deep-Link)
-- Privacy Policy Link (App-Store-Review-Blocker)
-- Sign in with Apple
-- Password Reset
-- Onboarding Plan-Qualität
-- Plan-Generation-Qualität
-- Account-Deletion Test
-
-Größere Post-TestFlight-Punkte (NICHT jetzt anfassen, nur zur Info):
-Garmin-Integration, Samsung/Android, kompletter UI/UX-Umbau, Settings-Umbau auf Runna/Strava-Niveau, Triathlon-Erweiterung.
+### Post-TestFlight (jetzt NICHT anfassen, nur zur Info)
+Garmin-Integration, Samsung/Android, kompletter UI/UX-Umbau, Settings-Umbau auf Runna/Strava-Niveau, Triathlon-Erweiterung, Apple-Watch-Companion.
 
 ## Workflow (Pflicht)
-Diagnose-first (keine Code-Änderung) → Fix-Vorschlag → CI=false npm run build → erst dann committen.
-Ein Auftrag pro Session/Branch, nicht mehrere Baustellen parallel — vermeidet Merge-Chaos.
-Nach jedem Fix: git add -A && git commit, danach git push nicht vergessen.
+- Diagnose-first (keine Code-Änderung ohne vorherige Diagnose) → Fix-Vorschlag → `CI=false npm run build` → erst dann committen.
+- Ein Auftrag pro Session/Branch, nicht mehrere Baustellen parallel — vermeidet Merge-Chaos.
+- Completion-String am Ende jeder abgeschlossenen Aufgabe.
+- Nach jedem Fix: `git add -A && git commit`, danach **git push nicht vergessen** — das wurde in der Vergangenheit öfter vergessen.
+- Kein Merge zu `main` ohne explizite Freigabe.
 
 ## Live-Test-Setup
-Lokaler Server für Chrome-Verifikation: npm run start:full (Frontend + Express-API :8787 gleichzeitig, 
-nötig um den echten AI-Pfad zu testen statt nur Mock-Fallback).
+Lokaler Server für Chrome-Verifikation: `npm run start:full` (Frontend + Express-API :8787 gleichzeitig, nötig um den echten AI-Pfad zu testen statt nur Mock-Fallback).
