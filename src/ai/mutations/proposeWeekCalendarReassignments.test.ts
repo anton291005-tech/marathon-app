@@ -184,7 +184,7 @@ describe("proposeWeekCalendarReassignments – Intervall direkt vor Long Run (ur
     const ranked = rankCalendarReassignmentCandidates([week], "s-mon", candidates, computeSourceDayCapacity(week, "s-mon", blocks));
     const friday = ranked.find((r) => r.targetSessionId === "s-fri");
     expect(friday).toBeDefined();
-    expect(friday?.microStructureSeverity).toBeGreaterThanOrEqual(75);
+    expect(friday?.microStructureDeltaSeverity).toBeGreaterThanOrEqual(75);
     expect(friday?.isConflict).toBe(true);
     expect(friday?.microStructureReason).toMatch(/Long Run/);
   });

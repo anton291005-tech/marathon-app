@@ -63,6 +63,8 @@ export type AiPlanWeek = {
 export type AiActionPreview = {
   title: string;
   items: string[];
+  /** Neutrale Hinweise (kein ⚠️), getrennt von `items` dargestellt — z. B. neue Erholungs-Hinweise 40–74. */
+  hints?: string[];
   confirmLabel?: string;
   cancelLabel?: string;
   secondaryLabel?: string;

@@ -57,6 +57,28 @@ const EMERGENT_WEEK: DaySpec[] = [
   { id: "s-sun", type: "easy", date: "16. Aug", day: "Sonntag" },
 ];
 
+// Zwei Long Runs (Montag und Samstag): ein Long Run direkt hinter dem anderen ergibt den 70er-Befund (Hinweis).
+const TWO_LONG_WEEK: DaySpec[] = [
+  { id: "s-mon", type: "long", date: "10. Aug", day: "Montag" },
+  { id: "s-tue", type: "easy", date: "11. Aug", day: "Dienstag" },
+  { id: "s-wed", type: "rest", date: "12. Aug", day: "Mittwoch" },
+  { id: "s-thu", type: "easy", date: "13. Aug", day: "Donnerstag" },
+  { id: "s-fri", type: "easy", date: "14. Aug", day: "Freitag" },
+  { id: "s-sat", type: "long", date: "15. Aug", day: "Samstag" },
+  { id: "s-sun", type: "easy", date: "16. Aug", day: "Sonntag" },
+];
+
+// Sa long → So interval ist schon im Plan (Altbefund, 92); ein Tausch von Di und Do ändert daran nichts.
+const PREEXISTING_WEEK: DaySpec[] = [
+  { id: "s-mon", type: "rest", date: "10. Aug", day: "Montag" },
+  { id: "s-tue", type: "easy", date: "11. Aug", day: "Dienstag" },
+  { id: "s-wed", type: "rest", date: "12. Aug", day: "Mittwoch" },
+  { id: "s-thu", type: "easy", date: "13. Aug", day: "Donnerstag" },
+  { id: "s-fri", type: "easy", date: "14. Aug", day: "Freitag" },
+  { id: "s-sat", type: "long", date: "15. Aug", day: "Samstag" },
+  { id: "s-sun", type: "interval", date: "16. Aug", day: "Sonntag" },
+];
+
 describe("validateWeekReassignmentBatch", () => {
   test("zwei unabhängige, harmlose Reassignments zusammen -> valid, beide Patch-Paare enthalten", () => {
     const week = buildWeek(HARMLESS_WEEK);
@@ -76,25 +98,66 @@ describe("validateWeekReassignmentBatch", () => {
     expect(bySessionId.get("s-thu")?.date).toBe("12. Aug");
   });
 
-  test("ein Reassignment verletzt für sich allein schon Micro-Structure (Back-to-back, warn) -> valid mit Warnung", () => {
+  test("neuer Befund ab 95 (Back-to-back) -> Batch ungültig, Grund wird genannt, Patches bleiben zur Transparenz", () => {
     const week = buildWeek(BASE_WEEK);
-    // s-tue <-> s-mon: Intervall rutscht auf Dienstag, direkt neben Mittwochs-Intervall -> back-to-back.
-    // validateMicroStructure liefert dafür "warn", nie "block" (Schritt 4: warn blockt das Batch nicht
-    // mehr hart, siehe validateWeekReassignmentBatch.ts).
+    // s-tue <-> s-mon: Intervall rutscht auf Dienstag, direkt neben Mittwochs-Intervall -> back-to-back (95).
     const proposals: WeekCalendarReassignmentProposal[] = [
       { sessionId: "s-tue", fromDayIso: "2026-08-11", toDayIso: "2026-08-10", reason: "Ausweichtag gefunden." },
     ];
 
     const result = validateWeekReassignmentBatch(proposals, week);
 
-    expect(result.valid).toBe(true);
-    if (result.valid) {
-      expect(result.warning).toEqual(expect.stringContaining("Back-to-back"));
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.violations.join(" ")).toEqual(expect.stringContaining("Back-to-back"));
       expect(result.patches.length).toBeGreaterThan(0);
     }
   });
 
-  test("zwei für sich harmlose Reassignments brechen zusammen eine Spacing-Regel (Kernfall, warn) -> valid mit Warnung", () => {
+  test("neuer Befund 75–94 (Intervall vor Long Run) -> valid mit ⚠️-Warnung, ohne Hinweis", () => {
+    const week = buildWeek(BASE_WEEK);
+    // s-mon <-> s-fri: Intervall rutscht auf den Freitag, direkt vor den Samstags-Long-Run (75).
+    const proposals: WeekCalendarReassignmentProposal[] = [
+      { sessionId: "s-mon", fromDayIso: "2026-08-10", toDayIso: "2026-08-14", reason: "Ausweichtag gefunden." },
+    ];
+
+    const result = validateWeekReassignmentBatch(proposals, week);
+
+    expect(result.valid).toBe(true);
+    if (result.valid) {
+      expect(result.warning).toEqual(expect.stringContaining("Long Run"));
+      expect(result.hint).toBeUndefined();
+    }
+  });
+
+  test("neuer Befund 40–74 (zwei Long Runs hintereinander) -> valid mit neutralem Hinweis, ohne Warnung", () => {
+    const week = buildWeek(TWO_LONG_WEEK);
+    // s-mon (long) <-> s-sun: der Montags-Long-Run rutscht direkt hinter den Samstags-Long-Run (70).
+    const proposals: WeekCalendarReassignmentProposal[] = [
+      { sessionId: "s-mon", fromDayIso: "2026-08-10", toDayIso: "2026-08-16", reason: "Ausweichtag gefunden." },
+    ];
+
+    const result = validateWeekReassignmentBatch(proposals, week);
+
+    expect(result.valid).toBe(true);
+    if (result.valid) {
+      expect(result.hint).toEqual(expect.stringContaining("lockere Tage"));
+      expect(result.warning).toBeUndefined();
+    }
+  });
+
+  test("vorbestehender Befund zählt nicht: Sa long → So interval besteht schon, ein harmloser Tausch bleibt ohne Warnung", () => {
+    const week = buildWeek(PREEXISTING_WEEK);
+    const proposals: WeekCalendarReassignmentProposal[] = [
+      { sessionId: "s-tue", fromDayIso: "2026-08-11", toDayIso: "2026-08-13", reason: "Ausweichtag gefunden." },
+    ];
+    const result = validateWeekReassignmentBatch(proposals, week);
+    expect(result).toMatchObject({ valid: true });
+    expect(result).not.toHaveProperty("warning");
+    expect(result).not.toHaveProperty("hint");
+  });
+
+  test("zwei für sich harmlose Reassignments brechen zusammen eine Spacing-Regel (Kernfall) -> Batch ungültig", () => {
     const week = buildWeek(EMERGENT_WEEK);
     const proposals: WeekCalendarReassignmentProposal[] = [
       { sessionId: "s-mon", fromDayIso: "2026-08-10", toDayIso: "2026-08-12", reason: "Ausweichtag gefunden." },
@@ -103,12 +166,12 @@ describe("validateWeekReassignmentBatch", () => {
 
     const result = validateWeekReassignmentBatch(proposals, week);
 
-    // Beide Patch-Paare wurden angewendet - Interaktionseffekt zwischen den beiden Swaps ergibt eine
-    // Micro-Structure-Warnung (nicht sichtbar aus den Einzel-Swaps), blockt das Batch aber nicht mehr.
-    expect(result.valid).toBe(true);
+    // Beide Patch-Paare wurden gebaut - der Interaktionseffekt (Mittwoch/Donnerstag direkt nebeneinander, 95) ist
+    // aus den Einzel-Swaps nicht sichtbar. Das System schlägt so etwas nie selbst vor: Batch ungültig.
+    expect(result.valid).toBe(false);
     expect(result.patches).toHaveLength(4);
-    if (result.valid) {
-      expect(result.warning).toBeTruthy();
+    if (!result.valid) {
+      expect(result.violations.join(" ")).toEqual(expect.stringContaining("Back-to-back"));
     }
   });
 

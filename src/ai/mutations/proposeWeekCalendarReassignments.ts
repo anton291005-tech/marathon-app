@@ -49,8 +49,9 @@ function sortConflictsBySeverity(
  * bleibt für nachfolgende Sessions frei.
  *
  * Nutzt dieselbe Ranking-Primitive (`rankCalendarReassignmentCandidates`) wie das "Bearbeiten"-Panel
- * hinter dem Einzel-Tag-📅-Button – dessen `isConflict`-Flag (Capacity-Fit UND Micro-Structure)
- * entscheidet, ob ein Kandidat als Lösung zählt. Erzeugt keinen PlanPatch, ruft weder
+ * hinter dem Einzel-Tag-📅-Button – dessen `isConflict`-Flag (Capacity-Fit UND neuer Micro-Structure-Befund
+ * ab 75) entscheidet, ob ein Kandidat als Lösung zählt. Befunde 40–74 sind kein Konflikt und werden als
+ * Hinweis angezeigt. `fullPlan` (Anzeigeplan) macht Nachbarwochen und Phasen sichtbar. Erzeugt keinen PlanPatch, ruft weder
  * `assignSessionToBestCapacityDay` noch `buildCalendarReassignmentAction` auf – reine Vorschau.
  * Gesperrte Sessions (`lockedSessionIds`) werden nie als Zieltag angeboten.
  */
@@ -59,8 +60,10 @@ export function proposeWeekCalendarReassignments(
   week: AiPlanWeek,
   scheduleBlocks: WeeklyScheduleBlock[],
   lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
+  fullPlan?: AiPlanWeek[],
 ): WeekCalendarReassignmentProposal[] {
-  const plan: AiPlanWeek[] = [week];
+  // Ohne ganzen Plan sieht die Bewertung nur diese Woche — Nachbarwochen (So → Mo) und deren Phase fehlen dann.
+  const plan: AiPlanWeek[] = fullPlan ?? [week];
   const ordered = sortConflictsBySeverity(conflicts, week, scheduleBlocks);
   const takenTargetSessionIds = new Set<string>();
   const proposals: WeekCalendarReassignmentProposal[] = [];

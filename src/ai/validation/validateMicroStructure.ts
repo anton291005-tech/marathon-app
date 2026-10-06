@@ -1,20 +1,8 @@
 import type { TrainingPlanV2, WorkoutV2, Intensity } from "../../planV2/types";
+import type { TrainingPhase } from "../../planV2/trainingPhase";
 import { allow, axis, joinReasons, warn, type ValidationResult } from "./validationResult";
 import type { ValidationContext } from "./validationContext";
 import { isLongRunType, resolveLoadClass } from "../../core/loadClass";
-
-function startOfIsoWeekMonday(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(12, 0, 0, 0);
-  const day = d.getDay(); // 0=Sun..6=Sat
-  const offset = (day + 6) % 7; // Mon->0, Sun->6
-  d.setDate(d.getDate() - offset);
-  return d;
-}
-
-function ymd(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
 
 function dayDiff(aIso: string, bIso: string): number {
   const a = new Date(aIso);
@@ -25,140 +13,297 @@ function dayDiff(aIso: string, bIso: string): number {
   return Math.round((db - da) / (24 * 60 * 60 * 1000));
 }
 
+/** Lokaler Kalendertag "YYYY-MM-DD" (nicht UTC: `toISOString()` kippt in Europe/Berlin auf den Vortag). */
+function localYmd(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function localYmdOfIso(iso: string): string | null {
+  const d = new Date(iso);
+  return Number.isFinite(d.getTime()) ? localYmd(d) : null;
+}
+
+/** Montag (lokal) der Kalenderwoche eines lokalen Tages "YYYY-MM-DD". */
+function mondayYmdOf(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const date = new Date(y, m - 1, d, 12, 0, 0, 0);
+  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return localYmd(date);
+}
+
 /** Belastungsklasse eines Workouts — dünner Wrapper um `core/loadClass` (einzige Quelle). */
 export function inferIntensity(w: WorkoutV2): Intensity {
   return resolveLoadClass(w);
 }
 
-/** Schweregrad „harte Einheit am Vortag eines Long Runs" — phasenunabhängig über der Warnschwelle (60). */
+/** Schweregrad „harte Einheit am Vortag eines Long Runs" — phasenunabhängig (außer Taper) über der Warnschwelle. */
 export const KEY_SESSION_EVE_SEVERITY = 75;
 
-function groupByWeek(workouts: WorkoutV2[]): Map<string, WorkoutV2[]> {
-  const map = new Map<string, WorkoutV2[]>();
-  for (const w of workouts) {
-    const d = new Date(w.dateIso);
-    if (!Number.isFinite(d.getTime())) continue;
-    const key = ymd(startOfIsoWeekMonday(d));
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(w);
-  }
-  return map;
+/**
+ * Stufen der Schweregrade (Darstellung und Auto-Vorschlag):
+ *   0: unter 40   — unbedenklich, nichts anzeigen
+ *   1: 40–74      — Hinweis (neutral)
+ *   2: 75–94      — Warnung (⚠️); Auto-Vorschlag nur mit Warnung
+ *   3: ab 95      — nie Auto-Vorschlag, in der manuellen Tageswahl sichtbar
+ */
+export const MICRO_HINT_THRESHOLD = 40;
+export const MICRO_WARNING_THRESHOLD = 75;
+export const MICRO_NEVER_AUTO_THRESHOLD = 95;
+
+export type MicroTier = 0 | 1 | 2 | 3;
+
+export function microSeverityTier(severity: number): MicroTier {
+  if (severity >= MICRO_NEVER_AUTO_THRESHOLD) return 3;
+  if (severity >= MICRO_WARNING_THRESHOLD) return 2;
+  if (severity >= MICRO_HINT_THRESHOLD) return 1;
+  return 0;
+}
+
+export type MicroFindingRule =
+  | "back_to_back_high"
+  | "recovery_after_high"
+  | "key_session_eve"
+  | "long_run_spacing"
+  | "high_density"
+  | "no_rest_day";
+
+/** Ein einzelner Befund; `dates` sind die beteiligten lokalen Kalendertage (bzw. der Wochen-Montag bei `no_rest_day`). */
+export type MicroFinding = {
+  rule: MicroFindingRule;
+  severity: number;
+  reason: string;
+  dates: string[];
+};
+
+/** Phase des Plans an einem lokalen Kalendertag; `undefined` → `context.phase`. */
+export type MicroPhaseLookup = (dateYmd: string) => TrainingPhase | undefined;
+
+export type MicroValidationOptions = { phaseOf?: MicroPhaseLookup };
+
+const PHASE_STRICTNESS: Record<TrainingPhase, number> = { base: 0, build: 1, peak: 2, taper: 3 };
+
+function strictestPhase(phases: TrainingPhase[]): TrainingPhase {
+  return phases.reduce((acc, p) => (PHASE_STRICTNESS[p] > PHASE_STRICTNESS[acc] ? p : acc), phases[0]);
+}
+
+function isRestWorkout(w: WorkoutV2): boolean {
+  return w.sport === "rest" || w.sessionType === "rest";
 }
 
 /**
- * Micro-structure validation for physiological spacing inside each calendar week.
- * Deterministic only; runs after structural rebuild.
+ * Sammelt alle Befunde der Erholungs-/Abstandsregeln über den GANZEN Plan — auch über Wochengrenzen
+ * (Sonntag → Montag). Keine frühen Rückgaben: jede Regel meldet jeden Treffer. Nur „kein Ruhetag" ist
+ * wochenbezogen. Phase je Tag über `options.phaseOf`, sonst `context.phase`; bei Paaren über Tage zweier
+ * Phasen gilt die strengere.
  */
-export function validateMicroStructure(plan: TrainingPlanV2, context: ValidationContext): ValidationResult {
-  const weeks = groupByWeek(plan.workouts || []);
+export function collectMicroFindings(
+  plan: TrainingPlanV2,
+  context: ValidationContext,
+  options: MicroValidationOptions = {},
+): MicroFinding[] {
+  const phaseAt = (ymd: string): TrainingPhase => options.phaseOf?.(ymd) ?? context.phase;
 
-  const warnItems: Array<{ reason: string; severity: number }> = [];
+  const entries: Array<{ w: WorkoutV2; ymd: string }> = [];
+  for (const w of plan.workouts || []) {
+    const ymd = localYmdOfIso(w.dateIso);
+    if (ymd) entries.push({ w, ymd });
+  }
+  entries.sort((a, b) => a.w.dateIso.localeCompare(b.w.dateIso));
 
-  const phase = context.phase;
-  const isTaper = phase === "taper";
-  const isPeak = phase === "peak";
-  const isBase = phase === "base";
+  const findings: MicroFinding[] = [];
 
-  function pushWarn(reason: string, severity: number) {
-    warnItems.push({ reason, severity });
+  // Wochenregel: kein Ruhetag in der Kalenderwoche.
+  const weeks = new Map<string, Array<{ w: WorkoutV2; ymd: string }>>();
+  for (const e of entries) {
+    const key = mondayYmdOf(e.ymd);
+    if (!weeks.has(key)) weeks.set(key, []);
+    weeks.get(key)!.push(e);
+  }
+  weeks.forEach((weekEntries, weekKey) => {
+    if (weekEntries.some((e) => isRestWorkout(e.w))) return;
+    const phase = phaseAt(weekEntries[0].ymd);
+    const severity = phase === "taper" ? 65 : phase === "peak" ? 55 : 35;
+    findings.push({ rule: "no_rest_day", severity, reason: "Warnung: Diese Woche hat keinen Ruhetag.", dates: [weekKey] });
+  });
+
+  // Dichte: drei harte Einheiten innerhalb von vier Tagen (planweit).
+  const highs = entries.filter((e) => inferIntensity(e.w) === "high");
+  for (let i = 0; i + 2 < highs.length; i += 1) {
+    const diff = dayDiff(highs[i].w.dateIso, highs[i + 2].w.dateIso);
+    if (diff < 0 || diff > 3) continue;
+    const dates = [highs[i].ymd, highs[i + 1].ymd, highs[i + 2].ymd];
+    const phase = strictestPhase(dates.map(phaseAt));
+    findings.push({
+      rule: "high_density",
+      severity: phase === "taper" ? 85 : phase === "peak" ? 80 : 60,
+      reason: "Warnung: Drei intensive Einheiten in vier Tagen erhöhen das Verletzungsrisiko.",
+      dates,
+    });
   }
 
-  function isRestWorkout(w: WorkoutV2): boolean {
-    return w.sport === "rest" || w.sessionType === "rest";
-  }
+  // Paarregeln über aufeinanderfolgende Einträge — unabhängig von der Kalenderwoche.
+  for (let i = 0; i + 1 < entries.length; i += 1) {
+    const { w: curr, ymd: currYmd } = entries[i];
+    const { w: next, ymd: nextYmd } = entries[i + 1];
+    const currInt = inferIntensity(curr);
+    const nextInt = inferIntensity(next);
+    const diffDays = dayDiff(curr.dateIso, next.dateIso);
+    const dates = [currYmd, nextYmd];
+    const phase = strictestPhase([phaseAt(currYmd), phaseAt(nextYmd)]);
+    const isTaper = phase === "taper";
+    const isPeak = phase === "peak";
+    const isBase = phase === "base";
 
-  const weekEntries = Array.from(weeks.entries());
-  for (let wi = 0; wi < weekEntries.length; wi += 1) {
-    const weekKey = weekEntries[wi][0];
-    const workouts = weekEntries[wi][1];
-    const sorted = [...workouts].sort((a, b) => a.dateIso.localeCompare(b.dateIso));
-
-    // Warning checks (week-level)
-    const hasRest = sorted.some((w) => w.sport === "rest" || w.sessionType === "rest");
-    if (!hasRest) {
-      const sev = isTaper ? 65 : isPeak ? 55 : 35;
-      pushWarn("Warnung: Diese Woche hat keinen Ruhetag.", sev);
+    // R1: keine harten Einheiten an Folgetagen (oder am selben Tag).
+    if (currInt === "high" && nextInt === "high" && diffDays <= 1) {
+      findings.push({
+        rule: "back_to_back_high",
+        severity: 95,
+        reason: "Back-to-back intensity: zwei intensive Einheiten hintereinander.",
+        dates,
+      });
     }
 
-    // Hard sessions density warning: 3 high sessions in 4 days
-    const highs = sorted
-      .filter((w) => inferIntensity(w) === "high")
-      .map((w) => w.dateIso)
-      .sort();
-    for (let i = 0; i < highs.length; i++) {
-      const start = highs[i];
-      const end = highs[i + 2];
-      if (!end) continue;
-      const diff = dayDiff(start, end);
-      if (diff >= 0 && diff <= 3) {
-        const sev = isTaper ? 85 : isPeak ? 80 : 60;
-        pushWarn("Warnung: Drei intensive Einheiten in vier Tagen erhöhen das Verletzungsrisiko.", sev);
-        break;
-      }
-    }
-
-    for (let i = 0; i < sorted.length; i++) {
-      const curr = sorted[i];
-      const next = sorted[i + 1];
-      if (!next) continue;
-
-      const currInt = inferIntensity(curr);
-      const nextInt = inferIntensity(next);
-      const diffDays = dayDiff(curr.dateIso, next.dateIso);
-
-      // RULE 1: no back-to-back high intensity on adjacent days (or same day) — warn only; athlete decides.
-      if (currInt === "high" && nextInt === "high" && diffDays <= 1) {
-        return warn({ micro: axis(95, "Back-to-back intensity: zwei intensive Einheiten hintereinander.") });
-      }
-
-      // RULE 1b: recovery after high session (phase-dependent)
-      if (currInt === "high" && diffDays === 1 && nextInt !== "low") {
-        if (isTaper) {
-          return warn({
-            micro: axis(95, "Taper: nach intensiver Einheit am Folgetag nur Erholung/locker sinnvoll."),
-          });
-        }
+    // R1b / Schlüsseleinheit: Erholung nach einer harten Einheit.
+    if (currInt === "high" && diffDays === 1 && nextInt !== "low") {
+      if (isTaper) {
+        findings.push({
+          rule: "recovery_after_high",
+          severity: 95,
+          reason: "Taper: nach intensiver Einheit am Folgetag nur Erholung/locker sinnvoll.",
+          dates,
+        });
+      } else {
         const sev = isPeak ? 80 : isBase ? 40 : 55;
         if (isLongRunType(next.sessionType)) {
-          // Harte Einheit am Vortag einer Schlüsseleinheit (Long Run): in jeder Phase mindestens Warnschwelle.
-          pushWarn(
-            "Warnung: Harte Einheit direkt vor einem Long Run — der Long Run braucht frische Beine.",
-            Math.max(sev, KEY_SESSION_EVE_SEVERITY),
-          );
+          findings.push({
+            rule: "key_session_eve",
+            severity: Math.max(sev, KEY_SESSION_EVE_SEVERITY),
+            reason: "Warnung: Harte Einheit direkt vor einem Long Run — der Long Run braucht frische Beine.",
+            dates,
+          });
         } else {
-          pushWarn("Warnung: Nach einer intensiven Einheit ist ein Erholungstag am nächsten Tag empfehlenswert.", sev);
+          findings.push({
+            rule: "recovery_after_high",
+            severity: sev,
+            reason: "Warnung: Nach einer intensiven Einheit ist ein Erholungstag am nächsten Tag empfehlenswert.",
+            dates,
+          });
         }
       }
+    }
 
-      // RULE 2: long run spacing (phase-dependent)
-      if (curr.sessionType === "long") {
-        if (diffDays < 2 && !isRestWorkout(next)) {
-          // In taper/peak: tighter spacing → warn by default (athlete may still confirm swaps).
-          if (isTaper || isPeak) {
-            if (nextInt !== "low") return warn({ micro: axis(92, "Long Run stacking: benötigt mindestens 2 Tage Abstand.") });
-          } else {
-            if (nextInt === "high")
-              return warn({ micro: axis(92, "Long Run: benötigt mindestens 2 Tage Abstand zu einer intensiven Einheit.") });
-            if (nextInt === "medium") pushWarn("Warnung: Nach einem Long Run sind 2 lockere Tage oft sinnvoll.", 70);
-          }
+    // R2/R3: Abstand nach einem Long Run.
+    if (isLongRunType(curr.sessionType) && diffDays < 2 && !isRestWorkout(next)) {
+      if (isTaper || isPeak) {
+        if (nextInt !== "low") {
+          findings.push({
+            rule: "long_run_spacing",
+            severity: 92,
+            reason: "Long Run stacking: benötigt mindestens 2 Tage Abstand.",
+            dates,
+          });
         }
+      } else if (nextInt === "high") {
+        findings.push({
+          rule: "long_run_spacing",
+          severity: 92,
+          reason: "Long Run: benötigt mindestens 2 Tage Abstand zu einer intensiven Einheit.",
+          dates,
+        });
+      } else if (nextInt === "medium") {
+        findings.push({
+          rule: "long_run_spacing",
+          severity: 70,
+          reason: "Warnung: Nach einem Long Run sind 2 lockere Tage oft sinnvoll.",
+          dates,
+        });
       }
     }
   }
 
-  const uniq = new Map<string, { reason: string; severity: number }>();
-  for (const item of warnItems) {
-    if (!uniq.has(item.reason)) uniq.set(item.reason, item);
-    else uniq.set(item.reason, { ...item, severity: Math.max(item.severity, uniq.get(item.reason)!.severity) });
-  }
-  // Schwerste zuerst: sonst verdrängen früh gefundene leichte Hinweise (z. B. „kein Ruhetag") einen schweren Befund.
-  const top = Array.from(uniq.values())
-    .sort((a, b) => b.severity - a.severity)
-    .slice(0, 3);
+  return findings;
+}
+
+/** Gleiche Gründe zusammenfassen (höchster Schweregrad), schwerste zuerst. */
+function uniqueBySeverity(findings: MicroFinding[]): Array<{ reason: string; severity: number }> {
+  const byReason = new Map<string, number>();
+  for (const f of findings) byReason.set(f.reason, Math.max(f.severity, byReason.get(f.reason) ?? 0));
+  return Array.from(byReason, ([reason, severity]) => ({ reason, severity })).sort((a, b) => b.severity - a.severity);
+}
+
+/**
+ * Gesamtplan-Sicht: Micro-structure validation for physiological spacing over the whole plan.
+ * Deterministic only; runs after structural rebuild. Meldet auch vorbestehende Befunde — für die
+ * Bewertung einer Änderung `computeMicroStructureDelta` verwenden.
+ */
+export function validateMicroStructure(
+  plan: TrainingPlanV2,
+  context: ValidationContext,
+  options: MicroValidationOptions = {},
+): ValidationResult {
+  const top = uniqueBySeverity(collectMicroFindings(plan, context, options)).slice(0, 3);
   const reason = joinReasons(top.map((t) => t.reason), " ");
   const score = top.reduce((m, t) => Math.max(m, t.severity), 0);
-  const axes = reason ? { micro: axis(score, reason) } : {};
   if (!reason) return allow();
+  const axes = { micro: axis(score, reason) };
   return score >= 60 ? warn(axes) : allow(axes);
 }
 
+export type MicroDelta = {
+  /** Im Nachher-Zustand neu oder schwerer als im Vorher-Zustand. */
+  newFindings: MicroFinding[];
+  /** Im Vorher-Zustand vorhanden, im Nachher-Zustand weg oder schwächer. */
+  resolvedFindings: MicroFinding[];
+  /** Höchster Schweregrad der neuen Befunde, 0 ohne neue Befunde. */
+  severity: number;
+  tier: MicroTier;
+  /** Neue Befunde ab 75 (⚠️-Warnung), schwerste zuerst. */
+  warnings: string[];
+  /** Neue Befunde 40–74 (neutraler Hinweis), schwerste zuerst. */
+  hints: string[];
+  /** Die schwersten neuen Gründe zusammengefasst (max. 3), `null` ohne neue Befunde. */
+  reason: string | null;
+};
+
+const findingKey = (f: MicroFinding) => `${f.rule}|${f.dates.join(",")}`;
+
+/**
+ * Nur die Änderung bewerten: Befunde im Nachher-Zustand, die es im Vorher-Zustand nicht (oder nur
+ * schwächer) gab. Vorbestehende Befunde zählen nicht. Befunde sind lokal an ihre Tage gebunden; ein
+ * Tausch zweier Tage kann deshalb nur Befunde ändern, die einen dieser Tage berühren.
+ */
+export function diffMicroFindings(before: MicroFinding[], after: MicroFinding[]): MicroDelta {
+  const beforeByKey = new Map(before.map((f) => [findingKey(f), f] as const));
+  const afterByKey = new Map(after.map((f) => [findingKey(f), f] as const));
+
+  const newFindings = after.filter((f) => {
+    const prev = beforeByKey.get(findingKey(f));
+    return !prev || f.severity > prev.severity;
+  });
+  const resolvedFindings = before.filter((f) => {
+    const next = afterByKey.get(findingKey(f));
+    return !next || next.severity < f.severity;
+  });
+
+  const unique = uniqueBySeverity(newFindings);
+  const severity = unique.reduce((m, f) => Math.max(m, f.severity), 0);
+  return {
+    newFindings,
+    resolvedFindings,
+    severity,
+    tier: microSeverityTier(severity),
+    warnings: unique.filter((f) => f.severity >= MICRO_WARNING_THRESHOLD).map((f) => f.reason),
+    hints: unique.filter((f) => f.severity >= MICRO_HINT_THRESHOLD && f.severity < MICRO_WARNING_THRESHOLD).map((f) => f.reason),
+    reason: unique.length ? joinReasons(unique.slice(0, 3).map((f) => f.reason), " ") : null,
+  };
+}
+
+export function computeMicroStructureDelta(
+  before: TrainingPlanV2,
+  after: TrainingPlanV2,
+  context: ValidationContext,
+  options: MicroValidationOptions = {},
+): MicroDelta {
+  return diffMicroFindings(collectMicroFindings(before, context, options), collectMicroFindings(after, context, options));
+}

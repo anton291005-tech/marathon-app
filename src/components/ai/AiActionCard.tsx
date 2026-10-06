@@ -33,6 +33,30 @@ export default function AiActionCard({ action, disabled, onConfirm, onCancel, on
           </div>
         ))}
       </div>
+      {preview.hints && preview.hints.length > 0 && (
+        <div
+          data-testid="action-card-hints"
+          style={{
+            marginTop: 10,
+            padding: "8px 10px",
+            borderRadius: 10,
+            background: "rgba(148,163,184,0.08)",
+            border: "1px solid rgba(148,163,184,0.18)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+          }}
+        >
+          <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#7c8aa5", fontWeight: 700 }}>
+            Hinweis
+          </div>
+          {preview.hints.map((hint) => (
+            <div key={hint} style={{ color: "#94a3b8", fontSize: 12, lineHeight: 1.45 }}>
+              {hint}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
         <button

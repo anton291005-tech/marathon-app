@@ -1,18 +1,27 @@
 import type { AiPlanWeek, PlanPatch } from "../../lib/ai/types";
 import type { WeekCalendarReassignmentProposal } from "./proposeWeekCalendarReassignments";
 import type { ValidationContext } from "../validation/validationContext";
+import type { TrainingPhase } from "../../planV2/trainingPhase";
 import { deepClone } from "../../core/deepClone";
 import { applyPlanPatches } from "../../lib/ai/actions";
 import { validatePlanIntegrity } from "../validation/validatePlanIntegrity";
-import { validateMicroStructure } from "../validation/validateMicroStructure";
+import { computeMicroStructureDelta } from "../validation/validateMicroStructure";
 import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 import { swapWorkouts } from "./swapWorkouts";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
-import { diffToPatches, findSessionById, NEUTRAL_VALIDATION_CONTEXT } from "./assignSessionToBestCapacityDay";
+import { diffToPatches, findSessionById, FALLBACK_VALIDATION_CONTEXT } from "./assignSessionToBestCapacityDay";
+import { buildPhaseLookup } from "./planPhaseLookup";
 import { sessionDayIso } from "./sessionDayIso";
 
 export type WeekReassignmentBatchResult =
-  | { valid: true; patches: PlanPatch[]; warning?: string }
+  | {
+      valid: true;
+      patches: PlanPatch[];
+      /** ⚠️-Warnung: neue Befunde ab 75 durch den Batch. */
+      warning?: string;
+      /** Neutraler Hinweis: neue Befunde 40–74. */
+      hint?: string;
+    }
   | { valid: false; patches: PlanPatch[]; violations: string[] };
 
 type ResolvedProposal = Extract<WeekCalendarReassignmentProposal, { toDayIso: string }>;
@@ -44,10 +53,11 @@ function findSessionIdForDayIso(week: AiPlanWeek, dayIso: string): string | null
  * Jedes resolved Proposal aus Schritt 2 ist laut `rankCalendarReassignmentCandidates` bereits einzeln
  * micro-structure-geprüft (isConflict === false) — hier wird trotzdem zusätzlich der GESAMTE
  * Batch-Endzustand geprüft (Begründung oben: Interaktionseffekte zwischen zwei Swaps). Ein
- * Micro-Structure-Status "warn" macht den Batch NICHT ungültig (Schritt 4: der Diff-Screen zeigt die
- * Warnung an, der Athlet bestätigt aktiv trotzdem — gleiches Pattern wie bei der manuellen
- * Tageswahl/"⚠️ Ungünstig"). Nur ein echter "block"-Status (den `validateMicroStructure` aktuell nie
- * liefert, aber der System-Status-Typ erlaubt ihn) bleibt Hard-Block fürs ganze Batch.
+ * Bewertet wird nur die Änderung (Delta gegen den unveränderten Plan, `computeMicroStructureDelta`), mit der
+ * Phase je Tag aus dem Plan und über Wochengrenzen hinweg (dafür `fullPlan` mitgeben; ohne ihn sieht der
+ * Batch nur die übergebene Woche). Neue Befunde 40–74 werden als neutraler `hint`, ab 75 als `warning`
+ * angezeigt — der Athlet bestätigt aktiv. Ein NEUER Befund ab 95 (z. B. zwei harte Tage hintereinander durch
+ * die Wechselwirkung zweier Verschiebungen) macht den Batch ungültig: das System schlägt so etwas nie selbst vor.
  *
  * Erkennt außerdem eine Klasse von Widersprüchen, die Schritt 2 selbst nicht ausschließt: eine Session
  * kann gleichzeitig eigene Quelle EINES Proposals und Verdrängungsziel eines ANDEREN sein (Schritt 2
@@ -65,13 +75,14 @@ function findSessionIdForDayIso(week: AiPlanWeek, dayIso: string): string | null
 export function validateWeekReassignmentBatch(
   proposals: WeekCalendarReassignmentProposal[],
   week: AiPlanWeek,
-  phase?: ValidationContext["phase"],
+  phase?: TrainingPhase,
   lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
+  fullPlan?: AiPlanWeek[],
 ): WeekReassignmentBatchResult {
   const resolved = proposals.filter(isResolvedProposal);
   if (resolved.length === 0) return { valid: true, patches: [] };
 
-  const original: AiPlanWeek[] = deepClone([week]);
+  const original: AiPlanWeek[] = deepClone(fullPlan ?? [week]);
   const usedSessionIds = new Set<string>();
   const violations: string[] = [];
   const patches: PlanPatch[] = [];
@@ -131,17 +142,16 @@ export function validateWeekReassignmentBatch(
     return { valid: false, patches, violations: ["Struktur-Integrität verletzt nach Anwendung aller Verschiebungen."] };
   }
 
-  const context: ValidationContext = phase ? { ...NEUTRAL_VALIDATION_CONTEXT, phase } : NEUTRAL_VALIDATION_CONTEXT;
-  const afterV2 = normalizeTrainingPlan(patched);
-  const microResult = validateMicroStructure(afterV2, context);
-  if (microResult.status === "block") {
-    const reason = microResult.axes.micro?.reason ?? "Micro-Structure-Verletzung nach Anwendung aller Verschiebungen.";
+  const context: ValidationContext = phase ? { ...FALLBACK_VALIDATION_CONTEXT, phase } : FALLBACK_VALIDATION_CONTEXT;
+  const delta = computeMicroStructureDelta(normalizeTrainingPlan(original), normalizeTrainingPlan(patched), context, {
+    phaseOf: buildPhaseLookup(original, phase),
+  });
+  if (delta.tier >= 3) {
+    const reason = delta.reason ?? "Micro-Structure-Verletzung nach Anwendung aller Verschiebungen.";
     return { valid: false, patches, violations: [reason] };
   }
-  if (microResult.status === "warn") {
-    const reason = microResult.axes.micro?.reason ?? "Micro-Structure-Warnung nach Anwendung aller Verschiebungen.";
-    return { valid: true, patches, warning: reason };
-  }
 
-  return { valid: true, patches };
+  const warning = delta.warnings.length ? delta.warnings.join(" ") : undefined;
+  const hint = delta.hints.length ? delta.hints.join(" ") : undefined;
+  return { valid: true, patches, ...(warning ? { warning } : {}), ...(hint ? { hint } : {}) };
 }

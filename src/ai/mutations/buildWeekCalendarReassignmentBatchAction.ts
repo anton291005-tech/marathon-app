@@ -49,6 +49,7 @@ export function buildWeekCalendarReassignmentBatchAction(
   const preview: AiActionPreview = {
     title: "Woche an Kalender anpassen",
     items,
+    ...(validation.hint ? { hints: [validation.hint] } : {}),
     confirmLabel: "Übernehmen",
     cancelLabel: "Abbrechen",
   };

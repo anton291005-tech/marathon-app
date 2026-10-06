@@ -68,7 +68,7 @@ describe("assignSessionToBestCapacityDay", () => {
     const result = assignSessionToBestCapacityDay(plan, "s-tue", candidates);
     expect(result.ok).toBe(true);
     expect(result.chosenTargetSessionId).toBe("s-sun");
-    expect(result.microStructureSeverity).toBe(0);
+    expect(result.microStructureDeltaSeverity).toBe(0);
     expect(result.warning).toBeNull();
   });
 
@@ -105,7 +105,7 @@ describe("assignSessionToBestCapacityDay", () => {
     const result = assignSessionToBestCapacityDay(plan, "s-tue", candidates);
     expect(result.ok).toBe(true);
     expect(result.chosenTargetSessionId).toBe("s-sun");
-    expect(result.microStructureSeverity).toBe(0);
+    expect(result.microStructureDeltaSeverity).toBe(0);
     expect(result.warning).toBeNull();
   });
 
@@ -120,7 +120,7 @@ describe("assignSessionToBestCapacityDay", () => {
     const result = assignSessionToBestCapacityDay(plan, "s-tue", candidates);
     expect(result.ok).toBe(true);
     expect(result.chosenTargetSessionId).toBe("s-sat");
-    expect(result.microStructureSeverity).toBe(92);
+    expect(result.microStructureDeltaSeverity).toBe(92);
     expect(result.warning).toEqual(expect.stringContaining("Long Run"));
   });
 

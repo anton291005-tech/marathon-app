@@ -109,8 +109,10 @@ describe("buildCalendarReassignmentAction", () => {
       plan: beforePlan,
       patches: [],
       chosenTargetSessionId: null,
-      microStructureSeverity: 0,
+      microStructureDeltaSeverity: 0,
+      microStructureTier: 0,
       warning: null,
+      hint: null,
       reason: "no-candidates",
     };
     expect(buildCalendarReassignmentAction("s-tue", result, beforePlan)).toBeNull();
@@ -126,8 +128,10 @@ describe("buildCalendarReassignmentAction", () => {
       plan: beforePlan,
       patches,
       chosenTargetSessionId: "s-sun",
-      microStructureSeverity: 0,
+      microStructureDeltaSeverity: 0,
+      microStructureTier: 0,
       warning: null,
+      hint: null,
     };
     const action = buildCalendarReassignmentAction("s-tue", result, beforePlan);
     expect(action?.type).toBe("reassign_session_to_calendar");
@@ -145,14 +149,61 @@ describe("buildCalendarReassignmentAction", () => {
       plan: beforePlan,
       patches,
       chosenTargetSessionId: "s-sat",
-      microStructureSeverity: 92,
+      microStructureDeltaSeverity: 92,
+      microStructureTier: 2,
       warning: "Long Run zu nah an intensiver Einheit.",
+      hint: null,
     };
     const action = buildCalendarReassignmentAction("s-tue", result, beforePlan);
     expect(action?.preview?.items).toEqual([
       "Easy Run: Dienstag → Samstag (15. Aug)",
       "⚠️ Long Run zu nah an intensiver Einheit.",
     ]);
+  });
+
+  test("Hinweis (40–74) steht getrennt in preview.hints, ohne ⚠️ und nicht in items", () => {
+    const patches: PlanPatch[] = [{ sessionId: "s-tue", changes: { day: "Samstag", date: "15. Aug" } }];
+    const result: SessionAssignmentResult = {
+      ok: true,
+      plan: beforePlan,
+      patches,
+      chosenTargetSessionId: "s-sat",
+      microStructureDeltaSeverity: 70,
+      microStructureTier: 1,
+      warning: null,
+      hint: "Nach einem Long Run sind 2 lockere Tage oft sinnvoll.",
+    };
+    const action = buildCalendarReassignmentAction("s-tue", result, beforePlan);
+    expect(action?.preview?.items).toEqual(["Easy Run: Dienstag → Samstag (15. Aug)"]);
+    expect(action?.preview?.items.join(" ")).not.toContain("⚠️");
+    expect(action?.preview?.hints).toEqual(["Nach einem Long Run sind 2 lockere Tage oft sinnvoll."]);
+  });
+
+  test("Warnung (ab 75) steht als ⚠️-Zeile in items, nicht in hints; beides zugleich bleibt getrennt", () => {
+    const patches: PlanPatch[] = [{ sessionId: "s-tue", changes: { day: "Samstag", date: "15. Aug" } }];
+    const result: SessionAssignmentResult = {
+      ok: true,
+      plan: beforePlan,
+      patches,
+      chosenTargetSessionId: "s-sat",
+      microStructureDeltaSeverity: 75,
+      microStructureTier: 2,
+      warning: "Harte Einheit direkt vor einem Long Run.",
+      hint: "Ein weiterer, leichter Hinweis.",
+    };
+    const action = buildCalendarReassignmentAction("s-tue", result, beforePlan);
+    expect(action?.preview?.items).toEqual(["Easy Run: Dienstag → Samstag (15. Aug)", "⚠️ Harte Einheit direkt vor einem Long Run."]);
+    expect(action?.preview?.hints).toEqual(["Ein weiterer, leichter Hinweis."]);
+    expect(action?.preview?.hints?.join(" ")).not.toContain("⚠️");
+  });
+
+  test("ohne Hinweis kein hints-Feld", () => {
+    const patches: PlanPatch[] = [{ sessionId: "s-tue", changes: { day: "Samstag", date: "15. Aug" } }];
+    const result: SessionAssignmentResult = {
+      ok: true, plan: beforePlan, patches, chosenTargetSessionId: "s-sat",
+      microStructureDeltaSeverity: 0, microStructureTier: 0, warning: null, hint: null,
+    };
+    expect(buildCalendarReassignmentAction("s-tue", result, beforePlan)?.preview).not.toHaveProperty("hints");
   });
 
   test("End-to-End mit echter Engine: Kandidat mit bestem Score ohne Konflikt gewinnt und ergibt eine gültige Action", () => {
@@ -183,13 +234,24 @@ describe("buildCalendarReassignmentCandidateViews", () => {
     expect(sunView?.isConflict).toBe(false);
   });
 
-  test("markiert Konflikt-Kandidaten mit isConflict und reicht die Warnung durch", () => {
+  test("markiert nur Kandidaten mit NEUEM Befund ab 75 als Konflikt und reicht die Warnung durch (Altbefunde zählen nicht)", () => {
+    // Sa long → So interval besteht schon vor jedem Tausch (Long-Run-Abstand); das darf keinen Kandidaten markieren.
     const plan = buildPlan(BASE_WEEK_ALL_CONFLICT);
     const candidates = buildCalendarReassignmentCandidates(plan[0], "s-tue", []);
     const ranked = rankCalendarReassignmentCandidates(plan, "s-tue", candidates);
     const views = buildCalendarReassignmentCandidateViews(plan[0], ranked);
+    const view = (id: string) => views.find((v) => v.targetSessionId === id)!;
 
-    expect(views.every((v) => v.isConflict)).toBe(true);
-    expect(views.some((v) => !!v.warningReason)).toBe(true);
+    // Intervall würde neben ein anderes Intervall rutschen (Back-to-back, neu) bzw. der Long Run neben ein Intervall (neu).
+    for (const id of ["s-mon", "s-wed", "s-sat"]) {
+      expect(view(id).isConflict).toBe(true);
+      expect(view(id).warningReason).toBeTruthy();
+    }
+    // Do/Fr verändern nichts an den Intensitäten → kein neuer Befund, obwohl der Plan schon einen hat.
+    for (const id of ["s-thu", "s-fri"]) {
+      expect(view(id).isConflict).toBe(false);
+      expect(view(id).warningReason).toBeNull();
+      expect(view(id).hintReason).toBeNull();
+    }
   });
 });

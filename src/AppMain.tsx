@@ -2899,8 +2899,9 @@ export default function AppMain(){
       setWeekCalendarBatchProposal({ action: null, patches: [], status: "no-conflicts" });
       return;
     }
-    const proposals = proposeWeekCalendarReassignments(conflicts, w, scheduleBlocks, lockedSessionIds);
-    const validation = validateWeekReassignmentBatch(proposals, w, undefined, lockedSessionIds);
+    // Ganzer Anzeigeplan: Nachbarwochen (So → Mo) und die Phase je Woche gehören zur Bewertung.
+    const proposals = proposeWeekCalendarReassignments(conflicts, w, scheduleBlocks, lockedSessionIds, displayPlan);
+    const validation = validateWeekReassignmentBatch(proposals, w, undefined, lockedSessionIds, displayPlan);
     if (!validation.valid) {
       setWeekCalendarBatchProposal({ action: null, patches: [], status: "blocked", blockedReasons: validation.violations });
       return;
@@ -5203,6 +5204,11 @@ export default function AppMain(){
                         {candidate.isConflict && (
                           <span style={{fontSize:11,color:"#f87171"}}>
                             ⚠️ Ungünstig{candidate.warningReason ? `: ${candidate.warningReason}` : ""}
+                          </span>
+                        )}
+                        {candidate.hintReason && (
+                          <span data-testid="calendar-candidate-hint" style={{fontSize:11,color:"#94a3b8"}}>
+                            Hinweis: {candidate.hintReason}
                           </span>
                         )}
                       </button>

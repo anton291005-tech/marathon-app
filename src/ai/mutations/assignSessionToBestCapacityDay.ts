@@ -2,8 +2,17 @@ import type { AiPlanWeek, AiPlanSession, PlanPatch } from "../../lib/ai/types";
 import { deepClone } from "../../core/deepClone";
 import { applyPlanPatches } from "../../lib/ai/actions";
 import { validatePlanIntegrity } from "../validation/validatePlanIntegrity";
-import { validateMicroStructure } from "../validation/validateMicroStructure";
+import {
+  collectMicroFindings,
+  diffMicroFindings,
+  type MicroDelta,
+  type MicroFinding,
+  type MicroTier,
+  type MicroValidationOptions,
+} from "../validation/validateMicroStructure";
+import type { TrainingPhase } from "../../planV2/trainingPhase";
 import type { ValidationContext } from "../validation/validationContext";
+import { buildPhaseLookup } from "./planPhaseLookup";
 import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 import { swapWorkouts } from "./swapWorkouts";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
@@ -24,12 +33,28 @@ export type SessionAssignmentResult = {
   plan: AiPlanWeek[];
   patches: PlanPatch[];
   chosenTargetSessionId: string | null;
-  microStructureSeverity: number;
+  /** Höchster Schweregrad der durch den Tausch NEU entstehenden Befunde (vorbestehende zählen nicht), 0 ohne. */
+  microStructureDeltaSeverity: number;
+  /** Stufe des Delta-Schweregrads: 0 unbedenklich, 1 Hinweis (40–74), 2 Warnung (75–94), 3 nie Auto-Vorschlag (ab 95). */
+  microStructureTier: MicroTier;
+  /** ⚠️-Warnung (neue Befunde ab 75), sonst `null`. */
   warning: string | null;
-  reason?: "no-candidates" | "no-valid-candidates" | "integrity-violation" | "no-good-fit-candidate" | "locked-session";
+  /** Neutraler Hinweis (neue Befunde 40–74), sonst `null`. */
+  hint: string | null;
+  reason?:
+    | "no-candidates"
+    | "no-valid-candidates"
+    | "integrity-violation"
+    | "no-good-fit-candidate"
+    | "no-safe-candidate"
+    | "locked-session";
 };
 
-export const NEUTRAL_VALIDATION_CONTEXT: ValidationContext = {
+/**
+ * Rückfall-Kontext des Validators. Die Phase kommt je Tag aus dem Plan (`buildPhaseLookup`); `phase` hier
+ * gilt nur für Tage ohne Wochenzeile. Recovery ist neutral (die Micro-Regeln lesen sie nicht).
+ */
+export const FALLBACK_VALIDATION_CONTEXT: ValidationContext = {
   planGoal: "marathon",
   currentWeekLoad: 0,
   weeklyAvgLoad: 0,
@@ -42,9 +67,6 @@ export const NEUTRAL_VALIDATION_CONTEXT: ValidationContext = {
   },
   phase: "build",
 };
-
-/** Micro-structure warnings are surfaced at the same threshold used elsewhere in validation (score >= 60). */
-const MICRO_STRUCTURE_WARN_THRESHOLD = 60;
 
 /**
  * Below this combined fit score, even the best candidate is rejected outright (no swap proposed)
@@ -135,10 +157,29 @@ export function diffToPatches(before: AiPlanWeek[], after: AiPlanWeek[], ids: st
 type ScoredCandidate = {
   candidate: SessionAssignmentCandidate;
   after: AiPlanWeek[];
-  severity: number;
-  reason: string | null;
+  delta: MicroDelta;
   combinedFit: number;
 };
+
+/** Phasen, Kontext und Vorher-Befunde einmal je Aufruf (nicht je Kandidat). */
+type MicroEvalContext = {
+  context: ValidationContext;
+  options: MicroValidationOptions;
+  beforeFindings: MicroFinding[];
+};
+
+function buildMicroEvalContext(plan: AiPlanWeek[], phase?: TrainingPhase): MicroEvalContext {
+  const context: ValidationContext = phase ? { ...FALLBACK_VALIDATION_CONTEXT, phase } : FALLBACK_VALIDATION_CONTEXT;
+  const options: MicroValidationOptions = { phaseOf: buildPhaseLookup(plan, phase) };
+  return { context, options, beforeFindings: collectMicroFindings(normalizeTrainingPlan(plan), context, options) };
+}
+
+function deltaFor(simulated: AiPlanWeek[], micro: MicroEvalContext): MicroDelta {
+  const afterFindings = collectMicroFindings(normalizeTrainingPlan(simulated), micro.context, micro.options);
+  return diffMicroFindings(micro.beforeFindings, afterFindings);
+}
+
+const joinOrNull = (parts: string[]): string | null => (parts.length ? parts.join(" ") : null);
 
 /** Scores one candidate day; `null` when it's the moved session's own day or its target can't be found. */
 function scoreCandidate(
@@ -147,16 +188,15 @@ function scoreCandidate(
   movedSession: AiPlanSession,
   candidate: SessionAssignmentCandidate,
   sourceDayCapacity: DayCapacityScore | null,
-  context: ValidationContext,
+  micro: MicroEvalContext,
 ): ScoredCandidate | null {
   if (candidate.targetSessionId === sessionId) return null;
   const displacedSession = findSessionById(before, candidate.targetSessionId);
   if (!displacedSession) return null;
 
   const simulated = swapWorkouts(before, sessionId, candidate.targetSessionId);
-  const afterV2 = normalizeTrainingPlan(simulated);
-  const microResult = validateMicroStructure(afterV2, context);
-  const microAxis = microResult.axes.micro;
+  // Nur die Änderung zählt: Befunde, die es vor dem Tausch schon gab, bleiben außen vor.
+  const delta = deltaFor(simulated, micro);
 
   // Both sides of the swap must be scored: the moved session on its new (candidate) day, AND the
   // displaced session that gets pushed onto the moved session's old day — otherwise a great capacity
@@ -164,32 +204,36 @@ function scoreCandidate(
   const movedFit = computeSessionDayFitScore(movedSession, candidate.capacity);
   const displacedFit = sourceDayCapacity ? computeSessionDayFitScore(displacedSession, sourceDayCapacity) : 1;
 
-  return {
-    candidate,
-    after: simulated,
-    severity: microAxis?.score ?? 0,
-    reason: microAxis?.reason ?? null,
-    combinedFit: Math.min(movedFit, displacedFit),
-  };
+  return { candidate, after: simulated, delta, combinedFit: Math.min(movedFit, displacedFit) };
 }
 
-/** Shared by the auto-pick (`assignSessionToBestCapacityDay`) and the full ranked list (`rankCalendarReassignmentCandidates`) — same order, so "the winner" is always ranked[0]. */
+/**
+ * Shared by the auto-pick (`assignSessionToBestCapacityDay`) and the full ranked list
+ * (`rankCalendarReassignmentCandidates`) — same order, so "the winner" is always ranked[0].
+ *
+ * Reihenfolge: (1) Kandidaten mit tragfähigem Kalender-Fit (>= `MIN_FIT_SCORE_THRESHOLD`) vor allen anderen —
+ * ein überbuchter Tag kann den Auto-Pick so nicht mehr blockieren; (2) niedrigere Stufe des Delta-Schweregrads
+ * (`microStructureTier`); (3) innerhalb einer Stufe höherer Fit; (4) niedrigerer Delta-Schweregrad; (5) frühestes Datum.
+ */
 function scoreAndRankCandidates(
   before: AiPlanWeek[],
   sessionId: string,
   movedSession: AiPlanSession,
   candidates: SessionAssignmentCandidate[],
   sourceDayCapacity: DayCapacityScore | null,
-  context: ValidationContext,
+  micro: MicroEvalContext,
 ): ScoredCandidate[] {
   const scored: ScoredCandidate[] = [];
   for (const candidate of candidates) {
-    const result = scoreCandidate(before, sessionId, movedSession, candidate, sourceDayCapacity, context);
+    const result = scoreCandidate(before, sessionId, movedSession, candidate, sourceDayCapacity, micro);
     if (result) scored.push(result);
   }
+  const fitInfeasible = (c: ScoredCandidate) => (c.combinedFit < MIN_FIT_SCORE_THRESHOLD ? 1 : 0);
   scored.sort((a, b) => {
-    if (a.severity !== b.severity) return a.severity - b.severity;
+    if (fitInfeasible(a) !== fitInfeasible(b)) return fitInfeasible(a) - fitInfeasible(b);
+    if (a.delta.tier !== b.delta.tier) return a.delta.tier - b.delta.tier;
     if (a.combinedFit !== b.combinedFit) return b.combinedFit - a.combinedFit;
+    if (a.delta.severity !== b.delta.severity) return a.delta.severity - b.delta.severity;
     return a.candidate.capacity.dateIso.localeCompare(b.candidate.capacity.dateIso);
   });
   return scored;
@@ -200,7 +244,7 @@ export function assignSessionToBestCapacityDay(
   sessionId: string,
   candidates: SessionAssignmentCandidate[],
   sourceDayCapacity: DayCapacityScore | null = null,
-  phase?: ValidationContext["phase"],
+  phase?: TrainingPhase,
   lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
 ): SessionAssignmentResult {
   const before: AiPlanWeek[] = deepClone(plan);
@@ -209,8 +253,10 @@ export function assignSessionToBestCapacityDay(
     plan: before,
     patches: [],
     chosenTargetSessionId: null,
-    microStructureSeverity: 0,
+    microStructureDeltaSeverity: 0,
+    microStructureTier: 0,
     warning: null,
+    hint: null,
   };
 
   const movedSession = findSessionById(before, sessionId);
@@ -221,8 +267,8 @@ export function assignSessionToBestCapacityDay(
     return { ...emptyResult, reason: "locked-session" };
   }
 
-  const context: ValidationContext = phase ? { ...NEUTRAL_VALIDATION_CONTEXT, phase } : NEUTRAL_VALIDATION_CONTEXT;
-  const scored = scoreAndRankCandidates(before, sessionId, movedSession, candidates, sourceDayCapacity, context);
+  const micro = buildMicroEvalContext(before, phase);
+  const scored = scoreAndRankCandidates(before, sessionId, movedSession, candidates, sourceDayCapacity, micro);
 
   if (scored.length === 0) {
     return { ...emptyResult, reason: "no-valid-candidates" };
@@ -234,6 +280,11 @@ export function assignSessionToBestCapacityDay(
   }
   if (winner.combinedFit < MIN_FIT_SCORE_THRESHOLD) {
     return { ...emptyResult, reason: "no-good-fit-candidate" };
+  }
+  // Ab Stufe 3 (neuer Befund ab 95, z. B. zwei harte Tage hintereinander) schlägt die Engine nie selbst vor —
+  // in der manuellen Tageswahl bleibt der Tag sichtbar und gekennzeichnet.
+  if (winner.delta.tier >= 3) {
+    return { ...emptyResult, reason: "no-safe-candidate" };
   }
 
   const patches = diffToPatches(before, winner.after, [sessionId, winner.candidate.targetSessionId]);
@@ -248,8 +299,10 @@ export function assignSessionToBestCapacityDay(
     plan: patched,
     patches,
     chosenTargetSessionId: winner.candidate.targetSessionId,
-    microStructureSeverity: winner.severity,
-    warning: winner.severity >= MICRO_STRUCTURE_WARN_THRESHOLD ? winner.reason : null,
+    microStructureDeltaSeverity: winner.delta.severity,
+    microStructureTier: winner.delta.tier,
+    warning: joinOrNull(winner.delta.warnings),
+    hint: joinOrNull(winner.delta.hints),
   };
 }
 
@@ -257,10 +310,17 @@ export type RankedCalendarCandidate = {
   targetSessionId: string;
   dateIso: string;
   combinedFit: number;
-  microStructureSeverity: number;
+  /** Höchster Schweregrad der durch den Tausch NEU entstehenden Befunde (vorbestehende zählen nicht). */
+  microStructureDeltaSeverity: number;
+  microStructureTier: MicroTier;
+  /** Alle neuen Gründe zusammengefasst, `null` ohne neue Befunde. */
   microStructureReason: string | null;
-  /** Would be rejected (low fit) or warned (micro-structure) by the auto-pick engine — surfaced so the
-   * athlete can see it's a worse choice, not hidden, since they may still deliberately pick it. */
+  /** ⚠️-Grund (neue Befunde ab 75), sonst `null`. */
+  microStructureWarning: string | null;
+  /** Neutraler Hinweis (neue Befunde 40–74), sonst `null`. */
+  microStructureHint: string | null;
+  /** Would be rejected (low fit) or warned (Stufe 2 und 3: neuer Befund ab 75) by the auto-pick engine — surfaced
+   * so the athlete can see it's a worse choice, not hidden, since they may still deliberately pick it. */
   isConflict: boolean;
 };
 
@@ -274,22 +334,25 @@ export function rankCalendarReassignmentCandidates(
   sessionId: string,
   candidates: SessionAssignmentCandidate[],
   sourceDayCapacity: DayCapacityScore | null = null,
-  phase?: ValidationContext["phase"],
+  phase?: TrainingPhase,
 ): RankedCalendarCandidate[] {
   const before: AiPlanWeek[] = deepClone(plan);
   const movedSession = findSessionById(before, sessionId);
   if (!sessionId || !movedSession || candidates.length === 0) return [];
 
-  const context: ValidationContext = phase ? { ...NEUTRAL_VALIDATION_CONTEXT, phase } : NEUTRAL_VALIDATION_CONTEXT;
-  const scored = scoreAndRankCandidates(before, sessionId, movedSession, candidates, sourceDayCapacity, context);
+  const micro = buildMicroEvalContext(before, phase);
+  const scored = scoreAndRankCandidates(before, sessionId, movedSession, candidates, sourceDayCapacity, micro);
 
   return scored.map((s) => ({
     targetSessionId: s.candidate.targetSessionId,
     dateIso: s.candidate.capacity.dateIso,
     combinedFit: s.combinedFit,
-    microStructureSeverity: s.severity,
-    microStructureReason: s.reason,
-    isConflict: s.combinedFit < MIN_FIT_SCORE_THRESHOLD || s.severity >= MICRO_STRUCTURE_WARN_THRESHOLD,
+    microStructureDeltaSeverity: s.delta.severity,
+    microStructureTier: s.delta.tier,
+    microStructureReason: s.delta.reason,
+    microStructureWarning: joinOrNull(s.delta.warnings),
+    microStructureHint: joinOrNull(s.delta.hints),
+    isConflict: s.combinedFit < MIN_FIT_SCORE_THRESHOLD || s.delta.tier >= 2,
   }));
 }
 
@@ -307,7 +370,7 @@ export function assignSessionToChosenDay(
   plan: AiPlanWeek[],
   sessionId: string,
   targetSessionId: string,
-  phase?: ValidationContext["phase"],
+  phase?: TrainingPhase,
   lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
 ): SessionAssignmentResult {
   const before: AiPlanWeek[] = deepClone(plan);
@@ -316,8 +379,10 @@ export function assignSessionToChosenDay(
     plan: before,
     patches: [],
     chosenTargetSessionId: null,
-    microStructureSeverity: 0,
+    microStructureDeltaSeverity: 0,
+    microStructureTier: 0,
     warning: null,
+    hint: null,
   };
 
   const movedSession = findSessionById(before, sessionId);
@@ -329,12 +394,9 @@ export function assignSessionToChosenDay(
     return { ...emptyResult, reason: "locked-session" };
   }
 
-  const context: ValidationContext = phase ? { ...NEUTRAL_VALIDATION_CONTEXT, phase } : NEUTRAL_VALIDATION_CONTEXT;
+  const micro = buildMicroEvalContext(before, phase);
   const simulated = swapWorkouts(before, sessionId, targetSessionId);
-  const afterV2 = normalizeTrainingPlan(simulated);
-  const microResult = validateMicroStructure(afterV2, context);
-  const microAxis = microResult.axes.micro;
-  const severity = microAxis?.score ?? 0;
+  const delta = deltaFor(simulated, micro);
 
   const patches = diffToPatches(before, simulated, [sessionId, targetSessionId]);
   const patched = applyPlanPatches(before, patches);
@@ -348,7 +410,9 @@ export function assignSessionToChosenDay(
     plan: patched,
     patches,
     chosenTargetSessionId: targetSessionId,
-    microStructureSeverity: severity,
-    warning: severity >= MICRO_STRUCTURE_WARN_THRESHOLD ? microAxis?.reason ?? null : null,
+    microStructureDeltaSeverity: delta.severity,
+    microStructureTier: delta.tier,
+    warning: joinOrNull(delta.warnings),
+    hint: joinOrNull(delta.hints),
   };
 }

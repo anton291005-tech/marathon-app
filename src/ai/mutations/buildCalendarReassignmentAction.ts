@@ -95,6 +95,8 @@ export function buildCalendarReassignmentAction(
   const preview: AiActionPreview = {
     title: "Trainingstag an Kalender anpassen",
     items,
+    // Neutraler Hinweis (neue Befunde 40–74): bewusst getrennt von den ⚠️-Warnungen, eigene Optik in der Karte.
+    ...(result.hint ? { hints: [result.hint] } : {}),
     confirmLabel: "Übernehmen",
     cancelLabel: "Abbrechen",
   };
@@ -110,7 +112,10 @@ export type CalendarReassignmentCandidateView = {
   targetSessionId: string;
   label: string;
   isConflict: boolean;
+  /** Neuer Befund ab 75 (⚠️ in der Tageswahl), sonst `null`. */
   warningReason: string | null;
+  /** Neuer Befund 40–74 (neutraler Hinweis in der Tageswahl), sonst `null`. */
+  hintReason: string | null;
 };
 
 /**
@@ -130,7 +135,8 @@ export function buildCalendarReassignmentCandidateViews(
       targetSessionId: candidate.targetSessionId,
       label,
       isConflict: candidate.isConflict,
-      warningReason: candidate.microStructureReason,
+      warningReason: candidate.microStructureWarning,
+      hintReason: candidate.microStructureHint,
     };
   });
 }
