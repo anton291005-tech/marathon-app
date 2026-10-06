@@ -140,6 +140,15 @@ Regelbasiert, transparent, kalibriert sich über Post-Workout-Feedback selbst na
 - Reset-Effekt, Messung und ResizeObserver in `AppMain.tsx` haben keinen Test, nur die Pure-Funktionen. Pro Wechsel auf Home sind bis zu drei synchrone Renders möglich.
 - Der Guard prüft die Kante des Inhaltsbereichs, nicht einzelne Karten; ein `position: fixed`-Element außerhalb des Wrappers erkennt er nicht.
 
+## Kalender-Tausch-Ausbau (Basis: `docs/calendar-system-analysis.md`, ab 2026-10-06)
+Reihenfolge und Begründung stehen in Abschnitt 7 der Analyse; je Schritt ein Branch.
+
+### Schritt 1 — `fix/load-class-ssot` (Code fertig, **nicht allein mergen**)
+**Umsetzung:** `src/core/loadClass.ts` ist die einzige Quelle der Belastungsklasse (interval/race/tempo = high, Long Run = medium, Long Run mit Renntempo-Anteil = high, sonst low); Server-Kopie `api/_lib/loadClass.js`, Paritätstest `src/core/loadClass.parity.test.ts` (Änderungen immer an beiden Dateien). `normalizeTrainingPlan` leitet `intensity` für Lauf-Sessions immer neu ab — gespeicherte Altwerte (`long=low`, `tempo=medium`) heilen beim nächsten Laden ohne Migration. Validator (`inferIntensity`), Kalender-Fit (`capacityScore.ts`), beide Plan-Generatoren und die Umwandlungen (`convertWorkout.ts`, `AppMain.tsx`) lesen dieselbe Funktion. Neue Validator-Regel: harte Einheit am Vortag eines Long Runs → Schweregrad 75 in jeder Phase (`KEY_SESSION_EVE_SEVERITY`). Top-3-Auswahl der Hinweise jetzt nach Schweregrad statt nach Fundreihenfolge.
+**Bewusst nicht umgestellt:** UI-Zähler („intensiv"), Recovery-/Prognose-Gewichte, Coach-Heuristiken (`HARD_TYPES`, `dailyDecision`, …) — andere Begriffe von „hart".
+**Merge-Bedingung:** erst zusammen mit Schritt 2 (`fix/microstructure-delta`). Der Validator nimmt das Maximum über den **ganzen Plan**; hat ein Plan das Muster „harte Einheit direkt vor Long Run" (z. B. Tempo Fr, Long Sa), erreicht jeder Tausch-Kandidat ≥ 75, jede Karte warnt, und der Kalender-Fit entscheidet wieder.
+**Folgepunkt (nicht in diesem Branch):** Der Plan-Generator (`claudePlanGenerator.js`, Prompt „intervalDay und tempoDay nicht aufeinanderfolgend"; festes Wochenmuster in `deterministicPlanGenerator.js`) kennt die Regel „keine harte Einheit am Vortag des Long Runs" nicht und kann Pläne erzeugen, die gegen den eigenen Validator verstoßen (in der Simulation: Regelsatz „Tempo Fr, Long Sa" → 17 von 18 Wochen mit Befund). Regel in Prompt und Generator-Klammer ergänzen.
+
 ## Harte Regel (nicht verhandelbar)
 Wissenschaftliche Planqualität ist die Leitplanke. Kalender-Constraints optimieren nur INNERHALB der Trainingsplan-Regeln — sie dürfen diese niemals überschreiben. Bei Konflikt gewinnt immer die Trainingsplan-Regel, nicht der Kalender.
 
