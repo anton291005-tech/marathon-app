@@ -61,3 +61,40 @@ export async function savePlanPatch(userId: string, patch: PlanPatch): Promise<v
     }
   }
 }
+
+/**
+ * Löscht ALLE Patches des Nutzers in Supabase. `plan_patches` hat keinen Plan-Bezug, Session-IDs
+ * (`w5-mo`) wiederholen sich zwischen Plänen — nach einem Planwechsel würden alte Zeilen beim nächsten
+ * Laden auf den neuen Plan wirken. Wirft nie: bei Fehler (z. B. offline) nur `console.warn`, kein Retry;
+ * die Zeilen bleiben dann stehen und kommen beim nächsten App-Start zurück.
+ */
+export async function deleteAllPlanPatches(userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("plan_patches").delete().eq("user_id", userId);
+    if (!error) return true;
+    // eslint-disable-next-line no-console
+    console.warn("[planPatchesService] deleteAllPlanPatches", error.message);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("[planPatchesService] deleteAllPlanPatches", e);
+  }
+  return false;
+}
+
+/**
+ * Verwirft die Patches, wenn ein anderer Plan aktiv wird (Onboarding-Abschluss, Plan-Ersatz, Planwechsel,
+ * Löschen des aktiven Plans): lokal sofort, danach in Supabase. Das Promise ist erst erfüllt, wenn der
+ * DELETE durch ist — wer danach neue Patches speichert (Wizard), wartet darauf, sonst träfe der DELETE sie mit.
+ * Ohne Planwechsel (`activePlanChanged: false`, z. B. ein nicht aktiver Plan wurde gelöscht) passiert nichts.
+ */
+export async function clearPlanPatchesForPlanChange(args: {
+  activePlanChanged: boolean;
+  userId: string | null | undefined;
+  clearLocal: () => void;
+  deleteRemote?: (userId: string) => Promise<boolean>;
+}): Promise<void> {
+  if (!args.activePlanChanged) return;
+  args.clearLocal();
+  if (!args.userId) return;
+  await (args.deleteRemote ?? deleteAllPlanPatches)(args.userId);
+}
