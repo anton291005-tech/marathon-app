@@ -114,5 +114,6 @@ describe.each([
     expect(result.patches.find((p) => p.sessionId === "w12-di")?.changes.dateIso).toBe("2026-10-08");
     expect(result.action?.preview?.items.join(" | ")).not.toContain("⚠️");
     expect(result.candidates.find((c) => c.targetSessionId === "w12-mi")?.isConflict).toBe(true);
+    expect(result.candidates.find((c) => c.targetSessionId === "w12-mi")?.warningReason).toContain("am Tag nach „Sprint-Prüfung“");
   });
 });

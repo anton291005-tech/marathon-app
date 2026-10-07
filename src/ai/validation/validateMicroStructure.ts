@@ -167,11 +167,16 @@ export function collectMicroFindings(
     for (const e of highs) {
       for (const offset of [-1, 1]) {
         const eventYmd = shiftYmd(e.ymd, offset);
-        if (externalLoadTitlesOf(eventYmd).length === 0) continue;
+        const eventTitles = externalLoadTitlesOf(eventYmd);
+        if (eventTitles.length === 0) continue;
+        const titles = eventTitles.map((t) => (t ?? "").trim()).filter(Boolean);
+        // offset −1: der Termin liegt am Vortag, die Einheit also am Tag NACH dem Termin.
+        const position = offset < 0 ? "am Tag nach" : "am Tag vor";
+        const event = titles.length ? titles.map((t) => `„${t}“`).join(", ") : "einem Kalendertermin";
         findings.push({
           rule: "physical_event_adjacent",
           severity: PHYSICAL_EVENT_ADJACENT_SEVERITY,
-          reason: "Warnung: Harte Einheit direkt neben einem körperlich belastenden Termin.",
+          reason: `Warnung: Harte Einheit ${position} ${event} – körperlich belastender Termin.`,
           dates: [e.ymd, eventYmd],
         });
       }

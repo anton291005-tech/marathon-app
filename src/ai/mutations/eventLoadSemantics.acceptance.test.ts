@@ -114,7 +114,7 @@ describe("Schritt 6 – Nachbarregel: harte Einheit am Tag vor oder nach einem k
     if (result.status !== "proposal") throw new Error("Vorschlag erwartet");
     const byId = new Map(result.candidates.map((c) => [c.targetSessionId, c]));
     expect(byId.get("w13-fr")?.isConflict).toBe(true);
-    expect(byId.get("w13-fr")?.warningReason ?? "").toMatch(/körperlich belastenden Termin/);
+    expect(byId.get("w13-fr")?.warningReason).toBe("Warnung: Harte Einheit am Tag vor „Sprint-Prüfung“ – körperlich belastender Termin.");
     for (const id of ["w13-mo", "w13-di", "w13-mi", "w13-do"]) {
       expect(byId.get(id)?.isConflict).toBe(false);
       expect(byId.get(id)?.warningReason).toBeNull();
@@ -148,7 +148,7 @@ describe("Schritt 6 – Nachbarregel: harte Einheit am Tag vor oder nach einem k
       const result = proposeSingleSessionCalendarReassignment([w], w, "w13-sa", blocks, locked);
       if (result.status !== "proposal") throw new Error("Vorschlag erwartet");
       expect(result.patches.find((p) => p.sessionId === "w13-sa")?.changes.dateIso).toBe(FRIDAY);
-      expect(result.action?.preview?.items.join(" | ")).toMatch(/⚠️.*körperlich belastenden Termin/);
+      expect(result.action?.preview?.items.join(" | ")).toContain("⚠️ Warnung: Harte Einheit am Tag vor „Sprint-Prüfung“ – körperlich belastender Termin.");
     });
 
     test("der Wochen-Vorschlag löst den Samstag dann nicht automatisch auf", () => {
@@ -163,6 +163,6 @@ describe("Schritt 6 – Nachbarregel: harte Einheit am Tag vor oder nach einem k
     const withLookup = assignSessionToChosenDay([w], "w13-sa", "w13-fr", undefined, NOTHING_LOCKED, buildPhysicalLoadDayLookup(blocks));
     expect(withLookup.ok).toBe(true);
     expect(withLookup.microStructureDeltaSeverity).toBe(75);
-    expect(withLookup.warning ?? "").toMatch(/körperlich belastenden Termin/);
+    expect(withLookup.warning).toBe("Warnung: Harte Einheit am Tag vor „Sprint-Prüfung“ – körperlich belastender Termin.");
   });
 });
