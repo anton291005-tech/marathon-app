@@ -110,6 +110,8 @@ Daraus folgt für die Praxis:
 | Nachtschicht 22–06 Uhr | liegt außerhalb beider Fenster, zählt mit 0 Minuten |
 | Ganztagstermin | wurde beim Import verworfen, existiert nicht |
 
+> **Stand nach Schritt 6 (`feat/event-load-semantics`, 2026-10-07):** Die Zeile „Sprint-Prüfung" in der Tabelle gilt nicht mehr — der Termin ist jetzt körperlich belastend (Konflikt für harte Einheiten am selben Tag, ⚠️ für harte Einheiten an den Nachbartagen). Die Stichwörter liegen in `src/scheduling/eventLoad.ts`; die Kategorie wirkt als Bremse („Sprint" im Job-Kalender). Details in `docs/roadmap.md`, „Schritt 6". Der folgende Absatz beschreibt den Stand der Analyse.
+
 Die Sport-Stichwörter stehen in `PHYSICAL_LOAD_TITLE_KEYWORDS` (`capacityScore.ts:45-64`). „Prüfung", „Klausur", „Schicht", „Reise" sind nicht enthalten. Die Kategorie (`study`, `job` …) wird gespeichert, aber von keiner Regel gelesen.
 
 Nicht bewertet werden: Tageszeit des Termins, Dauer der Einheit, zusammenhängende freie Lücke, mentale Belastung, Recovery-Daten.

@@ -2,8 +2,9 @@ import type { ScheduleBlockCategory } from "../lib/supabase/services/weeklySched
 
 /**
  * Stille Keyword-Heuristik für den EventKit-Import (Phase-2-Schritt 4).
- * Die Kategorie ist für die Capacity-Engine aktuell rein informativ (sie rechnet nur mit
- * Zeitfenstern) — die Klassifikation ist Vorarbeit für die Load-Tag-Presets (Schritt 5).
+ * Die Kategorie beschreibt den Kontext, nicht die Belastung: ob ein Termin körperlich belastet,
+ * entscheidet `classifyEventLoad` (`src/scheduling/eventLoad.ts`) aus dem Titel — die Kategorie wirkt dort
+ * nur als Bremse (`job` + „Sprint"). Sonst rechnet die Capacity-Engine nur mit Zeitfenstern.
  * Titel wird vor dem Kalendernamen geprüft; erster Treffer in der Listen-Reihenfolge gewinnt,
  * Fallback "other".
  */

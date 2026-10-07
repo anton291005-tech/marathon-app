@@ -27,6 +27,7 @@
 - Hat ein Tag mindestens einen solchen Block (Überlappung mit dem Tagesfenster), liegt `computeSessionDayFitScore` für die bereits als hohe Intensität behandelten Typen (`tempo`/`interval`/`race`/`long`) unter `MIN_FIT_SCORE_THRESHOLD` (Deckel `PHYSICAL_LOAD_DAY_FIT_SCORE` = 0,2) → Konflikt. Leichte Sessions (`easy`/`strength`/`bike`/`rest`) und der Anteil-Check bleiben unverändert.
 - Der Titel wird über `DayCapacityScore.physicalLoadBlockTitles` durchgereicht; dadurch nutzen Wochen-Scan, 📅-Button, Wochenbatch und Kandidaten-Ranking (inkl. Gegenseite des Swaps) ohne Signaturänderung dieselbe Regel. Der Konfliktgrund des Scans nennt den Termin.
 - Tests: Scan, Batch-Vorschlag (anderer Tag), Neutraltitel („Schicht"/„Arbeit") unverändert, Easy Run am selben Tag kein Konflikt, Belastungstag nie Zieltag für harte Sessions.
+**Stand seit Kalender-Tausch-Ausbau Schritt 6 (2026-10-07):** Die Stichwortliste liegt in `src/scheduling/eventLoad.ts` (`classifyEventLoad`), „Turnier" ist jetzt Stichwort mit Ausschlussliste, die Kategorie wirkt als Bremse — siehe unten „Schritt 6 — `feat/event-load-semantics`".
 **Bekannte Grenzen (Backlog, kein Blocker):** rein titelbasiert (keine Dauer-/Uhrzeitprüfung, kein Abgleich „freie Lücke vs. Laufdauer"); wiederkehrende Sport-Termine (z. B. wöchentliches „Fußballtraining") markieren jede Woche den Tag als Belastungstag; die Kategorie fließt weiterhin nicht ins Scoring ein; vorbestehend (nicht durch 2b verursacht, aber jetzt öfter erreichbar): `scoreAndRankCandidates` sortiert erst nach Micro-Structure-Severity, dann nach Fit — ein Belastungs-/überbuchter Tag mit niedrigerer Severity kann Platz 1 belegen und den 📅-Einzel-Auto-Pick per `no-good-fit-candidate` blockieren (der Wochenbatch nutzt das erste `!isConflict` und ist nicht betroffen).
 
 ### 3. Session Assignment Engine — abgeschlossen (`src/ai/mutations/assignSessionToBestCapacityDay.ts`)
@@ -54,6 +55,7 @@
 ### 5. Load-Tag-Presets-Library + self-calibrating Load-Scoring
 Regelbasiert, transparent, kalibriert sich über Post-Workout-Feedback selbst nach.
 **Anschluss an Schritt 4:** nutzt die dort eingeführte stille Kategorie-Klassifikation (`job`/`study`/…) als Ausgangsbasis für Load-Tags — erst hier bekommt die Kategorie Engine-Wirkung; ggf. Import-Review-/Nachklassifizierungs-UI hier nachziehen.
+**Teilweise vorgezogen (2026-10-07):** Die Belastungssemantik „körperlich / nur Zeit" ist als eigenes Merkmal umgesetzt (Kalender-Tausch-Ausbau Schritt 6). Offen bleiben die Presets-Library, die Selbstkalibrierung und die Nachklassifizierungs-UI.
 
 ### 6. Vorher/Nachher-Diff-Screen — Akzeptanzkriterium final (2026-09-17), UI-Anbindung in Arbeit
 **Ziel:** Nach Kalender-Connect (Wow-Moment) im "Woche"-Screen zeigen, wie sich die Trainingswoche durch die Capacity-Engine verändert hat.
@@ -158,6 +160,26 @@ Reihenfolge und Begründung stehen in Abschnitt 7 der Analyse; je Schritt ein Br
 
 ### Schritt 3 — Chat-Swap + manuelle Tageswahl durch dieselbe Prüfung (offen)
 **Vermerk (P1-8):** Die manuelle Tageswahl (📅 → „Anderen Tag wählen“ / „Trotzdem Tag wählen“) speichert heute sofort und zeigt die Prüfung nicht. In Schritt 3 gemeinsam mit dem Chat-Swap (`AiCoachPanel` → `handleSwapWorkoutsV2`, dessen `validateSwap`-Ergebnis heute nach dem Speichern verworfen wird): **Prüfergebnis (Hinweis/⚠️ aus dem Delta) VOR dem Speichern zeigen**, Bestätigung nötig. `validateSwap` dabei auf Delta (`before` liegt vor) und Tagesphase umstellen.
+
+### Schritt 6 — `feat/event-load-semantics` (Code fertig, baut auf Schritt 1 und 2 auf; Schritte 3–5 offen und keine Voraussetzung)
+**Ziel:** Termine haben eine Belastungssemantik, getrennt von der Zeitüberlappung. Anlass: Sa Intervall, „Sprint-Prüfung" 11–13 Uhr, So MP-Workout — vorher kein Konflikt (14 von 16 Stunden frei, Fit 0,875).
+**Umsetzung:**
+- `src/scheduling/eventLoad.ts`, `classifyEventLoad(block)` → `physical` (körperlich belastend) oder `time` (belegt nur Zeit). Zur Lesezeit aus dem Titel abgeleitet, **nicht gespeichert** — keine Migration, `category` (`job`/`study`/…) bleibt unverändert und ist nie Auslöser, nur Bremse. „Sprint-Prüfung" ist damit Kategorie `study` **und** Belastung `physical`; „Klausur"/„Abgabe" belegen nur Zeit.
+- Stichwörter (`PHYSICAL_LOAD_TITLE_KEYWORDS`): die Sportarten aus 2b plus `turnier`, `sprint`, `sportpraxis`, `sportprüfung`, `sporttest`, `leichtathletik`. Getrennt geschriebene Titel („Sport-Prüfung") treffen wie Komposita.
+- Ausschlussliste für Wettbewerbs-Stichwörter (`turnier`, `wettkampf`, `match`): Schach, Skat, Poker, Quiz, E-Sport (`NON_PHYSICAL_CONTEST_MARKERS`). Ersetzt die 2b-Entscheidung „Turnier allein ist kein Stichwort".
+- „Sprint" mit Job-Bremse: zählt nicht bei Kategorie `job` (auch über den Kalendernamen, z. B. Kalender „Arbeit") oder mit agilem Begleitwort (Planning, Review, Retro, Backlog, Daily, Standup, Demo …).
+- **Selber Tag:** unverändert der Deckel aus 2b (`PHYSICAL_LOAD_DAY_FIT_SCORE` 0,2) für Sessions mit Belastungsklasse `medium`/`high` (`core/loadClass`); lockere Einheiten, Kraft, Rad bleiben erlaubt. `computeDayCapacityScore` liest dafür `classifyEventLoad`.
+- **Nachbartage (neu):** Validator-Regel `physical_event_adjacent` — harte Einheit (`high`) am Tag vor oder nach einem körperlichen Termin → Schweregrad 75 in jeder Phase (`PHYSICAL_EVENT_ADJACENT_SEVERITY`, ⚠️-Warnung, nie Sperre, weil die Einstufung auf einem Stichwort beruht). Der Validator bekommt die Kalendersicht als Option `externalLoadTitlesOf` (`buildPhysicalLoadDayLookup`); durchgereicht in 📅-Vorschlag, Tageswahl, manuelle Tageswahl, Wochen-Vorschlag und Batch-Endprüfung. Bewertet wird nur die Änderung (Delta aus Schritt 2). Die Warnung nennt Termin und Richtung („am Tag vor „Sprint-Prüfung“").
+- `core/loadClass` bleibt die Quelle für **Sessions** (wer vom Deckel und von der Nachbarregel betroffen ist); Termine laufen bewusst nicht durch `classifyLoad` (Server-Kopie + Paritätstest).
+**Ergebnis im Anlassfall:** Samstag ist Konflikt („wegen Sprint-Prüfung"), der Vorschlag geht auf einen Tag Mo–Do; Freitag (Vortag der Prüfung) ist in der Tageswahl als ungünstig markiert. Testfall 2.1 der Analyse: Intervall geht jetzt auf den Donnerstag statt auf den Mittwoch nach der Prüfung. Tests: `eventLoad.test.ts`, `eventLoadSemantics.acceptance.test.ts`, Regel-Tests in `validateMicroStructure.test.ts`.
+**Bekannte Grenzen:**
+- Bleibt als einziger Ausweichtag der Tag neben dem Termin (z. B. Mo–Do vergangen), schlägt 📅 ihn **mit ⚠️** vor (Stufe 2 wie jede Warnung ab 75); der Wochen-Vorschlag lässt den Konflikt dann offen.
+- Bestand wird nicht gemeldet: „MP-Workout am Tag nach der Sprint-Prüfung" ohne Tausch erzeugt keinen Hinweis (eigener Scan-Typ, Analyse-Schritt 7).
+- Chat-Swap (`validateSwap`) und Generator-Prüfung laufen ohne Kalendersicht — die Nachbarregel greift dort nicht (Schritt 3).
+- Nachbarregel nur für `high`; ein Long Run ohne Renntempo-Anteil (`medium`) neben dem Termin bleibt unmarkiert (am Termintag selbst ist er blockiert).
+- Weiter titelbasiert: unbekannte Sportarten fehlen, „Sprinter" (Transporter) trifft „sprint", wiederkehrende Sporttermine markieren jede Woche den Tag und jetzt auch dessen Nachbarn. Keine Dauer-/Uhrzeitprüfung.
+- Nicht in diesem Branch: Ganztag, `availability`, Tageszeit, freie Lücke gegen Session-Dauer (Rest der Analyse-Zeile 6).
+**Folge-Branch:** Nutzer-Korrektur „(kein) körperlicher Termin" an der Konfliktkarte, gespeichert pro normalisiertem Titel (EventKit-Zeilen bekommen bei jedem Sync neue IDs), Migration 013.
 
 ## Harte Regel (nicht verhandelbar)
 Wissenschaftliche Planqualität ist die Leitplanke. Kalender-Constraints optimieren nur INNERHALB der Trainingsplan-Regeln — sie dürfen diese niemals überschreiben. Bei Konflikt gewinnt immer die Trainingsplan-Regel, nicht der Kalender.
