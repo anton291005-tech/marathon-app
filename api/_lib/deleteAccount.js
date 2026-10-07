@@ -2,10 +2,7 @@
 // Vercel Dashboard → Settings → Environment Variables → SUPABASE_SERVICE_ROLE_KEY (Production)
 "use strict";
 
-const { createClient } = require("@supabase/supabase-js");
-
-require("dotenv").config();
-require("dotenv").config({ path: ".env.local", override: true });
+const { requireUser } = require("./requireUser");
 
 const USER_DATA_TABLES = [
   "prep_recaps",
@@ -19,45 +16,6 @@ const USER_DATA_TABLES = [
   // TODO: add "marathon_logs" once table is created
 ];
 
-function readEnvTrimmed(name) {
-  const raw = process.env[name];
-  if (typeof raw !== "string") return "";
-  const value = raw.trim();
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value.slice(1, -1).trim();
-  }
-  return value;
-}
-
-function getSupabaseUrl() {
-  return readEnvTrimmed("REACT_APP_SUPABASE_URL") || readEnvTrimmed("SUPABASE_URL");
-}
-
-function getServiceRoleKey() {
-  const key = readEnvTrimmed("SUPABASE_SERVICE_ROLE_KEY");
-  return key.length > 0 ? key : "";
-}
-
-function createSupabaseAdminClient() {
-  const supabaseUrl = getSupabaseUrl();
-  const serviceRoleKey = getServiceRoleKey();
-  if (!supabaseUrl || !serviceRoleKey) {
-    return null;
-  }
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-function extractBearerToken(req) {
-  const raw = req.headers?.authorization || req.headers?.Authorization || "";
-  const match = /^Bearer\s+(.+)$/i.exec(String(raw).trim());
-  return match ? match[1].trim() : "";
-}
-
 /**
  * @param {import('http').IncomingMessage & { method?: string, headers?: Record<string, string> }} req
  * @returns {Promise<{ status: number, body: Record<string, unknown> }>}
@@ -67,30 +25,14 @@ async function handleDeleteAccount(req) {
     return { status: 405, body: { error: "Method Not Allowed" } };
   }
 
-  const token = extractBearerToken(req);
-  if (!token) {
-    return { status: 401, body: { error: "Missing Authorization bearer token" } };
-  }
-
-  const admin = createSupabaseAdminClient();
-  if (!admin) {
-    // eslint-disable-next-line no-console
-    console.warn("[deleteAccount] missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-    return { status: 503, body: { error: "Account deletion is not configured" } };
-  }
-
-  let userId;
-  try {
-    const { data, error } = await admin.auth.getUser(token);
-    if (error || !data?.user?.id) {
-      return { status: 401, body: { error: "Invalid or expired session" } };
+  const auth = await requireUser(req);
+  if (!auth.ok) {
+    if (auth.reason === "not_configured") {
+      return { status: 503, body: { error: "Account deletion is not configured" } };
     }
-    userId = data.user.id;
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn("[deleteAccount] getUser failed", err?.message || err);
-    return { status: 401, body: { error: "Invalid or expired session" } };
+    return { status: auth.status, body: auth.body };
   }
+  const { admin, userId } = auth;
 
   try {
     const deletedTables = [];
