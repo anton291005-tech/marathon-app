@@ -3,8 +3,8 @@ require("dotenv").config();
 // ACHTUNG: iOS/Capacitor-Builds rufen Vercel direkt auf (REACT_APP_AI_API_BASE in .env.production),
 // nicht localhost:8787. POST /api/ai hier und auf Vercel laufen beide über api/_lib/coachHandlers.js
 // (Claude, Prompt Caching, getrimmter Kontext). Die OpenAI-Helfer weiter unten in dieser Datei
-// (buildSystemPrompt, callResponsesApi) sind Legacy und werden für /api/ai nicht mehr genutzt —
-// nur POST /api/ai/daily-coach bleibt OpenAI. Bewusst nicht mit coachHandlers synchron halten.
+// (buildSystemPrompt, callResponsesApi) sind Legacy und werden für /api/ai nicht mehr genutzt.
+// Bewusst nicht mit coachHandlers synchron halten.
 
 const express = require("express");
 const cors = require("cors");
@@ -99,77 +99,6 @@ function sanitizeSentence(value) {
 }
 
 // ─── Daily-coach endpoint helpers ────────────────────────────────────────────
-
-function buildDailyCoachSystemPrompt() {
-  return [
-    "You are an elite marathon coach for a sub-2:50 athlete.",
-    "Given today's training context, provide a brief daily training recommendation.",
-    "Respond ONLY with valid JSON — no markdown, no extra text — in this exact shape:",
-    '{ "level": "hard" | "easy" | "rest" | "alternative", "title": "Heute: [2-4 word label]", "reason": "[one direct sentence in German, max 15 words]", "details": ["detail 1", "detail 2", "detail 3"] }',
-    "Rules:",
-    "- Respond in German.",
-    "- Be direct. No soft phrases like 'vielleicht' or 'könntest du'.",
-    "- 'hard': fresh recovery, quality session planned, weekly load low/medium.",
-    "- 'rest': recovery red or rest day planned or illness/injury mentioned.",
-    "- 'alternative': cross-training or injury-adjustment.",
-    "- 'easy': everything else — moderate or recovery-focused.",
-    "- Max 3 details, each max 8 words.",
-    "- Title always starts with 'Heute: '.",
-  ].join("\n");
-}
-
-function buildDailyCoachUserPrompt(coachContext) {
-  return JSON.stringify({
-    recoveryState: coachContext.recoveryLabel ?? "unbekannt",
-    weeklyFatigue: coachContext.weeklyFatigueLabel ?? "unbekannt",
-    recentHardSessionsOf5: coachContext.recentHardCount ?? 0,
-    avgFeelingScore: (coachContext.avgRecentFeeling > 0)
-      ? Number(coachContext.avgRecentFeeling).toFixed(1)
-      : "keine Daten",
-    todayPlannedSession: coachContext.todaySessionType ?? "keine",
-    currentPhase: coachContext.phase ?? "unbekannt",
-    daysToNextKeySession: coachContext.daysToNextKeySession ?? "unbekannt",
-    completedSessions: coachContext.doneSessions ?? 0,
-    athleteGoal: "Sub 2:50 marathon",
-  });
-}
-
-const DAILY_COACH_VALID_LEVELS = ["hard", "easy", "rest", "alternative"];
-
-function parseDailyCoachResponse(response) {
-  if (!response || typeof response !== "object") return null;
-  let raw = null;
-  if (typeof response.output_text === "string" && response.output_text.trim()) {
-    raw = response.output_text;
-  } else {
-    const messageBlock = (response?.output || []).find((e) => e.type === "message");
-    const textChunk = messageBlock?.content?.find((item) => item.type === "output_text");
-    if (textChunk?.text) raw = textChunk.text;
-  }
-  if (!raw) return null;
-  let parsed;
-  try {
-    parsed = JSON.parse(raw.trim());
-  } catch {
-    return null;
-  }
-  if (!DAILY_COACH_VALID_LEVELS.includes(parsed?.level)) return null;
-  if (typeof parsed?.title !== "string" || !parsed.title.trim()) return null;
-  if (typeof parsed?.reason !== "string" || !parsed.reason.trim()) return null;
-  return {
-    level: parsed.level,
-    title: sanitizeSentence(parsed.title),
-    reason: sanitizeSentence(parsed.reason),
-    details: Array.isArray(parsed.details)
-      ? parsed.details
-        .filter((d) => typeof d === "string" && d.trim())
-        .map((d) => sanitizeSentence(d))
-        .slice(0, 4)
-      : [],
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 function buildUserPayload(input, context) {
   const coachContext = deriveCoachContext(context);
@@ -677,7 +606,6 @@ app.get("/api/ai/health", (_req, res) => {
   const payload = {
     ok: true,
     openaiConfigured: Boolean(apiKey),
-    keyPrefix: apiKey ? apiKey.slice(0, 7) : null,
     model: defaultModel,
     projectConfigured: Boolean(project),
     schemaStrictObjects: schemaViolations.length === 0,
@@ -747,54 +675,13 @@ app.get("/api/strava/callback", async (req, res) => {
   }
 });
 
-app.post("/api/ai/daily-coach", async (req, res) => {
-  const { coachContext } = req.body || {};
-  if (!coachContext || typeof coachContext !== "object") {
-    return res.status(400).json({ error: "Invalid coachContext" });
-  }
-  if (!client) {
-    return res.status(200).json({ fallback: true, reason: "no_client" });
-  }
-  try {
-    const completion = await client.responses.create({
-      model: defaultModel,
-      input: [
-        {
-          role: "system",
-          content: [{ type: "input_text", text: buildDailyCoachSystemPrompt() }],
-        },
-        {
-          role: "user",
-          content: [{ type: "input_text", text: buildDailyCoachUserPrompt(coachContext) }],
-        },
-      ],
-      text: { format: { type: "json_object" } },
-    });
-    const parsed = parseDailyCoachResponse(completion);
-    if (!parsed) {
-      // eslint-disable-next-line no-console
-      console.warn("[ai-server] /api/ai/daily-coach: unparseable response, using fallback");
-      return res.status(200).json({ fallback: true });
-    }
-    // eslint-disable-next-line no-console
-    console.log("[ai-server] /api/ai/daily-coach response", parsed);
-    return res.status(200).json(parsed);
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error("[ai-server] /api/ai/daily-coach error", {
-      message: typeof error?.message === "string" ? error.message : "unknown",
-    });
-    return res.status(200).json({ fallback: true });
-  }
-});
-
 app.listen(port, () => {
   const schemaViolations = collectSchemaAdditionalPropertiesViolations(AI_RESPONSE_SCHEMA);
   const requiredCoverageViolations = collectSchemaRequiredCoverageViolations(AI_RESPONSE_SCHEMA);
   const summary = getSchemaStrictnessSummary();
   // eslint-disable-next-line no-console
   console.log(
-    `[ai-server] listening on http://localhost:${port} model=${defaultModel} key_present=${Boolean(apiKey)} key_prefix=${apiKey ? apiKey.slice(0, 7) : "none"}`
+    `[ai-server] listening on http://localhost:${port} model=${defaultModel} key_present=${Boolean(apiKey)}`
   );
   // eslint-disable-next-line no-console
   console.log(

@@ -9,7 +9,7 @@
 
 ## Abgeschlossen (Phase 1, Referenz)
 - Strava-Integration Backend komplett: Migration `008_strava_connections.sql` (RLS aktiv), `stravaService.js`, `auth.js`/`callback.js`, `@capacitor/browser`-Trigger in Settings. On-Device-OAuth-Test auf iPhone 13 steht noch aus (aktuell kein Kabel verfügbar).
-- AI Coach läuft auf Claude Sonnet 4.6 via `coachHandlers.js` (`callClaudeApi`) — bestätigt einziger aktiver Pfad. OpenAI gpt-4o-mini nur für `/api/ai/daily-coach` und `/api/onboarding/preferences-patches`.
+- AI Coach läuft auf Claude Sonnet 4.6 via `coachHandlers.js` (`callClaudeApi`) — bestätigt einziger aktiver Pfad. Die beiden OpenAI-Endpunkte `/api/ai/daily-coach` und `/api/onboarding/preferences-patches` sind seit `fix/api-auth-and-limits` gelöscht (kein Aufrufer im Live-Pfad).
 - Prompt Caching + Context Trimming deployed (next14Days/last7Days/planSummary, logsLast10Days/healthRunsLast10Days).
 
 ## Nächste Schritte (Reihenfolge als Leitplanke, nicht als starres Skript)

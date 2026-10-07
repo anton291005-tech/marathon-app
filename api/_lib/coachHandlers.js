@@ -1209,66 +1209,6 @@ async function callResponsesApi({ selectedModel, input, context, allowedActions,
   });
 }
 
-// ─── Daily coach helpers ─────────────────────────────────────────────────────
-
-function buildDailyCoachSystemPrompt() {
-  return [
-    "You are an elite marathon coach.",
-    "You receive ONLY `recoveryDomain` (RecoveryDomainState). Do not assume plan details, logs, or goals that are not inside recoveryDomain.",
-    "Provide a brief daily training tone recommendation from that domain snapshot.",
-    "Respond ONLY with valid JSON — no markdown — in this exact shape:",
-    '{ "level": "hard" | "easy" | "rest" | "alternative", "title": "Heute: [2-4 word label]", "reason": "[one direct sentence in German, max 15 words]", "details": ["detail 1", "detail 2", "detail 3"] }',
-    "Rules:",
-    "- Respond in German.",
-    "- Be direct.",
-    "- 'hard': domain indicates strong recovery (fresh band / high score) and insight supports quality.",
-    "- 'rest': domain indicates fatigue band or insight warning.",
-    "- 'alternative': injury-style caution in insight or very low confidence — prefer conservative cross-training language.",
-    "- 'easy': default moderate.",
-    "- Max 3 details, each max 8 words.",
-    "- Title always starts with 'Heute: '.",
-  ].join("\n");
-}
-
-function buildDailyCoachUserPrompt(recoveryDomain) {
-  return JSON.stringify({ recoveryDomain });
-}
-
-const DAILY_COACH_VALID_LEVELS = ["hard", "easy", "rest", "alternative"];
-
-function parseDailyCoachResponse(response) {
-  if (!response || typeof response !== "object") return null;
-  let raw = null;
-  if (typeof response.output_text === "string" && response.output_text.trim()) {
-    raw = response.output_text;
-  } else {
-    const messageBlock = (response?.output || []).find((e) => e.type === "message");
-    const textChunk = messageBlock?.content?.find((item) => item.type === "output_text");
-    if (textChunk?.text) raw = textChunk.text;
-  }
-  if (!raw) return null;
-  let parsed;
-  try {
-    parsed = JSON.parse(raw.trim());
-  } catch {
-    return null;
-  }
-  if (!DAILY_COACH_VALID_LEVELS.includes(parsed?.level)) return null;
-  if (typeof parsed?.title !== "string" || !parsed.title.trim()) return null;
-  if (typeof parsed?.reason !== "string" || !parsed.reason.trim()) return null;
-  return {
-    level: parsed.level,
-    title: sanitizeSentence(parsed.title),
-    reason: sanitizeSentence(parsed.reason),
-    details: Array.isArray(parsed.details)
-      ? parsed.details
-        .filter((d) => typeof d === "string" && d.trim())
-        .map((d) => sanitizeSentence(d))
-        .slice(0, 4)
-      : [],
-  };
-}
-
 // ─── Body parsing helper ─────────────────────────────────────────────────────
 
 /**
@@ -1345,47 +1285,4 @@ async function handleAiCoach(rawBody) {
   }
 }
 
-/**
- * Handle POST /api/ai/daily-coach
- * @param {*} rawBody - req.body (parsed object or raw string)
- * @returns {{ status: number, body: object }}
- */
-async function handleDailyCoach(rawBody) {
-  const body = ensureParsedBody(rawBody);
-  const recoveryDomain = body.recoveryDomain ?? body.coachContext?.recoveryDomain;
-  if (!recoveryDomain || typeof recoveryDomain !== "object") {
-    return { status: 400, body: { error: "Invalid recoveryDomain" } };
-  }
-  if (!client) {
-    return { status: 200, body: { fallback: true, reason: "no_client" } };
-  }
-  try {
-    const completion = await client.responses.create({
-      model: defaultModel,
-      input: [
-        {
-          role: "system",
-          content: [{ type: "input_text", text: buildDailyCoachSystemPrompt() }],
-        },
-        {
-          role: "user",
-          content: [{ type: "input_text", text: buildDailyCoachUserPrompt(recoveryDomain) }],
-        },
-      ],
-      text: { format: { type: "json_object" } },
-    });
-    const parsed = parseDailyCoachResponse(completion);
-    if (!parsed) {
-      return { status: 200, body: { fallback: true } };
-    }
-    console.log("[api/ai/daily-coach] response", parsed); // eslint-disable-line no-console
-    return { status: 200, body: parsed };
-  } catch (error) {
-    console.error("[api/ai/daily-coach] error", { // eslint-disable-line no-console
-      message: typeof error?.message === "string" ? error.message : "unknown",
-    });
-    return { status: 200, body: { fallback: true } };
-  }
-}
-
-module.exports = { handleAiCoach, handleDailyCoach };
+module.exports = { handleAiCoach };
