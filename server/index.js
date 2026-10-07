@@ -10,6 +10,7 @@ const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
 const { handleAiCoach } = require("../api/_lib/coachHandlers");
+const { guardRequest, sendGuardFailure } = require("../api/_lib/apiGuard");
 const { handleStravaAuthRequest, handleStravaCallbackRequest } = require("../api/_lib/stravaService");
 const {
   AI_RESPONSE_SCHEMA,
@@ -705,6 +706,9 @@ app.get("/api/ai/schema-check", async (_req, res) => {
 // Same Claude handler as Vercel (api/ai.js → coachHandlers.js). Not the legacy OpenAI path below.
 app.post("/api/ai", async (req, res) => {
   try {
+    const guard = await guardRequest(req);
+    if (!guard.ok) return sendGuardFailure(res, guard);
+
     const { status, body } = await handleAiCoach(req.body);
     return res.status(status).json(body);
   } catch (err) {

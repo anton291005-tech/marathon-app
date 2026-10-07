@@ -1,3 +1,4 @@
+import { getApiAuthHeaders } from "../api/authHeaders";
 import { getAiConfig } from "./config";
 import type { AiPlanRules } from "./coachPlanMutations";
 import type { TrainingPlanV2 } from "../../planV2/types";
@@ -85,13 +86,14 @@ function getPlanApiBaseUrl(): string {
 }
 
 async function postGeneratePlan(profile: PlanGenerationProfile, timeoutMs: number): Promise<string> {
+  const authHeaders = await getApiAuthHeaders();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const base = getPlanApiBaseUrl();
 
   const res = await fetch(`${base}/api/onboarding/generate-plan`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders },
     body: JSON.stringify({ profile }),
     signal: controller.signal,
   });
@@ -127,13 +129,14 @@ export async function fetchFullPlanFromClaude(
   try {
     // eslint-disable-next-line no-console
     console.log("[claude-client] full plan client timeout:", FULL_PLAN_CLIENT_TIMEOUT_MS, "ms");
+    const authHeaders = await getApiAuthHeaders();
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FULL_PLAN_CLIENT_TIMEOUT_MS);
 
     try {
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ profile }),
         signal: controller.signal,
       });

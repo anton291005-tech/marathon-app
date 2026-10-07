@@ -2,6 +2,7 @@
 
 const Anthropic = require("@anthropic-ai/sdk");
 const { handleCorsPreflight } = require("../_lib/cors");
+const { guardRequest, sendGuardFailure } = require("../_lib/apiGuard");
 const { generateFullPlanByPhases } = require("../_lib/phasedFullPlanGenerator");
 
 /**
@@ -19,6 +20,9 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    const guard = await guardRequest(req);
+    if (!guard.ok) return sendGuardFailure(res, guard);
+
     const { profile } = req.body ?? {};
     if (!profile) return res.status(400).json({ error: "profile required" });
 

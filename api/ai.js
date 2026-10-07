@@ -1,6 +1,7 @@
 "use strict";
 
 const { handleAiCoach } = require("./_lib/coachHandlers");
+const { guardRequest, sendGuardFailure } = require("./_lib/apiGuard");
 
 /**
  * Vercel serverless function: POST /api/ai
@@ -19,6 +20,9 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
   try {
+    const guard = await guardRequest(req);
+    if (!guard.ok) return sendGuardFailure(res, guard);
+
     const { status, body } = await handleAiCoach(req.body);
     return res.status(status).json(body);
   } catch (err) {

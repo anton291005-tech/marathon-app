@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from "../api/apiBaseUrl";
+import { getApiAuthHeaders } from "../api/authHeaders";
 import { aiAgentDevWarn } from "./agentDebug";
 import { onAgentFallback, recordCoachAgentCycleDev, weakAgentMessagePayload } from "./agentFallback";
 import { buildCoachContext } from "./buildCoachContext";
@@ -70,6 +71,8 @@ export async function runCoachAgent(userInput: string, appState: any) {
         ? rest
         : buildCoachContext(appState);
 
+    const authHeaders = await getApiAuthHeaders();
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 9000);
 
@@ -82,6 +85,7 @@ export async function runCoachAgent(userInput: string, appState: any) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...authHeaders,
         },
         body: JSON.stringify({
           input: userInput,
