@@ -132,7 +132,13 @@ async function generatePlanRulesWithClaude(profile) {
   }
 
   // eslint-disable-next-line no-console
-  console.log("[claude-gen] requesting rules for:", JSON.stringify(profile));
+  console.log(
+    "[claude-gen] requesting rules",
+    JSON.stringify({
+      planDurationDays: profile?.planDurationDays ?? null,
+      preferenceCount: Array.isArray(profile?.userPreferences) ? profile.userPreferences.length : 0,
+    }),
+  );
 
   const message = await Promise.race([
     client.messages.create({
@@ -153,13 +159,13 @@ async function generatePlanRulesWithClaude(profile) {
     .join("");
 
   // eslint-disable-next-line no-console
-  console.log("[claude-gen] rules response:", text);
+  console.log("[claude-gen] rules response length:", text.length);
 
   const clean = text.replace(/```json|```/g, "").trim();
   const rules = JSON.parse(clean);
 
   // eslint-disable-next-line no-console
-  console.log("[claude-gen] rules parsed:", JSON.stringify(rules));
+  console.log("[claude-gen] rules parsed, keys:", Object.keys(rules ?? {}).join(","));
   return rules;
 }
 
@@ -228,7 +234,7 @@ async function callClaudeForStructure(client, profile, extraInstruction) {
     .join("");
 
   // eslint-disable-next-line no-console
-  console.log("[claude-structure] response (first 500):", text.slice(0, 500));
+  console.log("[claude-structure] response length:", text.length);
 
   const clean = text.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
   return JSON.parse(clean);

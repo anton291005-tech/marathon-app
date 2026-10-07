@@ -1257,7 +1257,7 @@ async function handleAiCoach(rawBody) {
   const bareUser = extractBareUserTurn(input);
   const override = detectImmediateHighRiskOverride(bareUser);
   if (override) {
-    console.log("[api/ai] OVERRIDE TRIGGERED", bareUser); // eslint-disable-line no-console
+    console.log("[api/ai] OVERRIDE TRIGGERED, input chars:", bareUser.length); // eslint-disable-line no-console
     return {
       status: 200,
       body: { mode: "coach", message: override.message, override: true },
@@ -1272,7 +1272,7 @@ async function handleAiCoach(rawBody) {
   try {
     console.log(`[api/ai] model=${COACH_CHAT_MODEL}`); // eslint-disable-line no-console
     const rawText = await callClaudeApi({ input: bareUser, context, apiKey: anthropicApiKey });
-    console.log("[api/ai] Claude response (first 200 chars):", rawText.slice(0, 200)); // eslint-disable-line no-console
+    console.log("[api/ai] Claude response chars:", rawText.length); // eslint-disable-line no-console
 
     const normalized = parseClaudeCoachResponse(rawText, bareUser, context);
     return { status: 200, body: normalized };

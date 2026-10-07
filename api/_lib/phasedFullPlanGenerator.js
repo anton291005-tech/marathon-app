@@ -441,8 +441,10 @@ async function generateFullPlanByPhases(client, profile) {
         checkWeeklyVolumeGuardrail(chunkWeeks, weekStarts, weeklyKmTargets);
       } catch (err) {
         const errorPos = parseInt(err.message.match(/position (\d+)/)?.[1] || "0", 10);
-        const snippet = rawResponseText.slice(Math.max(0, errorPos - 150), errorPos + 150);
-        process.stdout.write(`[phased-plan] PARSE ERROR CONTEXT: ${JSON.stringify(snippet)}\n`);
+        // Nur Position und Länge — der Antworttext enthält Trainingsinhalte und Nutzerwünsche.
+        process.stdout.write(
+          `[phased-plan] PARSE ERROR CONTEXT: ${JSON.stringify({ errorPos, responseLength: rawResponseText.length })}\n`,
+        );
         status = "fallback";
         errorMessage = err?.message ?? "unknown";
         console.warn(
