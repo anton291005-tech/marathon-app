@@ -6,6 +6,7 @@ import {
   collectMicroFindings,
   diffMicroFindings,
   type MicroDelta,
+  type MicroExternalLoadLookup,
   type MicroFinding,
   type MicroTier,
   type MicroValidationOptions,
@@ -153,6 +154,10 @@ export function diffToPatches(before: AiPlanWeek[], after: AiPlanWeek[], ids: st
  * `buildLockedSessionIds`) or a locked winning target yields `reason: "locked-session"` without patches,
  * even when the caller passed unfiltered candidates. Callers are still expected to filter candidates
  * (`buildCalendarReassignmentCandidates`), since the guard rejects rather than skips a locked winner.
+ *
+ * `externalLoadTitlesOf` (`buildPhysicalLoadDayLookup`) lets the micro-structure check see physically
+ * demanding calendar events on neighbouring days: a hard session the day before or after one is a new
+ * finding of severity 75 (warning). Without it only the event's own day counts (via the fit score).
  */
 type ScoredCandidate = {
   candidate: SessionAssignmentCandidate;
@@ -168,9 +173,13 @@ type MicroEvalContext = {
   beforeFindings: MicroFinding[];
 };
 
-function buildMicroEvalContext(plan: AiPlanWeek[], phase?: TrainingPhase): MicroEvalContext {
+function buildMicroEvalContext(
+  plan: AiPlanWeek[],
+  phase?: TrainingPhase,
+  externalLoadTitlesOf?: MicroExternalLoadLookup,
+): MicroEvalContext {
   const context: ValidationContext = phase ? { ...FALLBACK_VALIDATION_CONTEXT, phase } : FALLBACK_VALIDATION_CONTEXT;
-  const options: MicroValidationOptions = { phaseOf: buildPhaseLookup(plan, phase) };
+  const options: MicroValidationOptions = { phaseOf: buildPhaseLookup(plan, phase), externalLoadTitlesOf };
   return { context, options, beforeFindings: collectMicroFindings(normalizeTrainingPlan(plan), context, options) };
 }
 
@@ -246,6 +255,7 @@ export function assignSessionToBestCapacityDay(
   sourceDayCapacity: DayCapacityScore | null = null,
   phase?: TrainingPhase,
   lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
+  externalLoadTitlesOf?: MicroExternalLoadLookup,
 ): SessionAssignmentResult {
   const before: AiPlanWeek[] = deepClone(plan);
   const emptyResult: Omit<SessionAssignmentResult, "reason"> = {
@@ -267,7 +277,7 @@ export function assignSessionToBestCapacityDay(
     return { ...emptyResult, reason: "locked-session" };
   }
 
-  const micro = buildMicroEvalContext(before, phase);
+  const micro = buildMicroEvalContext(before, phase, externalLoadTitlesOf);
   const scored = scoreAndRankCandidates(before, sessionId, movedSession, candidates, sourceDayCapacity, micro);
 
   if (scored.length === 0) {
@@ -335,12 +345,13 @@ export function rankCalendarReassignmentCandidates(
   candidates: SessionAssignmentCandidate[],
   sourceDayCapacity: DayCapacityScore | null = null,
   phase?: TrainingPhase,
+  externalLoadTitlesOf?: MicroExternalLoadLookup,
 ): RankedCalendarCandidate[] {
   const before: AiPlanWeek[] = deepClone(plan);
   const movedSession = findSessionById(before, sessionId);
   if (!sessionId || !movedSession || candidates.length === 0) return [];
 
-  const micro = buildMicroEvalContext(before, phase);
+  const micro = buildMicroEvalContext(before, phase, externalLoadTitlesOf);
   const scored = scoreAndRankCandidates(before, sessionId, movedSession, candidates, sourceDayCapacity, micro);
 
   return scored.map((s) => ({
@@ -372,6 +383,7 @@ export function assignSessionToChosenDay(
   targetSessionId: string,
   phase?: TrainingPhase,
   lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
+  externalLoadTitlesOf?: MicroExternalLoadLookup,
 ): SessionAssignmentResult {
   const before: AiPlanWeek[] = deepClone(plan);
   const emptyResult: Omit<SessionAssignmentResult, "reason"> = {
@@ -394,7 +406,7 @@ export function assignSessionToChosenDay(
     return { ...emptyResult, reason: "locked-session" };
   }
 
-  const micro = buildMicroEvalContext(before, phase);
+  const micro = buildMicroEvalContext(before, phase, externalLoadTitlesOf);
   const simulated = swapWorkouts(before, sessionId, targetSessionId);
   const delta = deltaFor(simulated, micro);
 

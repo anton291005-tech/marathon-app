@@ -5,7 +5,7 @@ import type { TrainingPhase } from "../../planV2/trainingPhase";
 import { deepClone } from "../../core/deepClone";
 import { applyPlanPatches } from "../../lib/ai/actions";
 import { validatePlanIntegrity } from "../validation/validatePlanIntegrity";
-import { computeMicroStructureDelta } from "../validation/validateMicroStructure";
+import { computeMicroStructureDelta, type MicroExternalLoadLookup } from "../validation/validateMicroStructure";
 import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 import { swapWorkouts } from "./swapWorkouts";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
@@ -58,6 +58,7 @@ function findSessionIdForDayIso(week: AiPlanWeek, dayIso: string): string | null
  * Batch nur die übergebene Woche). Neue Befunde 40–74 werden als neutraler `hint`, ab 75 als `warning`
  * angezeigt — der Athlet bestätigt aktiv. Ein NEUER Befund ab 95 (z. B. zwei harte Tage hintereinander durch
  * die Wechselwirkung zweier Verschiebungen) macht den Batch ungültig: das System schlägt so etwas nie selbst vor.
+ * `externalLoadTitlesOf` (`buildPhysicalLoadDayLookup`) macht körperlich belastende Termine an Nachbartagen sichtbar.
  *
  * Erkennt außerdem eine Klasse von Widersprüchen, die Schritt 2 selbst nicht ausschließt: eine Session
  * kann gleichzeitig eigene Quelle EINES Proposals und Verdrängungsziel eines ANDEREN sein (Schritt 2
@@ -78,6 +79,7 @@ export function validateWeekReassignmentBatch(
   phase?: TrainingPhase,
   lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
   fullPlan?: AiPlanWeek[],
+  externalLoadTitlesOf?: MicroExternalLoadLookup,
 ): WeekReassignmentBatchResult {
   const resolved = proposals.filter(isResolvedProposal);
   if (resolved.length === 0) return { valid: true, patches: [] };
@@ -145,6 +147,7 @@ export function validateWeekReassignmentBatch(
   const context: ValidationContext = phase ? { ...FALLBACK_VALIDATION_CONTEXT, phase } : FALLBACK_VALIDATION_CONTEXT;
   const delta = computeMicroStructureDelta(normalizeTrainingPlan(original), normalizeTrainingPlan(patched), context, {
     phaseOf: buildPhaseLookup(original, phase),
+    externalLoadTitlesOf,
   });
   if (delta.tier >= 3) {
     const reason = delta.reason ?? "Micro-Structure-Verletzung nach Anwendung aller Verschiebungen.";

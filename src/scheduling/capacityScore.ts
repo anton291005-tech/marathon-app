@@ -119,6 +119,24 @@ export function computeDayCapacityScore(dateIso: string, blocks: WeeklyScheduleB
 }
 
 /**
+ * Titel der körperlich belastenden Termine je Kalendertag ("YYYY-MM-DD"), mit Zwischenspeicher — die Sicht,
+ * die der Micro-Structure-Validator für die Nachbarregel braucht (`MicroValidationOptions.externalLoadTitlesOf`).
+ * Gleiche Quelle wie der Belastungs-Deckel am Termintag (`physicalLoadBlockTitles`).
+ */
+export function buildPhysicalLoadDayLookup(blocks: WeeklyScheduleBlock[]): (dateYmd: string) => readonly string[] {
+  const byDay = new Map<string, readonly string[]>();
+  return (dateYmd) => {
+    const day = dateYmd.slice(0, 10);
+    let titles = byDay.get(day);
+    if (!titles) {
+      titles = computeDayCapacityScore(day, blocks).physicalLoadBlockTitles;
+      byDay.set(day, titles);
+    }
+    return titles;
+  };
+}
+
+/**
  * Sessions mit Belastungsklasse medium oder high (`core/loadClass`: interval/tempo/race/long) brauchen echte
  * freie Zeit; "long" zählt allein durch sein Volumen als Last. Feinere Abstufung medium vs. high ist eine spätere Iteration.
  */

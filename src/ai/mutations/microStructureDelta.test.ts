@@ -47,10 +47,15 @@ const oneOff = (id: string, title: string, specificDate: string, startTime: stri
   id, title, category: "other", startTime, endTime, notes: null, source: "eventkit", isRecurring: false, specificDate,
 });
 
-/** Termine wie im Testfall 2.1: Di „Sprint-Prüfung" + „Arbeit" abends, Mi–Fr Arbeit. */
+/**
+ * Termine wie im Testfall 2.1: Di Prüfung + „Arbeit" abends, Mi–Fr Arbeit. Bewusst „Klausur" (belegt nur Zeit)
+ * statt „Sprint-Prüfung": seit Schritt 6 ist die Sprint-Prüfung ein körperlicher Termin und macht den Mittwoch
+ * über die Nachbarregel zur ⚠️-Wahl — diese Suite prüft die Delta-Bewertung, nicht die Termin-Semantik
+ * (dafür `eventLoadSemantics.acceptance.test.ts`).
+ */
 function blocksFor(tuesdayYmd: string, wedYmd: string, thuYmd: string, friYmd: string): OneOffScheduleBlock[] {
   return [
-    oneOff("b1", "Sprint-Prüfung", tuesdayYmd, "08:00", "14:00"),
+    oneOff("b1", "Klausur", tuesdayYmd, "08:00", "14:00"),
     oneOff("b2", "Arbeit", tuesdayYmd, "16:00", "22:00"),
     oneOff("b3", "Arbeit", wedYmd, "09:00", "17:00"),
     oneOff("b4", "Arbeit", thuYmd, "09:00", "17:00"),

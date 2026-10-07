@@ -107,4 +107,12 @@ describe.each([
     expect(intervalPatch?.changes.dateIso).toBeDefined();
     expect(intervalPatch?.changes.dateIso).not.toBe(SATURDAY);
   });
+
+  test("mit der Sprint-Prüfung am Dienstag (körperlicher Termin) geht das Intervall auf den Donnerstag, nicht auf den Mittwoch danach", () => {
+    const result = proposeSingleSessionCalendarReassignment([w], w, "w12-di", BLOCKS, LOCKED);
+    if (result.status !== "proposal") throw new Error("Vorschlag erwartet");
+    expect(result.patches.find((p) => p.sessionId === "w12-di")?.changes.dateIso).toBe("2026-10-08");
+    expect(result.action?.preview?.items.join(" | ")).not.toContain("⚠️");
+    expect(result.candidates.find((c) => c.targetSessionId === "w12-mi")?.isConflict).toBe(true);
+  });
 });

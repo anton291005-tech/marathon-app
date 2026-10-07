@@ -156,6 +156,7 @@ import {
   disconnectStrava,
 } from "./lib/supabase/services/stravaConnectionService";
 import { assignSessionToChosenDay } from "./ai/mutations/assignSessionToBestCapacityDay";
+import { buildPhysicalLoadDayLookup } from "./scheduling/capacityScore";
 import { proposeSingleSessionCalendarReassignment } from "./ai/mutations/buildCalendarReassignmentAction";
 import { buildLockedSessionIds } from "./ai/mutations/lockedSessions";
 import { scanWeekForCalendarConflicts } from "./ai/mutations/scanWeekForCalendarConflicts";
@@ -2883,7 +2884,7 @@ export default function AppMain(){
 
   const handleSelectCalendarReassignmentTarget = (targetSessionId)=>{
     if (!pendingCalendarProposal) return;
-    const result = assignSessionToChosenDay(displayPlan, pendingCalendarProposal.sessionId, targetSessionId, undefined, lockedSessionIds);
+    const result = assignSessionToChosenDay(displayPlan, pendingCalendarProposal.sessionId, targetSessionId, undefined, lockedSessionIds, buildPhysicalLoadDayLookup(scheduleBlocks));
     if (!result.ok || !result.patches.length) {
       setPendingCalendarProposal(prev => prev ? { ...prev, action: null, patches: [], mode: "preview", noConflict: false } : prev);
       return;
@@ -2901,7 +2902,7 @@ export default function AppMain(){
     }
     // Ganzer Anzeigeplan: Nachbarwochen (So → Mo) und die Phase je Woche gehören zur Bewertung.
     const proposals = proposeWeekCalendarReassignments(conflicts, w, scheduleBlocks, lockedSessionIds, displayPlan);
-    const validation = validateWeekReassignmentBatch(proposals, w, undefined, lockedSessionIds, displayPlan);
+    const validation = validateWeekReassignmentBatch(proposals, w, undefined, lockedSessionIds, displayPlan, buildPhysicalLoadDayLookup(scheduleBlocks));
     if (!validation.valid) {
       setWeekCalendarBatchProposal({ action: null, patches: [], status: "blocked", blockedReasons: validation.violations });
       return;

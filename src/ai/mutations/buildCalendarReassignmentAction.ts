@@ -8,7 +8,7 @@ import {
 } from "./assignSessionToBestCapacityDay";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 import type { WeeklyScheduleBlock } from "../../lib/supabase/services/weeklyScheduleBlocksService";
-import { computeDayCapacityScore, type DayCapacityScore } from "../../scheduling/capacityScore";
+import { buildPhysicalLoadDayLookup, computeDayCapacityScore, type DayCapacityScore } from "../../scheduling/capacityScore";
 import { sessionDayIso } from "./sessionDayIso";
 
 function findSessionById(plan: AiPlanWeek[], id: string): AiPlanSession | null {
@@ -170,7 +170,8 @@ export function proposeSingleSessionCalendarReassignment(
 
   const candidates = buildCalendarReassignmentCandidates(week, sessionId, blocks, lockedSessionIds);
   const sourceDayCapacity = computeSourceDayCapacity(week, sessionId, blocks);
-  const ranked = rankCalendarReassignmentCandidates(plan, sessionId, candidates, sourceDayCapacity);
+  const externalLoadTitlesOf = buildPhysicalLoadDayLookup(blocks);
+  const ranked = rankCalendarReassignmentCandidates(plan, sessionId, candidates, sourceDayCapacity, undefined, externalLoadTitlesOf);
   const candidateViews = buildCalendarReassignmentCandidateViews(week, ranked);
 
   const session = findSessionById([week], sessionId);
@@ -178,7 +179,15 @@ export function proposeSingleSessionCalendarReassignment(
   if (!inConflict || !session || !sourceDayCapacity) return { status: "no-conflict", candidates: candidateViews };
 
   const conflictCause = describeCalendarConflictCause(session, sourceDayCapacity);
-  const result = assignSessionToBestCapacityDay(plan, sessionId, candidates, sourceDayCapacity, undefined, lockedSessionIds);
+  const result = assignSessionToBestCapacityDay(
+    plan,
+    sessionId,
+    candidates,
+    sourceDayCapacity,
+    undefined,
+    lockedSessionIds,
+    externalLoadTitlesOf,
+  );
   const action = buildCalendarReassignmentAction(sessionId, result, plan, conflictCause);
   return { status: "proposal", action, patches: action ? result.patches : [], candidates: candidateViews, conflictCause };
 }

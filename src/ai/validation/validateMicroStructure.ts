@@ -40,6 +40,12 @@ export function inferIntensity(w: WorkoutV2): Intensity {
 export const KEY_SESSION_EVE_SEVERITY = 75;
 
 /**
+ * Schweregrad „harte Einheit am Tag vor oder nach einem körperlich belastenden Termin" — in jeder Phase
+ * ⚠️-Warnung, aber nie Sperre (95): die Einstufung des Termins beruht auf einem Stichwort im Titel.
+ */
+export const PHYSICAL_EVENT_ADJACENT_SEVERITY = 75;
+
+/**
  * Stufen der Schweregrade (Darstellung und Auto-Vorschlag):
  *   0: unter 40   — unbedenklich, nichts anzeigen
  *   1: 40–74      — Hinweis (neutral)
@@ -65,6 +71,7 @@ export type MicroFindingRule =
   | "key_session_eve"
   | "long_run_spacing"
   | "high_density"
+  | "physical_event_adjacent"
   | "no_rest_day";
 
 /** Ein einzelner Befund; `dates` sind die beteiligten lokalen Kalendertage (bzw. der Wochen-Montag bei `no_rest_day`). */
@@ -78,12 +85,24 @@ export type MicroFinding = {
 /** Phase des Plans an einem lokalen Kalendertag; `undefined` → `context.phase`. */
 export type MicroPhaseLookup = (dateYmd: string) => TrainingPhase | undefined;
 
-export type MicroValidationOptions = { phaseOf?: MicroPhaseLookup };
+/**
+ * Titel der körperlich belastenden Kalendertermine an einem lokalen Kalendertag (leer ohne). Der Validator
+ * kennt keine Kalender-Blöcke — die Kalender-Engine reicht die Sicht herein (`buildPhysicalLoadDayLookup`).
+ */
+export type MicroExternalLoadLookup = (dateYmd: string) => readonly string[];
+
+export type MicroValidationOptions = { phaseOf?: MicroPhaseLookup; externalLoadTitlesOf?: MicroExternalLoadLookup };
 
 const PHASE_STRICTNESS: Record<TrainingPhase, number> = { base: 0, build: 1, peak: 2, taper: 3 };
 
 function strictestPhase(phases: TrainingPhase[]): TrainingPhase {
   return phases.reduce((acc, p) => (PHASE_STRICTNESS[p] > PHASE_STRICTNESS[acc] ? p : acc), phases[0]);
+}
+
+/** Lokaler Kalendertag um `days` verschoben (Mittag als Anker, damit die Sommerzeit nichts kippt). */
+function shiftYmd(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return localYmd(new Date(y, m - 1, d + days, 12, 0, 0, 0));
 }
 
 function isRestWorkout(w: WorkoutV2): boolean {
@@ -94,7 +113,8 @@ function isRestWorkout(w: WorkoutV2): boolean {
  * Sammelt alle Befunde der Erholungs-/Abstandsregeln über den GANZEN Plan — auch über Wochengrenzen
  * (Sonntag → Montag). Keine frühen Rückgaben: jede Regel meldet jeden Treffer. Nur „kein Ruhetag" ist
  * wochenbezogen. Phase je Tag über `options.phaseOf`, sonst `context.phase`; bei Paaren über Tage zweier
- * Phasen gilt die strengere.
+ * Phasen gilt die strengere. Mit `options.externalLoadTitlesOf` zählt ein körperlich belastender Termin als
+ * fremde harte Belastung für die Nachbartage (der Termintag selbst läuft über den Kalender-Fit).
  */
 export function collectMicroFindings(
   plan: TrainingPlanV2,
@@ -139,6 +159,23 @@ export function collectMicroFindings(
       reason: "Warnung: Drei intensive Einheiten in vier Tagen erhöhen das Verletzungsrisiko.",
       dates,
     });
+  }
+
+  // Nachbarregel: harte Einheit am Tag vor oder nach einem körperlich belastenden Kalendertermin.
+  const externalLoadTitlesOf = options.externalLoadTitlesOf;
+  if (externalLoadTitlesOf) {
+    for (const e of highs) {
+      for (const offset of [-1, 1]) {
+        const eventYmd = shiftYmd(e.ymd, offset);
+        if (externalLoadTitlesOf(eventYmd).length === 0) continue;
+        findings.push({
+          rule: "physical_event_adjacent",
+          severity: PHYSICAL_EVENT_ADJACENT_SEVERITY,
+          reason: "Warnung: Harte Einheit direkt neben einem körperlich belastenden Termin.",
+          dates: [e.ymd, eventYmd],
+        });
+      }
+    }
   }
 
   // Paarregeln über aufeinanderfolgende Einträge — unabhängig von der Kalenderwoche.

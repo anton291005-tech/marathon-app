@@ -1,7 +1,13 @@
 import type { TrainingPlanV2 } from "../../planV2/types";
 import { rebuildPlanFromWorkouts } from "../../core/deriveWeeksFromWorkouts";
 import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
-import { validateMicroStructure, KEY_SESSION_EVE_SEVERITY } from "./validateMicroStructure";
+import {
+  collectMicroFindings,
+  computeMicroStructureDelta,
+  validateMicroStructure,
+  KEY_SESSION_EVE_SEVERITY,
+  PHYSICAL_EVENT_ADJACENT_SEVERITY,
+} from "./validateMicroStructure";
 import type { ValidationContext } from "./validationContext";
 
 type RawWorkout = TrainingPlanV2["workouts"][number];
@@ -157,5 +163,60 @@ describe("validateMicroStructure – nur über normalizeTrainingPlan (Belastungs
     ];
     const plan = normalized([...wk(5, false), ...wk(12, false), ...wk(19, true)]);
     expect(validateMicroStructure(plan, ctx("build")).axes.micro?.score ?? 0).toBeGreaterThanOrEqual(KEY_SESSION_EVE_SEVERITY);
+  });
+});
+
+describe("Nachbarregel: harte Einheit neben einem körperlich belastenden Termin", () => {
+  const build = (w: RawWorkout[]) => normalizeTrainingPlan(rebuildPlanFromWorkouts({ workouts: w }));
+  // Termin am Mittwoch 2026-10-07
+  const eventOn = (ymd: string) => (date: string) => (date === ymd ? ["Sprint-Prüfung"] : []);
+  const options = { externalLoadTitlesOf: eventOn("2026-10-07") };
+  const adjacent = (plan: TrainingPlanV2, opts = options) =>
+    collectMicroFindings(plan, vctx, opts).filter((f) => f.rule === "physical_event_adjacent");
+
+  test.each([
+    ["am Vortag", 6],
+    ["am Folgetag", 8],
+  ])("Intervall %s des Termins → Befund mit Schweregrad 75", (_label, d) => {
+    const findings = adjacent(build([run("a", d, "interval"), rest("r", 10)]));
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe(PHYSICAL_EVENT_ADJACENT_SEVERITY);
+    expect(findings[0].dates[1]).toBe("2026-10-07");
+  });
+
+  test.each(["base", "build", "peak", "taper"] as const)("Schweregrad ist in Phase %s derselbe (Warnung, nie Sperre)", (phase) => {
+    const findings = collectMicroFindings(build([run("a", 6, "tempo"), rest("r", 10)]), ctx(phase), options);
+    expect(findings.filter((f) => f.rule === "physical_event_adjacent").map((f) => f.severity)).toEqual([75]);
+  });
+
+  test("lockere Einheit, Long Run ohne Renntempo und Ruhetag neben dem Termin: kein Befund", () => {
+    expect(adjacent(build([run("a", 6, "easy"), run("b", 8, "long"), rest("r", 10)]))).toEqual([]);
+  });
+
+  test("Long Run mit Renntempo-Anteil am Folgetag zählt als harte Einheit", () => {
+    expect(adjacent(build([run("a", 8, "long", { title: "MP-Workout 24 km" }), rest("r", 10)]))).toHaveLength(1);
+  });
+
+  test("zwei Tage Abstand und der Termintag selbst lösen die Regel nicht aus", () => {
+    expect(adjacent(build([run("a", 5, "interval"), run("b", 7, "easy"), run("c", 9, "tempo"), rest("r", 10)]))).toEqual([]);
+    // Termintag selbst: läuft über den Kalender-Fit (Deckel 0,2), nicht über die Nachbarregel.
+    expect(adjacent(build([run("a", 7, "interval"), rest("r", 10)]))).toEqual([]);
+  });
+
+  test("ohne Kalendersicht (Chat-Swap, Generator-Prüfung) gibt es die Regel nicht", () => {
+    expect(adjacent(build([run("a", 6, "interval"), rest("r", 10)]), {} as typeof options)).toEqual([]);
+  });
+
+  test("Delta: Bestand zählt nicht, nur eine neu neben den Termin gelegte harte Einheit", () => {
+    const before = build([run("a", 5, "interval"), run("b", 6, "easy"), run("c", 8, "tempo"), rest("r", 10)]);
+    const unchanged = computeMicroStructureDelta(before, before, vctx, options);
+    expect(unchanged.severity).toBe(0); // Tempo am Tag nach dem Termin ist Altbestand
+
+    const after = build([run("a", 6, "interval"), run("b", 5, "easy"), run("c", 8, "tempo"), rest("r", 10)]);
+    const delta = computeMicroStructureDelta(before, after, vctx, options);
+    expect(delta.newFindings.map((f) => f.rule)).toEqual(["physical_event_adjacent"]);
+    expect(delta.severity).toBe(75);
+    expect(delta.tier).toBe(2);
+    expect(delta.warnings).toHaveLength(1);
   });
 });

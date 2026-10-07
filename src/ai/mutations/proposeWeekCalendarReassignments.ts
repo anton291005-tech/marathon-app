@@ -3,7 +3,7 @@ import type { WeeklyScheduleBlock } from "../../lib/supabase/services/weeklySche
 import type { WeeklyCalendarConflict } from "./scanWeekForCalendarConflicts";
 import { buildCalendarReassignmentCandidates, computeSourceDayCapacity } from "./buildCalendarReassignmentAction";
 import { rankCalendarReassignmentCandidates } from "./assignSessionToBestCapacityDay";
-import { computeSessionDayFitScore } from "../../scheduling/capacityScore";
+import { buildPhysicalLoadDayLookup, computeSessionDayFitScore } from "../../scheduling/capacityScore";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 
 export type WeekCalendarReassignmentProposal =
@@ -50,7 +50,7 @@ function sortConflictsBySeverity(
  *
  * Nutzt dieselbe Ranking-Primitive (`rankCalendarReassignmentCandidates`) wie das "Bearbeiten"-Panel
  * hinter dem Einzel-Tag-📅-Button – dessen `isConflict`-Flag (Capacity-Fit UND neuer Micro-Structure-Befund
- * ab 75) entscheidet, ob ein Kandidat als Lösung zählt. Befunde 40–74 sind kein Konflikt und werden als
+ * ab 75, inkl. „harte Einheit neben körperlich belastendem Termin") entscheidet, ob ein Kandidat als Lösung zählt. Befunde 40–74 sind kein Konflikt und werden als
  * Hinweis angezeigt. `fullPlan` (Anzeigeplan) macht Nachbarwochen und Phasen sichtbar. Erzeugt keinen PlanPatch, ruft weder
  * `assignSessionToBestCapacityDay` noch `buildCalendarReassignmentAction` auf – reine Vorschau.
  * Gesperrte Sessions (`lockedSessionIds`) werden nie als Zieltag angeboten.
@@ -65,6 +65,7 @@ export function proposeWeekCalendarReassignments(
   // Ohne ganzen Plan sieht die Bewertung nur diese Woche — Nachbarwochen (So → Mo) und deren Phase fehlen dann.
   const plan: AiPlanWeek[] = fullPlan ?? [week];
   const ordered = sortConflictsBySeverity(conflicts, week, scheduleBlocks);
+  const externalLoadTitlesOf = buildPhysicalLoadDayLookup(scheduleBlocks);
   const takenTargetSessionIds = new Set<string>();
   const proposals: WeekCalendarReassignmentProposal[] = [];
 
@@ -72,7 +73,14 @@ export function proposeWeekCalendarReassignments(
     const allCandidates = buildCalendarReassignmentCandidates(week, conflict.sessionId, scheduleBlocks, lockedSessionIds);
     const availableCandidates = allCandidates.filter((c) => !takenTargetSessionIds.has(c.targetSessionId));
     const sourceDayCapacity = computeSourceDayCapacity(week, conflict.sessionId, scheduleBlocks);
-    const ranked = rankCalendarReassignmentCandidates(plan, conflict.sessionId, availableCandidates, sourceDayCapacity);
+    const ranked = rankCalendarReassignmentCandidates(
+      plan,
+      conflict.sessionId,
+      availableCandidates,
+      sourceDayCapacity,
+      undefined,
+      externalLoadTitlesOf,
+    );
     const winner = ranked.find((r) => !r.isConflict);
 
     if (!winner) {
