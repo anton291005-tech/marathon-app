@@ -81,11 +81,16 @@ export async function deleteAllPlanPatches(userId: string): Promise<boolean> {
   return false;
 }
 
+/** So lange wartet ein Planwechsel höchstens auf den DELETE (hängende Verbindung), danach geht es ohne ihn weiter. */
+export const PLAN_PATCHES_DELETE_TIMEOUT_MS = 5000;
+
 /**
  * Verwirft die Patches, wenn ein anderer Plan aktiv wird (Onboarding-Abschluss, Plan-Ersatz, Planwechsel,
  * Löschen des aktiven Plans): lokal sofort, danach in Supabase. Das Promise ist erst erfüllt, wenn der
  * DELETE durch ist — wer danach neue Patches speichert (Wizard), wartet darauf, sonst träfe der DELETE sie mit.
  * Ohne Planwechsel (`activePlanChanged: false`, z. B. ein nicht aktiver Plan wurde gelöscht) passiert nichts.
+ * Antwortet der DELETE nicht binnen `PLAN_PATCHES_DELETE_TIMEOUT_MS`, geht es mit `console.warn` weiter; die
+ * Anfrage selbst wird nicht abgebrochen und kann später noch durchgehen.
  */
 export async function clearPlanPatchesForPlanChange(args: {
   activePlanChanged: boolean;
@@ -96,5 +101,14 @@ export async function clearPlanPatchesForPlanChange(args: {
   if (!args.activePlanChanged) return;
   args.clearLocal();
   if (!args.userId) return;
-  await (args.deleteRemote ?? deleteAllPlanPatches)(args.userId);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), PLAN_PATCHES_DELETE_TIMEOUT_MS);
+  });
+  const outcome = await Promise.race([(args.deleteRemote ?? deleteAllPlanPatches)(args.userId), timedOut]);
+  clearTimeout(timer);
+  if (outcome === "timeout") {
+    // eslint-disable-next-line no-console
+    console.warn(`[planPatchesService] deleteAllPlanPatches: keine Antwort nach ${PLAN_PATCHES_DELETE_TIMEOUT_MS} ms, weiter ohne Bestätigung`);
+  }
 }

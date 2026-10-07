@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { supabase } from "../client";
-import { clearPlanPatchesForPlanChange, deleteAllPlanPatches } from "./planPatchesService";
+import { clearPlanPatchesForPlanChange, deleteAllPlanPatches, PLAN_PATCHES_DELETE_TIMEOUT_MS } from "./planPatchesService";
 
 // Von babel-jest vor die Imports gehoben.
 jest.mock("../client", () => ({
@@ -146,6 +146,44 @@ describe("clearPlanPatchesForPlanChange", () => {
 
     expect(clearLocal).toHaveBeenCalledTimes(1);
     expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
+  });
+});
+
+describe("clearPlanPatchesForPlanChange – Timeout", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test("ein DELETE, der nie antwortet, blockiert den Ablauf höchstens bis zum Limit: Warnung, kein Throw", async () => {
+    jest.useFakeTimers();
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const deleteRemote = jest.fn((_userId: string) => new Promise<boolean>(() => {}));
+    let settled = false;
+
+    const pending = clearPlanPatchesForPlanChange({
+      activePlanChanged: true,
+      userId: USER_ID,
+      clearLocal: jest.fn(),
+      deleteRemote,
+    }).then(() => {
+      settled = true;
+    });
+
+    const flushMicrotasks = async () => {
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    };
+
+    jest.advanceTimersByTime(PLAN_PATCHES_DELETE_TIMEOUT_MS - 1);
+    await flushMicrotasks();
+    expect(settled).toBe(false);
+
+    jest.advanceTimersByTime(1);
+    await pending;
+    expect(settled).toBe(true);
+    expect(deleteRemote).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(PLAN_PATCHES_DELETE_TIMEOUT_MS).toBe(5000);
     warnSpy.mockRestore();
   });
 });
