@@ -3,6 +3,7 @@
 const Anthropic = require("@anthropic-ai/sdk");
 const { handleCorsPreflight } = require("../_lib/cors");
 const { guardRequest, sendGuardFailure } = require("../_lib/apiGuard");
+const { validatePlanBody } = require("../_lib/inputLimits");
 const { generateFullPlanByPhases } = require("../_lib/phasedFullPlanGenerator");
 
 /**
@@ -20,11 +21,11 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const guard = await guardRequest(req);
+    const guard = await guardRequest(req, {
+      validate: (body) => validatePlanBody(body, { enforceMaxDuration: true }),
+    });
     if (!guard.ok) return sendGuardFailure(res, guard);
-
-    const { profile } = req.body ?? {};
-    if (!profile) return res.status(400).json({ error: "profile required" });
+    const { profile } = guard.payload;
 
     const key = process.env.ANTHROPIC_API_KEY?.trim();
     if (!key) return res.status(500).json({ error: "ANTHROPIC_API_KEY missing" });
@@ -46,7 +47,7 @@ module.exports = async function handler(req, res) {
       "[api/onboarding/generate-plan-full] error:",
       typeof err?.message === "string" ? err.message : "unknown",
     );
-    return res.status(500).json({ error: "Plan generation failed", detail: err?.message });
+    return res.status(500).json({ error: "Plan generation failed" });
   }
 };
 

@@ -6,6 +6,7 @@ const {
 } = require("../_lib/claudePlanGenerator");
 const { handleCorsPreflight } = require("../_lib/cors");
 const { guardRequest, sendGuardFailure } = require("../_lib/apiGuard");
+const { validatePlanBody } = require("../_lib/inputLimits");
 
 /**
  * Vercel serverless function: POST /api/onboarding/generate-plan
@@ -22,13 +23,9 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
   try {
-    const guard = await guardRequest(req);
+    const guard = await guardRequest(req, { validate: validatePlanBody });
     if (!guard.ok) return sendGuardFailure(res, guard);
-
-    const { profile } = req.body || {};
-    if (!profile) {
-      return res.status(400).json({ error: "profile required" });
-    }
+    const { profile } = guard.payload;
 
     console.log("[API] POST /onboarding/generate-plan called");
 

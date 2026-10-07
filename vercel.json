@@ -3,9 +3,12 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/**/*.js": {
-      "maxDuration": 240
-    }
+    "api/ai.js": { "maxDuration": 30 },
+    "api/account.js": { "maxDuration": 30 },
+    "api/onboarding/generate-plan.js": { "maxDuration": 75 },
+    "api/onboarding/generate-plan-full.js": { "maxDuration": 240 },
+    "api/strava/auth.js": { "maxDuration": 15 },
+    "api/strava/callback.js": { "maxDuration": 15 }
   },
   "headers": [
     {

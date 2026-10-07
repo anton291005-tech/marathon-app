@@ -2,6 +2,7 @@
 
 const { handleAiCoach } = require("./_lib/coachHandlers");
 const { guardRequest, sendGuardFailure } = require("./_lib/apiGuard");
+const { validateCoachBody } = require("./_lib/inputLimits");
 
 /**
  * Vercel serverless function: POST /api/ai
@@ -20,10 +21,13 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
   try {
-    const guard = await guardRequest(req);
+    const guard = await guardRequest(req, { validate: validateCoachBody });
     if (!guard.ok) return sendGuardFailure(res, guard);
+    // Nur Größen, nie Inhalte — Grundlage, um COACH_CONTEXT_MAX_BYTES später enger zu ziehen.
+    // eslint-disable-next-line no-console
+    console.log("[api/ai] request", JSON.stringify(guard.meta ?? {}));
 
-    const { status, body } = await handleAiCoach(req.body);
+    const { status, body } = await handleAiCoach(guard.payload);
     return res.status(status).json(body);
   } catch (err) {
     // eslint-disable-next-line no-console

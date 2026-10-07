@@ -1241,7 +1241,6 @@ async function handleAiCoach(rawBody) {
     context,
     allowedActions,
     responseSchemaVersion,
-    model: modelOverride,
   } = body;
 
   if (typeof input !== "string" || !input.trim()) {
