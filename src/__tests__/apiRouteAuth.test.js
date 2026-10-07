@@ -2,6 +2,7 @@
 // Request einen KI-Aufruf erreichen.
 
 const mockGetUser = jest.fn();
+const mockRpc = jest.fn();
 
 jest.mock("@supabase/supabase-js", () => ({ createClient: jest.fn() }));
 jest.mock("@anthropic-ai/sdk", () => jest.fn());
@@ -74,7 +75,8 @@ describe("kostenpflichtige Routen verlangen ein Supabase-Token", () => {
     process.env.REACT_APP_SUPABASE_URL = "https://example.supabase.co";
     process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test-key";
     process.env.ANTHROPIC_API_KEY = "test-key-route-auth";
-    createClient.mockImplementation(() => ({ auth: { getUser: mockGetUser } }));
+    createClient.mockImplementation(() => ({ auth: { getUser: mockGetUser }, rpc: mockRpc }));
+    mockRpc.mockResolvedValue({ data: [{ allowed: true, retry_after_seconds: 60 }], error: null });
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
     handleAiCoach.mockResolvedValue({ status: 200, body: { mode: "coach", message: "ok" } });
     generatePlanStructureWithClaude.mockResolvedValue({ phases: [], analysis: "a" });

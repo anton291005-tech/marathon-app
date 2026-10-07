@@ -70,6 +70,22 @@ describe("Client sendet das Token an die eigenen Endpunkte", () => {
     });
   });
 
+  test("429 vom Server: die Limit-Nachricht kommt als normale Coach-Zeile an", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: async () =>
+        JSON.stringify({
+          mode: "support",
+          message: "Du hast das Limit für Coach-Anfragen erreicht. In etwa 25 Minuten geht es weiter.",
+          action: null,
+          error: "Rate limit exceeded",
+        }),
+    });
+    const result = await runCoachAgent("Hallo", { recoveryDomain: { domainKind: "initial" } });
+    expect(JSON.stringify(result)).toContain("Limit für Coach-Anfragen erreicht");
+  });
+
   test("fetchClaudePlanStructure → POST /api/onboarding/generate-plan", async () => {
     await fetchClaudePlanStructure(profile);
     expect(headersOfCall(fetchMock, "/api/onboarding/generate-plan")).toMatchObject({

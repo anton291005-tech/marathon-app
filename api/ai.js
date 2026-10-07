@@ -1,7 +1,7 @@
 "use strict";
 
 const { handleAiCoach } = require("./_lib/coachHandlers");
-const { guardRequest, sendGuardFailure } = require("./_lib/apiGuard");
+const { guardRequest, sendGuardFailure, coachRateLimitBody } = require("./_lib/apiGuard");
 const { validateCoachBody } = require("./_lib/inputLimits");
 
 /**
@@ -21,7 +21,11 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
   try {
-    const guard = await guardRequest(req, { validate: validateCoachBody });
+    const guard = await guardRequest(req, {
+      validate: validateCoachBody,
+      bucket: "coach_chat",
+      rateLimitBody: coachRateLimitBody,
+    });
     if (!guard.ok) return sendGuardFailure(res, guard);
     // Nur Größen, nie Inhalte — Grundlage, um COACH_CONTEXT_MAX_BYTES später enger zu ziehen.
     // eslint-disable-next-line no-console

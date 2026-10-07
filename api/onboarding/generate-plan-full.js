@@ -23,6 +23,7 @@ module.exports = async function handler(req, res) {
   try {
     const guard = await guardRequest(req, {
       validate: (body) => validatePlanBody(body, { enforceMaxDuration: true }),
+      bucket: "plan_full",
     });
     if (!guard.ok) return sendGuardFailure(res, guard);
     const { profile } = guard.payload;

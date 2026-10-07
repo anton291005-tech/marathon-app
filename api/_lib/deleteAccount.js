@@ -5,6 +5,7 @@
 const { requireUser } = require("./requireUser");
 
 const USER_DATA_TABLES = [
+  "api_usage",
   "prep_recaps",
   "plan_patches",
   "session_logs",

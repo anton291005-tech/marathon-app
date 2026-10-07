@@ -23,7 +23,7 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
   try {
-    const guard = await guardRequest(req, { validate: validatePlanBody });
+    const guard = await guardRequest(req, { validate: validatePlanBody, bucket: "plan_structure" });
     if (!guard.ok) return sendGuardFailure(res, guard);
     const { profile } = guard.payload;
 
