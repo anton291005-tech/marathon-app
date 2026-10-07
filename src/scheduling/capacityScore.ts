@@ -1,6 +1,9 @@
 import type { WeeklyScheduleBlock } from "../lib/supabase/services/weeklyScheduleBlocksService";
 import type { SessionType } from "../lib/ai/types";
 import { classifyLoad } from "../core/loadClass";
+import { classifyEventLoad } from "./eventLoad";
+
+export { isPhysicalLoadTitle, PHYSICAL_LOAD_TITLE_KEYWORDS } from "./eventLoad";
 
 export type DayCapacityScore = {
   dateIso: string;
@@ -12,7 +15,7 @@ export type DayCapacityScore = {
   capacityScore: number;
   isFullyBooked: boolean;
   isFullyFree: boolean;
-  /** Titles of blocks on this day that look like physical exertion (see `isPhysicalLoadTitle`); empty when none. */
+  /** Titles of blocks on this day with load kind "physical" (see `classifyEventLoad`); empty when none. */
   physicalLoadBlockTitles: string[];
 };
 
@@ -36,51 +39,6 @@ function timeStringToMinutes(time: string): number | null {
   const minutes = Number(match[2]);
   if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
   return hours * 60 + minutes;
-}
-
-/**
- * Lower-case title keywords that mark a calendar block as physical exertion (sports, tournaments).
- * Deliberately excludes generic words like "spiel" or "training". Extend here — matching is done by
- * `isPhysicalLoadTitle`.
- */
-export const PHYSICAL_LOAD_TITLE_KEYWORDS: readonly string[] = [
-  "fußball",
-  "fussball",
-  "football",
-  "soccer",
-  "wettkampf",
-  "match",
-  "handball",
-  "basketball",
-  "volleyball",
-  "hockey",
-  "tennis",
-  "badminton",
-  "squash",
-  "rugby",
-  "klettern",
-  "bouldern",
-  "triathlon",
-  "duathlon",
-];
-
-/** Keywords shorter than this only match as a whole word ("match" must not hit "Matcha"). */
-const MIN_COMPOUND_KEYWORD_LENGTH = 6;
-
-/**
- * True when a word of the title (case-insensitive) equals a keyword or — for keywords of at least
- * `MIN_COMPOUND_KEYWORD_LENGTH` chars — starts or ends with it, so German compounds like
- * "Fußballturnier" or "Hallenfußball" match while mid-word hits do not.
- */
-export function isPhysicalLoadTitle(title: string): boolean {
-  const words = title.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-  return words.some((word) =>
-    PHYSICAL_LOAD_TITLE_KEYWORDS.some(
-      (keyword) =>
-        word === keyword ||
-        (keyword.length >= MIN_COMPOUND_KEYWORD_LENGTH && (word.startsWith(keyword) || word.endsWith(keyword))),
-    ),
-  );
 }
 
 function blockAppliesToDate(block: WeeklyScheduleBlock, dateIso: string, dayOfWeek: number): boolean {
@@ -140,7 +98,7 @@ export function computeDayCapacityScore(dateIso: string, blocks: WeeklyScheduleB
     if (start == null || end == null || end <= start) continue;
     intervals.push([start, end]);
     const overlapsWindow = Math.min(end, window.endMinutes) > Math.max(start, window.startMinutes);
-    if (overlapsWindow && isPhysicalLoadTitle(block.title)) physicalLoadBlockTitles.push(block.title);
+    if (overlapsWindow && classifyEventLoad(block) === "physical") physicalLoadBlockTitles.push(block.title);
   }
 
   const busyMinutes = mergedBusyMinutes(intervals, window.startMinutes, window.endMinutes);

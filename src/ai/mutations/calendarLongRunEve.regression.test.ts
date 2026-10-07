@@ -87,12 +87,24 @@ describe.each([
   });
 
   test("auch mit kurzen Terminen (kein Konflikt) steht der Samstag in der Tageswahl als ungünstig", () => {
-    const light = [block("b1", "Sprint-Prüfung", "2026-10-06", "10:00", "12:00"), block("b2", "Arbeit", "2026-10-06", "17:00", "22:00")];
+    // „Klausur" statt „Sprint-Prüfung": belegt nur Zeit (Roadmap Kalender-Tausch-Ausbau, Schritt 6).
+    const light = [block("b1", "Klausur", "2026-10-06", "10:00", "12:00"), block("b2", "Arbeit", "2026-10-06", "17:00", "22:00")];
     const result = proposeSingleSessionCalendarReassignment([w], w, "w12-di", light, LOCKED);
     expect(result.status).toBe("no-conflict");
     if (result.status !== "no-conflict") return;
     const sat = result.candidates.find((c) => c.targetSessionId === "w12-sa");
     expect(sat?.isConflict).toBe(true);
     expect(result.candidates[0].targetSessionId).not.toBe("w12-sa");
+  });
+
+  test("kurze Sprint-Prüfung ist ein Konflikt für das Intervall (körperlicher Termin), Vorschlag meidet den Samstag", () => {
+    const light = [block("b1", "Sprint-Prüfung", "2026-10-06", "10:00", "12:00"), block("b2", "Arbeit", "2026-10-06", "17:00", "22:00")];
+    const result = proposeSingleSessionCalendarReassignment([w], w, "w12-di", light, LOCKED);
+    expect(result.status).toBe("proposal");
+    if (result.status !== "proposal") return;
+    expect(result.conflictCause).toBe("wegen Sprint-Prüfung");
+    const intervalPatch = result.patches.find((p) => p.sessionId === "w12-di");
+    expect(intervalPatch?.changes.dateIso).toBeDefined();
+    expect(intervalPatch?.changes.dateIso).not.toBe(SATURDAY);
   });
 });

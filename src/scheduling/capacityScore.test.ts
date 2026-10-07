@@ -180,6 +180,8 @@ describe("isPhysicalLoadTitle", () => {
     "Klettern",
     "Triathlon Vorbereitung",
     "Hallenfußball", // Kompositum: Stichwort am Wortende
+    "Turnier", // seit Schritt 6 Stichwort, mit Ausschlussliste (Schach, Skat, Poker, Quiz, E-Sport)
+    "Sprint-Prüfung",
     "Beachvolleyball",
   ])("%s zählt als körperliche Belastung", (title) => {
     expect(isPhysicalLoadTitle(title)).toBe(true);
@@ -189,8 +191,8 @@ describe("isPhysicalLoadTitle", () => {
     "Schicht",
     "Arbeit",
     "Job",
-    "Schachturnier", // "Turnier" allein ist kein Belastungs-Stichwort
-    "Turnier",
+    "Schachturnier", // Ausschlussliste: Wettbewerb ohne körperliche Belastung
+    "Klausur",
     "Vorlesung",
     "Training", // zu generisch
     "Spiel", // zu generisch
@@ -208,7 +210,6 @@ describe("isPhysicalLoadTitle", () => {
     }
     expect(PHYSICAL_LOAD_TITLE_KEYWORDS).not.toContain("spiel");
     expect(PHYSICAL_LOAD_TITLE_KEYWORDS).not.toContain("training");
-    expect(PHYSICAL_LOAD_TITLE_KEYWORDS).not.toContain("turnier");
   });
 });
 
@@ -239,7 +240,16 @@ describe("Belastungs-Blocks in computeDayCapacityScore / computeSessionDayFitSco
     }
   });
 
-  test("Schachturnier (gleiche Zeiten, kein Sport-Stichwort) ist kein Belastungstag; Fußballturnier bleibt es", () => {
+  test("Belastung kommt aus classifyEventLoad: study blockiert nie allein, Sprint im Job-Kalender zählt nicht", () => {
+    const loadTitles = (title: string, category: OneOffScheduleBlock["category"]) =>
+      computeDayCapacityScore("2026-09-20", [{ ...tournament, title, category }]).physicalLoadBlockTitles;
+    expect(loadTitles("Klausur", "study")).toEqual([]);
+    expect(loadTitles("Sprint-Prüfung", "study")).toEqual(["Sprint-Prüfung"]);
+    expect(loadTitles("Sprint", "job")).toEqual([]);
+    expect(loadTitles("Vereinsabend", "sport")).toEqual([]); // Kategorie sport ist kein Auslöser
+  });
+
+  test("Schachturnier (gleiche Zeiten, Ausschlussliste) ist kein Belastungstag; Fußballturnier bleibt es", () => {
     const chess = computeDayCapacityScore("2026-09-20", [{ ...tournament, title: "Schachturnier" }]);
     expect(chess.physicalLoadBlockTitles).toEqual([]);
     expect(computeSessionDayFitScore({ type: "long" }, chess)).toBeGreaterThanOrEqual(MIN_FIT_SCORE_THRESHOLD);
