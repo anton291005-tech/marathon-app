@@ -33,4 +33,14 @@ describe("Vercel-Funktionen", () => {
     expect(source).not.toMatch(/app\.post\(\s*"\/api\/ai\/daily-coach"/);
     expect(source).toMatch(/app\.get\(\s*"\/api\/ai\/health"/);
   });
+
+  test("der lokale Express-Server bindet nur auf Loopback, Proxy und CORS passen dazu", () => {
+    const server = fs.readFileSync(path.resolve(__dirname, "../../server/index.js"), "utf8");
+    expect(server).toMatch(/const host = "127\.0\.0\.1";/);
+    expect(server).toMatch(/app\.listen\(port, host,/);
+    expect(server).toMatch(/allowedHeaders: \["Content-Type", "Authorization"\]/);
+
+    const proxy = fs.readFileSync(path.resolve(__dirname, "../setupProxy.js"), "utf8");
+    expect(proxy).toMatch(/target: `http:\/\/127\.0\.0\.1:\$\{/);
+  });
 });

@@ -24,11 +24,13 @@ const {
 
 const app = express();
 const port = Number(process.env.AI_SERVER_PORT || 8787);
+// Nur Loopback: der lokale API-Server ist aus dem WLAN nicht erreichbar. iOS-Builds rufen ohnehin Vercel auf.
+const host = "127.0.0.1";
 const defaultModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const corsOptions = {
   origin: "http://localhost:3000",
   methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 function readEnvTrimmed(name) {
@@ -680,13 +682,13 @@ app.get("/api/strava/callback", async (req, res) => {
   }
 });
 
-app.listen(port, () => {
+app.listen(port, host, () => {
   const schemaViolations = collectSchemaAdditionalPropertiesViolations(AI_RESPONSE_SCHEMA);
   const requiredCoverageViolations = collectSchemaRequiredCoverageViolations(AI_RESPONSE_SCHEMA);
   const summary = getSchemaStrictnessSummary();
   // eslint-disable-next-line no-console
   console.log(
-    `[ai-server] listening on http://localhost:${port} model=${defaultModel} key_present=${Boolean(apiKey)}`
+    `[ai-server] listening on http://${host}:${port} model=${defaultModel} key_present=${Boolean(apiKey)}`
   );
   // eslint-disable-next-line no-console
   console.log(
