@@ -37,10 +37,10 @@
     "appearance_dark": "Dunkles Design",
     "appearance_light": "Helles Design",
     "language": "Sprache",
-    "account": "Account",
+    "account": "Konto",
     "logout": "Abmelden",
     "privacy_policy": "Datenschutzerklärung",
-    "delete_account": "Account löschen",
+    "delete_account": "Konto löschen",
     "delete_account_confirm": "Bist du sicher? Diese Aktion kann nicht rückgängig gemacht werden.",
     "cancel": "Abbrechen",
     "confirm": "Bestätigen"

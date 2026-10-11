@@ -1,3 +1,4 @@
+/* eslint-disable testing-library/no-container, testing-library/no-node-access -- die Rahmen-Tests prüfen Inline-Styles und den Neuaufbau des Scroll-Knotens; dafür gibt es keine Rollen-Abfrage. */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { SettingsDetailPage, SettingsPageFrame } from "./SettingsDetailPage";
 import { SettingsGroup, SettingsRow } from "./SettingsList";

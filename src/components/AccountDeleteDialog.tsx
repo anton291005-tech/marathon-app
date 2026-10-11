@@ -1,13 +1,17 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 
-export type AccountDeleteDialogStep = 1 | 2;
+/** Dieses Wort muss eingetippt werden, bevor „Konto löschen" aktiv wird. */
+export const ACCOUNT_DELETE_CONFIRM_WORD = "LÖSCHEN";
+
+export function isAccountDeleteConfirmed(input: string): boolean {
+  return input.trim().toLocaleUpperCase("de-DE") === ACCOUNT_DELETE_CONFIRM_WORD;
+}
 
 type Props = {
-  step: AccountDeleteDialogStep;
   busy?: boolean;
+  /** Meldung nach einem fehlgeschlagenen Versuch; der Bestätigen-Button heißt dann „Erneut versuchen". */
   error?: string | null;
   onCancel: () => void;
-  onContinue: () => void;
   onConfirmDelete: () => void;
 };
 
@@ -18,9 +22,11 @@ const overlayStyle: CSSProperties = {
   background: "rgba(2, 6, 23, 0.78)",
   backdropFilter: "blur(6px)",
   display: "flex",
-  alignItems: "center",
+  // Oben statt mittig: das Eingabefeld bleibt über der iOS-Tastatur sichtbar.
+  alignItems: "flex-start",
   justifyContent: "center",
-  padding: "24px 16px",
+  padding: "max(72px, calc(env(safe-area-inset-top, 0px) + 48px)) 16px 24px",
+  overflowY: "auto",
   boxSizing: "border-box",
 };
 
@@ -61,19 +67,10 @@ function actionButtonStyle(variant: "secondary" | "destructive", disabled: boole
   };
 }
 
-export function AccountDeleteDialog({
-  step,
-  busy = false,
-  error = null,
-  onCancel,
-  onContinue,
-  onConfirmDelete,
-}: Props) {
-  const isStep1 = step === 1;
-  const title = isStep1 ? "Account wirklich löschen?" : "Bist du sicher?";
-  const message = isStep1
-    ? "Alle deine Daten werden unwiderruflich gelöscht."
-    : "Diese Aktion kann nicht rückgängig gemacht werden.";
+export function AccountDeleteDialog({ busy = false, error = null, onCancel, onConfirmDelete }: Props) {
+  const [typed, setTyped] = useState("");
+  const confirmed = isAccountDeleteConfirmed(typed);
+  const confirmDisabled = busy || !confirmed;
 
   return (
     <div
@@ -85,7 +82,14 @@ export function AccountDeleteDialog({
         if (e.target === e.currentTarget && !busy) onCancel();
       }}
     >
-      <div style={cardStyle} onClick={(e) => e.stopPropagation()}>
+      <form
+        style={cardStyle}
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!confirmDisabled) onConfirmDelete();
+        }}
+      >
         <h2
           id="account-delete-title"
           style={{
@@ -96,9 +100,39 @@ export function AccountDeleteDialog({
             letterSpacing: "-0.02em",
           }}
         >
-          {title}
+          Konto wirklich löschen?
         </h2>
-        <p style={{ margin: "0 0 20px", fontSize: 14, color: "#94a3b8", lineHeight: 1.5 }}>{message}</p>
+        <p style={{ margin: "0 0 16px", fontSize: 14, color: "#94a3b8", lineHeight: 1.5 }}>
+          Dein Konto und alle deine Daten werden unwiderruflich gelöscht. Das lässt sich nicht rückgängig machen.
+        </p>
+
+        <label htmlFor="account-delete-confirm" style={{ display: "block", margin: "0 0 8px", fontSize: 13, color: "#cbd5e1" }}>
+          Tippe zur Bestätigung {ACCOUNT_DELETE_CONFIRM_WORD} ein.
+        </label>
+        <input
+          id="account-delete-confirm"
+          type="text"
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          disabled={busy}
+          placeholder={ACCOUNT_DELETE_CONFIRM_WORD}
+          autoCapitalize="characters"
+          autoCorrect="off"
+          autoComplete="off"
+          spellCheck={false}
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            margin: "0 0 16px",
+            padding: "11px 12px",
+            fontSize: 16,
+            borderRadius: 12,
+            border: "1px solid rgba(148, 163, 184, 0.25)",
+            background: "#0b1220",
+            color: "#f1f5f9",
+            letterSpacing: "0.04em",
+          }}
+        />
 
         {error ? (
           <div
@@ -121,22 +155,11 @@ export function AccountDeleteDialog({
           <button type="button" disabled={busy} onClick={onCancel} style={actionButtonStyle("secondary", busy)}>
             Abbrechen
           </button>
-          {isStep1 ? (
-            <button type="button" disabled={busy} onClick={onContinue} style={actionButtonStyle("destructive", busy)}>
-              Weiter
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onConfirmDelete}
-              style={actionButtonStyle("destructive", busy)}
-            >
-              {busy ? "Wird gelöscht…" : "Account endgültig löschen"}
-            </button>
-          )}
+          <button type="submit" disabled={confirmDisabled} style={actionButtonStyle("destructive", confirmDisabled)}>
+            {busy ? "Wird gelöscht…" : error ? "Erneut versuchen" : "Konto löschen"}
+          </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

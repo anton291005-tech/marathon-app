@@ -72,6 +72,7 @@ Test-Device: iPhone 13 (nie Simulator für device-kritische Fixes)
 - Onboarding-Plan-Qualität weiter verbessern
 - AI Coach: funktioniert, aber Antwortqualität noch nicht optimal — kein Blocker mehr, weiter verbessern
 - Account-Deletion Test
+- `SUPPORT_EMAIL` in `src/features/settings/appInfo.ts` ist ein Platzhalter (`support@example.invalid`) — vor TestFlight echte Adresse eintragen (Hilfe & Feedback, Fehler melden, Datenexport anfordern)
 - Strava-Integration: Backend komplett, On-Device-Test auf iPhone 13 noch offen
 
 ### Erledigt (nicht mehr offen)

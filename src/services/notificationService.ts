@@ -80,3 +80,17 @@ export async function cancelTrainingReminder(): Promise<void> {
     });
   } catch {}
 }
+
+/**
+ * Bestellt ALLE ausstehenden lokalen Notifications der App ab (Abmelden, Konto löschen) —
+ * nicht nur die Trainings-Erinnerung, damit nach dem Ende der Sitzung nichts mehr feuert.
+ */
+export async function cancelAllPendingNotifications(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const pending = await LocalNotifications.getPending();
+    const ids = (pending?.notifications ?? []).map((n) => ({ id: n.id }));
+    if (ids.length > 0) await LocalNotifications.cancel({ notifications: ids });
+  } catch {}
+  await cancelTrainingReminder();
+}

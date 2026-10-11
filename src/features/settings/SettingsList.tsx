@@ -47,7 +47,9 @@ export function SettingsGroup({ title, footer, padded = false, children }: Group
             ))}
       </div>
       {footer ? (
-        <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.45, padding: "8px 16px 0" }}>{footer}</div>
+        <div role="status" style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.45, padding: "8px 16px 0" }}>
+          {footer}
+        </div>
       ) : null}
     </section>
   );
@@ -55,34 +57,53 @@ export function SettingsGroup({ title, footer, padded = false, children }: Group
 
 type RowProps = {
   label: string;
-  /** Aktueller Wert rechts neben dem Chevron. */
+  /** Aktueller Wert rechts in der Zeile. */
   value?: string | null;
-  onClick: () => void;
+  /** Aktion oder Wechsel auf eine Detailseite. Ohne `onClick` und `href` ist die Zeile reine Anzeige. */
+  onClick?: () => void;
+  /** Link (extern oder `mailto:`); `external` öffnet ihn außerhalb der App. */
+  href?: string;
+  external?: boolean;
+  /** Chevron nur für Zeilen, die eine Detailseite öffnen (Standard bei `onClick`). */
+  chevron?: boolean;
+  tone?: "default" | "destructive";
+  disabled?: boolean;
 };
 
-/** Zeile, die eine Detailseite öffnet: Titel links, aktueller Wert + Chevron rechts. */
-export function SettingsRow({ label, value, onClick }: RowProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        width: "100%",
-        minHeight: SETTINGS_ROW_MIN_HEIGHT_PX,
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "8px 16px",
-        margin: 0,
-        background: "transparent",
-        border: "none",
-        cursor: "pointer",
-        textAlign: "left",
-        boxSizing: "border-box",
-        font: "inherit",
-      }}
-    >
-      <span style={{ flex: "1 1 auto", minWidth: 0, fontSize: 16, fontWeight: 500, color: "var(--text-primary)", lineHeight: 1.25 }}>
+/** Farbe für die einzige zulässige rote Stelle der Einstellungen: Konto löschen. */
+export const SETTINGS_DESTRUCTIVE_COLOR = "#f87171";
+
+const rowStyle: CSSProperties = {
+  width: "100%",
+  minHeight: SETTINGS_ROW_MIN_HEIGHT_PX,
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  padding: "8px 16px",
+  margin: 0,
+  background: "transparent",
+  border: "none",
+  textAlign: "left",
+  textDecoration: "none",
+  boxSizing: "border-box",
+  font: "inherit",
+};
+
+/** Listenzeile: Titel links, aktueller Wert rechts; je nach Props Anzeige, Aktion, Link oder Seitenwechsel. */
+export function SettingsRow({ label, value, onClick, href, external = false, chevron, tone = "default", disabled = false }: RowProps) {
+  const showChevron = chevron ?? (onClick != null && href == null);
+  const content = (
+    <>
+      <span
+        style={{
+          flex: "1 1 auto",
+          minWidth: 0,
+          fontSize: 16,
+          fontWeight: 500,
+          color: tone === "destructive" ? SETTINGS_DESTRUCTIVE_COLOR : "var(--text-primary)",
+          lineHeight: 1.25,
+        }}
+      >
         {label}
       </span>
       {value ? (
@@ -90,7 +111,7 @@ export function SettingsRow({ label, value, onClick }: RowProps) {
           style={{
             flex: "0 1 auto",
             minWidth: 0,
-            maxWidth: "55%",
+            maxWidth: "62%",
             fontSize: 15,
             color: "var(--text-secondary)",
             overflow: "hidden",
@@ -101,9 +122,35 @@ export function SettingsRow({ label, value, onClick }: RowProps) {
           {value}
         </span>
       ) : null}
-      <span aria-hidden style={{ flexShrink: 0, fontSize: 20, lineHeight: 1, color: "var(--text-muted)" }}>
-        ›
-      </span>
-    </button>
+      {showChevron ? (
+        <span aria-hidden style={{ flexShrink: 0, fontSize: 20, lineHeight: 1, color: "var(--text-muted)" }}>
+          ›
+        </span>
+      ) : null}
+    </>
   );
+  if (href != null) {
+    return (
+      <a
+        href={href}
+        {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        style={{ ...rowStyle, cursor: "pointer" }}
+      >
+        {content}
+      </a>
+    );
+  }
+  if (onClick != null) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        style={{ ...rowStyle, cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.55 : 1 }}
+      >
+        {content}
+      </button>
+    );
+  }
+  return <div style={rowStyle}>{content}</div>;
 }

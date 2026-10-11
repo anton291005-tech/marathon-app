@@ -33,7 +33,7 @@ export async function deleteAccountViaApi(): Promise<void> {
     throw new Error(
       typeof body.error === "string" && body.error.trim()
         ? body.error
-        : "Account konnte nicht gelöscht werden",
+        : "Konto konnte nicht gelöscht werden",
     );
   }
 }

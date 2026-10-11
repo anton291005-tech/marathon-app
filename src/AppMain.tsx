@@ -74,22 +74,32 @@ import {
 import { linkPrepRecapToPlan, loadPrepRecaps } from "./lib/supabase/services/prepRecapService";
 import RaceCalculator from "./components/RaceCalculator";
 import {
+  APP_VERSION,
   LANGUAGE_SELECTION_ENABLED,
+  PRIVACY_POLICY_URL,
+  SETTINGS_DESTRUCTIVE_COLOR,
   SETTINGS_NAV_ROOT,
   SETTINGS_PAGE_TITLES,
+  SettingsDataUsagePage,
   SettingsDetailPage,
   SettingsGroup,
   SettingsPageFrame,
   SettingsRow,
   SettingsSectionList,
+  buildBugReportMailto,
+  buildDataExportMailto,
+  buildFeedbackMailto,
   buildSettingsGoalLine,
   currentSettingsPage,
   isSettingsDetailOpen,
+  runAccountDeletion,
+  runSignOut,
   settingsBackLabel,
   settingsNavReducer,
 } from "./features/settings";
 import SurfaceCard from "./components/SurfaceCard";
 import { AccountDeleteDialog } from "./components/AccountDeleteDialog";
+import { cancelAllPendingNotifications } from "./services/notificationService";
 import { Onboarding } from "./components/Onboarding";
 import { AppTour, hasSeenTour, markTourSeen } from "./components/AppTour";
 import {
@@ -1198,7 +1208,7 @@ function marathonLogRecordsDiffSyncKeys(prev, next) {
 }
 
 export default function AppMain(){
-  const { user, signOut } = useAuth();
+  const { user, signOut, resetPassword } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage, languageLabels } = useLanguage();
   const { settings: notificationSettings, updateSettings: updateNotificationSettings } = useNotifications();
@@ -1217,7 +1227,9 @@ export default function AppMain(){
       clearTimeout(t);
     };
   }, [user]);
-  const [accountDeleteStep, setAccountDeleteStep] = useState<0 | 1 | 2>(0);
+  const [accountDeleteOpen, setAccountDeleteOpen] = useState(false);
+  /** „Passwort zurücksetzen" in den Einstellungen: Rückmeldung unter der Konto-Gruppe. */
+  const [passwordResetState, setPasswordResetState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [accountDeleteBusy, setAccountDeleteBusy] = useState(false);
   const [accountDeleteError, setAccountDeleteError] = useState<string | null>(null);
   beginAppFrame();
@@ -3410,6 +3422,18 @@ export default function AppMain(){
   );
 
   const homeTabLabel = getHomeTabLabel(homeRunSession, isPreStart);
+  /** Ziel-Zeile der Profilkarte: Renntag und Distanz aus dem aktiven Plan, Ziel nur aus SEINEN Preferences. */
+  const settingsGoalLine = () => {
+    const race = prepCompleted ? null : findGoalRaceSession(displayPlan);
+    const ownerPlanId = planPreferencesStoreRef.current?.ownerPlanId ?? null;
+    return buildSettingsGoalLine({
+      raceYmd: race?.ymd ?? null,
+      todayYmd: getAppCalendarYmd(appNow),
+      planRaceDistanceKm: race ? resolveRaceDistanceKm(race.session, null) : null,
+      preferences,
+      preferencesOwned: ownerPlanId != null ? ownerPlanId === activePlanId : activePlanDescribesPreferences,
+    });
+  };
   /** Wert der Zeile „Verbindungen" (nur iOS): wie viele der drei Verbindungen stehen. */
   const settingsConnectionsSummary = () => {
     const connected = [
@@ -3566,27 +3590,53 @@ export default function AppMain(){
   );
   const handleAccountDeleteCancel = useCallback(() => {
     if (accountDeleteBusy) return;
-    setAccountDeleteStep(0);
+    setAccountDeleteOpen(false);
     setAccountDeleteError(null);
   }, [accountDeleteBusy]);
 
-  const handleAccountDeleteConfirmFinal = useCallback(async () => {
+  /** Abmelden/Konto löschen: Erinnerung ausschalten (Zustand + Speicher) und alles Ausstehende abbestellen. */
+  const cancelRemindersForSessionEnd = async () => {
+    await updateNotificationSettings({ enabled: false });
+    await cancelAllPendingNotifications();
+  };
+
+  const handleSignOut = () =>
+    runSignOut({
+      cancelReminders: cancelRemindersForSessionEnd,
+      clearLocalData: clearMarathonLocalStorage,
+      signOut,
+    });
+
+  /** Reihenfolge und Fehlerpfad (kein Abmelden bei Fehler) stecken in `runAccountDeletion`. */
+  const handleAccountDeleteConfirmFinal = async () => {
     if (accountDeleteBusy || !user?.id) return;
     setAccountDeleteBusy(true);
     setAccountDeleteError(null);
     try {
-      await deleteAccountViaApi();
-      clearMarathonLocalStorage();
-      setAccountDeleteStep(0);
-      await signOut();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Account konnte nicht gelöscht werden";
-      setAccountDeleteError(msg);
-      try { await signOut(); } catch { /* ignore */ }
+      const result = await runAccountDeletion({
+        deleteAccount: deleteAccountViaApi,
+        cancelReminders: cancelRemindersForSessionEnd,
+        clearLocalData: clearMarathonLocalStorage,
+        signOut,
+      });
+      if (result.ok) setAccountDeleteOpen(false);
+      else setAccountDeleteError(result.message);
     } finally {
       setAccountDeleteBusy(false);
     }
-  }, [accountDeleteBusy, user?.id, signOut]);
+  };
+
+  const handlePasswordReset = async () => {
+    const email = user?.email;
+    if (!email || passwordResetState === "sending") return;
+    setPasswordResetState("sending");
+    try {
+      const { error } = await resetPassword(email);
+      setPasswordResetState(error ? "error" : "sent");
+    } catch {
+      setPasswordResetState("error");
+    }
+  };
 
   const handleOnboardingComplete = useCallback(
     async (patch, plan, patches, planName?: string) => {
@@ -5552,13 +5602,7 @@ export default function AppMain(){
             <SettingsSectionList
               title={t("settings.title")}
               email={user?.email ?? null}
-              goalLine={buildSettingsGoalLine({
-                raceYmd: prepCompleted ? null : findGoalRaceSession(displayPlan)?.ymd ?? null,
-                todayYmd: getAppCalendarYmd(appNow),
-                distanceLabel: preferences.raceDistanceLabel,
-                raceGoal: preferences.raceGoal,
-                targetTime: preferences.targetTime,
-              })}
+              goalLine={settingsGoalLine()}
               values={{
                 profile:
                   preferences.maxHeartRateBpm != null && Number.isFinite(preferences.maxHeartRateBpm)
@@ -5668,7 +5712,7 @@ export default function AppMain(){
               inputMode="text"
               value={preferences.targetTime}
               onChange={(e)=>setPreferences((prev)=>({...prev,targetTime:e.target.value}))}
-              placeholder="2:49:50"
+              placeholder="z. B. 2:49:50"
               style={{width:"100%",background:"var(--bg-primary)",border:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "1px solid rgba(56,189,248,0.5)" : "1px solid var(--border-input)",borderRadius:12,padding:"11px 12px",color:"var(--text-primary)",fontSize:16,boxSizing:"border-box",marginBottom:6,boxShadow:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "0 0 0 2px rgba(56,189,248,0.2)" : "none"}}
             />
             <div style={{fontSize:11,color:"var(--text-muted)"}}>Format: hh:mm:ss — dein angestrebtes Rennziel für den Plan.</div>
@@ -6455,83 +6499,75 @@ export default function AppMain(){
                 </SettingsGroup>
               ) : settingsPage === "privacy" ? (
                 <>
-          <a
-            href="https://marathon-app-alpha.vercel.app/privacy-policy"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              marginTop: 8,
-              width: "100%",
-              padding: "13px 16px",
-              fontSize: 14,
-              fontWeight: 700,
-              borderRadius: 12,
-              cursor: "pointer",
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-input)",
-              color: "var(--text-primary)",
-              display: "block",
-              textAlign: "center",
-              textDecoration: "none",
-              boxSizing: "border-box",
-            }}
-          >
-            {t("settings.privacy_policy")}
-          </a>
+                  <SettingsGroup>
+                    <SettingsRow label={t("settings.privacy_policy")} href={PRIVACY_POLICY_URL} external />
+                    <SettingsRow label="Welche Daten MyRace nutzt" onClick={() => openSettingsPage("dataUsage")} />
+                    <SettingsRow label="Datenexport anfordern" href={buildDataExportMailto({ accountEmail: user?.email })} />
+                  </SettingsGroup>
                   <SettingsGroup title="Backup" padded>
                     <BackupControls logs={storedLogs} onImportSuccess={handleBackupLogsImport} />
                   </SettingsGroup>
                 </>
+              ) : settingsPage === "dataUsage" ? (
+                <SettingsDataUsagePage />
               ) : (
                 <>
-          <button
-            type="button"
-            onClick={() => {
-              clearMarathonLocalStorage();
-              void signOut();
-            }}
-            style={{
-              marginTop: 8,
-              width: "100%",
-              padding: "13px 16px",
-              fontSize: 14,
-              fontWeight: 700,
-              borderRadius: 12,
-              cursor: "pointer",
-              background: "var(--bg-surface)",
-              border: "1px solid var(--border-input)",
-              color: "var(--text-primary)",
-            }}
-          >
-            {t("settings.logout")}
-          </button>
-
-          {user?.id ? (
-            <button
-              type="button"
-              disabled={accountDeleteBusy}
-              onClick={() => {
-                setAccountDeleteError(null);
-                setAccountDeleteStep(1);
-              }}
-              style={{
-                marginTop: 10,
-                marginBottom: 8,
-                width: "100%",
-                padding: "13px 16px",
-                fontSize: 14,
-                fontWeight: 700,
-                borderRadius: 12,
-                cursor: accountDeleteBusy ? "not-allowed" : "pointer",
-                opacity: accountDeleteBusy ? 0.6 : 1,
-                background: "rgba(220, 38, 38, 0.14)",
-                border: "1px solid rgba(220, 38, 38, 0.45)",
-                color: "#f87171",
-              }}
-            >
-              {t("settings.delete_account")}
-            </button>
-          ) : null}
+                  <SettingsGroup
+                    title="Konto"
+                    footer={
+                      passwordResetState === "sent"
+                        ? `Mail gesendet an ${user?.email}. Der Link zum Zurücksetzen ist unterwegs.`
+                        : passwordResetState === "error"
+                          ? "Mail konnte nicht gesendet werden. Bitte später erneut versuchen."
+                          : undefined
+                    }
+                  >
+                    <SettingsRow label="E-Mail" value={user?.email ?? "–"} />
+                    <SettingsRow
+                      label="Passwort zurücksetzen"
+                      value={passwordResetState === "sending" ? "Sende …" : null}
+                      onClick={() => void handlePasswordReset()}
+                      chevron={false}
+                      disabled={!user?.email || passwordResetState === "sending"}
+                    />
+                    <SettingsRow label={t("settings.logout")} onClick={() => void handleSignOut()} chevron={false} />
+                  </SettingsGroup>
+                  <SettingsGroup title="Hilfe">
+                    <SettingsRow
+                      label="Hilfe & Feedback"
+                      href={buildFeedbackMailto({ appVersion: APP_VERSION, userAgent: navigator.userAgent })}
+                    />
+                    <SettingsRow
+                      label="Fehler melden"
+                      href={buildBugReportMailto({ appVersion: APP_VERSION, userAgent: navigator.userAgent })}
+                    />
+                  </SettingsGroup>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,paddingBottom:8}}>
+                    <div style={{fontSize:13,color:"var(--text-muted)"}}>Version {APP_VERSION}</div>
+                    {user?.id ? (
+                      <button
+                        type="button"
+                        disabled={accountDeleteBusy}
+                        onClick={() => {
+                          setAccountDeleteError(null);
+                          setAccountDeleteOpen(true);
+                        }}
+                        style={{
+                          minHeight: 44,
+                          padding: "0 16px",
+                          background: "transparent",
+                          border: "none",
+                          font: "inherit",
+                          fontSize: 16,
+                          color: SETTINGS_DESTRUCTIVE_COLOR,
+                          cursor: accountDeleteBusy ? "not-allowed" : "pointer",
+                          opacity: accountDeleteBusy ? 0.6 : 1,
+                        }}
+                      >
+                        {t("settings.delete_account")}
+                      </button>
+                    ) : null}
+                  </div>
                 </>
               )}
             </SettingsDetailPage>
@@ -6876,16 +6912,11 @@ export default function AppMain(){
         </Suspense>
       ) : null}
 
-      {accountDeleteStep > 0 ? (
+      {accountDeleteOpen ? (
         <AccountDeleteDialog
-          step={accountDeleteStep}
           busy={accountDeleteBusy}
           error={accountDeleteError}
           onCancel={handleAccountDeleteCancel}
-          onContinue={() => {
-            setAccountDeleteError(null);
-            setAccountDeleteStep(2);
-          }}
           onConfirmDelete={() => void handleAccountDeleteConfirmFinal()}
         />
       ) : null}

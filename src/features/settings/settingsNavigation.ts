@@ -11,6 +11,7 @@ export type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number];
 /** Unterseite → Bereich, zu dem „Zurück" führt. */
 export const SETTINGS_SUBPAGE_PARENT = {
   healthAssignment: "connections",
+  dataUsage: "privacy",
   raceCalculator: "app",
   share: "app",
 } as const;
@@ -28,6 +29,7 @@ export const SETTINGS_PAGE_TITLES: Record<SettingsPageId, string> = {
   healthAssignment: "Aktivitäten zuordnen",
   raceCalculator: "Race Calculator",
   share: "Teilen",
+  dataUsage: "Datennutzung",
 };
 
 export type SettingsNavState = {

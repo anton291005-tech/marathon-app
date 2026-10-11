@@ -1,7 +1,17 @@
 export { SettingsDetailPage, SettingsPageFrame } from "./SettingsDetailPage";
-export { SettingsGroup, SettingsRow, SETTINGS_ROW_MIN_HEIGHT_PX } from "./SettingsList";
+export { SettingsDataUsagePage } from "./SettingsDataUsagePage";
+export { SettingsGroup, SettingsRow, SETTINGS_DESTRUCTIVE_COLOR, SETTINGS_ROW_MIN_HEIGHT_PX } from "./SettingsList";
 export { SettingsProfileCard } from "./SettingsProfileCard";
 export { SettingsSectionList } from "./SettingsSectionList";
+export { runAccountDeletion, runSignOut } from "./accountActions";
+export {
+  APP_VERSION,
+  PRIVACY_POLICY_URL,
+  SUPPORT_EMAIL,
+  buildBugReportMailto,
+  buildDataExportMailto,
+  buildFeedbackMailto,
+} from "./appInfo";
 export { LANGUAGE_SELECTION_ENABLED } from "./settingsFlags";
 export { buildSettingsGoalLine } from "./settingsGoalLine";
 export {
