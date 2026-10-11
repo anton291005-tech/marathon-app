@@ -29,6 +29,7 @@ function fillStepsOneToThree(skipPreferencesViaLink: boolean) {
   fireEvent.click(screen.getByRole("button", { name: "Weiter" }));
 
   fireEvent.click(screen.getByRole("button", { name: "0–20 km" }));
+  fireEvent.change(screen.getByLabelText("Wann ist dein Rennen?"), { target: { value: "01.01.2099" } });
   fireEvent.click(screen.getByRole("button", { name: "Weiter" }));
 
   if (skipPreferencesViaLink) {

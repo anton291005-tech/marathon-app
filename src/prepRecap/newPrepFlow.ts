@@ -80,10 +80,12 @@ export async function completeNewPrep(args: {
 }
 
 /**
- * Abschluss des Wizards (handleOnboardingComplete). Bei gesetztem Merker ZUERST remote archivieren
- * und den neuen Plan anlegen — erst danach lokal umstellen (Preferences ersetzen, Logs kürzen).
+ * Abschluss des Wizards (handleOnboardingComplete). ZUERST remote: bei gesetztem Merker archivieren
+ * und den neuen Plan anlegen, sonst (normaler neuer Plan, angemeldet) nur anlegen — erst danach lokal
+ * umstellen (Preferences ersetzen, Patches löschen, Logs kürzen).
  * Scheitert der Remote-Teil oder ist der neue Plan unbrauchbar, wirft die Funktion, BEVOR
  * `applyLocally` läuft: der Wizard zeigt den Fehler, lokal bleibt alles unverändert.
+ * Ohne Anmeldung und ohne Merker gibt es keinen Remote-Teil (`savedRemotely: false`).
  */
 export async function runOnboardingCompletion<P>(args: {
   newPrepPending: boolean;
@@ -96,13 +98,17 @@ export async function runOnboardingCompletion<P>(args: {
   insertNewPlan: (userId: string, plan: P) => Promise<void>;
   applyLocally: (opts: { savedRemotely: boolean }) => Promise<void>;
 }): Promise<void> {
+  const { userId, plan } = args;
+  if (plan == null || !args.isPlanUsable(plan)) {
+    throw new Error("[onboarding] neuer Plan fehlt oder ist ungültig — nichts verändert, nichts archiviert");
+  }
   if (!args.newPrepPending) {
-    await args.applyLocally({ savedRemotely: false });
+    if (userId) await args.insertNewPlan(userId, plan);
+    await args.applyLocally({ savedRemotely: userId != null });
     return;
   }
-  const { userId, plan } = args;
-  if (!userId || plan == null || !args.isPlanUsable(plan)) {
-    throw new Error("[newPrep] neuer Plan ungültig oder nicht angemeldet — nichts archiviert");
+  if (!userId) {
+    throw new Error("[newPrep] nicht angemeldet — nichts archiviert");
   }
   await args.completeNewPrep(() => args.insertNewPlan(userId, plan));
   await args.applyLocally({ savedRemotely: true });

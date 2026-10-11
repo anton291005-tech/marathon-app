@@ -3648,18 +3648,20 @@ export default function AppMain(){
         planName?.trim() ||
         [patch?.raceDistanceLabel ?? "Marathon", patch?.raceName, patch?.raceDate].filter(Boolean).join(" – ");
 
-      // „Neue Vorbereitung starten": ZUERST remote alten Plan archivieren und neuen anlegen, erst dann
-      // lokal umstellen (Preferences ersetzen, Logs kürzen). Scheitert das, wirft der Handler: der
-      // Wizard zeigt den Fehler (erneut versuchen / abbrechen), lokal und remote bleibt alles beim Alten.
+      // ZUERST remote: neuen Plan anlegen („Neue Vorbereitung starten": davor den alten archivieren), erst
+      // dann lokal umstellen (Preferences ersetzen, Patches löschen, Logs kürzen). Fehlt der Plan oder
+      // scheitert das Speichern, wirft der Handler: der Wizard zeigt den Fehler (erneut versuchen /
+      // abbrechen), lokal und remote bleibt alles beim Alten.
+      const newPrepPending = newPrepPendingRef.current != null;
       await runOnboardingCompletion({
-        newPrepPending: newPrepPendingRef.current != null,
+        newPrepPending,
         userId: user?.id ?? null,
         plan: plan ? normalizeTrainingPlan(plan) : null,
         isPlanUsable: (p) => validateTrainingPlanV2Integrity(p) && p.workouts.length > 0,
         completeNewPrep,
         insertNewPlan: (userId, p) => saveTrainingPlan(userId, p, planLabel || "Neue Vorbereitung"),
-        applyLocally: async ({ savedRemotely }) => {
-          if (savedRemotely) void refreshArchivedPreps();
+        applyLocally: async () => {
+          if (newPrepPending) void refreshArchivedPreps();
           try {
             setOnboardingForNewPlan(false);
             skipRemotePlanHydrationRef.current = true;
@@ -3711,9 +3713,6 @@ export default function AppMain(){
                 setTrainingPlanV2(normalizedPlan);
                 setHasUserTrainingPlan(true);
                 if (user?.id) {
-                  if (!savedRemotely) {
-                    await saveTrainingPlan(user.id, normalizedPlan, planLabel || undefined);
-                  }
                   const plansAfterSave = await loadAllTrainingPlans(user.id);
                   setAllTrainingPlans(plansAfterSave);
                   const newPlanId = plansAfterSave.find((item) => item.is_active)?.id ?? null;

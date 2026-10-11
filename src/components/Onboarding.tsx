@@ -170,6 +170,8 @@ export type OnboardingProps = {
   onCancel?: () => void;
 };
 
+const PLAN_GENERATION_FAILED_MESSAGE = "Plan konnte nicht erstellt werden. Bitte versuche es erneut.";
+
 export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingProps) {
   const { t } = useTranslation();
   const [step, setStep] = useState<OnboardingStep>(1);
@@ -224,8 +226,9 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
     );
   }, [planStartChoice, planStartCustomDate]);
 
+  // Pflichtfeld: ohne Renndatum gibt es keine Plan-Erzeugung (handleFinish braucht Start und Ziel).
   const raceDateError = useMemo(() => {
-    if (!raceDate.trim()) return "";
+    if (!raceDate.trim()) return "Bitte Renndatum eingeben.";
     const start = planStartResolved.date ?? startOfLocalDay(getAppNow());
     const err = validateMaskedDateInput(raceDate, {
       minDate: start,
@@ -243,7 +246,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
     (planStartChoice !== "custom" ||
       (planStartResolved.date != null && !planStartDateError)) &&
     !raceDateError &&
-    (raceDate.trim().length === 0 || isCompleteMaskedDate(raceDate));
+    isCompleteMaskedDate(raceDate);
 
   const summaryPayload = useMemo((): OnboardingSubmitPayload | null => {
     if (!distance || !weeklyKmRange.trim()) return null;
@@ -487,6 +490,15 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
         }
       }
 
+      // Ohne Plan nie abschließen: onComplete würde Preferences ersetzen und Patches löschen.
+      if (!plan) {
+        // eslint-disable-next-line no-console
+        console.error("[Onboarding] kein Plan erzeugt — Wizard bleibt offen");
+        setGenerateError(PLAN_GENERATION_FAILED_MESSAGE);
+        setPlanGenPhase("error");
+        return;
+      }
+
       const planName = [
         summaryPayload.raceDistanceLabel ?? "Marathon",
         summaryPayload.raceName,
@@ -507,7 +519,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[Onboarding] ERROR in handleFinish:", err);
-      setGenerateError("Plan konnte nicht erstellt werden. Bitte versuche es erneut.");
+      setGenerateError(PLAN_GENERATION_FAILED_MESSAGE);
       setPlanGenPhase("error");
     }
   }, [summaryPayload, isGenerating, onComplete, userPreferences]);
@@ -676,7 +688,6 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
               onChange={setRaceDate}
               minDate={planStartResolved.date ?? startOfLocalDay(getAppNow())}
               strictAfterMin
-              optional
               error={raceDateError}
               style={{ marginBottom: 0 }}
             />
