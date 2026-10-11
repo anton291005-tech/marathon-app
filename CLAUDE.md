@@ -79,7 +79,10 @@ Test-Device: iPhone 13 (nie Simulator für device-kritische Fixes)
 - Privacy Policy Link ist im App-Store-Review-Flow eingebunden
 
 ### Post-TestFlight (jetzt NICHT anfassen, nur zur Info)
-Garmin-Integration, Samsung/Android, kompletter UI/UX-Umbau, Settings-Umbau auf Runna/Strava-Niveau, Triathlon-Erweiterung, Apple-Watch-Companion.
+Garmin-Integration, Samsung/Android, kompletter UI/UX-Umbau, Settings-Umbau Schritte 4–7 (i18n/Systemsprache, Profil/HF-Zonen, Benachrichtigungen-Seite, Verbindungen-Zeilen), Triathlon-Erweiterung, Apple-Watch-Companion.
+
+### Settings-Umbau (Branch `feat/settings-redesign`)
+Schritte 1–3 sind vor TestFlight freigegeben: 1) Gerüst (Profilkarte, 6 Bereiche, Detailseiten), 2) Konto & Hilfe + Datenschutz & Daten, 3) Werkzeuge raus (Race Calculator, Teilen, Backup-Import, Debug-Buttons, Dark-Mode-Schalter). Schritte 4–7 folgen danach. Eigene Folge-Branches, nicht hier: vollständiger Datenexport, Trainingswoche bearbeiten, HF-Zonen überschreiben, KI-Einwilligung (`feat/ai-consent`).
 
 ## Workflow (Pflicht)
 - Diagnose-first (keine Code-Änderung ohne vorherige Diagnose) → Fix-Vorschlag → `CI=false npm run build` → erst dann committen.

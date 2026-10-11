@@ -200,6 +200,8 @@ Während der Recherche zu Schritt 6/8 als unbenutzt identifiziert — noch nicht
 ## Out of Scope bis TestFlight
 UI/UX-Redesign, Triathlon-Erweiterung, Android, Apple-Watch-Companion — nicht anfassen, auch nicht "nebenbei".
 
+**Ausnahme (von Anton freigegeben am 2026-10-11): Settings-Umbau, Schritte 1–3** auf `feat/settings-redesign` — 1) Gerüst: Profilkarte, sechs Bereiche (Profil, Training, Verbindungen, App, Datenschutz & Daten, Konto & Hilfe), Detailseiten mit Zurück, bestehende Inhalte nur umgehängt; 2) Konto & Hilfe + Datenschutz & Daten; 3) Werkzeuge raus (Race Calculator → Leistung, Teilen → Übersicht, Backup-Import, Debug-Buttons, Dark-Mode-Schalter). Schritte 4–7 (i18n/Systemsprache, Profil/HF-Zonen, Benachrichtigungen-Seite, Verbindungen-Zeilen) bleiben Post-TestFlight. Eigene Folge-Branches: vollständiger Datenexport, Trainingswoche bearbeiten, HF-Zonen überschreiben, KI-Einwilligung (`feat/ai-consent`). Bis Schritt 4 ist die Sprachzeile ausgeblendet und die App läuft fest auf Deutsch (`features/settings/settingsFlags.ts`).
+
 ## Datei-Anker (Referenz für Claude Code)
 - `assignSessionToBestCapacityDay.ts` (`src/ai/mutations/`) — Session Assignment Engine für Schritt 4, N-Kandidaten-Auswahl; **nicht** dasselbe wie der Chat-Swap (`AiCoachPanel`/`handleSwapWorkoutsV2`/`trySwapWorkoutDatesInPlan`)
 - `claudePlanGenerator.js` / `claudePlanService.ts` — Plan-Gen, Option A phasiert (Haiku-Phasenaufrufe + Sonnet für Struktur)

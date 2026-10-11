@@ -4,8 +4,10 @@ import de from "./locales/de.json";
 import en from "./locales/en.json";
 import fr from "./locales/fr.json";
 import es from "./locales/es.json";
+import { LANGUAGE_SELECTION_ENABLED } from "./features/settings/settingsFlags";
 
-const savedLang = localStorage.getItem("myrace-language") ?? "de";
+// Solange die Sprachwahl ausgeblendet ist, läuft die App fest auf Deutsch (gespeicherte Wahl bleibt erhalten).
+const savedLang = LANGUAGE_SELECTION_ENABLED ? localStorage.getItem("myrace-language") ?? "de" : "de";
 
 i18n
   .use(initReactI18next)

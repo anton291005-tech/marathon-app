@@ -22,7 +22,7 @@
  * in Inline-Handlern und älteren UI-Helfern). Reduktion nur **schrittweise** über echte Parameter-/Rückgabetypen oder
  * punktuelle `@ts-expect-error` auf einzelnen Zeilen — nicht durch globales Aufweichen von Domain-Typen.
  */
-import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useLayoutEffect, useReducer, useRef, useMemo, useCallback, lazy, Suspense } from "react";
 import RecoveryVerlaufCard from "./components/RecoveryVerlaufCard";
 import BackupControls from "./BackupControls";
 import { Capacitor } from "@capacitor/core";
@@ -73,6 +73,21 @@ import {
 } from "./prepRecap/prepRecapRecord";
 import { linkPrepRecapToPlan, loadPrepRecaps } from "./lib/supabase/services/prepRecapService";
 import RaceCalculator from "./components/RaceCalculator";
+import {
+  LANGUAGE_SELECTION_ENABLED,
+  SETTINGS_NAV_ROOT,
+  SETTINGS_PAGE_TITLES,
+  SettingsDetailPage,
+  SettingsGroup,
+  SettingsPageFrame,
+  SettingsRow,
+  SettingsSectionList,
+  buildSettingsGoalLine,
+  currentSettingsPage,
+  isSettingsDetailOpen,
+  settingsBackLabel,
+  settingsNavReducer,
+} from "./features/settings";
 import SurfaceCard from "./components/SurfaceCard";
 import { AccountDeleteDialog } from "./components/AccountDeleteDialog";
 import { Onboarding } from "./components/Onboarding";
@@ -1085,89 +1100,6 @@ function DetailBlock({ title, children }){
   );
 }
 
-/** Collapsible settings card — consistent style, full-header tap target, smooth CSS transition. */
-function CollapsibleSettingsCard({ title, subtitle, expanded, onToggle, children }) {
-  return (
-    <div
-      style={{
-        background: "var(--bg-card)",
-        borderRadius: 20,
-        border: "1px solid var(--border-default)",
-        overflow: "hidden",
-        flexShrink: 0,
-      }}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "14px 16px",
-          background: "transparent",
-          border: "none",
-          cursor: "pointer",
-          minHeight: 54,
-          textAlign: "left",
-          boxSizing: "border-box",
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1.2 }}>{title}</div>
-          {subtitle ? (
-            <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2, lineHeight: 1.3 }}>{subtitle}</div>
-          ) : null}
-        </div>
-        <span
-          style={{
-            color: "#7dd3fc",
-            fontSize: 11,
-            flexShrink: 0,
-            marginLeft: 10,
-            transition: "transform 0.25s ease",
-            display: "inline-block",
-            transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
-          }}
-        >
-          ▼
-        </span>
-      </button>
-      <div
-        style={{
-          overflow: "hidden",
-          maxHeight: expanded ? "3200px" : "0px",
-          transition: "max-height 0.35s ease",
-        }}
-      >
-        <div style={{ padding: "0 16px 16px", borderTop: "1px solid var(--border-default)" }}>
-          {children}
-          <button
-            type="button"
-            onClick={onToggle}
-            style={{
-              marginTop: 16,
-              background: "transparent",
-              border: "none",
-              color: "var(--text-muted)",
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: "pointer",
-              padding: "4px 0",
-              display: "block",
-              width: "100%",
-              textAlign: "center",
-            }}
-          >
-            Weniger anzeigen
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** Rückblick im Session-Modal: nachgeladener Puls wird nur angezeigt, nie ins Log geschrieben. */
 function noopPersistWorkoutHeartRate() {}
 
@@ -1377,17 +1309,15 @@ export default function AppMain(){
   const logsRef = useRef(logs);
   logsRef.current = logs;
   const [onboardingForNewPlan, setOnboardingForNewPlan] = useState(false);
-  const [settingsCards, setSettingsCards] = useState({
-    einstellungen: false,
-    trainingPlans: false,
-    teilen: false,
-    appleHealth: false,
-    strava: false,
-    calendar: false,
-    raceCalc: false,
-    backup: false,
-  });
-  const toggleSettingsCard = (key) => setSettingsCards(prev => ({ ...prev, [key]: !prev[key] }));
+  /** Einstellungen: Wurzel (Profilkarte + Bereiche) oder eine Detailseite — siehe `features/settings/settingsNavigation`. */
+  const [settingsNav, dispatchSettingsNav] = useReducer(settingsNavReducer, SETTINGS_NAV_ROOT);
+  const settingsPage = currentSettingsPage(settingsNav);
+  const openSettingsPage = (page) => dispatchSettingsNav({ type: "open", page });
+  const closeSettingsPage = () => dispatchSettingsNav({ type: "back" });
+  useEffect(() => {
+    // Wer den Tab verlässt, findet ihn beim Zurückkommen auf der Wurzel.
+    if (view !== "settings") dispatchSettingsNav({ type: "reset" });
+  }, [view]);
   const [aiChatMessages, setAiChatMessages] = useAiCoachChatMessagesState();
   const [preferences,setPreferences]=useState(() => readStoredJson(MARATHON_PREFERENCES_KEY, {}));
   const preferencesRef = useRef(preferences);
@@ -2379,6 +2309,11 @@ export default function AppMain(){
     const now = getAppNowEpochMs();
     if(now - lastSwipeAtRef.current < 420)return;
     lastSwipeAtRef.current = now;
+    // Offene Einstellungs-Detailseite: kein Tab-Wechsel, Wisch nach rechts = zurück.
+    if(view === "settings" && isSettingsDetailOpen(settingsNav)){
+      if(direction < 0)dispatchSettingsNav({ type: "back" });
+      return;
+    }
     stepView(direction);
   };
 
@@ -2752,6 +2687,10 @@ export default function AppMain(){
       }
     }
     navigateToView(targetScreen);
+    if(targetScreen === "settings"){
+      // Die Zielzeit liegt unter „Training"; jeder andere Sprung landet auf der Wurzel.
+      dispatchSettingsNav(section === "race_goal" ? { type: "open", page: "training" } : { type: "reset" });
+    }
   };
 
   const handleSwapWorkoutsV2 = (sourceId: string, targetId: string, _overrideAccepted?: boolean) => {
@@ -3471,6 +3410,15 @@ export default function AppMain(){
   );
 
   const homeTabLabel = getHomeTabLabel(homeRunSession, isPreStart);
+  /** Wert der Zeile „Verbindungen" (nur iOS): wie viele der drei Verbindungen stehen. */
+  const settingsConnectionsSummary = () => {
+    const connected = [
+      isHealthConnected,
+      stravaConnected === true,
+      computeCalendarConnectionDisplay(calendarPermission ?? "unavailable", calendarConnectedFlag).badge === "connected",
+    ].filter(Boolean).length;
+    return connected > 0 ? `${connected} verbunden` : "Nicht verbunden";
+  };
   const shareSummary = getShareSummary({ pct: prepProgressPct, week: w, nextKeySession, recoveryState, consistencyStats });
   const viewTransitionStyle = viewMotionDir === 0
     ? {}
@@ -5599,172 +5547,36 @@ export default function AppMain(){
           </div>
         </div>
       ):activeView==="settings"?(
-        <div style={{padding:"16px 16px 40px",display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flex:1,minHeight:0,...viewTransitionStyle}}>
-          <CollapsibleSettingsCard
-            title={t("settings.title")}
-            subtitle="Zielzeit, Marathon-PR, Herzfrequenz"
-            expanded={settingsCards.einstellungen}
-            onToggle={() => toggleSettingsCard("einstellungen")}
-          >
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "16px 0",
-              borderBottom: "1px solid var(--border-default)",
-              marginTop: 12,
-            }}>
-              <div>
-                <div style={{ color: "var(--text-primary)", fontWeight: 500 }}>{t("settings.appearance")}</div>
-                <div style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 2 }}>
-                  {theme === "dark" ? t("settings.appearance_dark") : t("settings.appearance_light")}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={toggleTheme}
-                aria-label={theme === "dark" ? t("settings.appearance_light") : t("settings.appearance_dark")}
-                style={{
-                  width: 52,
-                  height: 30,
-                  borderRadius: 15,
-                  border: "none",
-                  background: theme === "dark" ? "#60a5fa" : "#cbd5e1",
-                  position: "relative",
-                  cursor: "pointer",
-                  transition: "background 0.2s",
-                }}
-              >
-                <div style={{
-                  position: "absolute",
-                  top: 3,
-                  left: theme === "dark" ? 24 : 3,
-                  width: 24,
-                  height: 24,
-                  borderRadius: "50%",
-                  background: "#fff",
-                  transition: "left 0.2s",
-                }} />
-              </button>
-            </div>
-            <div style={{ padding: "16px 0", borderBottom: "1px solid var(--border-default)" }}>
-              <div style={{ color: "var(--text-primary)", fontWeight: 500, marginBottom: 10 }}>
-                {t("settings.language")}
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {(["de", "en", "fr", "es"] as const).map((lang) => (
-                  <button
-                    key={lang}
-                    type="button"
-                    onClick={() => setLanguage(lang)}
-                    style={{
-                      padding: "8px 16px",
-                      borderRadius: 10,
-                      border: `1px solid ${language === lang ? "#3b82f6" : "var(--border-default)"}`,
-                      background: language === lang ? "rgba(59,130,246,0.15)" : "var(--bg-card)",
-                      color: language === lang ? "#60a5fa" : "var(--text-secondary)",
-                      fontWeight: language === lang ? 600 : 400,
-                      fontSize: 14,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {languageLabels[lang]}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div style={{ padding: "16px 0", borderBottom: "1px solid var(--border-default)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: notificationSettings.enabled ? 14 : 0 }}>
-                <div>
-                  <div style={{ color: "var(--text-primary)", fontWeight: 500 }}>Trainings-Erinnerung</div>
-                  <div style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 2 }}>
-                    {notificationSettings.enabled
-                      ? `Täglich um ${String(notificationSettings.hour).padStart(2, "0")}:${String(notificationSettings.minute).padStart(2, "0")} Uhr`
-                      : "Deaktiviert"}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => updateNotificationSettings({ enabled: !notificationSettings.enabled })}
-                  aria-label={notificationSettings.enabled ? "Trainings-Erinnerung deaktivieren" : "Trainings-Erinnerung aktivieren"}
-                  style={{
-                    width: 52,
-                    height: 30,
-                    borderRadius: 15,
-                    border: "none",
-                    background: notificationSettings.enabled ? "#3b82f6" : "var(--bg-surface)",
-                    position: "relative",
-                    cursor: "pointer",
-                    transition: "background 0.2s",
-                  }}
-                >
-                  <div style={{
-                    position: "absolute",
-                    top: 3,
-                    left: notificationSettings.enabled ? 24 : 3,
-                    width: 24,
-                    height: 24,
-                    borderRadius: "50%",
-                    background: "#fff",
-                    transition: "left 0.2s",
-                  }} />
-                </button>
-              </div>
-              {notificationSettings.enabled && (
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
-                  <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>Uhrzeit</div>
-                  <select
-                    value={notificationSettings.hour}
-                    onChange={(e) => updateNotificationSettings({ hour: Number(e.target.value) })}
-                    style={{
-                      background: "var(--bg-card)",
-                      color: "var(--text-primary)",
-                      border: "1px solid var(--border-default)",
-                      borderRadius: 8,
-                      padding: "6px 10px",
-                      fontSize: 14,
-                    }}
-                  >
-                    {Array.from({ length: 24 }, (_, i) => (
-                      <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>
-                    ))}
-                  </select>
-                  <select
-                    value={notificationSettings.minute}
-                    onChange={(e) => updateNotificationSettings({ minute: Number(e.target.value) })}
-                    style={{
-                      background: "var(--bg-card)",
-                      color: "var(--text-primary)",
-                      border: "1px solid var(--border-default)",
-                      borderRadius: 8,
-                      padding: "6px 10px",
-                      fontSize: 14,
-                    }}
-                  >
-                    {[0, 15, 30, 45].map((m) => (
-                      <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-            {aiNavHint?.screen === "settings" && (
-              <div style={{fontSize:11,color:"#7dd3fc",marginBottom:10,marginTop:12,background:"rgba(56,189,248,0.12)",border:"1px solid rgba(56,189,248,0.28)",borderRadius:10,padding:"8px 10px"}}>
-                AI Navigation: {aiNavHint.section === "race_goal" ? "Rennziel" : aiNavHint.section}
-              </div>
-            )}
-            <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6,marginTop:12}}>Zielzeit</div>
-            <input
-              type="text"
-              lang="de-DE"
-              inputMode="text"
-              value={preferences.targetTime}
-              onChange={(e)=>setPreferences((prev)=>({...prev,targetTime:e.target.value}))}
-              placeholder="2:49:50"
-              style={{width:"100%",background:"var(--bg-primary)",border:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "1px solid rgba(56,189,248,0.5)" : "1px solid var(--border-input)",borderRadius:12,padding:"11px 12px",color:"var(--text-primary)",fontSize:16,boxSizing:"border-box",marginBottom:6,boxShadow:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "0 0 0 2px rgba(56,189,248,0.2)" : "none"}}
+        <SettingsPageFrame pageKey={settingsPage ?? "root"} motion={settingsNav.motion} style={viewTransitionStyle}>
+          {settingsPage === null ? (
+            <SettingsSectionList
+              title={t("settings.title")}
+              email={user?.email ?? null}
+              goalLine={buildSettingsGoalLine({
+                raceYmd: prepCompleted ? null : findGoalRaceSession(displayPlan)?.ymd ?? null,
+                todayYmd: getAppCalendarYmd(appNow),
+                distanceLabel: preferences.raceDistanceLabel,
+                raceGoal: preferences.raceGoal,
+                targetTime: preferences.targetTime,
+              })}
+              values={{
+                profile:
+                  preferences.maxHeartRateBpm != null && Number.isFinite(preferences.maxHeartRateBpm)
+                    ? `${preferences.maxHeartRateBpm} bpm`
+                    : null,
+                training: `${allTrainingPlans.length}/${MAX_ACTIVE_PLANS} Pläne`,
+                connections: Capacitor.getPlatform() === "ios" ? settingsConnectionsSummary() : null,
+              }}
+              onOpen={openSettingsPage}
             />
-            <div style={{fontSize:11,color:"var(--text-muted)"}}>Format: hh:mm:ss — dein angestrebtes Rennziel für den Plan.</div>
-
+          ) : (
+            <SettingsDetailPage
+              title={SETTINGS_PAGE_TITLES[settingsPage]}
+              backLabel={settingsBackLabel(settingsNav, t("settings.title"))}
+              onBack={closeSettingsPage}
+            >
+              {settingsPage === "profile" ? (
+                <SettingsGroup padded>
             <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6,marginTop:14}}>
               Bisheriger Marathon-PR (optional)
             </div>
@@ -5840,14 +5652,28 @@ export default function AppMain(){
             <div style={{fontSize:11,color:"var(--text-muted)",lineHeight:1.45}}>
               Für konkrete Pulsbereiche, Trainingsziele und die Puls-Abweichung in „Plan vs. Ist“. Leer lassen, wenn unbekannt.
             </div>
-          </CollapsibleSettingsCard>
-
-          <CollapsibleSettingsCard
-            title="Meine Trainingspläne"
-            subtitle={`${allTrainingPlans.length}/${MAX_ACTIVE_PLANS} Pläne`}
-            expanded={settingsCards.trainingPlans}
-            onToggle={() => toggleSettingsCard("trainingPlans")}
-          >
+                </SettingsGroup>
+              ) : settingsPage === "training" ? (
+                <>
+                  <SettingsGroup title="Aktives Ziel" padded>
+            {aiNavHint?.screen === "settings" && (
+              <div style={{fontSize:11,color:"#7dd3fc",marginBottom:10,marginTop:12,background:"rgba(56,189,248,0.12)",border:"1px solid rgba(56,189,248,0.28)",borderRadius:10,padding:"8px 10px"}}>
+                AI Navigation: {aiNavHint.section === "race_goal" ? "Rennziel" : aiNavHint.section}
+              </div>
+            )}
+            <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:6,marginTop:12}}>Zielzeit</div>
+            <input
+              type="text"
+              lang="de-DE"
+              inputMode="text"
+              value={preferences.targetTime}
+              onChange={(e)=>setPreferences((prev)=>({...prev,targetTime:e.target.value}))}
+              placeholder="2:49:50"
+              style={{width:"100%",background:"var(--bg-primary)",border:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "1px solid rgba(56,189,248,0.5)" : "1px solid var(--border-input)",borderRadius:12,padding:"11px 12px",color:"var(--text-primary)",fontSize:16,boxSizing:"border-box",marginBottom:6,boxShadow:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "0 0 0 2px rgba(56,189,248,0.2)" : "none"}}
+            />
+            <div style={{fontSize:11,color:"var(--text-muted)"}}>Format: hh:mm:ss — dein angestrebtes Rennziel für den Plan.</div>
+                  </SettingsGroup>
+                  <SettingsGroup padded>
             <PlanSwitcher
               plans={allTrainingPlans}
               onSwitch={(planId) => void handleSwitchPlan(planId)}
@@ -5857,34 +5683,13 @@ export default function AppMain(){
               archivedPreps={archivedPrepItems}
               onOpenArchived={openArchivedPrepRecap}
             />
-          </CollapsibleSettingsCard>
-
-          <CollapsibleSettingsCard
-            title="Teilen"
-            subtitle="Trainingsübersicht exportieren"
-            expanded={settingsCards.teilen}
-            onToggle={() => toggleSettingsCard("teilen")}
-          >
-            <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.7,whiteSpace:"pre-line",marginTop:12}}>{shareSummary}</div>
-            <button
-              type="button"
-              onClick={copyShareSummary}
-              style={{marginTop:12,background:"rgba(56,189,248,0.18)",color:"#dbeafe",border:"1px solid rgba(56,189,248,0.28)",borderRadius:12,padding:"10px 12px",cursor:"pointer",fontSize:12,fontWeight:700}}
-            >
-              Zusammenfassung kopieren
-            </button>
-            {shareFeedback ? <div style={{fontSize:11,color:"var(--text-secondary)",marginTop:8}}>{shareFeedback}</div> : null}
-          </CollapsibleSettingsCard>
-
-          {Capacitor.getPlatform() === "ios" ? (
-            <CollapsibleSettingsCard
-              title="Apple Health"
-              subtitle={isHealthConnected ? "Verbunden · Aktivitäten zuordnen" : "Nicht verbunden"}
-              expanded={settingsCards.appleHealth}
-              onToggle={() => toggleSettingsCard("appleHealth")}
-            >
-              <div style={{marginTop:12}}>
-              <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:10}}>Apple Health · Lauf zuordnen</div>
+                  </SettingsGroup>
+                </>
+              ) : settingsPage === "connections" ? (
+                Capacitor.getPlatform() === "ios" ? (
+                  <>
+                    <SettingsGroup title="Apple Health" padded>
+                      <div style={{marginTop:12}}>
               {healthKitAvailable === null ? (
                 <div style={{fontSize:12,color:"var(--text-secondary)",marginBottom:8}}>Apple Health wird geprüft …</div>
               ) : null}
@@ -5902,7 +5707,6 @@ export default function AppMain(){
               >
                 {isHealthConnected ? "Apple Health ist verbunden" : "Nicht verbunden — tippe auf „Apple Health verbinden“"}
               </div>
-              <>
               {appleHealthFetchStats ? (
                 <div style={{fontSize:12,color:"var(--text-secondary)",marginBottom:8,lineHeight:1.5}}>
                   <div>Gesamt (Health): {appleHealthFetchStats.fetchedTotal}</div>
@@ -6065,6 +5869,191 @@ export default function AppMain(){
                   {appleHealthLoadFeedback.text}
                 </div>
               ) : null}
+                      </div>
+                    </SettingsGroup>
+                    <SettingsGroup>
+                      <SettingsRow
+                        label={SETTINGS_PAGE_TITLES.healthAssignment}
+                        value={selectionOptions.length > 0 ? String(selectionOptions.length) : null}
+                        onClick={() => openSettingsPage("healthAssignment")}
+                      />
+                    </SettingsGroup>
+                    <SettingsGroup title="Strava" padded>
+              <div style={{marginTop:12}}>
+                <div
+                  style={{
+                    fontSize:13,
+                    fontWeight:700,
+                    marginBottom:8,
+                    color:stravaConnected ? "#86efac" : "var(--text-secondary)",
+                    lineHeight:1.45,
+                  }}
+                >
+                  {stravaConnected ? "Mit Strava verbunden" : "Nicht verbunden"}
+                </div>
+                {!stravaConnected ? (
+                  <button
+                    type="button"
+                    onClick={() => handleStravaConnect()}
+                    disabled={stravaConnectBusy}
+                    style={{
+                      background:"rgba(252,76,2,0.16)",
+                      border:"1px solid rgba(252,76,2,0.4)",
+                      borderRadius:12,
+                      padding:"10px 14px",
+                      color:"#fdba8c",
+                      fontSize:13,
+                      fontWeight:700,
+                      cursor:stravaConnectBusy ? "default" : "pointer",
+                      opacity:stravaConnectBusy ? 0.55 : 1,
+                    }}
+                  >
+                    {stravaConnectBusy ? "Verbinde…" : "Mit Strava verbinden"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleStravaDisconnect()}
+                    disabled={stravaConnectBusy}
+                    style={{
+                      background:"rgba(15,23,42,0.85)",
+                      border:"1px solid var(--border-default)",
+                      borderRadius:12,
+                      padding:"10px 14px",
+                      color:"#cbd5e1",
+                      fontSize:13,
+                      fontWeight:700,
+                      cursor:stravaConnectBusy ? "default" : "pointer",
+                      opacity:stravaConnectBusy ? 0.55 : 1,
+                    }}
+                  >
+                    {stravaConnectBusy ? "Trenne…" : "Trennen"}
+                  </button>
+                )}
+                {stravaFeedback ? (
+                  <div
+                    style={{
+                      fontSize:12,
+                      lineHeight:1.45,
+                      marginTop:8,
+                      color:stravaFeedback.tone === "ok" ? "#86efac" : "#fca5a5",
+                      fontWeight:650,
+                    }}
+                  >
+                    {stravaFeedback.text}
+                  </div>
+                ) : null}
+              </div>
+                    </SettingsGroup>
+                    {(() => {
+            const display = computeCalendarConnectionDisplay(
+              calendarPermission ?? "unavailable",
+              calendarConnectedFlag
+            );
+            const badgeText = {
+              connected: "Verbunden",
+              "not-connected": "Nicht verbunden",
+              denied: "Zugriff verweigert",
+              unavailable: "Nicht verfügbar",
+            }[display.badge];
+            const badgeColor = display.badge === "connected" ? "#86efac" : "var(--text-secondary)";
+            return (
+                        <SettingsGroup title="Kalender" padded>
+                <div style={{marginTop:12}}>
+                  <div style={{fontSize:13, fontWeight:700, marginBottom:8, color:badgeColor, lineHeight:1.45}}>
+                    {badgeText}
+                  </div>
+                  {display.action === "disconnect" ? (
+                    <button
+                      type="button"
+                      onClick={() => handleCalendarDisconnectInSettings()}
+                      disabled={calendarConnectBusy}
+                      style={{
+                        background:"rgba(15,23,42,0.85)",
+                        border:"1px solid var(--border-default)",
+                        borderRadius:12,
+                        padding:"10px 14px",
+                        color:"#cbd5e1",
+                        fontSize:13,
+                        fontWeight:700,
+                        cursor:calendarConnectBusy ? "default" : "pointer",
+                        opacity:calendarConnectBusy ? 0.55 : 1,
+                      }}
+                    >
+                      Trennen
+                    </button>
+                  ) : null}
+                  {display.action === "request-access" ? (
+                    <button
+                      type="button"
+                      onClick={() => handleCalendarConnectInSettings()}
+                      disabled={calendarConnectBusy}
+                      style={{
+                        background:"rgba(16,185,129,0.16)",
+                        border:"1px solid rgba(52,211,153,0.4)",
+                        borderRadius:12,
+                        padding:"10px 14px",
+                        color:"#6ee7b7",
+                        fontSize:13,
+                        fontWeight:700,
+                        cursor:calendarConnectBusy ? "default" : "pointer",
+                        opacity:calendarConnectBusy ? 0.55 : 1,
+                      }}
+                    >
+                      {calendarConnectBusy ? "Verbinde…" : "Kalenderzugriff aktivieren"}
+                    </button>
+                  ) : null}
+                  {display.action === "open-settings" ? (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenIosCalendarSettings()}
+                      style={{
+                        background:"rgba(56,189,248,0.18)",
+                        border:"1px solid rgba(56,189,248,0.35)",
+                        borderRadius:12,
+                        padding:"10px 14px",
+                        color:"#7dd3fc",
+                        fontSize:13,
+                        fontWeight:700,
+                        cursor:"pointer",
+                      }}
+                    >
+                      In Einstellungen aktivieren
+                    </button>
+                  ) : null}
+                  {display.action === "none" ? (
+                    <div style={{fontSize:12, color:"var(--text-secondary)", lineHeight:1.45}}>
+                      Kalenderzugriff auf diesem Gerät nicht verfügbar.
+                    </div>
+                  ) : null}
+                  {calendarFeedback ? (
+                    <div
+                      style={{
+                        fontSize:12,
+                        lineHeight:1.45,
+                        marginTop:8,
+                        color:calendarFeedback.tone === "ok" ? "#86efac" : "#fca5a5",
+                        fontWeight:650,
+                      }}
+                    >
+                      {calendarFeedback.text}
+                    </div>
+                  ) : null}
+                </div>
+                        </SettingsGroup>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  <SettingsGroup padded>
+                    <div style={{fontSize:14,color:"var(--text-secondary)",lineHeight:1.5,paddingTop:14}}>
+                      Apple Health, Kalender und Strava lassen sich nur in der iOS-App verbinden.
+                    </div>
+                  </SettingsGroup>
+                )
+              ) : settingsPage === "healthAssignment" ? (
+                <SettingsGroup padded>
+                  <div style={{marginTop:14}}>
               {!homeRunSession ? (
                 <div style={{fontSize:13,color:"var(--text-secondary)",lineHeight:1.5,marginBottom:10}}>
                   Heute ist keine Trainingseinheit geplant – du kannst Läufe trotzdem einer beliebigen Plan-Einheit zuordnen.
@@ -6291,212 +6280,181 @@ export default function AppMain(){
                   ) : null}
                 </div>
               )}
-              </>
+                  </div>
+                </SettingsGroup>
+              ) : settingsPage === "app" ? (
+                <>
+                  <SettingsGroup padded>
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "16px 0",
+              borderBottom: "1px solid var(--border-default)",
+              marginTop: 12,
+            }}>
+              <div>
+                <div style={{ color: "var(--text-primary)", fontWeight: 500 }}>{t("settings.appearance")}</div>
+                <div style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 2 }}>
+                  {theme === "dark" ? t("settings.appearance_dark") : t("settings.appearance_light")}
+                </div>
               </div>
-            </CollapsibleSettingsCard>
-          ) : null}
-
-          {Capacitor.getPlatform() === "ios" ? (
-            <CollapsibleSettingsCard
-              title="Calendar Sync"
-              subtitle={stravaConnected ? "Mit Strava verbunden" : "Nicht verbunden"}
-              expanded={settingsCards.strava}
-              onToggle={() => toggleSettingsCard("strava")}
-            >
-              <div style={{marginTop:12}}>
-                <div
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label={theme === "dark" ? t("settings.appearance_light") : t("settings.appearance_dark")}
+                style={{
+                  width: 52,
+                  height: 30,
+                  borderRadius: 15,
+                  border: "none",
+                  background: theme === "dark" ? "#60a5fa" : "#cbd5e1",
+                  position: "relative",
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                }}
+              >
+                <div style={{
+                  position: "absolute",
+                  top: 3,
+                  left: theme === "dark" ? 24 : 3,
+                  width: 24,
+                  height: 24,
+                  borderRadius: "50%",
+                  background: "#fff",
+                  transition: "left 0.2s",
+                }} />
+              </button>
+            </div>
+            {LANGUAGE_SELECTION_ENABLED ? (
+            <div style={{ padding: "16px 0", borderBottom: "1px solid var(--border-default)" }}>
+              <div style={{ color: "var(--text-primary)", fontWeight: 500, marginBottom: 10 }}>
+                {t("settings.language")}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {(["de", "en", "fr", "es"] as const).map((lang) => (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => setLanguage(lang)}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: 10,
+                      border: `1px solid ${language === lang ? "#3b82f6" : "var(--border-default)"}`,
+                      background: language === lang ? "rgba(59,130,246,0.15)" : "var(--bg-card)",
+                      color: language === lang ? "#60a5fa" : "var(--text-secondary)",
+                      fontWeight: language === lang ? 600 : 400,
+                      fontSize: 14,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {languageLabels[lang]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            ) : null}
+            <div style={{ padding: "16px 0", borderBottom: "1px solid var(--border-default)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: notificationSettings.enabled ? 14 : 0 }}>
+                <div>
+                  <div style={{ color: "var(--text-primary)", fontWeight: 500 }}>Trainings-Erinnerung</div>
+                  <div style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 2 }}>
+                    {notificationSettings.enabled
+                      ? `Täglich um ${String(notificationSettings.hour).padStart(2, "0")}:${String(notificationSettings.minute).padStart(2, "0")} Uhr`
+                      : "Deaktiviert"}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateNotificationSettings({ enabled: !notificationSettings.enabled })}
+                  aria-label={notificationSettings.enabled ? "Trainings-Erinnerung deaktivieren" : "Trainings-Erinnerung aktivieren"}
                   style={{
-                    fontSize:13,
-                    fontWeight:700,
-                    marginBottom:8,
-                    color:stravaConnected ? "#86efac" : "var(--text-secondary)",
-                    lineHeight:1.45,
+                    width: 52,
+                    height: 30,
+                    borderRadius: 15,
+                    border: "none",
+                    background: notificationSettings.enabled ? "#3b82f6" : "var(--bg-surface)",
+                    position: "relative",
+                    cursor: "pointer",
+                    transition: "background 0.2s",
                   }}
                 >
-                  {stravaConnected ? "Mit Strava verbunden" : "Nicht verbunden"}
-                </div>
-                {!stravaConnected ? (
-                  <button
-                    type="button"
-                    onClick={() => handleStravaConnect()}
-                    disabled={stravaConnectBusy}
-                    style={{
-                      background:"rgba(252,76,2,0.16)",
-                      border:"1px solid rgba(252,76,2,0.4)",
-                      borderRadius:12,
-                      padding:"10px 14px",
-                      color:"#fdba8c",
-                      fontSize:13,
-                      fontWeight:700,
-                      cursor:stravaConnectBusy ? "default" : "pointer",
-                      opacity:stravaConnectBusy ? 0.55 : 1,
-                    }}
-                  >
-                    {stravaConnectBusy ? "Verbinde…" : "Mit Strava verbinden"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleStravaDisconnect()}
-                    disabled={stravaConnectBusy}
-                    style={{
-                      background:"rgba(15,23,42,0.85)",
-                      border:"1px solid var(--border-default)",
-                      borderRadius:12,
-                      padding:"10px 14px",
-                      color:"#cbd5e1",
-                      fontSize:13,
-                      fontWeight:700,
-                      cursor:stravaConnectBusy ? "default" : "pointer",
-                      opacity:stravaConnectBusy ? 0.55 : 1,
-                    }}
-                  >
-                    {stravaConnectBusy ? "Trenne…" : "Trennen"}
-                  </button>
-                )}
-                {stravaFeedback ? (
-                  <div
-                    style={{
-                      fontSize:12,
-                      lineHeight:1.45,
-                      marginTop:8,
-                      color:stravaFeedback.tone === "ok" ? "#86efac" : "#fca5a5",
-                      fontWeight:650,
-                    }}
-                  >
-                    {stravaFeedback.text}
-                  </div>
-                ) : null}
+                  <div style={{
+                    position: "absolute",
+                    top: 3,
+                    left: notificationSettings.enabled ? 24 : 3,
+                    width: 24,
+                    height: 24,
+                    borderRadius: "50%",
+                    background: "#fff",
+                    transition: "left 0.2s",
+                  }} />
+                </button>
               </div>
-            </CollapsibleSettingsCard>
-          ) : null}
-
-          {Capacitor.getPlatform() === "ios" ? (() => {
-            const display = computeCalendarConnectionDisplay(
-              calendarPermission ?? "unavailable",
-              calendarConnectedFlag
-            );
-            const badgeText = {
-              connected: "Verbunden",
-              "not-connected": "Nicht verbunden",
-              denied: "Zugriff verweigert",
-              unavailable: "Nicht verfügbar",
-            }[display.badge];
-            const badgeColor = display.badge === "connected" ? "#86efac" : "var(--text-secondary)";
-            return (
-              <CollapsibleSettingsCard
-                title="Kalender"
-                subtitle={badgeText}
-                expanded={settingsCards.calendar}
-                onToggle={() => toggleSettingsCard("calendar")}
-              >
-                <div style={{marginTop:12}}>
-                  <div style={{fontSize:13, fontWeight:700, marginBottom:8, color:badgeColor, lineHeight:1.45}}>
-                    {badgeText}
-                  </div>
-                  {display.action === "disconnect" ? (
-                    <button
-                      type="button"
-                      onClick={() => handleCalendarDisconnectInSettings()}
-                      disabled={calendarConnectBusy}
-                      style={{
-                        background:"rgba(15,23,42,0.85)",
-                        border:"1px solid var(--border-default)",
-                        borderRadius:12,
-                        padding:"10px 14px",
-                        color:"#cbd5e1",
-                        fontSize:13,
-                        fontWeight:700,
-                        cursor:calendarConnectBusy ? "default" : "pointer",
-                        opacity:calendarConnectBusy ? 0.55 : 1,
-                      }}
-                    >
-                      Trennen
-                    </button>
-                  ) : null}
-                  {display.action === "request-access" ? (
-                    <button
-                      type="button"
-                      onClick={() => handleCalendarConnectInSettings()}
-                      disabled={calendarConnectBusy}
-                      style={{
-                        background:"rgba(16,185,129,0.16)",
-                        border:"1px solid rgba(52,211,153,0.4)",
-                        borderRadius:12,
-                        padding:"10px 14px",
-                        color:"#6ee7b7",
-                        fontSize:13,
-                        fontWeight:700,
-                        cursor:calendarConnectBusy ? "default" : "pointer",
-                        opacity:calendarConnectBusy ? 0.55 : 1,
-                      }}
-                    >
-                      {calendarConnectBusy ? "Verbinde…" : "Kalenderzugriff aktivieren"}
-                    </button>
-                  ) : null}
-                  {display.action === "open-settings" ? (
-                    <button
-                      type="button"
-                      onClick={() => handleOpenIosCalendarSettings()}
-                      style={{
-                        background:"rgba(56,189,248,0.18)",
-                        border:"1px solid rgba(56,189,248,0.35)",
-                        borderRadius:12,
-                        padding:"10px 14px",
-                        color:"#7dd3fc",
-                        fontSize:13,
-                        fontWeight:700,
-                        cursor:"pointer",
-                      }}
-                    >
-                      In Einstellungen aktivieren
-                    </button>
-                  ) : null}
-                  {display.action === "none" ? (
-                    <div style={{fontSize:12, color:"var(--text-secondary)", lineHeight:1.45}}>
-                      Kalenderzugriff auf diesem Gerät nicht verfügbar.
-                    </div>
-                  ) : null}
-                  {calendarFeedback ? (
-                    <div
-                      style={{
-                        fontSize:12,
-                        lineHeight:1.45,
-                        marginTop:8,
-                        color:calendarFeedback.tone === "ok" ? "#86efac" : "#fca5a5",
-                        fontWeight:650,
-                      }}
-                    >
-                      {calendarFeedback.text}
-                    </div>
-                  ) : null}
+              {notificationSettings.enabled && (
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
+                  <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>Uhrzeit</div>
+                  <select
+                    value={notificationSettings.hour}
+                    onChange={(e) => updateNotificationSettings({ hour: Number(e.target.value) })}
+                    style={{
+                      background: "var(--bg-card)",
+                      color: "var(--text-primary)",
+                      border: "1px solid var(--border-default)",
+                      borderRadius: 8,
+                      padding: "6px 10px",
+                      fontSize: 14,
+                    }}
+                  >
+                    {Array.from({ length: 24 }, (_, i) => (
+                      <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>
+                    ))}
+                  </select>
+                  <select
+                    value={notificationSettings.minute}
+                    onChange={(e) => updateNotificationSettings({ minute: Number(e.target.value) })}
+                    style={{
+                      background: "var(--bg-card)",
+                      color: "var(--text-primary)",
+                      border: "1px solid var(--border-default)",
+                      borderRadius: 8,
+                      padding: "6px 10px",
+                      fontSize: 14,
+                    }}
+                  >
+                    {[0, 15, 30, 45].map((m) => (
+                      <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+                    ))}
+                  </select>
                 </div>
-              </CollapsibleSettingsCard>
-            );
-          })() : null}
-
-          <CollapsibleSettingsCard
-            title="Race Calculator"
-            subtitle="Pace, Splits, Halbmarathon"
-            expanded={settingsCards.raceCalc}
-            onToggle={() => toggleSettingsCard("raceCalc")}
-          >
-            <div style={{marginTop:12}}>
-              <RaceCalculator noCard />
+              )}
             </div>
-          </CollapsibleSettingsCard>
-
-          <CollapsibleSettingsCard
-            title="Backup"
-            subtitle="Daten sichern & wiederherstellen"
-            expanded={settingsCards.backup}
-            onToggle={() => toggleSettingsCard("backup")}
-          >
-            <div style={{marginTop:12}}>
-              <BackupControls logs={storedLogs} onImportSuccess={handleBackupLogsImport} />
-            </div>
-          </CollapsibleSettingsCard>
-
+                  </SettingsGroup>
+                  <SettingsGroup>
+                    <SettingsRow label={SETTINGS_PAGE_TITLES.raceCalculator} onClick={() => openSettingsPage("raceCalculator")} />
+                    <SettingsRow label={SETTINGS_PAGE_TITLES.share} onClick={() => openSettingsPage("share")} />
+                  </SettingsGroup>
+                </>
+              ) : settingsPage === "raceCalculator" ? (
+                <SettingsGroup padded>
+                  <div style={{marginTop:14}}>
+                    <RaceCalculator noCard />
+                  </div>
+                </SettingsGroup>
+              ) : settingsPage === "share" ? (
+                <SettingsGroup padded>
+            <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.7,whiteSpace:"pre-line",marginTop:12}}>{shareSummary}</div>
+            <button
+              type="button"
+              onClick={copyShareSummary}
+              style={{marginTop:12,background:"rgba(56,189,248,0.18)",color:"#dbeafe",border:"1px solid rgba(56,189,248,0.28)",borderRadius:12,padding:"10px 12px",cursor:"pointer",fontSize:12,fontWeight:700}}
+            >
+              Zusammenfassung kopieren
+            </button>
+            {shareFeedback ? <div style={{fontSize:11,color:"var(--text-secondary)",marginTop:8}}>{shareFeedback}</div> : null}
+                </SettingsGroup>
+              ) : settingsPage === "privacy" ? (
+                <>
           <a
             href="https://marathon-app-alpha.vercel.app/privacy-policy"
             target="_blank"
@@ -6520,7 +6478,12 @@ export default function AppMain(){
           >
             {t("settings.privacy_policy")}
           </a>
-
+                  <SettingsGroup title="Backup" padded>
+                    <BackupControls logs={storedLogs} onImportSuccess={handleBackupLogsImport} />
+                  </SettingsGroup>
+                </>
+              ) : (
+                <>
           <button
             type="button"
             onClick={() => {
@@ -6535,9 +6498,9 @@ export default function AppMain(){
               fontWeight: 700,
               borderRadius: 12,
               cursor: "pointer",
-              background: "rgba(239, 68, 68, 0.1)",
-              border: "1px solid rgba(239, 68, 68, 0.32)",
-              color: "#fca5a5",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-input)",
+              color: "var(--text-primary)",
             }}
           >
             {t("settings.logout")}
@@ -6569,7 +6532,11 @@ export default function AppMain(){
               {t("settings.delete_account")}
             </button>
           ) : null}
-        </div>
+                </>
+              )}
+            </SettingsDetailPage>
+          )}
+        </SettingsPageFrame>
       ):null}
 
       </div>
@@ -6599,7 +6566,11 @@ export default function AppMain(){
               <button
                 className="bottom-nav-btn"
                 key={item.key}
-                onClick={()=>navigateToView(item.key)}
+                onClick={()=>{
+                  // Tap auf den Einstellungen-Tab führt immer zur Wurzel, auch von einer Detailseite aus.
+                  if(item.key === "settings")dispatchSettingsNav({ type: "reset" });
+                  navigateToView(item.key);
+                }}
                 {...(item.key === 'coach' ? {'data-tour': 'coach-tab'} : item.key === 'week' ? {'data-tour': 'week-tab'} : {})}
                 style={{
                   background:active ? "linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))" : "transparent",
