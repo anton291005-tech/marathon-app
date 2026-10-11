@@ -154,6 +154,34 @@ export function parseRestDayFromPreferences(prefs: string[]): number | undefined
   return undefined;
 }
 
+const PLAN_MAX_DURATION_DAYS = 52 * 7;
+
+/**
+ * Meldung für Server-Antworten, bei denen ein lokaler Ersatzplan täuschen würde (Anmeldung, Tageslimit,
+ * abgelehnte Eingabe). `null` = kein solcher Fall (Erfolg, Netzwerkfehler, 5xx).
+ */
+export function planApiBlockingMessage(
+  result: { status?: number; retryAfterSeconds?: number },
+  planDurationDays: number,
+): string | null {
+  if (result.status === 401) return "Bitte neu anmelden.";
+  if (result.status === 429) {
+    const seconds = result.retryAfterSeconds;
+    if (!seconds || seconds <= 0) {
+      return "Tageslimit für die Plan-Erzeugung erreicht. Versuch es später wieder.";
+    }
+    const minutes = Math.max(1, Math.ceil(seconds / 60));
+    const wait = minutes >= 120 ? `${Math.ceil(minutes / 60)} Stunden` : `${minutes} Minuten`;
+    return `Tageslimit für die Plan-Erzeugung erreicht. Versuch es in etwa ${wait} wieder.`;
+  }
+  if (result.status === 400) {
+    return planDurationDays > PLAN_MAX_DURATION_DAYS
+      ? "Das Renndatum liegt zu weit in der Zukunft (max. 52 Wochen)."
+      : "Deine Angaben wurden vom Server abgelehnt. Bitte prüfe sie und versuche es erneut.";
+  }
+  return null;
+}
+
 export type OnboardingProps = {
   onComplete: (
     prefs: PersistedMarathonPreferences,
@@ -193,6 +221,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
   );
   const [planGenWeekCount, setPlanGenWeekCount] = useState(12);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [simplifiedPlanOffered, setSimplifiedPlanOffered] = useState(false);
   const isGenerating = planGenPhase === "loading" || planGenPhase === "success";
 
   const distance = useMemo(
@@ -396,10 +425,11 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
     [calendarBusy, userId],
   );
 
-  const handleFinish = useCallback(async () => {
+  const handleFinish = useCallback(async (useSimplifiedPlan = false) => {
     if (!summaryPayload || isGenerating) return;
 
     setGenerateError(null);
+    setSimplifiedPlanOffered(false);
     setPlanGenPhase("loading");
 
     try {
@@ -436,16 +466,35 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
             userPreferences: userPreferences.filter(Boolean),
           };
 
-          const { plan: fullPlan, error: fullPlanError } = await fetchFullPlanFromClaude(profile);
+          // Vor jedem Abbruch unten ist noch nichts verändert: Preferences, Patches und Logs fasst erst onComplete an.
+          const fullResult = useSimplifiedPlan ? null : await fetchFullPlanFromClaude(profile);
+          const fullPlan =
+            fullResult?.plan && validateTrainingPlanV2Integrity(fullResult.plan) ? fullResult.plan : null;
 
-          if (fullPlan && validateTrainingPlanV2Integrity(fullPlan)) {
+          if (fullResult && !fullPlan) {
+            // eslint-disable-next-line no-console
+            console.error("[Onboarding] Option A failed:", fullResult.error, fullResult.status);
+            const blockingMessage = planApiBlockingMessage(fullResult, planDurationDays);
+            // Netzwerkfehler/5xx: kein stiller Ersatzplan — der vereinfachte Plan wird nur angeboten.
+            setGenerateError(
+              blockingMessage ?? "Plan konnte nicht erstellt werden. Bitte versuche es erneut.",
+            );
+            setSimplifiedPlanOffered(blockingMessage === null);
+            setPlanGenPhase("error");
+            return;
+          }
+
+          if (fullPlan) {
             plan = fullPlan;
             patches = [];
           } else {
-            // eslint-disable-next-line no-console
-            console.error("[Onboarding] Option A failed:", fullPlanError);
-
             const claudeResult = await fetchClaudePlanStructure(profile);
+            const structureBlockingMessage = planApiBlockingMessage(claudeResult, planDurationDays);
+            if (structureBlockingMessage) {
+              setGenerateError(structureBlockingMessage);
+              setPlanGenPhase("error");
+              return;
+            }
             const structure = claudeResult.structure;
             const rules = structure?.rules;
             const hasStructure =
@@ -525,6 +574,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
         phase={planGenPhase}
         errorMessage={generateError}
         onRetry={() => void handleFinish()}
+        onUseSimplifiedPlan={simplifiedPlanOffered ? () => void handleFinish(true) : undefined}
         onCancel={onCancel}
       />
     );

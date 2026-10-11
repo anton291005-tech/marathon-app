@@ -58,6 +58,11 @@ export type PlanGenerationLoadingScreenProps = {
   onRetry: () => void;
   /** Nur im Fehlerzustand: Wizard verlassen, ohne etwas zu ändern (ohne Handler kein Button). */
   onCancel?: () => void;
+  /**
+   * Nur im Fehlerzustand: bietet statt des KI-Plans ausdrücklich einen vereinfachten Plan an.
+   * Ohne Handler kein Angebot.
+   */
+  onUseSimplifiedPlan?: () => void;
 };
 
 export function PlanGenerationLoadingScreen({
@@ -66,6 +71,7 @@ export function PlanGenerationLoadingScreen({
   errorMessage,
   onRetry,
   onCancel,
+  onUseSimplifiedPlan,
 }: PlanGenerationLoadingScreenProps) {
   const estimatedSeconds = estimatePlanGenerationSeconds(weekCount);
   const [percent, setPercent] = useState(0);
@@ -194,6 +200,38 @@ export function PlanGenerationLoadingScreen({
             >
               Erneut versuchen
             </button>
+            {onUseSimplifiedPlan ? (
+              <>
+                <p
+                  style={{
+                    margin: "16px 0 10px",
+                    fontSize: 12,
+                    color: "var(--text-secondary)",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Du kannst stattdessen mit einem vereinfachten Plan starten. Er folgt einem festen Schema und
+                  ist nicht individuell vom Coach ausgearbeitet.
+                </p>
+                <button
+                  type="button"
+                  onClick={onUseSimplifiedPlan}
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    borderRadius: 14,
+                    border: "1px solid rgba(148, 163, 184, 0.2)",
+                    background: "transparent",
+                    color: "var(--text-primary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Vereinfachten Plan verwenden
+                </button>
+              </>
+            ) : null}
             {onCancel ? (
               <button
                 type="button"

@@ -2,6 +2,15 @@
 export const AGENT_WEAK_MESSAGE =
   "Ich bin gleich für dich da. Stell mir deine Frage zum Training.";
 
+/** Der Server hat geantwortet, aber abgelehnt — das wird benannt statt hinter der Standardzeile versteckt. */
+export const AGENT_AUTH_MESSAGE = "Bitte neu anmelden.";
+export const AGENT_UNAVAILABLE_MESSAGE = "Der Coach ist gerade nicht verfügbar.";
+
+/** Chat-Zeile für eine HTTP-Fehlerantwort von /api/ai, die selbst keine anzeigbare Coach-Nachricht trägt. */
+export function agentHttpErrorResponse(status: number): { mode: "support"; message: string } {
+  return { mode: "support", message: status === 401 ? AGENT_AUTH_MESSAGE : AGENT_UNAVAILABLE_MESSAGE };
+}
+
 /** Dev-only: surface silent degradation + rough quality rates without production noise */
 let devCoachCycles = 0;
 let devFallbacks = 0;

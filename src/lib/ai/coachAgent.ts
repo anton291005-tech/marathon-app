@@ -1,7 +1,12 @@
 import { getApiBaseUrl } from "../api/apiBaseUrl";
 import { getApiAuthHeaders } from "../api/authHeaders";
 import { aiAgentDevWarn } from "./agentDebug";
-import { onAgentFallback, recordCoachAgentCycleDev, weakAgentMessagePayload } from "./agentFallback";
+import {
+  agentHttpErrorResponse,
+  onAgentFallback,
+  recordCoachAgentCycleDev,
+  weakAgentMessagePayload,
+} from "./agentFallback";
 import { buildCoachContext } from "./buildCoachContext";
 import { handleAgentResponse } from "./handleAgentResponse";
 
@@ -110,17 +115,23 @@ export async function runCoachAgent(userInput: string, appState: any) {
     if (!res.ok) {
       // eslint-disable-next-line no-console
       console.error("[coachAgent] API error body:", responseText.slice(0, 200));
+      // 401/503 kommen vom Türsteher (`requireUser`) und tragen nur `{ error }` — eigene Meldung statt Standardzeile.
+      if (res.status === 401 || res.status === 503) return agentHttpErrorResponse(res.status);
     }
     let data: unknown;
     try {
       data = responseText.trim() ? JSON.parse(responseText) : null;
     } catch (e) {
+      if (!res.ok) return agentHttpErrorResponse(res.status);
       // eslint-disable-next-line no-console
       console.error("[coachAgent] JSON parse failed:", e instanceof Error ? e.message : String(e));
       aiAgentDevWarn("json-parse-failed", responseText?.slice?.(0, 200));
       onAgentFallback("invalid_json");
       return await handleAgentResponse(weakAgentMessagePayload(), appState);
     }
+
+    // Fehlerantworten mit eigener Coach-Nachricht (429-Limit, 500) werden unverändert angezeigt, alle anderen benannt.
+    if (!res.ok && !isLegacyCoachPayload(data)) return agentHttpErrorResponse(res.status);
 
     const normalized = normalizeFetchedAgentPayload(data);
     return await handleAgentResponse(normalized, appState);

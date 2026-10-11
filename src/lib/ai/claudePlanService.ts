@@ -51,6 +51,11 @@ export interface ClaudePlanStructure {
 export interface ClaudePlanStructureResult {
   structure: ClaudePlanStructure | null;
   analysis: string;
+  error?: string;
+  /** HTTP-Status, sobald der Server geantwortet hat; fehlt bei Netzwerkfehler/Timeout. */
+  status?: number;
+  /** Nur bei 429, wenn der Server eine Wartezeit liefert. */
+  retryAfterSeconds?: number;
 }
 
 export interface PlanGenerationProfile {
@@ -68,6 +73,10 @@ export interface PlanGenerationProfile {
 export interface FullPlanResult {
   plan: TrainingPlanV2 | null;
   error?: string;
+  /** HTTP-Status, sobald der Server geantwortet hat; fehlt bei Netzwerkfehler/Timeout. */
+  status?: number;
+  /** Nur bei 429, wenn der Server eine Wartezeit liefert. */
+  retryAfterSeconds?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +92,33 @@ const STRUCTURE_PLAN_CLIENT_TIMEOUT_MS = 45000;
 function getPlanApiBaseUrl(): string {
   const config = getAiConfig();
   return config.apiBaseUrl?.replace(/\/$/, "") || DEFAULT_PLAN_API_BASE;
+}
+
+class PlanApiHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(`HTTP ${status}`);
+  }
+}
+
+/** Wartezeit einer 429-Antwort: `Retry-After`-Header, sonst `retryAfterSeconds`/`retry_after` im Body. */
+function readRetryAfterSeconds(res: Response, rawText: string): number | undefined {
+  if (res.status !== 429) return undefined;
+  const candidates: unknown[] = [res.headers?.get?.("Retry-After")];
+  try {
+    const body = JSON.parse(rawText) as { retryAfterSeconds?: unknown; retry_after?: unknown } | null;
+    candidates.push(body?.retryAfterSeconds, body?.retry_after);
+  } catch {
+    // Body ist kein JSON — dann zählt nur der Header.
+  }
+  for (const candidate of candidates) {
+    if (candidate == null || candidate === "") continue;
+    const seconds = Number(candidate);
+    if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds);
+  }
+  return undefined;
 }
 
 async function postGeneratePlan(profile: PlanGenerationProfile, timeoutMs: number): Promise<string> {
@@ -104,7 +140,7 @@ async function postGeneratePlan(profile: PlanGenerationProfile, timeoutMs: numbe
   if (!res.ok) {
     // eslint-disable-next-line no-console
     console.error("[claude-client] HTTP error:", res.status, rawText.slice(0, 500));
-    throw new Error(`HTTP ${res.status}`);
+    throw new PlanApiHttpError(res.status, readRetryAfterSeconds(res, rawText));
   }
 
   // eslint-disable-next-line no-console
@@ -146,7 +182,13 @@ export async function fetchFullPlanFromClaude(
       if (!res.ok) {
         // eslint-disable-next-line no-console
         console.error("[claudePlanService] raw response on failure:", rawText);
-        return { plan: null, error: `HTTP ${res.status}` };
+        const retryAfterSeconds = readRetryAfterSeconds(res, rawText);
+        return {
+          plan: null,
+          error: `HTTP ${res.status}`,
+          status: res.status,
+          ...(retryAfterSeconds != null ? { retryAfterSeconds } : {}),
+        };
       }
 
       let data: { plan?: unknown; error?: string };
@@ -156,17 +198,21 @@ export async function fetchFullPlanFromClaude(
         // eslint-disable-next-line no-console
         console.error("[claudePlanService] raw response on failure:", rawText);
         const msg = parseErr instanceof Error ? parseErr.message : "JSON parse failed";
-        return { plan: null, error: msg };
+        return { plan: null, error: msg, status: res.status };
       }
 
-      if (!data.plan) return { plan: null, error: data.error ?? "no plan returned" };
+      if (!data.plan) return { plan: null, error: data.error ?? "no plan returned", status: res.status };
 
       const normalized = normalizeTrainingPlan(data.plan);
       if (normalized.workouts.length === 0) {
-        return { plan: null, error: data.error ?? "plan normalization yielded empty plan" };
+        return {
+          plan: null,
+          error: data.error ?? "plan normalization yielded empty plan",
+          status: res.status,
+        };
       }
 
-      return { plan: normalized };
+      return { plan: normalized, status: res.status };
     } finally {
       clearTimeout(timeoutId);
     }
@@ -205,11 +251,22 @@ export async function fetchClaudePlanStructure(
     return {
       structure,
       analysis: data.analysis ?? structure?.analysis ?? "",
+      status: 200,
     };
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("[claude-client] fetchClaudePlanStructure error:", err);
-    return { structure: null, analysis: "" };
+    const error = err instanceof Error ? err.message : "unknown";
+    if (err instanceof PlanApiHttpError) {
+      return {
+        structure: null,
+        analysis: "",
+        error,
+        status: err.status,
+        ...(err.retryAfterSeconds != null ? { retryAfterSeconds: err.retryAfterSeconds } : {}),
+      };
+    }
+    return { structure: null, analysis: "", error };
   }
 }
 
