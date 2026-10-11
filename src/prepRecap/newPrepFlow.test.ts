@@ -53,10 +53,38 @@ describe("runOnboardingCompletion — remote vor lokal", () => {
     expect(args.applyLocally).not.toHaveBeenCalled();
   });
 
-  it("ohne Merker (normaler neuer Plan): nie archivieren, lokal wie bisher inkl. eigenem Speichern", async () => {
+  it("ohne Merker (normaler neuer Plan): nie archivieren, erst remote anlegen, dann lokal umstellen", async () => {
     const { calls, args, run } = setup({ newPrepPending: false });
     await run();
     expect(args.completeNewPrep).not.toHaveBeenCalled();
+    expect(calls).toEqual(["insert", "local:true"]);
+  });
+
+  it("ohne Merker, nicht angemeldet: nur lokal, kein Remote-Speichern", async () => {
+    const { calls, args, run } = setup({ newPrepPending: false, userId: null });
+    await run();
+    expect(args.insertNewPlan).not.toHaveBeenCalled();
     expect(calls).toEqual(["local:false"]);
+  });
+
+  it.each([
+    ["kein Plan", { plan: null }],
+    ["ungültiger Plan", { plan: { id: "bad", ok: false } }],
+  ])("ohne Merker, %s: wirft, nichts gespeichert, lokal unverändert (Preferences, Patches)", async (_label, overrides) => {
+    const { args, run } = setup({ newPrepPending: false, ...(overrides as object) } as never);
+    await expect(run()).rejects.toThrow(/nichts verändert/);
+    expect(args.insertNewPlan).not.toHaveBeenCalled();
+    expect(args.applyLocally).not.toHaveBeenCalled();
+  });
+
+  it("ohne Merker, Speichern scheitert: Fehler geht an den Wizard, lokal unverändert", async () => {
+    const { args, run } = setup({
+      newPrepPending: false,
+      insertNewPlan: jest.fn(async () => {
+        throw new Error("save failed");
+      }),
+    });
+    await expect(run()).rejects.toThrow("save failed");
+    expect(args.applyLocally).not.toHaveBeenCalled();
   });
 });

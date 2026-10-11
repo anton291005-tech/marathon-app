@@ -136,7 +136,7 @@ import { computePlanAdherenceScore, computePlanDueSessionCounts, isSessionDueByY
 import { getAiContext } from "./lib/ai/getAiContext";
 import { AI_COACH_AVAILABLE_SCREENS } from "./lib/ai/aiCoachAvailableScreens";
 import { loadProfile, saveProfile } from "./lib/supabase/services/profilesService";
-import { loadPlanPatches, savePlanPatch } from "./lib/supabase/services/planPatchesService";
+import { clearPlanPatchesForPlanChange, loadPlanPatches, savePlanPatch } from "./lib/supabase/services/planPatchesService";
 import { loadWeeklyScheduleBlocks } from "./lib/supabase/services/weeklyScheduleBlocksService";
 import {
   runCalendarForegroundResync,
@@ -2714,13 +2714,18 @@ export default function AppMain(){
     }
   };
 
+  // Patches hängen nur an der Session-ID: sobald ein anderer Plan aktiv wird, lokal verwerfen (Supabase: `clearPlanPatchesForPlanChange`).
+  const clearLocalPlanPatches = useCallback(()=>{
+    if (typeof localStorage !== "undefined") localStorage.removeItem(MARATHON_AI_PLAN_PATCHES_KEY);
+    setAiPlanPatches([]);
+  }, []);
+
   const handleAiReplaceTrainingPlanV2 = (_message, plan, clearPatches)=>{
     if(!plan)return;
     const normalized = normalizeTrainingPlan(plan);
     if(!validateTrainingPlanV2Integrity(normalized) || normalized.workouts.length === 0)return;
     if(clearPatches){
-      localStorage.removeItem(MARATHON_AI_PLAN_PATCHES_KEY);
-      setAiPlanPatches([]);
+      void clearPlanPatchesForPlanChange({ activePlanChanged: true, userId: user?.id, clearLocal: clearLocalPlanPatches });
     }
     setTrainingPlanV2(normalized);
     if (user?.id && planRemoteReady) {
@@ -3551,6 +3556,7 @@ export default function AppMain(){
       if (!user?.id) return;
       try {
         await setActivePlan(user.id, planId);
+        const patchesCleared = clearPlanPatchesForPlanChange({ activePlanChanged: true, userId: user.id, clearLocal: clearLocalPlanPatches });
         const remotePlan = await loadTrainingPlan(user.id);
         if (remotePlan != null && validateTrainingPlanV2Integrity(remotePlan)) {
           setTrainingPlanV2(remotePlan);
@@ -3559,13 +3565,14 @@ export default function AppMain(){
           );
           movePreferencesToPlan(planId);
         }
+        await patchesCleared;
         await refreshAllTrainingPlans();
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error("[AppMain] handleSwitchPlan error:", e);
       }
     },
-    [refreshAllTrainingPlans, user?.id, movePreferencesToPlan],
+    [refreshAllTrainingPlans, user?.id, movePreferencesToPlan, clearLocalPlanPatches],
   );
 
   const handleAddNewPlan = useCallback(() => {
@@ -3585,6 +3592,8 @@ export default function AppMain(){
       if (!user?.id || allTrainingPlans.length <= 1) return;
       try {
         const { activatedPlanId } = await deletePlan(user.id, planId);
+        // Nur wenn der aktive Plan gelöscht wurde und ein anderer nachrückt; sonst bleiben die Patches.
+        const patchesCleared = clearPlanPatchesForPlanChange({ activePlanChanged: !!activatedPlanId, userId: user.id, clearLocal: clearLocalPlanPatches });
         if (activatedPlanId) {
           const remotePlan = await loadTrainingPlan(user.id);
           if (remotePlan != null && validateTrainingPlanV2Integrity(remotePlan)) {
@@ -3598,13 +3607,14 @@ export default function AppMain(){
           planPreferencesStoreRef.current = forgetPlanPreferences(planPreferencesStoreRef.current, planId);
           writePlanPreferencesStore(planPreferencesStoreRef.current);
         }
+        await patchesCleared;
         await refreshAllTrainingPlans();
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error("[AppMain] handleDeletePlan error:", e);
       }
     },
-    [allTrainingPlans.length, refreshAllTrainingPlans, user?.id, movePreferencesToPlan],
+    [allTrainingPlans.length, refreshAllTrainingPlans, user?.id, movePreferencesToPlan, clearLocalPlanPatches],
   );
   const handleAccountDeleteCancel = useCallback(() => {
     if (accountDeleteBusy) return;
@@ -3638,18 +3648,20 @@ export default function AppMain(){
         planName?.trim() ||
         [patch?.raceDistanceLabel ?? "Marathon", patch?.raceName, patch?.raceDate].filter(Boolean).join(" – ");
 
-      // „Neue Vorbereitung starten": ZUERST remote alten Plan archivieren und neuen anlegen, erst dann
-      // lokal umstellen (Preferences ersetzen, Logs kürzen). Scheitert das, wirft der Handler: der
-      // Wizard zeigt den Fehler (erneut versuchen / abbrechen), lokal und remote bleibt alles beim Alten.
+      // ZUERST remote: neuen Plan anlegen („Neue Vorbereitung starten": davor den alten archivieren), erst
+      // dann lokal umstellen (Preferences ersetzen, Patches löschen, Logs kürzen). Fehlt der Plan oder
+      // scheitert das Speichern, wirft der Handler: der Wizard zeigt den Fehler (erneut versuchen /
+      // abbrechen), lokal und remote bleibt alles beim Alten.
+      const newPrepPending = newPrepPendingRef.current != null;
       await runOnboardingCompletion({
-        newPrepPending: newPrepPendingRef.current != null,
+        newPrepPending,
         userId: user?.id ?? null,
         plan: plan ? normalizeTrainingPlan(plan) : null,
         isPlanUsable: (p) => validateTrainingPlanV2Integrity(p) && p.workouts.length > 0,
         completeNewPrep,
         insertNewPlan: (userId, p) => saveTrainingPlan(userId, p, planLabel || "Neue Vorbereitung"),
-        applyLocally: async ({ savedRemotely }) => {
-          if (savedRemotely) void refreshArchivedPreps();
+        applyLocally: async () => {
+          if (newPrepPending) void refreshArchivedPreps();
           try {
             setOnboardingForNewPlan(false);
             skipRemotePlanHydrationRef.current = true;
@@ -3682,7 +3694,8 @@ export default function AppMain(){
               }
             }
 
-            setAiPlanPatches([]);
+            // DELETE in Supabase startet sofort; vor dem Speichern der Wizard-Patches wird unten darauf gewartet.
+            const patchesCleared = clearPlanPatchesForPlanChange({ activePlanChanged: true, userId: user?.id, clearLocal: clearLocalPlanPatches });
             setLogs(detachedLogs);
             setPreferences(isolatedPrefs);
             if (user?.id) {
@@ -3700,9 +3713,6 @@ export default function AppMain(){
                 setTrainingPlanV2(normalizedPlan);
                 setHasUserTrainingPlan(true);
                 if (user?.id) {
-                  if (!savedRemotely) {
-                    await saveTrainingPlan(user.id, normalizedPlan, planLabel || undefined);
-                  }
                   const plansAfterSave = await loadAllTrainingPlans(user.id);
                   setAllTrainingPlans(plansAfterSave);
                   const newPlanId = plansAfterSave.find((item) => item.is_active)?.id ?? null;
@@ -3717,6 +3727,7 @@ export default function AppMain(){
                 }
                 // eslint-disable-next-line no-console
                 console.log("[AppMain] saveTrainingPlan done");
+                await patchesCleared;
                 if (patches?.length) {
                   handleAiApplyPlanPatches("", null, patches);
                 }
@@ -3746,6 +3757,7 @@ export default function AppMain(){
       refreshArchivedPreps,
       activePlanId,
       activePlanDescribesPreferences,
+      clearLocalPlanPatches,
     ],
   );
   const postWorkoutMaxHeartRateBpm = (() => {
