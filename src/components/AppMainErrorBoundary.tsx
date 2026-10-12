@@ -93,7 +93,7 @@ export class AppMainErrorBoundary extends React.Component<Props, State> {
             </div>
           ) : null}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button
+            <button className="mr-primary"
               type="button"
               onClick={this.handleReload}
               style={{
@@ -102,8 +102,8 @@ export class AppMainErrorBoundary extends React.Component<Props, State> {
                 border: "none",
                 fontWeight: 700,
                 cursor: "pointer",
-                color: "#fff",
-                background: "linear-gradient(135deg, #10b981, #3b82f6)",
+                color: "var(--on-accent)",
+                background: "var(--accent)",
               }}
             >
               Neu laden

@@ -126,7 +126,6 @@ import {
 import AiCoachPanel from "./components/ai/AiCoachPanel";
 import { PostWorkoutSummaryCard } from "./components/PostWorkoutSummaryCard";
 import { getCoachFeedback } from "./coachFeedback";
-import { isHomePreStart } from "./homeStatus";
 import { usePostWorkoutSummary } from "./hooks/usePostWorkoutSummary";
 import { usePostWorkoutHrEnrichment } from "./hooks/usePostWorkoutHrEnrichment";
 import {
@@ -266,6 +265,9 @@ import {
 } from "./health/healthDataService";
 import type { PermissionState } from "./recovery/recoveryDisplayState";
 import { formatScore100 } from "./ui/formatScore100";
+import { Activity, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Footprints, House, Info, MessageCircle, Route, Settings, Star } from "lucide-react";
+import { ICON_SIZE, ICON_SIZE_S, ICON_STROKE, SessionTypeIcon } from "./ui/icons";
+import { StatusChip } from "./ui/StatusChip";
 import {
   logRunBikeTotalFromHealthDev,
   logWorkoutSanityCheckDev,
@@ -329,28 +331,37 @@ function logHealthKit(_message, ..._rest) {}
 
 const PI = {
   // Legacy embedded plan keys — kept for backward compat with LEGACY_EMBEDDED_PLAN_WEEKS
-  MINI:  { label:"Mini-Prep",         emoji:"🔄", col:"#6366f1", bg:"rgba(99,102,241,0.12)" },
-  BASE:  { label:"Basisaufbau",        emoji:"🌱", col:"#10b981", bg:"rgba(16,185,129,0.12)" },
-  DEV:   { label:"Entwicklung",        emoji:"📈", col:"#3b82f6", bg:"rgba(59,130,246,0.12)" },
-  BUILD: { label:"Aufbau & Peak",      emoji:"🔥", col:"#ef4444", bg:"rgba(239,68,68,0.12)" },
-  SPEC:  { label:"Wettkampfspez.",     emoji:"🎯", col:"#f59e0b", bg:"rgba(245,158,11,0.12)" },
-  TAPER: { label:"Taper",             emoji:"⚡", col:"#a855f7", bg:"rgba(168,85,247,0.12)" },
+  MINI:  { label:"Mini-Prep",  col:"#6366f1", bg:"rgba(99,102,241,0.12)" },
+  BASE:  { label:"Basisaufbau",  col:"#10b981", bg:"rgba(16,185,129,0.12)" },
+  DEV:   { label:"Entwicklung",  col:"#3b82f6", bg:"rgba(59,130,246,0.12)" },
+  BUILD: { label:"Aufbau & Spitze",  col:"#ef4444", bg:"rgba(239,68,68,0.12)" },
+  SPEC:  { label:"Wettkampfspez.",  col:"#f59e0b", bg:"rgba(245,158,11,0.12)" },
+  TAPER: { label:"Taper",  col:"#a855f7", bg:"rgba(168,85,247,0.12)" },
   // Canonical 4-phase keys from trainingPhase.ts — used by newly generated plans
-  base:  { label:"Base",              emoji:"🌱", col:trainingPhaseColor("base"),  bg:"rgba(16,185,129,0.12)" },
-  build: { label:"Build",             emoji:"🔥", col:trainingPhaseColor("build"), bg:"rgba(59,130,246,0.12)" },
-  peak:  { label:"Peak",              emoji:"🎯", col:trainingPhaseColor("peak"),  bg:"rgba(239,68,68,0.12)" },
-  taper: { label:"Taper",             emoji:"⚡", col:trainingPhaseColor("taper"), bg:"rgba(168,85,247,0.12)" },
+  base:  { label:"Grundlage", col:trainingPhaseColor("base"),  bg:"rgba(16,185,129,0.12)" },
+  build: { label:"Aufbau",  col:trainingPhaseColor("build"), bg:"rgba(59,130,246,0.12)" },
+  peak:  { label:"Spitze", col:trainingPhaseColor("peak"),  bg:"rgba(239,68,68,0.12)" },
+  taper: { label:"Taper",  col:trainingPhaseColor("taper"), bg:"rgba(168,85,247,0.12)" },
 };
 const DEFAULT_VIEW = "home";
+/** Tab-Bar: Icons und Beschriftungen sind fest (docs/design-system/components.md, „TabBar"). */
+const TAB_BAR_ITEMS = [
+  { key: "home", label: "Heute", Icon: House },
+  { key: "week", label: "Woche", Icon: CalendarDays },
+  { key: "performance", label: "Leistung", Icon: Activity },
+  { key: "overview", label: "Übersicht", Icon: Route },
+  { key: "coach", label: "Coach", Icon: MessageCircle },
+  { key: "settings", label: "Einstellungen", Icon: Settings },
+];
 const TI = {
-  rest:     { label:"Ruhe",         emoji:"😴", col:"#4b5563" },
-  easy:     { label:"Easy Run",     emoji:"🟢", col:"#10b981" },
-  interval: { label:"Intervall",    emoji:"⚡", col:"#ef4444" },
-  tempo:    { label:"Tempo",        emoji:"🔶", col:"#f59e0b" },
-  long:     { label:"Long Run",     emoji:"🔵", col:"#3b82f6" },
-  strength: { label:"Krafttraining",emoji:"💪", col:"#8b5cf6" },
-  bike:     { label:"Rennrad",      emoji:"🚴", col:"#06b6d4" },
-  race:     { label:"Rennen",       emoji:"🏁", col:"#fbbf24" },
+  rest:     { label:"Ruhe",  col:"#4b5563" },
+  easy:     { label:"Lockerer Lauf", col:"#10b981" },
+  interval: { label:"Intervall",  col:"#ef4444" },
+  tempo:    { label:"Tempo",  col:"#f59e0b" },
+  long:     { label:"Langer Lauf", col:"#3b82f6" },
+  strength: { label:"Krafttraining",  col:"#8b5cf6" },
+  bike:     { label:"Rennrad",  col:"#06b6d4" },
+  race:     { label:"Rennen",  col:"#fbbf24" },
 };
 
 /** Session-Detail: Workout-Struktur (Warm-up/Main Set/Cool-down) nur für strukturierte, intensive Einheiten. */
@@ -380,7 +391,7 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
     s("w02-do","Do","16. Apr","strength","Krafttraining (Gym)",0,"Ganzkörper – etwas mehr Intensität als Woche 1.",null),
     s("w02-fr","Fr","17. Apr","bike","Rennrad 60 min",0,"Aktive Regeneration auf dem Rad.","locker ~65% HFmax"),
     s("w02-sa","Sa","18. Apr","easy","Easy Run",12,"Progressiv: erst locker, letzte 2 km etwas flotter.","5:15–5:30/km"),
-    s("w02-so","So","19. Apr","long","Langer Lauf → Vorbereitung done!",17,"🚀 Letzter Lauf der Mini-Prep. Easy & genussvoll!","5:20–5:40/km"),
+    s("w02-so","So","19. Apr","long","Langer Lauf → Vorbereitung done!",17,"Letzter Lauf der Mini-Prep. Easy & genussvoll!","5:20–5:40/km"),
   ]},
   // ── BASE ───────────────────────────────────────
   {wn:3,phase:"BASE",label:"Basisaufbau W1",dates:"20.–26. April 2026",km:50,
@@ -416,8 +427,8 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
     s("w05-sa","Sa","9. Mai","easy","Easy Run",12,"Locker. Fokus auf Lauftechnik.","5:10–5:20/km"),
     s("w05-so","So","10. Mai","long","Long Run 24 km",24,"Gleichmäßig easy – keine Tempoarbeit heute.","5:15–5:25/km"),
   ]},
-  {wn:6,phase:"BASE",label:"Erholungswoche 1 ⬇️",dates:"11.–17. Mai 2026",km:45,
-   focus:"⬇️ Entlastungswoche – Adaptationen festigen, Körper erholen",
+  {wn:6,phase:"BASE",label:"Erholungswoche 1",dates:"11.–17. Mai 2026",km:45,
+   focus:"Entlastungswoche – Adaptationen festigen, Körper erholen",
    s:[
     s("w06-mo","Mo","11. Mai","rest","Ruhetag",0,"Vollständige Erholung.",null),
     s("w06-di","Di","12. Mai","easy","Easy Run",8,"Kurzer, lockerer Lauf. Kein Druck.","5:20–5:35/km"),
@@ -448,7 +459,7 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
     s("w08-do","Do","28. Mai","bike","Rennrad 75 min",0,"Lockere Radeinheit – Beine schonen.","locker"),
     s("w08-fr","Fr","29. Mai","strength","Krafttraining (Gym)",0,"Ganzkörper.",null),
     s("w08-sa","Sa","30. Mai","easy","Easy Run",13,"Lockerer Lauf.","5:10–5:20/km"),
-    s("w08-so","So","31. Mai","long","Long Run 26 km 🎉",26,"Erste 26er-Marke! Gleichmäßig easy.","5:10–5:20/km"),
+    s("w08-so","So","31. Mai","long","Long Run 26 km",26,"Erste 26er-Marke! Gleichmäßig easy.","5:10–5:20/km"),
   ]},
   {wn:9,phase:"DEV",label:"Entwicklung W2",dates:"1.–7. Juni 2026",km:68,
    focus:"Langer Schwellenlauf 16km + 27km Long Run",
@@ -470,10 +481,10 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
     s("w10-do","Do","11. Jun","bike","Rennrad 90 min",0,"Längere Radeinheit – aerobes Training ohne Laufstress.","locker-moderat"),
     s("w10-fr","Fr","12. Jun","strength","Krafttraining (Gym)",0,"Ganzkörper.",null),
     s("w10-sa","Sa","13. Jun","easy","Easy Run",13,"Lockerer Lauf.","5:10–5:20/km"),
-    s("w10-so","So","14. Jun","long","Long Run 28 km mit MP 💪",28,"20km easy → letzte 8km @ 4:10/km. Erste spezifische Einheit!","5:10 → letzte 8km: 4:10/km"),
+    s("w10-so","So","14. Jun","long","Long Run 28 km mit MP",28,"20km easy → letzte 8km @ 4:10/km. Erste spezifische Einheit!","5:10 → letzte 8km: 4:10/km"),
   ]},
-  {wn:11,phase:"DEV",label:"Erholungswoche 2 ⬇️",dates:"15.–21. Juni 2026",km:55,
-   focus:"⬇️ Entlastungswoche – Kraft sammeln für Peak-Phase",
+  {wn:11,phase:"DEV",label:"Erholungswoche 2",dates:"15.–21. Juni 2026",km:55,
+   focus:"Entlastungswoche – Kraft sammeln für Peak-Phase",
    s:[
     s("w11-mo","Mo","15. Jun","rest","Ruhetag",0,"Regeneration.",null),
     s("w11-di","Di","16. Jun","easy","Easy Run",10,"Lockerer Lauf.","5:15–5:30/km"),
@@ -503,11 +514,11 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
     s("w13-do","Do","2. Jul","bike","Rennrad 90 min",0,"Lockere-moderate Radeinheit.","locker-moderat"),
     s("w13-fr","Fr","3. Jul","strength","Krafttraining (Gym)",0,"Ganzkörper.",null),
     s("w13-sa","Sa","4. Jul","easy","Easy Run",13,"Lockerer Lauf.","5:10–5:20/km"),
-    s("w13-so","So","5. Jul","long","Long Run 28 km – großer MP-Block 💥",28,"18km easy → letzte 10km @ 4:05/km. Starkes MP-Feeling!","5:10 → letzte 10: 4:05/km"),
+    s("w13-so","So","5. Jul","long","Long Run 28 km – großer MP-Block",28,"18km easy → letzte 10km @ 4:05/km. Starkes MP-Feeling!","5:10 → letzte 10: 4:05/km"),
   ]},
   // ── BUILD/PEAK ─────────────────────────────────
   {wn:14,phase:"BUILD",label:"Aufbau W1",dates:"6.–12. Juli 2026",km:80,
-   focus:"Erste 80km-Woche 🔥 – polarisierter Trainingsansatz beginnt",
+   focus:"Erste 80km-Woche – polarisierter Trainingsansatz beginnt",
    s:[
     s("w14-mo","Mo","6. Jul","rest","Ruhetag",0,"Regeneration.",null),
     s("w14-di","Di","7. Jul","interval","Intervall: 6×1600m",16,"2km WU · 6×1600m @ 3:55/km (2min Pause) · 2km CD.","3:55/km"),
@@ -515,7 +526,7 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
     s("w14-do","Do","9. Jul","easy","Easy Run",13,"Lockere Erholung.","5:10–5:25/km"),
     s("w14-fr","Fr","10. Jul","strength","Krafttraining (Gym)",0,"Ganzkörper.",null),
     s("w14-sa","Sa","11. Jul","easy","Easy Run",13,"Lockerer Lauf.","5:10–5:20/km"),
-    s("w14-so","So","12. Jul","long","Long Run 30 km 🎉",30,"ERSTE 30er-MARKE! Gleichmäßig easy – große Leistung!","5:10–5:20/km"),
+    s("w14-so","So","12. Jul","long","Long Run 30 km",30,"ERSTE 30er-MARKE! Gleichmäßig easy – große Leistung!","5:10–5:20/km"),
   ]},
   {wn:15,phase:"BUILD",label:"Aufbau W2",dates:"13.–19. Juli 2026",km:83,
    focus:"Schwellentempo + 30km mit starkem MP-Block",
@@ -526,10 +537,10 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
     s("w15-do","Do","16. Jul","bike","Rennrad 90 min",0,"Moderate Radeinheit – aktive Erholung.","locker-moderat"),
     s("w15-fr","Fr","17. Jul","strength","Krafttraining (Gym)",0,"Ganzkörper.",null),
     s("w15-sa","Sa","18. Jul","easy","Easy Run",14,"Lockerer Lauf.","5:10–5:20/km"),
-    s("w15-so","So","19. Jul","long","Long Run 30 km mit MP-Block 💥",30,"18km easy → letzte 12km @ 4:05/km. Schlüsseleinheit!","5:10 → letzte 12: 4:05/km"),
+    s("w15-so","So","19. Jul","long","Long Run 30 km mit MP-Block",30,"18km easy → letzte 12km @ 4:05/km. Schlüsseleinheit!","5:10 → letzte 12: 4:05/km"),
   ]},
-  {wn:16,phase:"BUILD",label:"Erholungswoche 3 ⬇️",dates:"20.–26. Juli 2026",km:63,
-   focus:"⬇️ Entlastungswoche vor dem Peak – gut erholen!",
+  {wn:16,phase:"BUILD",label:"Erholungswoche 3",dates:"20.–26. Juli 2026",km:63,
+   focus:"Entlastungswoche vor dem Peak – gut erholen!",
    s:[
     s("w16-mo","Mo","20. Jul","rest","Ruhetag",0,"Regeneration.",null),
     s("w16-di","Di","21. Jul","interval","Kurze Intervalle: 6×800m",12,"2km WU · 6×800m @ 3:45/km (2min Pause) · 2km CD. Schnell & frisch!","3:45/km"),
@@ -543,23 +554,23 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
    focus:"Doppelte Qualität: 3×5000m + Schwelle + riesiger Long Run",
    s:[
     s("w17-mo","Mo","27. Jul","rest","Ruhetag",0,"Regeneration.",null),
-    s("w17-di","Di","28. Jul","interval","Intervall: 3×5000m 🔥",18,"2km WU · 3×5000m @ 3:58/km (3min Pause) · 2km CD. Härteste Intervalleinheit!","3:58/km"),
+    s("w17-di","Di","28. Jul","interval","Intervall: 3×5000m",18,"2km WU · 3×5000m @ 3:58/km (3min Pause) · 2km CD. Härteste Intervalleinheit!","3:58/km"),
     s("w17-mi","Mi","29. Jul","easy","Easy Run",14,"Lockerer Dauerlauf.","5:10–5:20/km"),
     s("w17-do","Do","30. Jul","bike","Rennrad 90 min",0,"Moderate Radeinheit.","locker-moderat"),
     s("w17-fr","Fr","31. Jul","strength","Krafttraining (Gym)",0,"Ganzkörper.",null),
     s("w17-sa","Sa","1. Aug","tempo","Tempodauerlauf 18 km",18,"2km WU · 14km @ 3:58/km · 2km CD.","3:58/km"),
-    s("w17-so","So","2. Aug","long","Long Run 32 km mit MP-Block 🏔️",32,"20km easy → letzte 12km @ 4:05/km. Eine der wichtigsten Einheiten!","5:10 → letzte 12: 4:05/km"),
+    s("w17-so","So","2. Aug","long","Long Run 32 km mit MP-Block",32,"20km easy → letzte 12km @ 4:05/km. Eine der wichtigsten Einheiten!","5:10 → letzte 12: 4:05/km"),
   ]},
-  {wn:18,phase:"BUILD",label:"🔥 PEAK-WOCHE",dates:"3.–9. August 2026",km:90,
-   focus:"🔥 PEAK-WOCHE – Höchste Kilometerzahl der Saison! Du schaffst das!",
+  {wn:18,phase:"BUILD",label:"PEAK-WOCHE",dates:"3.–9. August 2026",km:90,
+   focus:"PEAK-WOCHE – Höchste Kilometerzahl der Saison! Du schaffst das!",
    s:[
     s("w18-mo","Mo","3. Aug","rest","Ruhetag",0,"Regeneration nach Sa/So. Sehr wichtig!",null),
-    s("w18-di","Di","4. Aug","tempo","Tempodauerlauf 20 km 🔥",20,"2km WU · 16km @ 3:58/km · 2km CD. Langer, harter Schwellenlauf!","3:58/km"),
+    s("w18-di","Di","4. Aug","tempo","Tempodauerlauf 20 km",20,"2km WU · 16km @ 3:58/km · 2km CD. Langer, harter Schwellenlauf!","3:58/km"),
     s("w18-mi","Mi","5. Aug","easy","Easy Run",15,"Lockerer Dauerlauf.","5:10–5:20/km"),
     s("w18-do","Do","6. Aug","easy","Easy Run",14,"Lockere Erholung.","5:15–5:25/km"),
     s("w18-fr","Fr","7. Aug","strength","Krafttraining (Gym)",0,"Ganzkörper.",null),
     s("w18-sa","Sa","8. Aug","easy","Easy Run",13,"Locker – Beine für den großen Sonntag schonen.","5:15–5:25/km"),
-    s("w18-so","So","9. Aug","long","Long Run 34 km 🏔️ LÄNGSTER LAUF",34,"LÄNGSTER LAUF DER SAISON! 22km easy → letzte 12km @ 4:05/km. EPIC!","5:10 → letzte 12: 4:05/km"),
+    s("w18-so","So","9. Aug","long","Long Run 34 km LÄNGSTER LAUF",34,"LÄNGSTER LAUF DER SAISON! 22km easy → letzte 12km @ 4:05/km. EPIC!","5:10 → letzte 12: 4:05/km"),
   ]},
   // ── SPEC ───────────────────────────────────────
   {wn:19,phase:"SPEC",label:"Aufbau W6 – Pre-HM",dates:"10.–16. August 2026",km:72,
@@ -584,8 +595,8 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
     s("w20-sa","Sa","22. Aug","easy","Easy Run",8,"Kurzer lockerer Lauf.","5:15–5:30/km"),
     s("w20-so","So","23. Aug","long","Long Run 22 km easy",22,"Easy – letzter großer Lauf vor dem HM.","5:20–5:30/km"),
   ]},
-  {wn:21,phase:"SPEC",label:"🏁 KÖLNER HALBMARATHON",dates:"24.–30. August 2026",km:42,
-   focus:"🏁 MEILENSTEIN: Kölner Halbmarathon! Ziel: ~1:23–1:25 (3:56–3:59/km)",
+  {wn:21,phase:"SPEC",label:"KÖLNER HALBMARATHON",dates:"24.–30. August 2026",km:42,
+   focus:"MEILENSTEIN: Kölner Halbmarathon! Ziel: ~1:23–1:25 (3:56–3:59/km)",
    s:[
     s("w21-mo","Mo","24. Aug","rest","Ruhetag",0,"Regeneration.",null),
     s("w21-di","Di","25. Aug","easy","Easy + 6× Strides",8,"Locker einlaufen, Beine aktivieren.","5:20–5:30/km + Strides"),
@@ -593,7 +604,7 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
     s("w21-do","Do","27. Aug","strength","Krafttraining – sehr leicht",0,"Leichtes Krafttraining! Keinen Muskelkater riskieren!",null),
     s("w21-fr","Fr","28. Aug","easy","Easy Run",6,"Kurz & locker. Mentale Vorbereitung.","5:20–5:30/km"),
     s("w21-sa","Sa","29. Aug","easy","Easy + 4× Strides (shakeout)",5,"5km easy + 4×Strides. Früh ins Bett!","locker + Strides"),
-    s("w21-so","So","30. Aug","race","🏁 KÖLNER HALBMARATHON",21.1,"MEILENSTEIN! Zeigt dir, wie gut die Prep läuft. Rennday-Feeling sammeln!","3:56–3:59/km (Ziel 1:23–1:25)"),
+    s("w21-so","So","30. Aug","race","KÖLNER HALBMARATHON",21.1,"MEILENSTEIN! Zeigt dir, wie gut die Prep läuft. Rennday-Feeling sammeln!","3:56–3:59/km (Ziel 1:23–1:25)"),
   ]},
   {wn:22,phase:"SPEC",label:"Erholung nach HM",dates:"31. Aug – 6. Sep 2026",km:62,
    focus:"Erholen & zurück in den Rhythmus – letzte richtige Trainingsphase",
@@ -607,8 +618,8 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
     s("w22-so","So","6. Sep","long","Long Run 24 km",24,"Letzter richtiger Long Run vor dem Taper. Easy & selbstbewusst!","5:10–5:20/km"),
   ]},
   // ── TAPER ──────────────────────────────────────
-  {wn:23,phase:"TAPER",label:"Taper W1 ⬇️",dates:"7.–13. September 2026",km:55,
-   focus:"⬇️ Taper beginnt – Volumen runter, Intensität BLEIBT!",
+  {wn:23,phase:"TAPER",label:"Taper W1",dates:"7.–13. September 2026",km:55,
+   focus:"Taper beginnt – Volumen runter, Intensität BLEIBT!",
    s:[
     s("w23-mo","Mo","7. Sep","rest","Ruhetag",0,"Regeneration.",null),
     s("w23-di","Di","8. Sep","interval","Intervall: 5×1000m",13,"2km WU · 5×1000m @ 3:55/km (90s Pause) · 2km CD.","3:55/km"),
@@ -618,8 +629,8 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
     s("w23-sa","Sa","12. Sep","easy","Easy + Strides",10,"10km easy + 6×80m Strides.","5:15–5:25/km"),
     s("w23-so","So","13. Sep","long","Long Run 24 km mit MP",24,"16km easy → letzte 8km @ 4:01/km (MARATHON PACE!). Letzter harter Long Run.","5:15 → letzte 8: 4:01/km"),
   ]},
-  {wn:24,phase:"TAPER",label:"Taper W2 ⬇️⬇️",dates:"14.–20. September 2026",km:42,
-   focus:"⬇️⬇️ Volumen stark reduziert – die Form kommt jetzt!",
+  {wn:24,phase:"TAPER",label:"Taper W2",dates:"14.–20. September 2026",km:42,
+   focus:"Volumen stark reduziert – die Form kommt jetzt!",
    s:[
     s("w24-mo","Mo","14. Sep","rest","Ruhetag",0,"Regeneration.",null),
     s("w24-di","Di","15. Sep","interval","Intervall: 4×1000m",10,"2km WU · 4×1000m @ 3:55/km (90s Pause) · 2km CD.","3:55/km"),
@@ -629,8 +640,8 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
     s("w24-sa","Sa","19. Sep","easy","Easy + 6× Strides",8,"8km easy + 6×80m Strides. Beine aktivieren.","5:15–5:25/km"),
     s("w24-so","So","20. Sep","long","Long Run 18 km mit MP",18,"12km easy → letzte 6km @ 4:01/km. Letzte längere Einheit!","5:15 → letzte 6: 4:01/km"),
   ]},
-  {wn:25,phase:"TAPER",label:"🏆 RACE WEEK – WARSCHAU",dates:"21.–27. September 2026",km:28,
-   focus:"🏆 RACE WEEK – Du hast alles gegeben. Jetzt erntest du! SUB 2:50!",
+  {wn:25,phase:"TAPER",label:"RACE WEEK – WARSCHAU",dates:"21.–27. September 2026",km:28,
+   focus:"RACE WEEK – Du hast alles gegeben. Jetzt erntest du! SUB 2:50!",
    s:[
     s("w25-mo","Mo","21. Sep","rest","Ruhetag",0,"Füße hochlegen, gut essen & trinken, relaxen.",null),
     s("w25-di","Di","22. Sep","easy","Easy + Strides",8,"8km easy + 4×80m Strides. Beine aktivieren.","5:15–5:25/km"),
@@ -638,7 +649,7 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
     s("w25-do","Do","24. Sep","easy","Easy + 3× MP-Strides",5,"5km easy + 3×100m @ MP. Kurz reinspüren.","5:20 + 3×MP-Strides"),
     s("w25-fr","Fr","25. Sep","rest","Ruhetag / Anreise Warschau",0,"Anreise, Expo, Startnummer. Beine schonen! Carbo-Loading!",null),
     s("w25-sa","Sa","26. Sep","easy","Shakeout: 4 km + Strides",4,"4km sehr locker + 4×80m Strides. Beine aufwecken!","locker + Strides"),
-    s("w25-so","So","27. Sep","race","🏆 WARSCHAU MARATHON – SUB 2:50!",42.2,"START 🔥 Erste Hälfte: 4:04–4:05/km · Zweite Hälfte: aufdrehen! Du hast es dir verdient!","⌀ 4:01/km = 2:49:50"),
+    s("w25-so","So","27. Sep","race","WARSCHAU MARATHON – SUB 2:50!",42.2,"START Erste Hälfte: 4:04–4:05/km · Zweite Hälfte: aufdrehen! Du hast es dir verdient!","⌀ 4:01/km = 2:49:50"),
   ]},
 ];
 const BASE_PLAN = LEGACY_EMBEDDED_PLAN_WEEKS;
@@ -758,22 +769,22 @@ function getSessionMilestones(session, week, meta){
 
   const plannedKm = getSessionPlannedDistanceKm(session);
   if(session.type === "long" && plannedKm > 28){
-    milestones.push({ label: "Long Run 28+", emoji: "🏔️", color: "#38bdf8" });
+    milestones.push({ label: "Langer Lauf 28+", color: "#38bdf8" });
   }
   if(meta?.first30kId && session.id === meta.first30kId){
-    milestones.push({ label: "Erste 30 km", emoji: "🚀", color: "#f97316" });
+    milestones.push({ label: "Erste 30 km", color: "#f97316" });
   }
   if(meta?.longestLongRunKm != null && session.type === "long" && plannedKm === meta.longestLongRunKm && plannedKm > 0){
-    milestones.push({ label: "Längster Lauf", emoji: "👑", color: "#f59e0b" });
+    milestones.push({ label: "Längster Lauf", color: "#f59e0b" });
   }
   if(session.type === "race" && plannedKm >= 42){
-    milestones.push({ label: "Marathon", emoji: "🏁", color: "#ef4444" });
+    milestones.push({ label: "Marathon", color: "#ef4444" });
   }else if(session.type === "race" && plannedKm >= 21){
-    milestones.push({ label: "Halbmarathon", emoji: "🎯", color: "#a855f7" });
+    milestones.push({ label: "Halbmarathon", color: "#a855f7" });
   }
   // WARNING: week.km is legacy and may not equal sum of sessions — OK for peak-week heuristic only.
   if(week.km >= 90){
-    milestones.push({ label: "Peak Woche", emoji: "🔥", color: "#10b981" });
+    milestones.push({ label: "Spitzenwoche", color: "#10b981" });
   }
 
   return milestones;
@@ -856,12 +867,12 @@ function getWeeklyFatigue(week){
   else if(longestRun >= 24)score += 1;
 
   if(score >= 4){
-    return { label: "hoch", icon: "🔴", color: "#f87171", note: "Viele Reize, Belastung aktiv managen." };
+    return { label: "hoch", word: "Hoch", tone: "low", color: "#f87171", note: "Viele Reize, Belastung aktiv managen." };
   }
   if(score >= 2.25){
-    return { label: "mittel", icon: "🟡", color: "#fbbf24", note: "Solide Trainingswoche mit spürbarer Beanspruchung." };
+    return { label: "mittel", word: "Mittel", tone: "fair", color: "#fbbf24", note: "Solide Trainingswoche mit spürbarer Beanspruchung." };
   }
-  return { label: "niedrig", icon: "🟢", color: "#34d399", note: "Kontrollierte Woche, gut für Konstanz und Erholung." };
+  return { label: "niedrig", word: "Niedrig", tone: "good", color: "#34d399", note: "Kontrollierte Woche, gut für Konstanz und Erholung." };
 }
 
 /** Legacy "no completed half marathon this cycle" default — unchanged from the original heuristic. */
@@ -1077,18 +1088,6 @@ function getSessionTypeAccentColor(type){
   return meta?.col ?? "var(--text-muted)";
 }
 
-/** Linker Tabbar-Shortcut: gleiche Lauf-Session wie Home-Held (`homeRunSession`). */
-function getHomeTabLabel(session, isPreStart){
-  if(isPreStart)return "START";
-  if(!session)return "HOME";
-  if(session.type === "bike")return TI.bike?.emoji ?? "🚴";
-  if(session.type === "strength")return TI.strength?.emoji ?? "💪";
-  const display = getDisplayPlannedDistanceKm(session);
-  if(display != null && display > 0)return String(Math.round(display));
-  if(session.type === "race")return TI.race?.emoji ?? "🏁";
-  return "HOME";
-}
-
 /** Prominente 3er-Stat-Box-Reihe (Distanz/Tempo/HF) im Session-Detail-Modal — zweitgrößte visuelle Ebene nach dem Titel. */
 function StatBox({ label, value, sublabel, accent }){
   return (
@@ -1269,7 +1268,7 @@ export default function AppMain(){
         let phase: TrainingPhase = "base";
         if (planPhase === "TAPER") phase = "taper";
         else if (planPhase === "PEAK") phase = "peak";
-        else if (label.toLowerCase().includes("peak") || label.includes("🔥")) phase = "peak";
+        else if (label.toLowerCase().includes("peak")) phase = "peak";
         else if (planPhase === "BUILD" || planPhase === "SPEC" || planPhase === "DEV") phase = "build";
         else phase = "base";
         map.set(weekStartIso, { weekStartIso, phase });
@@ -1286,7 +1285,7 @@ export default function AppMain(){
       let phase: TrainingPhase = "base";
       if (planPhase === "TAPER") phase = "taper";
       else if (planPhase === "PEAK") phase = "peak";
-      else if (label.toLowerCase().includes("peak") || label.includes("🔥")) phase = "peak";
+      else if (label.toLowerCase().includes("peak")) phase = "peak";
       else if (planPhase === "BUILD" || planPhase === "SPEC" || planPhase === "DEV") phase = "build";
       else phase = "base";
       map.set(weekStartIso, { weekStartIso, phase });
@@ -2017,7 +2016,7 @@ export default function AppMain(){
       if (freshBlocks) setScheduleBlocks(freshBlocks);
       setCalendarFeedback({
         tone: "ok",
-        text: result.importedCount > 0 ? `✓ ${result.importedCount} Termine importiert` : "Kalender verbunden — keine Termine in den nächsten 4 Wochen.",
+        text: result.importedCount > 0 ? `${result.importedCount} Termine importiert` : "Kalender verbunden — keine Termine in den nächsten 4 Wochen.",
       });
     } finally {
       setCalendarConnectBusy(false);
@@ -2726,7 +2725,7 @@ export default function AppMain(){
     pendingCalendarProposal,
     weekCalendarBatchProposal,
   });
-  const ph=PI[w?.phase ?? ""] ?? PI["base"] ?? PI["BASE"] ?? { label:"Woche", emoji:"📅", col:"var(--text-secondary)", bg:"var(--border-default)" };
+  const ph=PI[w?.phase ?? ""] ?? PI["base"] ?? PI["BASE"] ?? { label:"Woche", col:"var(--text-secondary)", bg:"var(--border-default)" };
   // Week 1 mid-week start: show greyed placeholder cells for days before plan start
   const WEEK_DAYS_DE = ["Mo","Di","Mi","Do","Fr","Sa","So"];
   const missingLeadingDays = wIdx === 0 && wSessions.length > 0 && wSessions[0].day !== "Mo"
@@ -3249,7 +3248,6 @@ export default function AppMain(){
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const firstTrainingStart = firstTrainingDate ? new Date(firstTrainingDate.getFullYear(), firstTrainingDate.getMonth(), firstTrainingDate.getDate()) : null;
   const hasCalendarStarted = !!(firstTrainingStart && todayStart >= firstTrainingStart);
-  const isPreStart = isHomePreStart(logs, ACTIVE_SESSIONS);
   const blockStartLabel = firstTrainingDate
     ? firstTrainingDate.toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })
     : "";
@@ -3354,7 +3352,6 @@ export default function AppMain(){
     ],
   );
 
-  const homeTabLabel = getHomeTabLabel(homeRunSession, isPreStart);
   /** Ziel-Zeile der Profilkarte: Renntag und Distanz aus dem aktiven Plan, Ziel nur aus SEINEN Preferences. */
   const settingsGoalLine = () => {
     const race = prepCompleted ? null : findGoalRaceSession(displayPlan);
@@ -3792,12 +3789,10 @@ export default function AppMain(){
   const compactScreen = getCompactScreenSpacing();
   const spacing = { xs: LAYOUT_SPACING.xs, sm: LAYOUT_SPACING.sm, md: LAYOUT_SPACING.md };
   const safeTopPad = "max(44px, env(safe-area-inset-top, 44px))";
-  /** Platz für die schwebende Tab-Bar — eine Quelle für alle Tabs (`layout/bottomNavLayout.ts`). */
+  /** Platz für die Tab-Bar — eine Quelle für alle Tabs (`layout/bottomNavLayout.ts`). */
   const safeBottomContentPad = getBottomNavContentPadding();
   const appRootBackground = {
-    backgroundColor: "#070912",
-    backgroundImage: "radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",
-    backgroundRepeat: "no-repeat",
+    backgroundColor: "var(--surface-0)",
   };
   const mainScrollAreaStyle = {
     flex: 1,
@@ -4018,7 +4013,7 @@ export default function AppMain(){
       );
       if (cards.length >= 2) validateSiblingStackNoOverlap(cards, "week-sessions");
     }
-    // Jeder Tab: der Inhaltsbereich endet oberhalb der schwebenden Tab-Bar.
+    // Jeder Tab: der Inhaltsbereich endet oberhalb der Tab-Bar.
     validateClearOfBottomNav(mainContentAreaRef.current, bottomNavRef.current, `bottom-nav:${activeView}`);
     // Home in dichtester Stufe: was jetzt noch überläuft, muss gescrollt werden (nur kleine Geräte erwartet).
     if (activeView === "home" && !homeCoachAssessmentExpanded && homeDensity === 2 && homeTailRef.current) {
@@ -4075,22 +4070,11 @@ export default function AppMain(){
         }}
       >
       <style>{`
-        .dashboard-action,
-        .bottom-nav-btn {
-          -webkit-tap-highlight-color: transparent;
-        }
         .dashboard-action {
+          -webkit-tap-highlight-color: transparent;
           transition: transform .12s ease, background .22s ease, border-color .22s ease, box-shadow .22s ease, color .22s ease;
         }
         .dashboard-action:active {
-          transform: scale(.97);
-        }
-        .bottom-nav-btn {
-          transition: transform .12s ease, background .22s ease, color .22s ease, opacity .22s ease;
-          justify-content: center !important;
-          align-items: center !important;
-        }
-        .bottom-nav-btn:active {
           transform: scale(.97);
         }
         @keyframes viewSlideNext {
@@ -4128,7 +4112,7 @@ export default function AppMain(){
               ...viewTransitionStyle,
             }}
           >
-            <div style={{ fontSize: 48 }}>🏃</div>
+            <Footprints aria-hidden size={48} strokeWidth={ICON_STROKE} color="var(--ink-3)" />
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#f1f5f9" }}>
               Kein Plan vorhanden
             </h2>
@@ -4159,10 +4143,9 @@ export default function AppMain(){
                 fontWeight: 700,
                 borderRadius: 14,
                 border: "none",
-                color: "#fff",
-                background: "linear-gradient(135deg, #10b981, #3b82f6)",
                 cursor: "pointer",
               }}
+              className="mr-btn mr-btn--primary"
             >
               Onboarding neu starten
             </button>
@@ -4300,15 +4283,12 @@ export default function AppMain(){
                           aria-label="Erledigt"
                           style={{
                             marginLeft: 8,
-                            fontSize: 14,
-                            fontWeight: 900,
-                            color: "#22c55e",
+                            color: "var(--status-good)",
                             verticalAlign: "baseline",
                             display: "inline-block",
-                            transform: "translateY(-1px)",
                           }}
                         >
-                          ✓
+                          <Check aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />
                         </span>
                       ) : null;
                     })()}
@@ -4372,7 +4352,7 @@ export default function AppMain(){
                 ) : dashboardStatus === "done" ? (
                   <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.22)", borderRadius: 999, padding: homeScrollLocked ? "2px 8px" : "3px 10px" }}>
                     <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
-                    <span style={{ fontSize: homeScrollLocked ? 10 : 11, color: "#86efac", fontWeight: 700 }}>Heute erledigt ✓</span>
+                    <span style={{ fontSize: homeScrollLocked ? 10 : 11, color: "#86efac", fontWeight: 700 }}>Heute erledigt</span>
                   </div>
                 ) : (
                   <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 999, padding: homeScrollLocked ? "2px 8px" : "3px 10px" }}>
@@ -4473,107 +4453,42 @@ export default function AppMain(){
             >
               {dashboardStatus !== "skipped" && !dashboardHealthOnlyDone ? (
               <button
-                className="dashboard-action"
+                className={`dashboard-action mr-btn ${dashboardStatus === "done" ? "mr-btn--secondary" : "mr-btn--primary"}`}
                 type="button"
                 onClick={() => homeRunSession && quickCompleteSession(homeRunSession)}
                 disabled={!homeRunSession}
                 aria-label={dashboardStatus === "done" ? "Erledigt-Markierung rückgängig machen" : undefined}
-                style={dashboardStatus === "done" ? {
-                  flex: 1,
-                  minWidth: 0,
-                  background: "var(--bg-surface)",
-                  border: "1px solid var(--border-default)",
-                  color: homeRunSession ? "var(--text-secondary)" : "#374151",
-                  borderRadius: 999,
-                  padding: "11px 12px",
-                  minHeight: 46,
-                  cursor: homeRunSession ? "pointer" : "not-allowed",
-                  fontSize: 14,
-                  fontWeight: 700,
-                  boxSizing: "border-box",
-                } : {
-                  flex: 1,
-                  minWidth: 0,
-                  background: "rgba(16,185,129,0.26)",
-                  border: "1px solid rgba(16,185,129,0.4)",
-                  color: homeRunSession ? "#ecfdf5" : "#374151",
-                  borderRadius: 999,
-                  padding: "11px 12px",
-                  minHeight: 46,
-                  cursor: homeRunSession ? "pointer" : "not-allowed",
-                  fontSize: 15,
-                  fontWeight: 800,
-                  boxShadow: "0 10px 28px rgba(16,185,129,0.12)",
-                  boxSizing: "border-box",
-                }}
+                style={{ flex: 2, height: 46, padding: "0 12px" }}
               >
-                {dashboardStatus === "done" ? "Rückgängig" : "✓ Done"}
+                {dashboardStatus === "done" ? "Rückgängig" : (
+                  <>
+                    <Check aria-hidden size={18} strokeWidth={ICON_STROKE} />
+                    Erledigt
+                  </>
+                )}
               </button>
               ) : null}
               {dashboardStatus !== "done" ? (
               <button
-                className="dashboard-action"
+                className="dashboard-action mr-btn mr-btn--secondary"
                 type="button"
                 onClick={() => homeRunSession && quickSkipSession(homeRunSession)}
                 disabled={!homeRunSession}
                 aria-label={dashboardStatus === "skipped" ? "Übersprungen-Markierung rückgängig machen" : undefined}
-                style={dashboardStatus === "skipped" ? {
-                  flex: 1,
-                  minWidth: 0,
-                  background: "var(--bg-surface)",
-                  border: "1px solid var(--border-default)",
-                  color: homeRunSession ? "var(--text-secondary)" : "#374151",
-                  borderRadius: 999,
-                  padding: "11px 12px",
-                  minHeight: 46,
-                  cursor: homeRunSession ? "pointer" : "not-allowed",
-                  fontSize: 14,
-                  fontWeight: 700,
-                  boxSizing: "border-box",
-                } : {
-                  flex: 1,
-                  minWidth: 0,
-                  background: "rgba(239,68,68,0.18)",
-                  border: "1px solid rgba(248,113,113,0.32)",
-                  color: homeRunSession ? "#fecaca" : "#374151",
-                  borderRadius: 999,
-                  padding: "11px 12px",
-                  minHeight: 46,
-                  cursor: homeRunSession ? "pointer" : "not-allowed",
-                  fontSize: 15,
-                  fontWeight: 800,
-                  boxShadow: "0 10px 26px rgba(248,113,113,0.1)",
-                  boxSizing: "border-box",
-                }}
+                style={{ flex: 1, height: 46, padding: "0 12px" }}
               >
-                {dashboardStatus === "skipped" ? "Rückgängig" : "Skip"}
+                {dashboardStatus === "skipped" ? "Rückgängig" : "Auslassen"}
               </button>
               ) : null}
               <button
                 type="button"
-                className="dashboard-action"
+                className="dashboard-action mr-btn mr-btn--secondary"
                 onClick={() => homeRunSession && openModal(homeRunSession)}
                 disabled={!homeRunSession}
-                style={{
-                  flex: "0 0 46px",
-                  width: 46,
-                  minWidth: 46,
-                  margin: 0,
-                  padding: 0,
-                  background: "var(--bg-surface)",
-                  border: "1px solid var(--border-default)",
-                  color: homeRunSession ? "var(--text-secondary)" : "#374151",
-                  borderRadius: 999,
-                  cursor: homeRunSession ? "pointer" : "not-allowed",
-                  fontSize: 16,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxSizing: "border-box",
-                }}
+                style={{ flex: "0 0 46px", width: 46, height: 46, padding: 0 }}
                 aria-label="Details zur Einheit öffnen"
               >
-                ⓘ
+                <Info aria-hidden size={ICON_SIZE} strokeWidth={ICON_STROKE} />
               </button>
             </div>
             )}
@@ -4918,7 +4833,7 @@ export default function AppMain(){
                 }}
               >
                 {homeCoachAssessmentExpanded ? "Weniger anzeigen" : t("plan.show_more")}
-                <span style={{ marginLeft: 6, opacity: 0.85 }} aria-hidden>{homeCoachAssessmentExpanded ? "▴" : "▾"}</span>
+                <span style={{ marginLeft: 6, display: "inline-flex", verticalAlign: "middle" }} aria-hidden>{homeCoachAssessmentExpanded ? <ChevronUp size={ICON_SIZE_S} strokeWidth={ICON_STROKE} /> : <ChevronDown size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />}</span>
               </button>
             </div>
 
@@ -4927,20 +4842,18 @@ export default function AppMain(){
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:4}}>
                 <div style={{padding:hs.metricsTopTilePadding,textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Erholung</div>
-                  <div style={{fontSize:15,fontWeight:800,color:recoveryPresentation.session.toneHex,lineHeight:1.1}}>
-                    {isRecoveryHydrating && recoveryPresentation.session.label === "Keine Daten"
-                      ? <span style={{ display: "inline-block", width: 30, height: 13, borderRadius: 3, background: "var(--bg-surface)", animation: "pulse 1.2s ease-in-out infinite", verticalAlign: "middle" }} />
-                      : recoveryPresentation.session.label}
-                  </div>
+                  {isRecoveryHydrating && recoveryPresentation.session.label === "Keine Daten"
+                    ? <span style={{ display: "inline-block", width: 30, height: 13, borderRadius: 3, background: "var(--bg-surface)", animation: "pulse 1.2s ease-in-out infinite", verticalAlign: "middle" }} />
+                    : <StatusChip tone={recoveryPresentation.session.status ?? "neutral"}>{recoveryPresentation.session.label}</StatusChip>}
                 </div>
                 <div style={{padding:hs.metricsTopTilePadding,textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Belastung</div>
-                  <div style={{fontSize:15,fontWeight:800,color:weeklyFatigue.color,lineHeight:1}}>{weeklyFatigue.icon} {weeklyFatigue.label}</div>
+                  <StatusChip tone={weeklyFatigue.tone}>{weeklyFatigue.word}</StatusChip>
                 </div>
                 <div style={{padding:hs.metricsTopTilePadding,textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
                   <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Serie</div>
                   <div style={{fontSize:16,fontWeight:800,color:"#c4b5fd",lineHeight:1}}>
-                    {consistencyStats.sessionStreak}<span style={{fontSize:10,color:"rgba(148,163,184,0.48)",marginLeft:2}}>×</span>
+                    {consistencyStats.sessionStreak}<span style={{fontSize:10,color:"var(--ink-3)",marginLeft:3}}>{consistencyStats.sessionStreak === 1 ? "Tag" : "Tage"}</span>
                   </div>
                 </div>
               </div>
@@ -4949,8 +4862,8 @@ export default function AppMain(){
                 {[
                   { label: "Plan", value: `${prepProgressPct}%`, sub: "Fortschritt", color: "#10b981" },
                   { label: "km", value: `${Math.round(loggedRunKm)}`, sub: `${kmPct}%`, color: "#38bdf8" },
-                  { label: "Long", value: `${doneLongRuns}/${longRuns}`, sub: "done", color: "#f59e0b" },
-                  { label: "Quality", value: `${doneHardSessions}/${hardSessions}`, sub: "done", color: "#fb7185" },
+                  { label: "Lange Läufe", value: `${doneLongRuns}/${longRuns}`, sub: "erledigt", color: "#f59e0b" },
+                  { label: "Qualität", value: `${doneHardSessions}/${hardSessions}`, sub: "erledigt", color: "#fb7185" },
                 ].map(m=>(
                   <div
                     key={m.label}
@@ -4994,13 +4907,13 @@ export default function AppMain(){
           >
             <div data-tour="week-header" style={{ flexShrink: 0, background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:16,padding:"4px 6px 4px",boxShadow:"0 20px 40px var(--shadow)"}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid var(--border-default)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===0?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
+                <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid var(--border-default)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===0?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}} aria-label="Vorherige Woche"><ChevronLeft aria-hidden size={ICON_SIZE} strokeWidth={ICON_STROKE} /></button>
                 <div style={{flex:1,textAlign:"center",minWidth:0}}>
-                  <span style={{display:"inline-block",padding:"3px 9px",borderRadius:999,fontSize:11,fontWeight:700,background:ph.bg,color:ph.col,marginBottom:4}}>{ph.emoji} {ph.label}</span>
+                  <span style={{display:"inline-block",padding:"3px 9px",borderRadius:999,fontSize:11,fontWeight:700,background:ph.bg,color:ph.col,marginBottom:4}}>{ph.label}</span>
                   <div style={{fontSize:17,fontWeight:800,color:"var(--text-primary)",lineHeight:1.2}}>{w?.label ?? ""}</div>
                   <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:2}}>{w?.dates ?? ""}</div>
                 </div>
-                <button onClick={()=>setWIdx(i=>Math.min(displayPlan.length-1,i+1))} disabled={wIdx===displayPlan.length-1} style={{background:wIdx===displayPlan.length-1?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid var(--border-default)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===displayPlan.length-1?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
+                <button onClick={()=>setWIdx(i=>Math.min(displayPlan.length-1,i+1))} disabled={wIdx===displayPlan.length-1} style={{background:wIdx===displayPlan.length-1?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid var(--border-default)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===displayPlan.length-1?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}} aria-label="Nächste Woche"><ChevronRight aria-hidden size={ICON_SIZE} strokeWidth={ICON_STROKE} /></button>
               </div>
 
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:3,marginTop:2}}>
@@ -5068,7 +4981,8 @@ export default function AppMain(){
                   gap: 6,
                 }}
               >
-                📅 Woche auf Kalenderkonflikte prüfen
+                <CalendarDays aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />
+                Woche auf Kalenderkonflikte prüfen
               </button>
             )}
 
@@ -5137,8 +5051,8 @@ export default function AppMain(){
                       >
                         <span style={{fontSize:13,fontWeight:700,color:"#dbe7ff"}}>{candidate.label}</span>
                         {candidate.isConflict && (
-                          <span style={{fontSize:11,color:"#f87171"}}>
-                            ⚠️ Ungünstig{candidate.warningReason ? `: ${candidate.warningReason}` : ""}
+                          <span style={{fontSize:11,color:"var(--status-low)"}}>
+                            Ungünstig{candidate.warningReason ? `: ${candidate.warningReason}` : ""}
                           </span>
                         )}
                       </button>
@@ -5180,7 +5094,7 @@ export default function AppMain(){
                       <span style={{fontSize:13,color:"#f87171",lineHeight:1.5}}>
                         Konnte nicht automatisch aufgelöst werden: {(weekCalendarBatchProposal.blockedReasons || []).join(" ")}
                       </span>
-                      <span style={{fontSize:12,color:"var(--text-secondary)"}}>Bitte einzelne Konflikte über den 📅-Button pro Einheit bearbeiten.</span>
+                      <span style={{fontSize:12,color:"var(--text-secondary)"}}>Bitte einzelne Konflikte über den Kalender-Button pro Einheit bearbeiten.</span>
                       <button onClick={handleCancelWeekCalendarBatch} style={{alignSelf:"flex-end",background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700,fontSize:13}}>OK</button>
                     </div>
                   ) : weekCalendarBatchProposal.action ? (
@@ -5206,7 +5120,7 @@ export default function AppMain(){
                 const isDone=status==="done";
                 const isSkipped=status==="skipped";
                 const milestones = getSessionMilestones(session, w, milestoneMeta);
-                const milestoneEmojis = milestones.map((milestone) => milestone.emoji).join(" ");
+                const milestoneLabels = milestones.map((milestone) => milestone.label).join(" · ");
                 const hasHint = session.type !== "rest";
                 const weekCompact = !weekHasExpandedSessionDesc;
                 const sessionRowWrap = getWeekSessionRowWrapStyle(weekStackShouldScroll);
@@ -5235,16 +5149,16 @@ export default function AppMain(){
                   >
                     <div style={{width: weekCompact ? 30 : 36,flexShrink:0,textAlign:"center"}}>
                       <div style={{fontSize: weekCompact ? 9 : 10,fontWeight:800,color:"var(--text-secondary)",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
-                      <div style={{marginTop: weekCompact ? 3 : 4,width: weekCompact ? 30 : 36,height: weekCompact ? 30 : 36,borderRadius:10,background:`${ti.col}1a`,border:`1px solid ${ti.col}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize: weekCompact ? 15 : 16}}>{ti.emoji}</div>
+                      <div style={{marginTop: weekCompact ? 3 : 4,width: weekCompact ? 30 : 36,height: weekCompact ? 30 : 36,borderRadius:10,background:`${ti.col}1a`,border:`1px solid ${ti.col}33`,display:"flex",alignItems:"center",justifyContent:"center",color:ti.col}}><SessionTypeIcon type={session.type} size={weekCompact ? ICON_SIZE_S : 18} /></div>
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{fontSize: weekCompact ? 14 : 15,fontWeight:700,color:weekTitleColor,lineHeight:1.3,overflowWrap:"anywhere"}}>
-                        {session.title}{milestoneEmojis ? ` ${milestoneEmojis}` : ""}
+                        {session.title}
                       </div>
-                      {displayPk != null && displayPk > 0 ? (
-                        <div style={{fontSize: weekCompact ? 12 : 13,fontWeight:600,color:"rgba(148,163,184,0.85)",marginTop:2}}>
-                          {`${formatKm(displayPk).toFixed(1)} km`}
+                      {(displayPk != null && displayPk > 0) || milestoneLabels ? (
+                        <div style={{fontSize: weekCompact ? 12 : 13,fontWeight:600,color:"var(--ink-2)",marginTop:2}}>
+                          {[displayPk != null && displayPk > 0 ? `${formatKm(displayPk).toFixed(1)} km` : null, milestoneLabels || null].filter(Boolean).join(" · ")}
                         </div>
                       ) : null}
                     </div>
@@ -5261,13 +5175,15 @@ export default function AppMain(){
                           background:isDone?"rgba(16,185,129,0.18)":"rgba(15,23,42,0.82)",
                           color:isDone?"#86efac":"#cbd5e1",
                           cursor:"pointer",
-                          fontSize:16,
-                          fontWeight:800,
+                          display:"flex",
+                          alignItems:"center",
+                          justifyContent:"center",
+                          padding:0,
                           transition:"transform .18s ease, background .18s ease"
                         }}
                         aria-label={`${session.title} schnell als erledigt markieren`}
                       >
-                        ✓
+                        <Check aria-hidden size={18} strokeWidth={ICON_STROKE} />
                       </button>
                     )}
                     {hasHint && scheduleBlocks.length > 0 && !lockedSessionIds.has(session.id) && (
@@ -5282,11 +5198,14 @@ export default function AppMain(){
                           background:"rgba(15,23,42,0.82)",
                           color:"#cbd5e1",
                           cursor:"pointer",
-                          fontSize:15,
+                          display:"flex",
+                          alignItems:"center",
+                          justifyContent:"center",
+                          padding:0,
                         }}
                         aria-label={`${session.title} an Kalender anpassen`}
                       >
-                        📅
+                        <CalendarDays aria-hidden size={18} strokeWidth={ICON_STROKE} />
                       </button>
                     )}
                   </div>
@@ -5438,7 +5357,7 @@ export default function AppMain(){
                     }}
                   >
                     <div style={{padding:"6px 8px 6px"}}>
-                      <div style={{fontSize:13,fontWeight:800,color:phase.col,lineHeight:1.25}}>{phase.emoji} {phase.label}</div>
+                      <div style={{fontSize:13,fontWeight:800,color:phase.col,lineHeight:1.25}}>{phase.label}</div>
                       <div style={{fontSize:10,color:"var(--text-secondary)",marginTop:2,lineHeight:1.35}}>
                         {pluralDe(phaseWeeks.length, "Woche", "Wochen")}
                         {phaseWeeks.length > 0
@@ -5496,8 +5415,8 @@ export default function AppMain(){
                                     </span>
                                   ) : null}
                                 </div>
-                                {phaseHasPeak ? <div style={{fontSize:10,color:"#10b981",marginTop:3,fontWeight:700}}>🔥 Peak Woche</div> : null}
-                                {weekSkipped > 0 ? <div style={{fontSize:10,color:"#fca5a5",marginTop:3,fontWeight:700}}>⏭ {weekSkipped} ausgelassen</div> : null}
+                                {phaseHasPeak ? <div style={{fontSize:10,color:"#10b981",marginTop:3,fontWeight:700}}>Spitzenwoche</div> : null}
+                                {weekSkipped > 0 ? <div style={{fontSize:10,color:"#fca5a5",marginTop:3,fontWeight:700}}>{weekSkipped} ausgelassen</div> : null}
                               </div>
                               <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:8}}>
                                 <div style={{width:56,height:5,background:"#0b0f1c",borderRadius:999,overflow:"hidden"}}>
@@ -6423,104 +6342,29 @@ export default function AppMain(){
         />
       ) : null}
 
-      <div ref={bottomNavRef} data-layout-bottom-nav="1" style={{position:"fixed",left:"calc(12px + env(safe-area-inset-left, 0px))",right:"calc(12px + env(safe-area-inset-right, 0px))",bottom:getBottomNavBottomOffset(),zIndex:90}}>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gap:6,height:BOTTOM_NAV_HEIGHT_PX,boxSizing:"border-box",background:"rgba(9,12,22,0.72)",border:"1px solid var(--border-default)",borderRadius:24,padding:"10px 8px 11px",boxShadow:"0 20px 50px rgba(2,6,23,0.32)",backdropFilter:"blur(22px)"}}>
-          {[
-            { key: "home", label: homeTabLabel, icon: null },
-            { key: "week", label: t("plan.week_label"), icon: "▤" },
-            { key: "performance", label: "Leistung", icon: "◔" },
-            { key: "overview", label: "Übersicht", icon: "◎" },
-            { key: "coach", label: "AI Coach", icon: "✦" },
-            { key: "settings", label: t("settings.title"), icon: "⚙" },
-          ].map((item)=>{
-            const active = activeView === item.key;
-            // Home-Tab ohne Einheit/km: Icon + „Heute" wie die übrigen Tabs.
-            const homePlain = item.key === "home" && (item.label === "HOME" || item.label === "START");
-            const icon = homePlain ? "⌂" : item.icon;
-            const textLabel = item.key !== "home" ? item.label : homePlain ? "Heute" : null;
-            return (
-              <button
-                className="bottom-nav-btn"
-                key={item.key}
-                onClick={()=>{
-                  // Tap auf den Einstellungen-Tab führt immer zur Wurzel, auch von einer Detailseite aus.
-                  if(item.key === "settings")dispatchSettingsNav({ type: "reset" });
-                  navigateToView(item.key);
-                }}
-                {...(item.key === 'coach' ? {'data-tour': 'coach-tab'} : item.key === 'week' ? {'data-tour': 'week-tab'} : {})}
-                style={{
-                  background:active ? "linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))" : "transparent",
-                  border:"1px solid transparent",
-                  color:active ? "#fff" : "rgba(148,163,184,0.88)",
-                  borderRadius:18,
-                  padding:"6px 6px 6px",
-                  margin:0,
-                  cursor:"pointer",
-                  display:"flex",
-                  flexDirection:"column",
-                  alignItems:"center",
-                  justifyContent:"center",
-                  gap:4,
-                }}
-                aria-label={`${item.key === "home" ? "Heute" : item.label} öffnen`}
-              >
-                {item.key === "home" && !homePlain ? (
-                  /^\d+$/.test(item.label) ? (
-                    <span
-                      aria-hidden
-                      style={{
-                        fontSize:24,
-                        fontWeight:900,
-                        color:active ? "#fff" : "rgba(148,163,184,0.88)",
-                        lineHeight:1,
-                        letterSpacing:"-0.03em",
-                        flexShrink:0,
-                      }}
-                    >
-                      {item.label}
-                    </span>
-                  ) : (
-                    <span
-                      aria-hidden
-                      style={{
-                        fontSize:20,
-                        lineHeight:1,
-                        flexShrink:0,
-                        opacity:active ? 1 : 0.82,
-                      }}
-                    >
-                      {item.label}
-                    </span>
-                  )
-                ) : icon != null ? (
-                  <span
-                    aria-hidden
-                    style={{
-                      width:16,
-                      height:16,
-                      display:"flex",
-                      alignItems:"center",
-                      justifyContent:"center",
-                      fontSize:16,
-                      lineHeight:1,
-                      flexShrink:0,
-                      opacity:active ? 1 : 0.82,
-                    }}
-                  >
-                    {icon}
-                  </span>
-                ) : null}
-                {textLabel != null && (
-                  <span style={{fontSize:item.key === "settings" || item.key === "coach" ? 8.8 : 10,fontWeight:800,opacity:active ? 1 : 0.7,letterSpacing:"0",whiteSpace:"nowrap",margin:0,lineHeight:1}}>
-                    {textLabel}
-                  </span>
-                )}
-                <span style={{width:4,height:4,borderRadius:"50%",background:active ? "#fff" : "transparent",flexShrink:0,margin:0,boxShadow:active ? "0 0 10px rgba(255,255,255,0.5)" : "none"}} />
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <nav ref={bottomNavRef} data-layout-bottom-nav="1" aria-label="Hauptnavigation" className="mr-tabbar" style={{position:"fixed",left:0,right:0,bottom:0,zIndex:90,height:`calc(${BOTTOM_NAV_HEIGHT_PX}px + ${getBottomNavBottomOffset()})`,paddingBottom:getBottomNavBottomOffset(),paddingLeft:"env(safe-area-inset-left, 0px)",paddingRight:"env(safe-area-inset-right, 0px)"}}>
+        {TAB_BAR_ITEMS.map((item)=>{
+          const active = activeView === item.key;
+          const TabIcon = item.Icon;
+          return (
+            <button
+              type="button"
+              className={active ? "mr-tab is-active" : "mr-tab"}
+              key={item.key}
+              onClick={()=>{
+                // Tap auf den Einstellungen-Tab führt immer zur Wurzel, auch von einer Detailseite aus.
+                if(item.key === "settings")dispatchSettingsNav({ type: "reset" });
+                navigateToView(item.key);
+              }}
+              {...(item.key === 'coach' ? {'data-tour': 'coach-tab'} : item.key === 'week' ? {'data-tour': 'week-tab'} : {})}
+              aria-current={active ? "page" : undefined}
+            >
+              <TabIcon aria-hidden size={ICON_SIZE} strokeWidth={ICON_STROKE} />
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
 
       {modal&&modalWeek&&modalWorkout&&(modalCompletionSummaryDisplay ? (
         <PostWorkoutSummaryCard open summary={modalCompletionSummaryDisplay} onDone={closeModal} onEdit={() => setModalEditMode(true)} />
@@ -6533,12 +6377,11 @@ export default function AppMain(){
               </div>
 
               <div style={{textAlign:"center",marginTop:-10}}>
-                <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.12em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Session Details</div>
+                <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.12em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Einheit</div>
                 <div style={{fontSize:26,fontWeight:800,color:"#fff",lineHeight:1.2,overflowWrap:"anywhere"}}>
                   {modal.title}
-                  {modalMilestones.length > 0 ? ` ${modalMilestones.map((milestone) => milestone.emoji).join(" ")}` : ""}
                 </div>
-                <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:6}}>{modal.day}, {modal.date} · {modalWeek.label}</div>
+                <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:6}}>{[`${modal.day}, ${modal.date}`, modalWeek.label, ...modalMilestones.map((milestone) => milestone.label)].join(" · ")}</div>
               </div>
 
               {modal.type !== "rest" ? (
@@ -6598,8 +6441,8 @@ export default function AppMain(){
                     }}
                   >
                     {modalMoreDetailsExpanded ? "Weniger anzeigen" : t("plan.show_more")}
-                    <span style={{ marginLeft: 6, opacity: 0.85 }} aria-hidden>
-                      {modalMoreDetailsExpanded ? "▴" : "▾"}
+                    <span style={{ marginLeft: 6, display: "inline-flex", verticalAlign: "middle" }} aria-hidden>
+                      {modalMoreDetailsExpanded ? <ChevronUp size={ICON_SIZE_S} strokeWidth={ICON_STROKE} /> : <ChevronDown size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />}
                     </span>
                   </button>
                   {modalMoreDetailsExpanded ? (
@@ -6661,13 +6504,13 @@ export default function AppMain(){
                   <label style={{display:"block",fontSize:10,fontWeight:600,color:"rgba(124,138,165,0.75)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>Gefühl</label>
                   <div style={{display:"flex",gap:8}}>
                     {[1,2,3,4,5].map(n=>(
-                      <button key={n} onClick={()=>setForm(f=>({...f,feeling:n}))} style={{flex:1,background:form.feeling>=n?"rgba(245,158,11,0.2)":"var(--bg-primary)",border:`1px solid ${form.feeling>=n?"#f59e0b":"var(--border-default)"}`,borderRadius:12,padding:"10px 0",cursor:"pointer",fontSize:18}}>
-                        ⭐
+                      <button key={n} onClick={()=>setForm(f=>({...f,feeling:n}))} style={{flex:1,background:form.feeling>=n?"rgba(245,158,11,0.2)":"var(--bg-primary)",border:`1px solid ${form.feeling>=n?"#f59e0b":"var(--border-default)"}`,borderRadius:12,padding:"10px 0",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:form.feeling>=n?"#f59e0b":"var(--ink-3)"}} aria-label={`Gefühl ${n} von 5`}>
+                        <Star aria-hidden size={ICON_SIZE} strokeWidth={ICON_STROKE} fill={form.feeling>=n?"currentColor":"none"} />
                       </button>
                     ))}
                   </div>
                   <div style={{fontSize:12,color:"var(--text-secondary)",textAlign:"center",marginTop:8}}>
-                    {["","😓 Sehr schwer","😕 Schlecht","😐 Okay","😊 Gut","🔥 Fantastisch!"][form.feeling]}
+                    {["","Sehr schwer","Schlecht","Okay","Gut","Sehr gut"][form.feeling]}
                   </div>
                 </div>
 
@@ -6695,7 +6538,7 @@ export default function AppMain(){
             <div style={{position:"sticky",bottom:0,padding:16,background:"linear-gradient(180deg,rgba(9,13,24,0) 0%, rgba(9,13,24,0.94) 18%, rgba(9,13,24,1) 100%)",borderTop:"1px solid var(--border-default)"}}>
               <div style={{display:"flex",gap:10}}>
                 <button onClick={closeModal} style={{flex:1,background:"#0b1220",border:"1px solid var(--border-default)",color:"var(--text-secondary)",borderRadius:14,padding:"13px",cursor:"pointer",fontSize:14,fontWeight:600}}>Abbrechen</button>
-                <button onClick={saveModal} style={{flex:1.4,background:"linear-gradient(135deg,#10b981,#3b82f6)",border:"none",color:"#fff",borderRadius:14,padding:"13px",cursor:"pointer",fontSize:14,fontWeight:700}}>Speichern</button>
+                <button className="mr-primary" onClick={saveModal} style={{flex:1.4,background:"var(--accent)",border:"none",color:"var(--on-accent)",borderRadius:14,padding:"13px",cursor:"pointer",fontSize:14,fontWeight:700}}>Speichern</button>
               </div>
             </div>
           </div>

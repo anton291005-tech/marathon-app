@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { X } from "lucide-react";
 import { hapticImpactLight, hapticSuccess } from "../../native/haptics";
+import { ICON_SIZE, ICON_STROKE } from "../../ui/icons";
 import { formatFinishTime } from "../../prepRecap/raceResultPresentation";
 import { formatRecapHero, formatRecapNumber, type RecapHero, type RecapSlide } from "./buildRecapSlides";
 import { launchCelebration, type CelebrationHandle } from "./celebration";
@@ -393,7 +395,7 @@ export default function PrepRecapStory({
               onClick={onClose}
               style={recapCloseButtonStyle}
             >
-              ✕
+              <X aria-hidden size={ICON_SIZE} strokeWidth={ICON_STROKE} />
             </button>
           </div>
         </div>

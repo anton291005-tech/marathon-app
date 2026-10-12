@@ -5,6 +5,8 @@ import "./i18n";
 import * as Sentry from "@sentry/react";
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
+import './styles/tokens.css';
+import './styles/components.css';
 import './index.css';
 import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/AuthContext';
@@ -23,6 +25,8 @@ import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { WifiOff } from 'lucide-react';
+import { ICON_SIZE_S, ICON_STROKE } from './ui/icons';
 
 Sentry.init({
   dsn: process.env.REACT_APP_SENTRY_DSN || "",
@@ -67,8 +71,8 @@ function AppRoot() {
             left: 0,
             right: 0,
             zIndex: 9999,
-            background: "#1e293b",
-            borderBottom: "1px solid #f59e0b",
+            background: "var(--status-low-tint)",
+            color: "var(--status-low)",
             padding: "10px 16px",
             display: "flex",
             alignItems: "center",
@@ -77,8 +81,8 @@ function AppRoot() {
             paddingTop: "calc(10px + env(safe-area-inset-top, 0px))",
           }}
         >
-          <span style={{ fontSize: 16 }}>📡</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#fbbf24" }}>
+          <WifiOff aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />
+          <span style={{ fontSize: 13, fontWeight: 600 }}>
             Keine Internetverbindung
           </span>
         </div>

@@ -75,7 +75,7 @@ describe("Onboarding — Schritt 4 (Kalender verbinden)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Vollzeit-Job/ }));
 
-    await waitFor(() => expect(screen.getByText("✓ Wochenrhythmus gespeichert")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Wochenrhythmus gespeichert")).toBeInTheDocument());
     const [userId, blocks] = (insertPresetBlocks as jest.Mock).mock.calls[0];
     expect(userId).toBe("user-1");
     expect(blocks).toHaveLength(5);
@@ -102,12 +102,12 @@ describe("Onboarding — Schritt 4 (Kalender verbinden)", () => {
     expect(screen.queryByRole("button", { name: "Weiter" })).not.toBeInTheDocument();
   });
 
-  it("zeigt '✓ Kalender bereits verbunden'-Zustand bei gesetztem Connected-Marker (Re-Onboarding)", () => {
+  it("zeigt 'Kalender bereits verbunden'-Zustand bei gesetztem Connected-Marker (Re-Onboarding)", () => {
     localStorage.setItem("calendarImportConnected", "1");
     render(<Onboarding onComplete={jest.fn()} userId="user-1" />);
     fillStepsOneToThree(false);
 
-    expect(screen.getByText("✓ Kalender verbunden")).toBeInTheDocument();
+    expect(screen.getByText("Kalender verbunden")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Vollzeit-Job/ })).not.toBeInTheDocument();
   });
 });

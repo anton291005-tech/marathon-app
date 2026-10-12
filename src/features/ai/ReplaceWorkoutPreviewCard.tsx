@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { ArrowRight } from "lucide-react";
+import { ICON_SIZE_S, ICON_STROKE } from "../../ui/icons";
 import { getAppNow } from "../../core/time/timeSystem";
 import type { AiAssistantAction } from "../../lib/ai/types";
 import { rowHeadingForSessionDateLabel } from "./SwapPreviewCard";
@@ -14,20 +16,20 @@ type Props = {
   onCancel: () => void;
 };
 
-function sportGlyph(sport?: string): string {
-  if (sport === "bike") return "🚴";
-  if (sport === "swim") return "🏊";
-  if (sport === "strength") return "💪";
-  if (sport === "run") return "🏃";
+function sportWord(sport?: string): string {
+  if (sport === "bike") return "Rad";
+  if (sport === "swim") return "Schwimmen";
+  if (sport === "strength") return "Kraft";
+  if (sport === "run") return "Lauf";
   return "";
 }
 
 function sessionTypeLabel(type?: string): string {
   if (!type || type === "rest") return "";
-  if (type === "easy") return "Easy";
+  if (type === "easy") return "Locker";
   if (type === "tempo") return "Tempo";
   if (type === "interval") return "Intervall";
-  if (type === "long") return "Long Run";
+  if (type === "long") return "Langer Lauf";
   if (type === "bike") return "Rennrad";
   if (type === "swim") return "Schwimmen";
   if (type === "strength") return "Kraft";
@@ -39,7 +41,7 @@ function metricsLine(session: any): string {
   if (session.type === "rest") return "Ruhetag";
   const parts: string[] = [];
   const sport = typeof session.sport === "string" ? session.sport : session.type === "bike" ? "bike" : "run";
-  const sportLabel = sportGlyph(sport);
+  const sportLabel = sportWord(sport);
   const typeLabel = sessionTypeLabel(session.sessionType ?? session.type);
   if (sportLabel || typeLabel) {
     parts.push([sportLabel, typeLabel].filter(Boolean).join(" "));
@@ -119,7 +121,7 @@ export function ReplaceWorkoutPreviewCard({
         <div style={{ fontWeight: 800, fontSize: 11, letterSpacing: "0.08em", color: "#94a3b8", textTransform: "uppercase" }}>
           Vorher
         </div>
-        <div style={{ textAlign: "center", color: "#64748b", fontWeight: 900 }}>→</div>
+        <div style={{ display: "flex", justifyContent: "center", color: "var(--ink-3)" }}><ArrowRight aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} /></div>
         <div style={{ fontWeight: 800, fontSize: 11, letterSpacing: "0.08em", color: "#94a3b8", textTransform: "uppercase" }}>
           Nachher
         </div>
@@ -170,7 +172,7 @@ export function ReplaceWorkoutPreviewCard({
           }}
         >
           <div style={{ fontSize: 12, lineHeight: 1.55, color: "#fcd34d", fontWeight: 650 }}>
-            ⚠️{lowConf}
+            {lowConf}
           </div>
         </div>
       ) : null}
@@ -180,10 +182,9 @@ export function ReplaceWorkoutPreviewCard({
           type="button"
           onClick={onConfirm}
           disabled={!canConfirm}
+          className="mr-btn mr-btn--primary mr-btn--small"
           style={{
-            background: "linear-gradient(135deg,#10b981,#3b82f6)",
             border: "none",
-            color: "#fff",
             borderRadius: 12,
             padding: "10px 12px",
             fontSize: 13,
@@ -191,7 +192,7 @@ export function ReplaceWorkoutPreviewCard({
             cursor: canConfirm ? "pointer" : "not-allowed",
           }}
         >
-          {isConvert ? "Konvertieren ✓" : "Ersetzen ✓"}
+          {isConvert ? "Konvertieren" : "Ersetzen"}
         </button>
         <button
           type="button"

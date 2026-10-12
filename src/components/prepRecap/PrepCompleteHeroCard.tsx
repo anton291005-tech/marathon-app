@@ -80,7 +80,7 @@ export default function PrepCompleteHeroCard({
           fontWeight: 800,
         }}
       >
-        🏁 Vorbereitung abgeschlossen
+        Vorbereitung abgeschlossen
       </div>
       <div
         style={{

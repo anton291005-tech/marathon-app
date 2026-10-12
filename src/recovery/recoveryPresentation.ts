@@ -98,6 +98,8 @@ export type RecoveryPresentationState = {
   session: {
     label: string;
     toneHex: string;
+    /** Stufe für den StatusChip; fehlt ohne berechenbaren Score. */
+    status?: "good" | "fair" | "low";
   };
   verlauf: RecoveryVerlaufCardPresentation;
 };
@@ -224,6 +226,7 @@ export function getRecoveryPresentationState(
     session: {
       label: domain.sessionRecovery.label,
       toneHex: domain.sessionRecovery.tone,
+      status: domain.sessionRecovery.status,
     },
     verlauf: buildVerlaufCardPresentation(domain, opts),
   };

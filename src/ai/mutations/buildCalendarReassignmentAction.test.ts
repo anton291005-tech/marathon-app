@@ -151,7 +151,7 @@ describe("buildCalendarReassignmentAction", () => {
     const action = buildCalendarReassignmentAction("s-tue", result, beforePlan);
     expect(action?.preview?.items).toEqual([
       "Easy Run: Dienstag → Samstag (15. Aug)",
-      "⚠️ Long Run zu nah an intensiver Einheit.",
+      "Hinweis: Long Run zu nah an intensiver Einheit.",
     ]);
   });
 

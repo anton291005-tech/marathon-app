@@ -1,5 +1,7 @@
 import React from "react";
 import { Capacitor } from "@capacitor/core";
+import { TriangleAlert } from "lucide-react";
+import { ICON_STROKE } from "../ui/icons";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -77,7 +79,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+          <div style={{ marginBottom: 12, color: "var(--status-low)", display: "flex", justifyContent: "center" }}><TriangleAlert aria-hidden size={40} strokeWidth={ICON_STROKE} /></div>
           <div
             style={{
               fontSize: 18,

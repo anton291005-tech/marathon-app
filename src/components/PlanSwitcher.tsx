@@ -1,4 +1,6 @@
 import { useCallback, useState, type CSSProperties } from "react";
+import { Check, Play, Trash2 } from "lucide-react";
+import { ICON_SIZE_S, ICON_STROKE } from "../ui/icons";
 import { MAX_ACTIVE_PLANS, type TrainingPlanListItem } from "../lib/supabase/services/trainingPlanService";
 
 /** Archivierter Plan (abgeschlossene Vorbereitung) mit seinem Rückblick. */
@@ -119,9 +121,7 @@ export function PlanSwitcher({
                   }}
                 >
                   {plan.is_active ? (
-                    <span style={{ color: "#6ee7b7", fontSize: 13 }} aria-hidden>
-                      ✓
-                    </span>
+                    <Check aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} color="var(--status-good)" style={{ flex: "none" }} />
                   ) : null}
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {plan.plan_name}
@@ -139,7 +139,7 @@ export function PlanSwitcher({
                     style={iconButtonStyle}
                     onClick={() => onSwitch(plan.id)}
                   >
-                    ►
+                    <Play aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />
                   </button>
                   {canDelete ? (
                     <button
@@ -149,7 +149,7 @@ export function PlanSwitcher({
                       style={deleteButtonStyle}
                       onClick={() => setPendingDeleteId(plan.id)}
                     >
-                      🗑
+                      <Trash2 aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />
                     </button>
                   ) : null}
                 </div>
@@ -210,7 +210,7 @@ export function PlanSwitcher({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  🏁 {prep.name}
+                  {prep.name}
                 </div>
                 {prep.dateLabel ? (
                   <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{prep.dateLabel}</div>

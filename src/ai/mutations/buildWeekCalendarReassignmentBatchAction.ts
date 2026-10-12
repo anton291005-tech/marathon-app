@@ -36,13 +36,13 @@ export function buildWeekCalendarReassignmentBatchAction(
   if (items.length === 0) return null;
 
   if (validation.warning) {
-    items.push(`⚠️ ${validation.warning}`);
+    items.push(`Hinweis: ${validation.warning}`);
   }
 
   const unresolvedCount = proposals.filter((p) => "unresolved" in p).length;
   if (unresolvedCount > 0) {
     items.push(
-      `${unresolvedCount} Konflikt${unresolvedCount === 1 ? "" : "e"} nicht automatisch lösbar – einzeln über 📅 bearbeiten.`,
+      `${unresolvedCount} Konflikt${unresolvedCount === 1 ? "" : "e"} nicht automatisch lösbar – einzeln über den Kalender-Button bearbeiten.`,
     );
   }
 

@@ -44,7 +44,7 @@ export async function scheduleTrainingReminder(
 
   const body = todayWorkoutTitle
     ? `Heute: ${todayWorkoutTitle}`
-    : "Dein Training wartet auf dich 💪";
+    : "Dein Training wartet auf dich.";
 
   const now = getAppNow();
   const scheduled = new Date(now.getTime());
@@ -57,7 +57,7 @@ export async function scheduleTrainingReminder(
     notifications: [
       {
         id: NOTIFICATION_ID,
-        title: "MyRace 🏃",
+        title: "MyRace",
         body,
         schedule: {
           at: scheduled,

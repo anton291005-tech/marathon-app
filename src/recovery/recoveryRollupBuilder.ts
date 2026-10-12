@@ -231,8 +231,8 @@ export function buildRecoveryWeekRollups(args: {
     let loadBalanceLabel = "Ausgewogen";
     if (recoveryForBalance === null) {
       loadBalanceLabel = `Belastung ${loadStressLabel(loadIdx)} — unsichere Kopplung an R̂`;
-    } else if (loadIdx >= 3.5 && recoveryForBalance < 62) loadBalanceLabel = "Hohe Last, Recovery eher begrenzt";
-    else if (loadIdx >= 3.5 && recoveryForBalance >= 72) loadBalanceLabel = "Hohe Last, Recovery tragfähig";
+    } else if (loadIdx >= 3.5 && recoveryForBalance < 62) loadBalanceLabel = "Hohe Last, Erholung eher begrenzt";
+    else if (loadIdx >= 3.5 && recoveryForBalance >= 72) loadBalanceLabel = "Hohe Last, Erholung tragfähig";
     else if (loadIdx < 2 && recoveryForBalance >= 78) loadBalanceLabel = "Leichte Woche, gute Reserve";
 
     let sleepQualityLabel = "Im Normbereich";

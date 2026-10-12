@@ -6,13 +6,15 @@ export type LegacySessionRecovery = {
   label: string;
   tone: string;
   detail: string;
+  /** Stufe für den StatusChip (Punkt + Wort); fehlt ohne berechenbaren Score. */
+  status?: "good" | "fair" | "low";
 };
 
 /** Domain-Zustand: kein berechenbarer KPI (Extended aus oder keine Serie). */
 export const INSUFFICIENT_DATA_SESSION_RECOVERY: LegacySessionRecovery = {
   label: "Keine Daten",
   tone: "#64748b",
-  detail: "Extended Recovery ist aus oder es fehlt die Datenbasis — kein numerischer Recovery-Score.",
+  detail: "Die erweiterte Erholung ist aus oder es fehlt die Datenbasis — kein Erholungswert.",
 };
 
 /**
@@ -33,27 +35,31 @@ export function sessionRecoveryFromScore0To100(score: number): LegacySessionReco
   const o = recoveryScoreBandOrdinal(s);
   if (o === 0) {
     return {
-      label: "🔴 Niedrig",
+      label: "Niedrig",
+      status: "low",
       tone: "#f87171",
       detail: "Reserve ist gering — konservativ steuern, Schlaf und Regeneration priorisieren.",
     };
   }
   if (o === 1) {
     return {
-      label: "🟡 Moderat",
+      label: "Moderat",
+      status: "fair",
       tone: "#fbbf24",
       detail: "Solider, aber begrenzter Puffer — Belastung moderat halten und Signale beobachten.",
     };
   }
   if (o === 2) {
     return {
-      label: "🟢 Gut",
+      label: "Gut",
+      status: "good",
       tone: "#38bdf8",
       detail: "Gute Ausgangslage — Qualität und Volumen wie geplant möglich, wenn es sich gut anfühlt.",
     };
   }
   return {
-    label: "🟢 Frisch",
+    label: "Frisch",
+    status: "good",
     tone: "#34d399",
     detail: "Hohe Reserve — gute Basis für anspruchsvolle Einheiten bei passenden anderen Signalen.",
   };

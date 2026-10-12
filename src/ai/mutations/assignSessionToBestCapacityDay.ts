@@ -56,7 +56,7 @@ export const MIN_FIT_SCORE_THRESHOLD = 0.35;
 
 /**
  * Kalenderkonflikt einer Session auf ihrem aktuellen Tag: Fit-Score unter `MIN_FIT_SCORE_THRESHOLD`.
- * Gemeinsames Kriterium von Wochen-Scan und Einzel-📅-Handler.
+ * Gemeinsames Kriterium von Wochen-Scan und Einzel-Kalender-Handler.
  */
 export function isSessionInCalendarConflict(session: Pick<AiPlanSession, "type">, dayCapacity: DayCapacityScore): boolean {
   return computeSessionDayFitScore(session, dayCapacity) < MIN_FIT_SCORE_THRESHOLD;

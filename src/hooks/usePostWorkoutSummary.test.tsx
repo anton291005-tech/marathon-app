@@ -67,7 +67,7 @@ describe("usePostWorkoutSummary trigger logic", () => {
 
     const { rerender } = render(<Harness planSessions={planSessions} logs={logs} healthRuns={healthRuns} />);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(await screen.findByText(/AI Coach/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^Coach$/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Fertig"));
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -152,7 +152,7 @@ describe("usePostWorkoutSummary trigger logic", () => {
     ];
     render(<Harness planSessions={planSessions} logs={logs} healthRuns={healthRuns} />);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(await screen.findByText(/AI Coach/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^Coach$/)).toBeInTheDocument();
   });
 
   test("multiple workouts same day -> shows latest only", async () => {
@@ -196,7 +196,7 @@ describe("usePostWorkoutSummary trigger logic", () => {
     render(<Harness planSessions={planSessions} logs={logs} healthRuns={healthRuns} aiAnalysisEnabled={false} />);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     // AI section still renders but shows fallback when AI is disabled.
-    expect(await screen.findByText(/AI Coach/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^Coach$/)).toBeInTheDocument();
     expect(await screen.findByText(/Zu wenig Daten/i)).toBeInTheDocument();
   });
 
@@ -228,7 +228,7 @@ describe("usePostWorkoutSummary trigger logic", () => {
     // With avgHeartRateBpm=150 and maxHr=190, L2 should succeed → real message shown.
     render(<Harness planSessions={planSessions} logs={logs} healthRuns={healthRuns} recoveryPoints={[{ date: "2026-05-01", score0_100: 80 }]} />);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(await screen.findByText(/AI Coach/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^Coach$/)).toBeInTheDocument();
     // Raw debug lines ("Nicht genug Daten für Trendanalyse") must not appear.
     expect(screen.queryByText(/Nicht genug Daten für Trendanalyse/)).toBeNull();
     // A real l2-based insight should be present (not the fallback "Zu wenig Daten" text).

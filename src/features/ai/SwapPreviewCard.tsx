@@ -140,7 +140,7 @@ export function SwapPreviewCard({
   const lowConfidenceHint =
     confidence === "low"
       ? [
-          "⚠️ Hinweis: Die Zuordnung der beiden Einheiten ist weniger sicher — bitte die Tage kurz gegenprüfen. Du kannst den Tausch trotzdem durchführen.",
+          "Hinweis: Die Zuordnung der beiden Einheiten ist weniger sicher — bitte die Tage kurz gegenprüfen. Du kannst den Tausch trotzdem durchführen.",
         ]
       : [];
   const hintsAbove = Array.from(new Set([...(coachHints || []), ...lowConfidenceHint]));
@@ -310,13 +310,13 @@ export function SwapPreviewCard({
 
       <div style={{ marginTop: 2 }}>
         {axes.structural ? (
-          <RiskBar label="Structural risk" color="#60a5fa" score={axes.structural.score} reason={axes.structural.reason} />
+          <RiskBar label="Struktur" color="#60a5fa" score={axes.structural.score} reason={axes.structural.reason} />
         ) : null}
-        {axes.load ? <RiskBar label="Load risk" color="#fb923c" score={axes.load.score} reason={axes.load.reason} /> : null}
+        {axes.load ? <RiskBar label="Belastung" color="#fb923c" score={axes.load.score} reason={axes.load.reason} /> : null}
         {axes.recovery ? (
-          <RiskBar label="Recovery risk" color="#a78bfa" score={axes.recovery.score} reason={axes.recovery.reason} />
+          <RiskBar label="Erholung" color="#a78bfa" score={axes.recovery.score} reason={axes.recovery.reason} />
         ) : null}
-        {axes.micro ? <RiskBar label="Micro risk" color="#f87171" score={axes.micro.score} reason={axes.micro.reason} /> : null}
+        {axes.micro ? <RiskBar label="Tagesfolge" color="#f87171" score={axes.micro.score} reason={axes.micro.reason} /> : null}
       </div>
 
       {intensityConflict ? (
@@ -363,13 +363,13 @@ export function SwapPreviewCard({
       ) : null}
 
       <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button
+        <button className="mr-primary"
           type="button"
           onClick={onConfirmClick}
           style={{
-            background: "linear-gradient(135deg,#10b981,#3b82f6)",
+            background: "var(--accent)",
             border: "none",
-            color: "#fff",
+            color: "var(--on-accent)",
             borderRadius: 12,
             padding: "10px 12px",
             fontSize: 13,

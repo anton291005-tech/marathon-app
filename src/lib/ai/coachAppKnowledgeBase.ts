@@ -9,11 +9,11 @@ export const COACH_APP_KNOWLEDGE_MARKDOWN = `
 # Marathon App — interne Wissensbasis (${COACH_APP_KNOWLEDGE_VERSION})
 
 ## Navigation & Hauptfunktionen
-- **Start (Home)**: Tagesfokus, nächste Einheit, Recovery-/Coach-Kurzinfos, Link zum AI Coach.
+- **Start (Home)**: Tagesfokus, nächste Einheit, Recovery-/Coach-Kurzinfos, Link zum Coach.
 - **Woche**: Wochenplan mit allen Sessions (Typ, Distanz, Beschreibung); Tap auf Einheit öffnet Details/Log.
-- **Leistung**: Auswertungen, Kilometer, Trends, Zuordnung zu Apple-Health-Läufen wo vorhanden, Race Calculator.
+- **Leistung**: Auswertungen, Kilometer, Trends, Zuordnung zu Apple-Health-Läufen wo vorhanden, Rennrechner.
 - **Übersicht**: Phasen-/Wochenüberblick über den gesamten Plan, Zusammenfassung zum Teilen.
-- **AI Coach** (Tab „Coach“): Chat für Training, App-Hilfe, Datenübersicht und strukturierte Plan-Aktionen (immer mit Bestätigung bei Planänderungen).
+- **Coach** (Tab „Coach“): Chat für Training, App-Hilfe, Datenübersicht und strukturierte Plan-Aktionen (immer mit Bestätigung bei Planänderungen).
 - **Einstellungen** (sechs Bereiche): **Profil** (Marathon-PR, optionale Max-Herzfrequenz) · **Training** (Zielzeit, Pläne) · **Verbindungen** (Apple Health verbinden/aktualisieren, Aktivitäten zuordnen, Strava, Kalender) · **App** (Trainings-Erinnerung) · **Datenschutz & Daten** (Datenschutzerklärung, Datennutzung, Datenexport anfordern) · **Konto & Hilfe** (Konto, Hilfe & Feedback, Fehler melden, Version).
 
 ## Trainingsplan — Speicher & Logik
@@ -45,7 +45,7 @@ export const COACH_APP_KNOWLEDGE_MARKDOWN = `
 
 ## Bekannte Grenzen
 - Benachrichtigungen: Es gibt genau eine — die tägliche **Trainings-Erinnerung** zur gewählten Uhrzeit (Einstellungen → App, nur in der iOS-App, standardmäßig aus). Keine weiteren Push-Nachrichten.
-- Kein separates Ticketsystem — Fragen zur App löst der AI Coach bevorzugt **hier im Chat** mit Navigation und klaren Schritten.
+- Kein separates Ticketsystem — Fragen zur App löst der Coach bevorzugt **hier im Chat** mit Navigation und klaren Schritten.
 `.trim();
 
 /** Short digest injected into prompts (German). */

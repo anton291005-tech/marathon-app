@@ -49,7 +49,7 @@ export const AI_DATA_USES: readonly AiDataUse[] = [
     note: "Keine Gesundheitsdaten.",
   },
   {
-    title: "AI Coach",
+    title: "Coach",
     provider: "Anthropic (Claude)",
     items: [
       "Deine Nachricht und der Chatverlauf",

@@ -119,7 +119,7 @@ export function SwapSelectionCard({ sourceCandidates, targetCandidates, coachTod
       </div>
 
       <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button
+        <button className="mr-primary"
           type="button"
           onClick={() => {
             if (!canConfirm) return;
@@ -127,7 +127,7 @@ export function SwapSelectionCard({ sourceCandidates, targetCandidates, coachTod
           }}
           disabled={!canConfirm}
           style={{
-            background: canConfirm ? "linear-gradient(135deg,#10b981,#3b82f6)" : "rgba(30,41,59,0.5)",
+            background: canConfirm ? "var(--accent)" : "rgba(30,41,59,0.5)",
             border: "none",
             color: canConfirm ? "#fff" : "#64748b",
             borderRadius: 12,

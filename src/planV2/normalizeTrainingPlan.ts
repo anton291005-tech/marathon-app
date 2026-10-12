@@ -6,6 +6,7 @@ import { mapSessionType } from "../lib/ai/mapSessionType";
 import { resolveLegacyYearAnchor, resolveLegacyYears } from "./legacyYearAnchor";
 import type { Intensity, TrainingPlanV2, WeekV2, WorkoutSport, WorkoutV2 } from "./types";
 import { normalizeTrainingPhase, trainingPhaseLabelDe } from "./trainingPhase";
+import { stripDecorativeEmoji } from "./stripDecorativeEmoji";
 
 const VALID_SPORTS = new Set<WorkoutSport>(["run", "bike", "rest", "strength", "swim"]);
 const VALID_INTENSITIES = new Set<Intensity>(["low", "medium", "high"]);
@@ -53,6 +54,11 @@ function normalizeOptionalString(raw: unknown): string | null {
   if (raw == null) return null;
   const text = String(raw).trim();
   return text ? text : null;
+}
+
+/** Plan-Text ohne Emojis/Piktogramme; leer, wenn nichts übrig bleibt. */
+function cleanPlanText(raw: unknown): string {
+  return typeof raw === "string" ? stripDecorativeEmoji(raw.trim()) : "";
 }
 
 function mondayIsoFromDateIso(dateIso: string): string | null {
@@ -179,7 +185,7 @@ function normalizeWorkout(
   const idRaw = typeof raw.id === "string" ? raw.id.trim() : "";
   const id = idRaw || `normalized-workout-${fallbackIndex}-${dateIso.slice(0, 10)}`;
 
-  const titleRaw = typeof raw.title === "string" ? raw.title.trim() : "";
+  const titleRaw = cleanPlanText(raw.title);
   const title = titleRaw || defaultTitleForSessionType(sessionType);
 
   return {
@@ -190,7 +196,7 @@ function normalizeWorkout(
     intensity: normalizeIntensity(raw.intensity, sessionType),
     title,
     km: normalizeKm(raw.km),
-    desc: normalizeOptionalString(raw.desc),
+    desc: normalizeOptionalString(typeof raw.desc === "string" ? stripDecorativeEmoji(raw.desc) : raw.desc),
     pace: normalizeOptionalString(raw.pace),
     structured: raw.structured ?? null,
   };
@@ -207,13 +213,9 @@ export function normalizeWeekMeta(
       : weekIndex + 1;
   const phase = normalizeTrainingPhase(typeof base.phase === "string" ? base.phase : undefined);
   const phaseLabel = trainingPhaseLabelDe(phase);
-  const label =
-    typeof base.label === "string" && base.label.trim()
-      ? base.label.trim()
-      : `Woche ${wn} · ${phaseLabel}`;
+  const label = cleanPlanText(base.label) || `Woche ${wn} · ${phaseLabel}`;
   const dates = typeof base.dates === "string" ? base.dates : "";
-  const focus =
-    typeof base.focus === "string" && base.focus.trim() ? base.focus.trim() : undefined;
+  const focus = cleanPlanText(base.focus) || undefined;
   const isRecoveryWeek = base.isRecoveryWeek === true;
 
   return {

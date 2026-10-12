@@ -432,7 +432,7 @@ function getRaceConfig(
   if (d <= 5) {
     return {
       raceKm: 5,
-      raceTitle: "🏁 5 km",
+      raceTitle: "5 km",
       peakLongRunKm: 12,
       taperLongRunKm: 8,
       planWeeksIdeal: 8,
@@ -443,7 +443,7 @@ function getRaceConfig(
   if (d <= 10) {
     return {
       raceKm: 10,
-      raceTitle: "🏁 10 km",
+      raceTitle: "10 km",
       peakLongRunKm: 18,
       taperLongRunKm: 12,
       planWeeksIdeal: 10,
@@ -454,7 +454,7 @@ function getRaceConfig(
   if (d <= 15) {
     return {
       raceKm: 15,
-      raceTitle: "🏁 15 km",
+      raceTitle: "15 km",
       peakLongRunKm: 22,
       taperLongRunKm: 14,
       planWeeksIdeal: 12,
@@ -465,7 +465,7 @@ function getRaceConfig(
   if (d <= 21.2) {
     return {
       raceKm: 21.1,
-      raceTitle: "🏁 Halbmarathon",
+      raceTitle: "Halbmarathon",
       peakLongRunKm: 26,
       taperLongRunKm: 16,
       planWeeksIdeal: 16,
@@ -475,7 +475,7 @@ function getRaceConfig(
   }
   return {
     raceKm: 42.2,
-    raceTitle: "🏁 Marathon",
+    raceTitle: "Marathon",
     peakLongRunKm: 32,
     taperLongRunKm: 18,
     planWeeksIdeal: 20,
@@ -827,7 +827,7 @@ function strengthWorkoutForDay(ymd: string, iso: string): WorkoutV2 {
     dateIso: iso,
     sport: "rest",
     sessionType: "strength",
-    title: "💪 Krafttraining",
+    title: "Krafttraining",
     km: 0,
     desc: "Rumpf, Beine, funktionelle Übungen.",
     pace: null,
@@ -842,7 +842,7 @@ function bikeWorkoutForDay(ymd: string, iso: string): WorkoutV2 {
     dateIso: iso,
     sport: "bike",
     sessionType: "bike",
-    title: "🚴 Radfahren",
+    title: "Radfahren",
     km: 0,
     desc: "Lockeres Radfahren, aktive Erholung.",
     pace: null,
@@ -857,7 +857,7 @@ function swimWorkoutForDay(ymd: string, iso: string): WorkoutV2 {
     dateIso: iso,
     sport: "rest",
     sessionType: "swim",
-    title: "🏊 Schwimmen",
+    title: "Schwimmen",
     km: 0,
     desc: "Lockeres Schwimmen, Ganzkörper.",
     pace: null,
@@ -1092,10 +1092,10 @@ export function generateMarathonPlanV2ToRace(
       metaByWeekStart.set(startIso, {
         wn: weekIdx,
         phase,
-        label: isRecoveryWeek ? `${displayLabel} W${weekIdx} ⬇️` : `${displayLabel} W${weekIdx}`,
+        label: `${displayLabel} W${weekIdx}`,
         dates: `${formatDeDate(displayDate)} ff.`,
         focus: isRecoveryWeek
-          ? "⬇️ Entlastungswoche – Volumen reduziert, Adaptationen festigen"
+          ? "Entlastungswoche – Volumen reduziert, Adaptationen festigen"
           : focus,
         isRecoveryWeek,
       });

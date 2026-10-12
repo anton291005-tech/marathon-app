@@ -58,9 +58,9 @@ export default function WeeklyAnalysisCard({ weekLabel, weekDates, analysis }: P
 
       {analysis.longRunPlanned && (
         <div style={{ fontSize: 11, marginBottom: 10 }}>
-          <span style={{ color: "#64748b" }}>Long Run · </span>
+          <span style={{ color: "#64748b" }}>Langer Lauf · </span>
           {analysis.longRunDone ? (
-            <span style={{ color: "#86efac", fontWeight: 700 }}>✓{analysis.longRunKmPlanned ? ` ${analysis.longRunKmPlanned} km` : ""}</span>
+            <span style={{ color: "#86efac", fontWeight: 700 }}>erledigt{analysis.longRunKmPlanned ? ` · ${analysis.longRunKmPlanned} km` : ""}</span>
           ) : (
             <span style={{ color: "#fca5a5", fontWeight: 700 }}>offen</span>
           )}

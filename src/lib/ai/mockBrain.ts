@@ -397,7 +397,7 @@ export function buildMockAiResponse(userInput: string, context: AiContext): AiAs
       explain = "Taper ist die geplante Entlastung vor dem Rennen: weniger Umfang, genug Reize, frische Beine am Start.";
     } else if (hasAny(text, ["app", "erklar", "erklaere"])) {
       explain =
-        "Die App kombiniert Trainingsplan, Wochensteuerung und Performance-Hinweise. Der AI Coach schlaegt Aktionen vor, die du erst bestaetigst.";
+        "Die App kombiniert Trainingsplan, Wochensteuerung und Performance-Hinweise. Der Coach schlaegt Aktionen vor, die du erst bestaetigst.";
     }
     return {
       mode: "support",

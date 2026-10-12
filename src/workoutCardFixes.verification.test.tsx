@@ -159,9 +159,9 @@ describe("TEST BLOCK 3 — Info card switching (static + hook contract)", () => 
     expect(APP_TSX).toContain("getSessionStatus(modalLog) !== \"done\"");
   });
 
-  test("9. Upcoming: modalCompletionSummaryDisplay null → Session Details still present in false branch", () => {
-    expect(APP_TSX).toMatch(/modalCompletionSummaryDisplay \?[\s\S]*Session Details/);
-    expect(APP_TSX).toContain("Session Details");
+  test("9. Upcoming: modalCompletionSummaryDisplay null → Einheit-Details still present in false branch", () => {
+    expect(APP_TSX).toMatch(/modalCompletionSummaryDisplay \?[\s\S]*>Einheit<\/div>/);
+    expect(APP_TSX).toContain(">Einheit</div>");
   });
 
   test("9b. Erledigt: Bearbeiten in der Card wechselt ins Formular; jedes Öffnen/Schließen startet wieder mit der Card", () => {

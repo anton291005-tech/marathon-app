@@ -25,7 +25,7 @@ function navigierenSettingsRace(ctx: AiContext): AiAssistantResponse {
     mode: "support",
     message:
       "Zielzeit und Renn-Bezug stellst du unter «Einstellungen» → «Training» ein: dort findest du das Feld «Zielzeit» (hh:mm:ss). Die optionale Max-HF liegt unter «Einstellungen» → «Profil». " +
-      "Den strukturierten Trainingsplan mit Renn-Datum passt du über den AI Coach an (z. B. neuer Marathon-Termin) — immer mit Bestätigungskarte.",
+      "Den strukturierten Trainingsplan mit Renn-Datum passt du über den Coach an (z. B. neuer Marathon-Termin) — immer mit Bestätigungskarte.",
     action: { ...action, preview: buildActionPreview(action, ctx) },
   };
 }

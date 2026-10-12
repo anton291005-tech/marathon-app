@@ -88,7 +88,7 @@ describe("Rückblick: Conclusion Card aus gespeicherten Daten", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveTextContent("Easy + 3× MP-Strides");
     expect(dialog).toHaveTextContent("8.2 km");
-    expect(dialog).toHaveTextContent("😊 Gut");
+    expect(dialog).toHaveTextContent("Gut");
     expect(dialog).toHaveTextContent("Lief locker.");
     // Kein Pace-/Puls-Tile ohne Daten, kein Platzhalter.
     expect(screen.queryByText("Pace")).toBeNull();

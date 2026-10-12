@@ -40,7 +40,7 @@ export function comparePace(
   const a = aRaw;
 
   if (a >= lo && a <= hi) {
-    return { status: "in_range", deltaSeconds: 0, label: "Tempo im Plan ✓" };
+    return { status: "in_range", deltaSeconds: 0, label: "Tempo im Plan" };
   }
 
   // Schneller als geplant ⇒ weniger Sek./km
@@ -83,7 +83,7 @@ export function compareHR(
   const hi = Math.max(minRaw, maxRaw);
 
   if (a >= lo && a <= hi) {
-    return { status: "in_range", deltaBpm: 0, label: "Puls im Plan ✓" };
+    return { status: "in_range", deltaBpm: 0, label: "Puls im Plan" };
   }
 
   if (a > hi) {

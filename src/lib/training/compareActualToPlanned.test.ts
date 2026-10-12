@@ -53,7 +53,7 @@ describe("compareHR", () => {
 
 describe("compareActualToPlanned labels", () => {
   test("9. pace in_range label exact", () => {
-    expect(comparePace(321, 320, 330).label).toBe("Tempo im Plan ✓");
+    expect(comparePace(321, 320, 330).label).toBe("Tempo im Plan");
   });
 
   test("10. HR +1 singular", () => {

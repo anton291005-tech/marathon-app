@@ -36,9 +36,8 @@ const primaryButtonStyle: CSSProperties = {
   fontWeight: 700,
   border: "none",
   borderRadius: 14,
-  color: "#fff",
-  background: "linear-gradient(135deg, #10b981, #3b82f6)",
-  boxShadow: "0 8px 24px rgba(59, 130, 246, 0.25)",
+  color: "var(--on-accent)",
+  background: "var(--accent)",
 };
 
 function isEmailNotConfirmedError(message: string | undefined): boolean {
@@ -294,7 +293,7 @@ export function AuthScreen() {
                 Passwörter stimmen nicht überein.
               </p>
             )}
-            <button
+            <button className="mr-primary"
               disabled={!canSave}
               style={{
                 ...primaryButtonStyle,
@@ -432,7 +431,7 @@ export function AuthScreen() {
                 {resendStatus}
               </div>
             ) : null}
-            <button
+            <button className="mr-primary"
               type="button"
               disabled={resendSubmitting || resendCooldownSec > 0 || !confirmationEmail}
               onClick={() => void handleResendConfirmation()}
@@ -560,7 +559,7 @@ export function AuthScreen() {
               ) : null}
 
               {loginNeedsConfirmation ? (
-                <button
+                <button className="mr-primary"
                   type="button"
                   disabled={resendSubmitting || resendCooldownSec > 0 || !confirmationEmail}
                   onClick={() => void handleResendConfirmation()}
@@ -580,7 +579,7 @@ export function AuthScreen() {
                 </button>
               ) : null}
 
-              <button
+              <button className="mr-primary"
                 type="submit"
                 disabled={submitting}
                 style={{
@@ -588,7 +587,7 @@ export function AuthScreen() {
                   cursor: submitting ? "not-allowed" : "pointer",
                   opacity: submitting ? 0.75 : 1,
                   background: submitting
-                    ? "linear-gradient(135deg, rgba(16,185,129,0.65), rgba(59,130,246,0.65))"
+                    ? "var(--accent)"
                     : primaryButtonStyle.background,
                 }}
               >

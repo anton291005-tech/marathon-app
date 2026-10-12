@@ -54,11 +54,11 @@ function inferHighIntensity(w: WorkoutV2): boolean {
  */
 export function buildSwapAthleteFacingWarnings(opts: { before: TrainingPlanV2; after: TrainingPlanV2 }): string[] {
   const msgLongBeforeInterval =
-    "⚠️ Hinweis: Nach dem Tausch folgt am nächsten Plan-Tag ein Intervall- oder Tempotraining direkt nach einem langen bzw. langen Lauf. Das kann die Erholung beeinträchtigen. Du kannst den Tausch trotzdem durchführen.";
+    "Hinweis: Nach dem Tausch folgt am nächsten Plan-Tag ein Intervall- oder Tempotraining direkt nach einem langen bzw. langen Lauf. Das kann die Erholung beeinträchtigen. Du kannst den Tausch trotzdem durchführen.";
   const msgBackToBackHard =
-    "⚠️ Hinweis: Nach dem Tausch stehen zwei intensive Einheiten an aufeinanderfolgenden Tagen. Du kannst den Tausch trotzdem durchführen.";
+    "Hinweis: Nach dem Tausch stehen zwei intensive Einheiten an aufeinanderfolgenden Tagen. Du kannst den Tausch trotzdem durchführen.";
   const msgRestBufferLost =
-    "⚠️ Hinweis: Nach dem Tausch liegt zwischen zwei intensiven Einheiten kein Ruhetag mehr wie zuvor im Plan. Du kannst den Tausch trotzdem durchführen.";
+    "Hinweis: Nach dem Tausch liegt zwischen zwei intensiven Einheiten kein Ruhetag mehr wie zuvor im Plan. Du kannst den Tausch trotzdem durchführen.";
 
   const out: string[] = [];
   const afterBy = workoutsByLocalDay(opts.after.workouts);
@@ -135,10 +135,10 @@ export function validateSwap(context: {
   const recoveryAxisScore = Math.max(0, Math.min(100, Math.round(35 + decisionScore)));
   const recoveryReason =
     rs.recoveryStatus === "fatigued"
-      ? "Recovery: du bist aktuell eher ermüdet."
+      ? "Erholung: du bist aktuell eher ermüdet."
       : rs.recoveryStatus === "fresh"
-        ? "Recovery: du bist aktuell eher frisch."
-        : "Recovery: normal.";
+        ? "Erholung: du bist aktuell eher frisch."
+        : "Erholung: normal.";
   results.push({ status: "allow", axes: { recovery: axis(recoveryAxisScore, recoveryReason) } });
 
   return evaluate(results, v);

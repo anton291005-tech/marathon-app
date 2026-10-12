@@ -29,8 +29,8 @@ type Props = {
  * vorbei (kein Haken, kein Health-Lauf — evtl. nicht gestartet), bleibt die Aussage neutral.
  */
 function noTimeHeadline(completedBy: PrepCompletedBy): string {
-  if (completedBy === "race_done") return "Rennen gelaufen 🎉";
-  if (completedBy === "plan_ended") return "Plan durchgezogen 🎉";
+  if (completedBy === "race_done") return "Rennen gelaufen";
+  if (completedBy === "plan_ended") return "Plan durchgezogen";
   return "Renntag vorbei";
 }
 

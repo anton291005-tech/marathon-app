@@ -7,6 +7,8 @@ import {
 } from "../../prepRecap/finishTimeInput";
 import type { FinishTimePatch, FinishTimeSource } from "../../prepRecap/prepRecapRecord";
 import { formatFinishTime } from "../../prepRecap/raceResultPresentation";
+import { X } from "lucide-react";
+import { ICON_SIZE, ICON_STROKE } from "../../ui/icons";
 import { FINISH_INPUT_BACKGROUND } from "./recapTheme";
 import {
   heroFontSize,
@@ -152,7 +154,7 @@ export default function FinishTimeInputStep({
         }}
       >
         <button type="button" aria-label="Schließen" onClick={onDismiss} style={recapCloseButtonStyle}>
-          ✕
+          <X aria-hidden size={ICON_SIZE} strokeWidth={ICON_STROKE} />
         </button>
       </div>
 

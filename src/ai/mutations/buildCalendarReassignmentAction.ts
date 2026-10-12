@@ -89,7 +89,7 @@ export function buildCalendarReassignmentAction(
   if (items.length === 0) return null;
 
   if (result.warning) {
-    items.push(`⚠️ ${result.warning}`);
+    items.push(`Hinweis: ${result.warning}`);
   }
 
   const preview: AiActionPreview = {
@@ -148,7 +148,7 @@ export type SingleSessionCalendarProposal =
     };
 
 /**
- * Einzel-Flow des 📅-Buttons: schlägt nur dann einen Tausch vor, wenn die Session auf ihrem aktuellen
+ * Einzel-Flow des Kalender-Buttons: schlägt nur dann einen Tausch vor, wenn die Session auf ihrem aktuellen
  * Tag im Kalenderkonflikt ist (`isSessionInCalendarConflict`, dasselbe Kriterium wie der Wochen-Scan).
  * Ohne Konflikt (oder ohne parsebares Datum, wie im Scan) kommt `no-conflict` mit den Kandidaten für die
  * manuelle Tageswahl zurück — die bleibt also immer erreichbar. Gesperrte Sessions liefern `locked`.

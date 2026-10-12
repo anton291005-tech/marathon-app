@@ -24,7 +24,7 @@ function describeConflict(session: AiPlanSession, fitScore: number, dayCapacity:
 }
 
 /**
- * Rein lesender Wochen-Scan: wendet dieselbe Capacity-Scoring-Logik, die der 📅-Button pro Klick
+ * Rein lesender Wochen-Scan: wendet dieselbe Capacity-Scoring-Logik, die der Kalender-Button pro Klick
  * für eine einzelne Session nutzt (`computeDayCapacityScore` + `computeSessionDayFitScore` aus
  * capacityScore.ts, gleiche Schwelle `MIN_FIT_SCORE_THRESHOLD`), auf alle Sessions der Woche an —
  * bewertet aber nur den jeweils AKTUELLEN Tag jeder Session (IST-Zustand), nicht mögliche
@@ -33,7 +33,7 @@ function describeConflict(session: AiPlanSession, fitScore: number, dayCapacity:
  * `scoreCandidate` in assignSessionToBestCapacityDay.ts), nicht für den unveränderten Status quo.
  *
  * Erzeugt keinen PlanPatch und verändert nichts – dient nur der Erkennung, welche Tage der Woche
- * mit den hinterlegten Kalender-Blocks kollidieren. Der bestehende Einzel-Tag-📅-Handler
+ * mit den hinterlegten Kalender-Blocks kollidieren. Der bestehende Einzel-Tag-Kalender-Handler
  * (`handleProposeCalendarReassignment` in AppMain.tsx) bleibt davon unberührt.
  *
  * Gesperrte Sessions (erledigt/übersprungen/vergangen, `buildLockedSessionIds`) sind nie Quelle eines

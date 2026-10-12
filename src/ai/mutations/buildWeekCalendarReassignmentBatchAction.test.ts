@@ -45,7 +45,7 @@ describe("buildWeekCalendarReassignmentBatchAction", () => {
     expect(action?.preview?.items).toEqual([
       "Intervalle: Montag → Dienstag (11. Aug)",
       "Easy Run: Dienstag → Montag (10. Aug)",
-      "⚠️ Back-to-back intensity: zwei intensive Einheiten hintereinander.",
+      "Hinweis: Back-to-back intensity: zwei intensive Einheiten hintereinander.",
     ]);
   });
 
@@ -62,7 +62,7 @@ describe("buildWeekCalendarReassignmentBatchAction", () => {
     const action = buildWeekCalendarReassignmentBatchAction(proposals, validation, WEEK);
 
     expect(action).not.toBeNull();
-    expect(action?.preview?.items).toContain("1 Konflikt nicht automatisch lösbar – einzeln über 📅 bearbeiten.");
+    expect(action?.preview?.items).toContain("1 Konflikt nicht automatisch lösbar – einzeln über den Kalender-Button bearbeiten.");
   });
 
   test("geblockter Batch (valid: false) -> null", () => {

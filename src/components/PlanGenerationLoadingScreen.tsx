@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { TriangleAlert } from "lucide-react";
+import { ICON_STROKE } from "../ui/icons";
 
 // ---------------------------------------------------------------------------
 // Public constants — Onboarding.tsx times its onComplete() call against these
@@ -156,10 +158,10 @@ export function PlanGenerationLoadingScreen({
                 background: "rgba(248, 113, 113, 0.14)",
                 border: "1px solid rgba(248, 113, 113, 0.35)",
                 marginBottom: 20,
-                fontSize: 32,
+                color: "var(--status-low)",
               }}
             >
-              ⚠️
+              <TriangleAlert aria-hidden size={32} strokeWidth={ICON_STROKE} />
             </div>
             <h2
               style={{
@@ -183,7 +185,7 @@ export function PlanGenerationLoadingScreen({
               {errorMessage ??
                 "Dein Trainingsplan konnte nicht erstellt werden. Das kann an einer instabilen Verbindung liegen."}
             </p>
-            <button
+            <button className="mr-primary"
               type="button"
               onClick={onRetry}
               style={{
@@ -194,8 +196,8 @@ export function PlanGenerationLoadingScreen({
                 border: "none",
                 borderRadius: 14,
                 cursor: "pointer",
-                color: "#fff",
-                background: "linear-gradient(135deg, #10b981, #3b82f6)",
+                color: "var(--on-accent)",
+                background: "var(--accent)",
               }}
             >
               Erneut versuchen

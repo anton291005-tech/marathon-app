@@ -92,7 +92,7 @@ describe("RaceResultCard", () => {
 
   it("feiert ein erledigtes Rennen auch ohne erkannte Zeit", () => {
     render(<RaceResultCard {...done} finish={null} />);
-    expect(screen.getByText("Rennen gelaufen 🎉")).toBeInTheDocument();
+    expect(screen.getByText("Rennen gelaufen")).toBeInTheDocument();
     expect(screen.getByText("Ziel: Sub 2:50")).toBeInTheDocument();
     expect(screen.queryByTestId("race-result-time")).toBeNull();
   });
@@ -135,6 +135,6 @@ describe("RaceResultCard", () => {
   it("benennt einen Plan ohne Race-Session passend", () => {
     render(<RaceResultCard {...base} raceName={null} goalSeconds={null} finish={null} completedBy="plan_ended" />);
     expect(screen.getByText("Vorbereitung abgeschlossen")).toBeInTheDocument();
-    expect(screen.getByText("Plan durchgezogen 🎉")).toBeInTheDocument();
+    expect(screen.getByText("Plan durchgezogen")).toBeInTheDocument();
   });
 });

@@ -1,0 +1,35 @@
+/* MyRace-Komponenten (Klassen mr-*). Vorlage: docs/design-system/components.css. Werte kommen aus tokens.css. */
+
+.mr-icon { width: var(--size-icon); height: var(--size-icon); flex: none; }
+.mr-icon--s { width: var(--size-icon-s); height: var(--size-icon-s); }
+
+/* Button */
+.mr-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: var(--size-button); padding: 0 var(--space-6); border: 0; border-radius: var(--radius-m); font: 600 17px/22px var(--font-sans); cursor: pointer; -webkit-tap-highlight-color: transparent; box-sizing: border-box; min-width: 0; }
+.mr-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.mr-btn[disabled] { opacity: 0.4; cursor: default; }
+.mr-btn--primary { background: var(--accent); color: var(--on-accent); }
+.mr-btn--primary:not([disabled]):active { background: var(--accent-press); }
+.mr-btn--secondary { background: var(--surface-2); color: var(--ink); }
+.mr-btn--secondary:not([disabled]):active { background: var(--surface-3); }
+.mr-btn--ghost { background: transparent; color: var(--accent-text); padding: 0 var(--space-3); }
+.mr-btn--danger { background: transparent; color: var(--accent-text); padding: 0 var(--space-3); }
+.mr-btn--small { height: 36px; padding: 0 var(--space-4); font-size: 15px; border-radius: var(--radius-s); }
+.mr-btn--block { width: 100%; }
+
+/* Primärbuttons mit Inline-Styles (noch nicht auf mr-btn umgebaut): nur der Gedrückt-Zustand. */
+.mr-primary:not(:disabled):active { background: var(--accent-press) !important; }
+
+/* StatusChip */
+.mr-chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: var(--radius-pill); font: 600 13px/18px var(--font-sans); background: var(--surface-3); color: var(--ink-2); white-space: nowrap; box-sizing: border-box; max-width: 100%; }
+.mr-chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.mr-chip--plain::before { display: none; }
+.mr-chip--good { background: var(--status-good-tint); color: var(--status-good); }
+.mr-chip--fair { background: var(--status-fair-tint); color: var(--status-fair); }
+.mr-chip--low { background: var(--status-low-tint); color: var(--status-low); }
+.mr-chip--accent { background: var(--accent-tint); color: var(--accent-text); }
+
+/* TabBar */
+.mr-tabbar { display: flex; box-sizing: border-box; background: var(--surface-1); border-top: 1px solid var(--line); }
+.mr-tab { flex: 1; min-width: 0; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--ink-3); font: 600 10px/12px var(--font-sans); background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; white-space: nowrap; }
+.mr-tab.is-active { color: var(--accent-text); }
+.mr-tab:focus-visible { outline: none; box-shadow: inset var(--shadow-focus); border-radius: var(--radius-s); }

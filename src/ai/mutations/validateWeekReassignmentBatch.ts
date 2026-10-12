@@ -46,7 +46,7 @@ function findSessionIdForDayIso(week: AiPlanWeek, dayIso: string): string | null
  * Batch-Endzustand geprüft (Begründung oben: Interaktionseffekte zwischen zwei Swaps). Ein
  * Micro-Structure-Status "warn" macht den Batch NICHT ungültig (Schritt 4: der Diff-Screen zeigt die
  * Warnung an, der Athlet bestätigt aktiv trotzdem — gleiches Pattern wie bei der manuellen
- * Tageswahl/"⚠️ Ungünstig"). Nur ein echter "block"-Status (den `validateMicroStructure` aktuell nie
+ * Tageswahl/"Ungünstig"). Nur ein echter "block"-Status (den `validateMicroStructure` aktuell nie
  * liefert, aber der System-Status-Typ erlaubt ihn) bleibt Hard-Block fürs ganze Batch.
  *
  * Erkennt außerdem eine Klasse von Widersprüchen, die Schritt 2 selbst nicht ausschließt: eine Session

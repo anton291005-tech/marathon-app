@@ -401,7 +401,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
         return;
       }
       setCalendarStepMode("connected");
-      setCalendarFeedback({ tone: "ok", text: `✓ ${result.importedCount} Termine importiert` });
+      setCalendarFeedback({ tone: "ok", text: `${result.importedCount} Termine importiert` });
     } finally {
       setCalendarBusy(false);
     }
@@ -417,7 +417,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
       try {
         const result = await insertPresetBlocks(userId, presetToScheduleBlocks(presetId));
         if (result.ok) {
-          setCalendarFeedback({ tone: "ok", text: "✓ Wochenrhythmus gespeichert" });
+          setCalendarFeedback({ tone: "ok", text: "Wochenrhythmus gespeichert" });
         } else {
           setSelectedPresetId(null);
           setCalendarFeedback({ tone: "err", text: "Speichern fehlgeschlagen — bitte erneut versuchen." });
@@ -902,7 +902,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
 
             {calendarStepMode === "connect" ? (
               <>
-                <button
+                <button className="mr-primary"
                   type="button"
                   onClick={() => void handleConnectCalendar()}
                   disabled={calendarBusy}
@@ -915,8 +915,8 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
                     borderRadius: 14,
                     cursor: calendarBusy ? "not-allowed" : "pointer",
                     opacity: calendarBusy ? 0.7 : 1,
-                    color: "#fff",
-                    background: "linear-gradient(135deg, #10b981, #3b82f6)",
+                    color: "var(--on-accent)",
+                    background: "var(--accent)",
                   }}
                 >
                   {calendarBusy ? "Verbinde…" : "Kalender verbinden"}
@@ -942,7 +942,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
 
             {calendarStepMode === "connected" ? (
               <p style={{ margin: 0, fontSize: 14, color: "#34d399", fontWeight: 600 }}>
-                ✓ Kalender verbunden
+                Kalender verbunden
               </p>
             ) : null}
 
@@ -1181,7 +1181,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
           ) : null}
 
           {step < 5 ? (
-            <button
+            <button className="mr-primary"
               type="button"
               disabled={step === 1 ? !step1Valid : step === 2 ? !step2Valid : false}
               onClick={goNext}
@@ -1200,14 +1200,14 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
                       : "pointer",
                 opacity:
                   step === 1 && !step1Valid ? 0.5 : step === 2 && !step2Valid ? 0.5 : 1,
-                color: "#fff",
-                background: "linear-gradient(135deg, #10b981, #3b82f6)",
+                color: "var(--on-accent)",
+                background: "var(--accent)",
               }}
             >
               {t("onboarding.next")}
             </button>
           ) : (
-            <button
+            <button className="mr-primary"
               type="button"
               disabled={isGenerating}
               onClick={() => void handleFinish()}
@@ -1220,8 +1220,8 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
                 borderRadius: 14,
                 cursor: isGenerating ? "not-allowed" : "pointer",
                 opacity: isGenerating ? 0.7 : 1,
-                color: "#fff",
-                background: "linear-gradient(135deg, #10b981, #3b82f6)",
+                color: "var(--on-accent)",
+                background: "var(--accent)",
               }}
             >
               {finishButtonLabel}

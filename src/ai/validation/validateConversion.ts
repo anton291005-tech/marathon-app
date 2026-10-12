@@ -145,7 +145,7 @@ export function buildConversionAthleteFacingWarnings(
   const validation = validateConversion(before, after, sessionId);
   const loadReason = validation.axes.load?.reason;
   if (loadReason) {
-    out.push(`⚠️ Hinweis: ${loadReason} Du kannst die Konvertierung trotzdem durchführen.`);
+    out.push(`Hinweis: ${loadReason} Du kannst die Konvertierung trotzdem durchführen.`);
   }
 
   const weekStart = findWeekStartForSession(after, sessionId);
@@ -157,7 +157,7 @@ export function buildConversionAthleteFacingWarnings(
       const runAfter = weekRunningKmV2(afterWeek);
       if (runAfter > runBefore + 0.5) {
         out.push(
-          `ℹ️ Wochen-Lauf-km: ${runBefore} → ${runAfter} km (Rad-Anteil entfällt in der Lauf-Summe).`,
+          `Wochen-Lauf-km: ${runBefore} → ${runAfter} km (Rad-Anteil entfällt in der Lauf-Summe).`,
         );
       }
 
@@ -168,7 +168,7 @@ export function buildConversionAthleteFacingWarnings(
         const loadBefore = getWeekPlannedLoadKm(beforePlanWeeks[weekIdx]!);
         const loadAfter = getWeekPlannedLoadKm(afterPlanWeeks[weekIdx]!);
         if (Math.abs(loadAfter - loadBefore) > 0.5) {
-          out.push(`ℹ️ Trainingsvolumen (Lauf+Rad): ${loadBefore} → ${loadAfter} km.`);
+          out.push(`Trainingsvolumen (Lauf+Rad): ${loadBefore} → ${loadAfter} km.`);
         }
       }
     }

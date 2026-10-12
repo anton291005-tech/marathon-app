@@ -41,48 +41,48 @@ type TourStep = {
 const TOUR_STEPS: TourStep[] = [
   {
     isWelcome: true,
-    title: '👋 Willkommen bei MyRace!',
+    title: 'Willkommen bei MyRace',
     description: 'Lass uns kurz zeigen, was dich hier erwartet. Die Tour dauert nur 30 Sekunden.',
     tab: 'home',
   },
   {
     target: 'today-session',
-    title: '📅 Heutige Einheit',
-    text: 'Hier siehst du dein heutiges Training — Distanz, Typ und Beschreibung. Tippe auf ✓ Done wenn du fertig bist.',
+    title: 'Heutige Einheit',
+    text: 'Hier siehst du dein heutiges Training — Distanz, Typ und Beschreibung. Tippe auf „Erledigt“, wenn du fertig bist.',
     position: 'bottom',
     tab: 'home',
   },
   {
     target: 'recovery-card',
-    title: '❤️ Vorbereitungs-Einschätzung',
-    text: 'Dein täglicher Readiness-Score. Zeigt ob du heute pushen oder lieber erholen solltest.',
+    title: 'Vorbereitungs-Einschätzung',
+    text: 'Deine tägliche Einschätzung. Zeigt, ob du heute fordern oder lieber erholen solltest.',
     position: 'bottom',
     tab: 'home',
   },
   {
     target: 'week-header',
-    title: '▤ Wochenplan',
-    text: 'Alle Sessions der Woche auf einen Blick. Tippe auf eine Einheit für Details und zum Loggen.',
+    title: 'Wochenplan',
+    text: 'Alle Einheiten der Woche auf einen Blick. Tippe auf eine Einheit für Details und zum Loggen.',
     position: 'bottom',
     tab: 'week',
   },
   {
     target: 'performance-card',
-    title: '◔ Leistung',
+    title: 'Leistung',
     text: 'Dein Trainingsfortschritt und Prognose für den Renntag. Hier siehst du wie sich deine Form entwickelt.',
     position: 'bottom',
     tab: 'performance',
   },
   {
     target: 'overview-card',
-    title: '◎ Übersicht',
-    text: 'Der komplette Trainingsplan — alle Phasen von Base bis Taper. Sieh wo du gerade stehst.',
+    title: 'Übersicht',
+    text: 'Der komplette Trainingsplan — alle Phasen von Grundlage bis Taper. Sieh, wo du gerade stehst.',
     position: 'bottom',
     tab: 'overview',
   },
   {
     target: 'coach-tab',
-    title: '✦ Dein AI Coach',
+    title: 'Dein Coach',
     text: 'Frag den Coach alles — Plan anpassen, Einheiten tauschen, Fragen zum Training. Er kennt deinen Stand.',
     position: 'top',
     tab: 'coach',
@@ -344,7 +344,7 @@ export function AppTour({ onComplete, onTabChange }: AppTourProps) {
                 onClick={goNext}
                 style={{
                   background: isLast
-                    ? 'linear-gradient(135deg, #10b981, #3b82f6)'
+                    ? "var(--accent)"
                     : 'rgba(59,130,246,0.12)',
                   border: `1px solid ${isLast ? 'transparent' : 'rgba(59,130,246,0.35)'}`,
                   borderRadius: 12,

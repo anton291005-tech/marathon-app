@@ -100,7 +100,7 @@ export function inferRecoveryScoreDeltaHints(
       const typ = context?.trainingTypeLabel ? ` (${context.trainingTypeLabel})` : "";
       hints.push(`Training heute: ${round1(km)} km${typ}`);
     } else {
-      hints.push("Training heute beeinflusst die Recovery");
+      hints.push("Training heute beeinflusst die Erholung");
     }
   }
 

@@ -65,7 +65,7 @@ describe("describeCalendarConflictCause", () => {
   });
 });
 
-describe("Einzel-Tag-📅: Grund im Vorschlag", () => {
+describe("Einzel-Tag-Kalender: Grund im Vorschlag", () => {
   test("Stichwort-Treffer: Zeile der verschobenen Session nennt das Fußballturnier, die verdrängte nicht", () => {
     const week = buildWeek();
     const proposal = proposeSingleSessionCalendarReassignment([week], week, "s-sun", [TOURNAMENT]);

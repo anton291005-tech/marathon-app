@@ -51,7 +51,7 @@ describe("generateMarathonPlanV2ToRace distance/volume/rest", () => {
   test("10 km + 20–40 km + rest Tuesday", () => {
     const plan = generateMarathonPlanV2ToRace(start, race, "time", 10, "20–40 km", 2);
     const raceW = findRaceWorkout(plan);
-    expect(raceW?.title).toBe("🏁 10 km");
+    expect(raceW?.title).toBe("10 km");
     expect(raceW?.km).toBe(10);
     expect(maxLongRunKm(plan)).toBeLessThanOrEqual(18);
     expect(tuesdaySessions(plan).every((w) => w.sessionType === "rest")).toBe(true);
@@ -60,7 +60,7 @@ describe("generateMarathonPlanV2ToRace distance/volume/rest", () => {
   test("marathon + 60–80 km", () => {
     const plan = generateMarathonPlanV2ToRace(start, race, "time", 42.2, "60–80 km");
     const raceW = findRaceWorkout(plan);
-    expect(raceW?.title).toBe("🏁 Marathon");
+    expect(raceW?.title).toBe("Marathon");
     expect(raceW?.km).toBe(42.2);
     expect(maxLongRunKm(plan)).toBeLessThanOrEqual(32);
   });
@@ -68,7 +68,7 @@ describe("generateMarathonPlanV2ToRace distance/volume/rest", () => {
   test("half marathon + default volume", () => {
     const plan = generateMarathonPlanV2ToRace(start, race, "time", 21.1, "40–60 km");
     const raceW = findRaceWorkout(plan);
-    expect(raceW?.title).toBe("🏁 Halbmarathon");
+    expect(raceW?.title).toBe("Halbmarathon");
     expect(raceW?.km).toBe(21.1);
     expect(maxLongRunKm(plan)).toBeLessThanOrEqual(26);
   });
@@ -181,18 +181,11 @@ describe("generateMarathonPlanV2ToRace distance/volume/rest", () => {
     }
   });
 
-  test("phase label format: label uses German labels with optional ⬇️", () => {
+  test("phase label format: Phasenname + Wochennummer, ohne Emoji", () => {
     const plan = generateMarathonPlanV2ToRace(start, race, "time", 42.2);
     for (const week of plan.weeks) {
       const label = week.meta?.label ?? "";
-      // Must start with a known phase label
-      expect(label).toMatch(/^(Base|Build|Peak|Taper) W\d+( ⬇️)?$/);
-      // Recovery weeks must have ⬇️, non-recovery must not
-      if (week.meta?.isRecoveryWeek) {
-        expect(label).toContain("⬇️");
-      } else {
-        expect(label).not.toContain("⬇️");
-      }
+      expect(label).toMatch(/^(Base|Build|Peak|Taper) W\d+$/);
     }
   });
 
@@ -352,14 +345,13 @@ describe("generateMarathonPlanV2ToRace distance/volume/rest", () => {
       expect(recKm).toBeLessThan(prevKm);
       expect(recKm).toBeLessThan(nextKm);
 
-      // Label must contain ⬇️
-      expect(recWeek.meta?.label).toContain("⬇️");
+      // Entlastung steht im Fokus-Text, nicht als Emoji im Label
+      expect(recWeek.meta?.focus).toContain("Entlastungswoche");
     }
 
-    // Confirm non-recovery weeks do NOT have ⬇️ label
     const nonRecovery = plan.weeks.filter((w) => !w.meta?.isRecoveryWeek);
     for (const w of nonRecovery) {
-      expect(w.meta?.label ?? "").not.toContain("⬇️");
+      expect(w.meta?.focus ?? "").not.toContain("Entlastungswoche");
     }
   });
 

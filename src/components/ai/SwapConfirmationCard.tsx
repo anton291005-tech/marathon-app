@@ -136,13 +136,13 @@ export default function SwapConfirmationCard({
         >
           Abbrechen
         </button>
-        <button
+        <button className="mr-primary"
           onClick={onConfirm}
           style={{
             flex: 1,
-            background: "linear-gradient(135deg,#10b981,#3b82f6)",
+            background: "var(--accent)",
             border: "none",
-            color: "#fff",
+            color: "var(--on-accent)",
             borderRadius: 10,
             padding: "10px 0",
             fontSize: 13,

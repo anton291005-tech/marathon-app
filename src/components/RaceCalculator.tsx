@@ -45,7 +45,7 @@ export default function RaceCalculator() {
 
   return (
     <SurfaceCard>
-      <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 12 }}>Race Calculator</div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 12 }}>Rennrechner</div>
       <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#7c8aa5", fontWeight: 700, marginBottom: 6 }}>
         Zielzeit
       </div>

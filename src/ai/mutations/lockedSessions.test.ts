@@ -319,7 +319,7 @@ describe("(b) Guard-Violation bei gesperrter ID", () => {
   });
 });
 
-describe("(c) Einzel-Flow (📅-Button)", () => {
+describe("(c) Einzel-Flow (Kalender-Button)", () => {
   test("isSessionInCalendarConflict: Schwelle MIN_FIT_SCORE_THRESHOLD (0,35), harte vs. leichte Session", () => {
     const day = (capacityScore: number): DayCapacityScore => ({
       dateIso: "2026-08-10",

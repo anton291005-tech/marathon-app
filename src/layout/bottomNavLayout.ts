@@ -1,15 +1,15 @@
 /**
- * Schwebende Tab-Bar: eine Quelle für ihre Maße und den Platz, den jeder Tab unten dafür freihält
+ * Tab-Bar am unteren Rand: eine Quelle für ihre Maße und den Platz, den jeder Tab unten dafür freihält
  * (UI only — no business logic).
  *
  * Die Bar ist `position: fixed` und liegt über dem Inhalt. Der gemeinsame Inhalts-Wrapper in
  * `AppMain.tsx` reserviert deshalb `getBottomNavContentPadding()` — keine Seite kodiert den Wert selbst.
  */
 
-/** Feste Außenhöhe der Bar (border-box): 52 Button + 21 Padding + 2 Rahmen. */
-export const BOTTOM_NAV_HEIGHT_PX = 75;
-/** Abstand der Bar zum unteren Rand, zusätzlich zur Safe Area (Home-Indicator). */
-export const BOTTOM_NAV_BOTTOM_OFFSET_PX = 12;
+/** Höhe der Bar ohne Safe Area (`size-tabbar`, border-box inkl. Haarlinie oben). */
+export const BOTTOM_NAV_HEIGHT_PX = 64;
+/** Die Bar liegt bündig am unteren Rand; unter den Tabs bleibt nur die Safe Area (Home-Indicator). */
+export const BOTTOM_NAV_BOTTOM_OFFSET_PX = 0;
 /** Luft zwischen dem Ende des Inhalts und der Oberkante der Bar. */
 export const BOTTOM_NAV_CONTENT_GAP_PX = 8;
 
@@ -24,7 +24,7 @@ export function getBottomNavContentPadding(): string {
   return `calc(${BOTTOM_NAV_RESERVED_PX}px + ${SAFE_AREA_BOTTOM})`;
 }
 
-/** `bottom` der Tab-Bar selbst. */
+/** Innenabstand unten in der Tab-Bar (Safe Area); die Bar selbst sitzt auf `bottom: 0`. */
 export function getBottomNavBottomOffset(): string {
   return `calc(${BOTTOM_NAV_BOTTOM_OFFSET_PX}px + ${SAFE_AREA_BOTTOM})`;
 }

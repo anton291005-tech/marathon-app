@@ -49,7 +49,7 @@ function sortConflictsBySeverity(
  * bleibt für nachfolgende Sessions frei.
  *
  * Nutzt dieselbe Ranking-Primitive (`rankCalendarReassignmentCandidates`) wie das "Bearbeiten"-Panel
- * hinter dem Einzel-Tag-📅-Button – dessen `isConflict`-Flag (Capacity-Fit UND Micro-Structure)
+ * hinter dem Einzel-Tag-Kalender-Button – dessen `isConflict`-Flag (Capacity-Fit UND Micro-Structure)
  * entscheidet, ob ein Kandidat als Lösung zählt. Erzeugt keinen PlanPatch, ruft weder
  * `assignSessionToBestCapacityDay` noch `buildCalendarReassignmentAction` auf – reine Vorschau.
  * Gesperrte Sessions (`lockedSessionIds`) werden nie als Zieltag angeboten.

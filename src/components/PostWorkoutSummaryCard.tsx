@@ -128,7 +128,7 @@ function intervalPaceDeltaVersusTarget(
 }
 
 /** Gleiche Skala wie das Gefühl-Feld im Bearbeiten-Formular (1–5). */
-const LOG_FEELING_LABELS = ["", "😓 Sehr schwer", "😕 Schlecht", "😐 Okay", "😊 Gut", "🔥 Fantastisch!"];
+const LOG_FEELING_LABELS = ["", "Sehr schwer", "Schlecht", "Okay", "Gut", "Sehr gut"];
 
 const RING_R = 50;
 const RING_CX = 62;
@@ -751,7 +751,7 @@ export function PostWorkoutSummaryCard(props: {
                   marginBottom: 7,
                 }}
               >
-                AI Coach
+                Coach
               </div>
               {coachMessage ? (
                 <div

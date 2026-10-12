@@ -35,13 +35,13 @@ export default function AiActionCard({ action, disabled, onConfirm, onCancel, on
       </div>
 
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <button
+        <button className="mr-primary"
           onClick={onConfirm}
           disabled={disabled}
           style={{
             flex: 1.2,
-            background: "linear-gradient(135deg,#10b981,#3b82f6)",
-            color: "#fff",
+            background: "var(--accent)",
+            color: "var(--on-accent)",
             border: "none",
             borderRadius: 11,
             padding: "10px 12px",

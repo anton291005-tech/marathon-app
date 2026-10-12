@@ -48,7 +48,7 @@ export default function AiCoachPanel({
       id: createId(),
       role: "assistant",
       type: "text",
-      text: "Ich bin dein AI Coach. Ich schlage Änderungen erst als Vorschau vor, bevor etwas übernommen wird.",
+      text: "Ich bin dein Coach. Ich schlage Änderungen erst als Vorschau vor, bevor etwas übernommen wird.",
     },
   ]);
   const messages = controlledMessages ?? internalMessages;
@@ -278,7 +278,7 @@ export default function AiCoachPanel({
           padding: "14px 14px 10px",
         }}
       >
-        <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text-primary)" }}>AI Coach</div>
+        <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text-primary)" }}>Coach</div>
         <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
           Coach + Navigator. Plananpassungen werden immer erst als Action Card zur Bestätigung gezeigt.
         </div>
@@ -356,13 +356,13 @@ export default function AiCoachPanel({
             opacity: busy ? 0.65 : 1,
           }}
         />
-        <button
+        <button className="mr-primary"
           onClick={() => void sendMessage()}
           disabled={!canSend}
           style={{
-            background: "linear-gradient(135deg,#10b981,#3b82f6)",
+            background: "var(--accent)",
             border: "none",
-            color: "#fff",
+            color: "var(--on-accent)",
             borderRadius: 12,
             padding: "0 14px",
             fontSize: 13,
