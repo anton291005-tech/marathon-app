@@ -55,7 +55,7 @@ export const AI_DATA_USES: readonly AiDataUse[] = [
       "Deine Nachricht und der Chatverlauf",
       "Dein Trainingsplan",
       "Deine Trainingseinträge der letzten Wochen (inkl. Notizen und Gefühl)",
-      "Läufe und Radfahrten aus Apple Health der letzten Wochen",
+      "Läufe und Radfahrten aus Apple Health der letzten Wochen (Art, Datum, Dauer, Distanz, Durchschnittspuls)",
       "Erholungswerte: Schlaf, HRV, Ruhepuls",
       "Zielzeit und Max-HF",
     ],

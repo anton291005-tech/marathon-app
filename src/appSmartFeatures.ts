@@ -2,6 +2,7 @@
 
 import { getAppNow } from "./core/time/timeSystem";
 import { calculatePlanAwareStreak } from "./trainingIntelligence/streak";
+import { pluralDe } from "./utils/pluralDe";
 
 const MONTHS = {
   Jan: 0,
@@ -193,11 +194,11 @@ export function getShareSummary({ pct, week, nextKeySession, recoveryState, cons
       ? nextKeySession.title.trim()
       : "Alles erledigt";
   return [
-    "MyRace Snapshot",
+    "Mein MyRace-Stand",
     `Fortschritt: ${pct ?? 0}%`,
     `Aktuelle Woche: ${safePlanWeekLabel(week)}`,
-    `Recovery: ${recoveryState?.label ?? "—"}`,
-    `Streak: ${streak} Tage in Folge`,
+    `Erholung: ${recoveryState?.label ?? "—"}`,
+    `Serie: ${pluralDe(streak, "Tag", "Tage")} in Folge`,
     `Nächster Fokus: ${nextTitle}`,
   ].join("\n");
 }

@@ -46,6 +46,30 @@ export function coachStructuredMarkdownAppendix(context: AiContext): string {
   return `Plan: ${weeks} Wochen, ${sessions} Einheiten. Nächste 14 Tage: ${context.next14Days.length} Sessions.`;
 }
 
+/** Die einzigen Felder eines Health-Workouts, die den Coach-Endpunkt erreichen dürfen. */
+export type CoachHealthRun = {
+  workoutType?: string;
+  startDate: string;
+  duration: number;
+  distanceMeters: number | null;
+  avgHeartRateBpm?: number;
+};
+
+/**
+ * Whitelist für Health-Workouts im Coach-Payload: Art, Start, Dauer, Distanz, Durchschnittspuls.
+ * Alles andere (GPS-Verlauf, Splits, Runden, Quellname, IDs) bleibt auf dem Gerät.
+ * Dieselbe Liste wendet der Server an (`api/_lib/coachHealthRunFields.js`).
+ */
+export function toCoachHealthRun(run: StoredHealthRun): CoachHealthRun {
+  return {
+    ...(typeof run.workoutType === "string" ? { workoutType: run.workoutType } : {}),
+    startDate: run.startDate,
+    duration: run.duration,
+    distanceMeters: run.distanceMeters ?? null,
+    ...(typeof run.avgHeartRateBpm === "number" ? { avgHeartRateBpm: run.avgHeartRateBpm } : {}),
+  };
+}
+
 export function toRemoteCoachPayload(context: AiContext) {
   const now = new Date(context.todayIso);
   const nowDate = Number.isFinite(now.getTime()) ? now : getAppNow();
@@ -59,7 +83,7 @@ export function toRemoteCoachPayload(context: AiContext) {
     conversationTurns: context.conversationTurns ?? [],
     trainingPlan: { source: "display", weeks: context.plan },
     logsLast30Days: sliceLogsLast30Days(context.logs || {}, nowDate),
-    healthRunsLast30Days: [...(context.healthRuns || [])],
+    healthRunsLast30Days: (context.healthRuns || []).map(toCoachHealthRun),
     recoveryDomain: context.recoveryDomain ?? { domainKind: "initial" as const },
     prepStatus: context.prepStatus ?? null,
   };

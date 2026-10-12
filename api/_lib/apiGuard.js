@@ -58,7 +58,7 @@ function sendGuardFailure(res, guard) {
  */
 function coachRateLimitBody(retryAfterSeconds) {
   const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
-  const wait = minutes >= 120 ? `${Math.ceil(minutes / 60)} Stunden` : `${minutes} Minuten`;
+  const wait = minutes >= 120 ? `${Math.ceil(minutes / 60)} Stunden` : `${minutes} ${minutes === 1 ? "Minute" : "Minuten"}`;
   return {
     mode: "support",
     message: `Du hast das Limit für Coach-Anfragen erreicht. In etwa ${wait} geht es weiter — dein Plan bleibt bis dahin unverändert nutzbar.`,

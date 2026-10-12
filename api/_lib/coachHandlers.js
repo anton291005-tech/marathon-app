@@ -13,6 +13,7 @@
 
 const OpenAI = require("openai");
 const Anthropic = require("@anthropic-ai/sdk");
+const { pickCoachHealthRunFields } = require("./coachHealthRunFields");
 const { extractJson } = require("./extractJson");
 // Deliberately use a local copy so this directory is fully self-contained.
 // Do NOT change this back to "../../server/aiSchema" — that file is not always
@@ -791,8 +792,10 @@ function trimHealthRunsLast10Days(context) {
     : Array.isArray(context?.healthRunsLast10Days)
       ? context.healthRunsLast10Days
       : [];
-  return [...runs]
-    .sort((a, b) => new Date(a?.startDate).getTime() - new Date(b?.startDate).getTime())
+  return runs
+    .map(pickCoachHealthRunFields)
+    .filter(Boolean)
+    .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
     .slice(-10);
 }
 

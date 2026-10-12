@@ -1,4 +1,5 @@
 import { parseSessionDateLabel } from "../../appSmartFeatures";
+import { pluralDe } from "../../utils/pluralDe";
 import {
   buildBoostNextWeekVolumePatches,
   buildInjuryNoRunningPatches,
@@ -165,7 +166,7 @@ function buildShiftRaceDatePatches(context: AiContext, payload: Record<string, a
   return upcoming.map((session) => ({
     sessionId: session.id,
     changes: shiftSessionDate(session, shiftDays),
-    reason: `Renntermin um ${shiftDays} Tage verschoben`,
+    reason: `Renntermin um ${pluralDe(shiftDays, "Tag", "Tage")} verschoben`,
   }));
 }
 
@@ -178,7 +179,7 @@ function buildShiftPlanStartDatePatches(context: AiContext, payload: Record<stri
   const patches = upcoming.map((session) => ({
     sessionId: session.id,
     changes: shiftSessionDate(session, shiftDays),
-    reason: `Trainingsstart um ${shiftDays} Tage verschoben`,
+    reason: `Trainingsstart um ${pluralDe(shiftDays, "Tag", "Tage")} verschoben`,
   }));
 
   const firstTraining = upcoming.find((session) => session.type !== "rest");
@@ -188,11 +189,11 @@ function buildShiftPlanStartDatePatches(context: AiContext, payload: Record<stri
       changes: {
         type: "rest",
         km: 0,
-        title: "Zusatz-Ruhetag (verspaeteter Start)",
+        title: "Zusatz-Ruhetag (verspäteter Start)",
         desc: "Start bewusst konservativ halten und Belastung langsam aufbauen.",
         pace: null,
       },
-      reason: "Verspaeteter Einstieg",
+      reason: "Verspäteter Einstieg",
     });
   }
 
@@ -284,7 +285,7 @@ export function buildActionPreview(action: AiAssistantAction, context: AiContext
     return {
       title: "Navigation",
       items: [section ? `Ziel: ${target} (${section})` : `Ziel: ${target}`],
-      confirmLabel: "Oeffnen",
+      confirmLabel: "Öffnen",
       cancelLabel: "Abbrechen",
     };
   }
@@ -303,14 +304,14 @@ export function buildActionPreview(action: AiAssistantAction, context: AiContext
   if (action.type === "shift_plan_start_date") {
     const shiftDays = Number(action.payload?.requestedStartOffsetDays ?? action.payload?.shiftDays ?? 4);
     const items = [
-      `Trainingsstart um ${Number.isFinite(shiftDays) ? shiftDays : 4} Tage verschoben`,
+      `Trainingsstart um ${pluralDe(Number.isFinite(shiftDays) ? shiftDays : 4, "Tag", "Tage")} verschoben`,
       "Erste harte Einheit wird durch lockeren Wiedereinstieg ersetzt",
       "Planstruktur bleibt erhalten",
     ];
     return {
       title: "Vorgeschlagene Anpassung",
       items,
-      confirmLabel: "Uebernehmen",
+      confirmLabel: "Übernehmen",
       secondaryLabel: "Bearbeiten",
       cancelLabel: "Abbrechen",
     };
@@ -319,7 +320,7 @@ export function buildActionPreview(action: AiAssistantAction, context: AiContext
   return {
     title: "Vorgeschlagene Anpassung",
     items: toPreviewItems(context, patches),
-    confirmLabel: "Uebernehmen",
+    confirmLabel: "Übernehmen",
     secondaryLabel: "Bearbeiten",
     cancelLabel: "Abbrechen",
   };
@@ -330,7 +331,7 @@ export function executeAiAction(action: AiAssistantAction, context: AiContext): 
     const targetScreen = action.payload?.targetScreen || "home";
     return {
       mode: "navigator",
-      message: "Navigation wird geoeffnet.",
+      message: "Navigation wird geöffnet.",
       navigation: {
         targetScreen,
         section: action.payload?.section || undefined,
@@ -340,7 +341,7 @@ export function executeAiAction(action: AiAssistantAction, context: AiContext): 
   if (action.type === "explain_feature") {
     return {
       mode: "support",
-      message: "Ich habe nur erklaert und nichts am Plan veraendert.",
+      message: "Ich habe nur erklärt und nichts am Plan verändert.",
     };
   }
   if (action.type === "swap_training_days") {
@@ -359,7 +360,7 @@ export function executeAiAction(action: AiAssistantAction, context: AiContext): 
   if (!planPatches.length) {
     return {
       mode: "coach",
-      message: "Ich habe keine sichere Aenderung gefunden. Lass uns den Wunsch genauer eingrenzen.",
+      message: "Ich habe keine sichere Änderung gefunden. Lass uns den Wunsch genauer eingrenzen.",
     };
   }
   return {

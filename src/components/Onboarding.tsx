@@ -46,6 +46,7 @@ import {
 } from "../calendar/calendarSyncService";
 import { SCHEDULE_PRESETS, presetToScheduleBlocks, type SchedulePresetId } from "../calendar/presets";
 import { insertPresetBlocks } from "../lib/supabase/services/weeklyScheduleBlocksService";
+import { pluralDe } from "../utils/pluralDe";
 
 // ---------------------------------------------------------------------------
 
@@ -171,7 +172,7 @@ export function planApiBlockingMessage(
       return "Tageslimit für die Plan-Erzeugung erreicht. Versuch es später wieder.";
     }
     const minutes = Math.max(1, Math.ceil(seconds / 60));
-    const wait = minutes >= 120 ? `${Math.ceil(minutes / 60)} Stunden` : `${minutes} Minuten`;
+    const wait = minutes >= 120 ? `${Math.ceil(minutes / 60)} Stunden` : pluralDe(minutes, "Minute", "Minuten");
     return `Tageslimit für die Plan-Erzeugung erreicht. Versuch es in etwa ${wait} wieder.`;
   }
   if (result.status === 400) {

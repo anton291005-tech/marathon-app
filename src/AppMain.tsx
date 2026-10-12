@@ -98,6 +98,7 @@ import {
   settingsNavReducer,
 } from "./features/settings";
 import SurfaceCard from "./components/SurfaceCard";
+import { pluralDe } from "./utils/pluralDe";
 import { AccountDeleteDialog } from "./components/AccountDeleteDialog";
 import { cancelAllPendingNotifications } from "./services/notificationService";
 import { Onboarding } from "./components/Onboarding";
@@ -5439,7 +5440,7 @@ export default function AppMain(){
                     <div style={{padding:"6px 8px 6px"}}>
                       <div style={{fontSize:13,fontWeight:800,color:phase.col,lineHeight:1.25}}>{phase.emoji} {phase.label}</div>
                       <div style={{fontSize:10,color:"var(--text-secondary)",marginTop:2,lineHeight:1.35}}>
-                        {phaseWeeks.length} Wochen
+                        {pluralDe(phaseWeeks.length, "Woche", "Wochen")}
                         {phaseWeeks.length > 0
                           ? ` · Woche ${phaseWeeks[0].wn}${phaseWeeks.length > 1 ? `–${phaseWeeks[phaseWeeks.length - 1].wn}` : ""}`
                           : ""}
@@ -6433,6 +6434,10 @@ export default function AppMain(){
             { key: "settings", label: t("settings.title"), icon: "⚙" },
           ].map((item)=>{
             const active = activeView === item.key;
+            // Home-Tab ohne Einheit/km: Icon + „Heute" wie die übrigen Tabs.
+            const homePlain = item.key === "home" && (item.label === "HOME" || item.label === "START");
+            const icon = homePlain ? "⌂" : item.icon;
+            const textLabel = item.key !== "home" ? item.label : homePlain ? "Heute" : null;
             return (
               <button
                 className="bottom-nav-btn"
@@ -6457,9 +6462,9 @@ export default function AppMain(){
                   justifyContent:"center",
                   gap:4,
                 }}
-                aria-label={`${item.label} öffnen`}
+                aria-label={`${item.key === "home" ? "Heute" : item.label} öffnen`}
               >
-                {item.key === "home" ? (
+                {item.key === "home" && !homePlain ? (
                   /^\d+$/.test(item.label) ? (
                     <span
                       aria-hidden
@@ -6474,7 +6479,7 @@ export default function AppMain(){
                     >
                       {item.label}
                     </span>
-                  ) : item.label !== "HOME" && item.label !== "START" ? (
+                  ) : (
                     <span
                       aria-hidden
                       style={{
@@ -6486,8 +6491,8 @@ export default function AppMain(){
                     >
                       {item.label}
                     </span>
-                  ) : null
-                ) : item.icon != null ? (
+                  )
+                ) : icon != null ? (
                   <span
                     aria-hidden
                     style={{
@@ -6502,12 +6507,12 @@ export default function AppMain(){
                       opacity:active ? 1 : 0.82,
                     }}
                   >
-                    {item.icon}
+                    {icon}
                   </span>
                 ) : null}
-                {item.key !== "home" && (
+                {textLabel != null && (
                   <span style={{fontSize:item.key === "settings" || item.key === "coach" ? 8.8 : 10,fontWeight:800,opacity:active ? 1 : 0.7,letterSpacing:"0",whiteSpace:"nowrap",margin:0,lineHeight:1}}>
-                    {item.label}
+                    {textLabel}
                   </span>
                 )}
                 <span style={{width:4,height:4,borderRadius:"50%",background:active ? "#fff" : "transparent",flexShrink:0,margin:0,boxShadow:active ? "0 0 10px rgba(255,255,255,0.5)" : "none"}} />

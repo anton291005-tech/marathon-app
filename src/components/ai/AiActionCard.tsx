@@ -50,7 +50,7 @@ export default function AiActionCard({ action, disabled, onConfirm, onCancel, on
             opacity: disabled ? 0.7 : 1,
           }}
         >
-          {preview.confirmLabel || (isNavigation ? "Oeffnen" : "Uebernehmen")}
+          {preview.confirmLabel || (isNavigation ? "Öffnen" : "Übernehmen")}
         </button>
 
         {!hideEdit && (

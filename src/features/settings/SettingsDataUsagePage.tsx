@@ -49,7 +49,7 @@ export function SettingsDataUsagePage() {
       ))}
 
       <p style={{ ...textStyle, fontSize: 12, color: "var(--text-muted)", padding: "0 16px" }}>
-        Ist der Cloud-Coach nicht erreichbar, antwortet ein lokaler Coach direkt auf deinem Gerät.
+        Ist der Coach nicht erreichbar, siehst du eine Fehlermeldung.
       </p>
     </>
   );

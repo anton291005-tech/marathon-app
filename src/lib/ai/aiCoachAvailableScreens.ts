@@ -8,7 +8,7 @@ export const AI_COACH_AVAILABLE_SCREENS: AiContext["availableScreens"] = [
   { key: "home", label: "Start" },
   { key: "week", label: "Wochenplan", sections: ["current_week"] },
   { key: "performance", label: "Leistung" },
-  { key: "overview", label: "Uebersicht" },
+  { key: "overview", label: "Übersicht" },
   { key: "coach", label: "AI Coach" },
   { key: "settings", label: "Einstellungen", sections: ["race_goal"] },
 ];

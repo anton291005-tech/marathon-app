@@ -48,7 +48,7 @@ export default function AiCoachPanel({
       id: createId(),
       role: "assistant",
       type: "text",
-      text: "Ich bin dein AI Coach. Ich schlage Aenderungen erst als Vorschau vor, bevor etwas uebernommen wird.",
+      text: "Ich bin dein AI Coach. Ich schlage Änderungen erst als Vorschau vor, bevor etwas übernommen wird.",
     },
   ]);
   const messages = controlledMessages ?? internalMessages;
@@ -214,7 +214,7 @@ export default function AiCoachPanel({
         id: createId(),
         role: "assistant",
         type: "text",
-        text: "Navigation geoeffnet.",
+        text: "Navigation geöffnet.",
       });
       return;
     }
@@ -225,7 +225,7 @@ export default function AiCoachPanel({
         id: createId(),
         role: "assistant",
         type: "text",
-        text: `${patchCount} Anpassung(en) uebernommen.`,
+        text: `${patchCount} Anpassung(en) übernommen.`,
       });
       return;
     }
@@ -243,7 +243,7 @@ export default function AiCoachPanel({
       id: createId(),
       role: "assistant",
       type: "text",
-      text: "Alles klar, ich habe nichts geaendert.",
+      text: "Alles klar, ich habe nichts geändert.",
     });
   };
 
@@ -280,7 +280,7 @@ export default function AiCoachPanel({
       >
         <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text-primary)" }}>AI Coach</div>
         <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-          Coach + Navigator. Plananpassungen werden immer erst als Action Card zur Bestaetigung gezeigt.
+          Coach + Navigator. Plananpassungen werden immer erst als Action Card zur Bestätigung gezeigt.
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
           {QUICK_ACTIONS.map((chip) => (
