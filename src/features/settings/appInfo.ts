@@ -1,3 +1,5 @@
+import { App as CapacitorApp } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
 import packageJson from "../../../package.json";
 
 /**
@@ -6,7 +8,25 @@ import packageJson from "../../../package.json";
  */
 export const SUPPORT_EMAIL = "support@example.invalid";
 
+/** Version des Web-Bundles (package.json) — Anzeige im Web und Fallback in der nativen App. */
 export const APP_VERSION: string = packageJson.version;
+
+/**
+ * Angezeigte Version: in der nativen App die echte App-Version samt Build („1.2.0 (34)"),
+ * im Web und bei jedem Fehler des Plugins die package.json-Version.
+ */
+export async function loadAppVersionLabel(): Promise<string> {
+  if (!Capacitor.isNativePlatform()) return APP_VERSION;
+  try {
+    const info = await CapacitorApp.getInfo();
+    const version = typeof info?.version === "string" ? info.version.trim() : "";
+    if (!version) return APP_VERSION;
+    const build = typeof info?.build === "string" ? info.build.trim() : "";
+    return build ? `${version} (${build})` : version;
+  } catch {
+    return APP_VERSION;
+  }
+}
 
 export const PRIVACY_POLICY_URL = "https://marathon-app-alpha.vercel.app/privacy-policy";
 

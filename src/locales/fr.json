@@ -33,9 +33,6 @@
   },
   "settings": {
     "title": "Paramètres",
-    "appearance": "Apparence",
-    "appearance_dark": "Mode sombre",
-    "appearance_light": "Mode clair",
     "language": "Langue",
     "account": "Compte",
     "logout": "Se déconnecter",

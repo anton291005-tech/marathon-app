@@ -33,9 +33,6 @@
   },
   "settings": {
     "title": "Einstellungen",
-    "appearance": "Erscheinungsbild",
-    "appearance_dark": "Dunkles Design",
-    "appearance_light": "Helles Design",
     "language": "Sprache",
     "account": "Konto",
     "logout": "Abmelden",

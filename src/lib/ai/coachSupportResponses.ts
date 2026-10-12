@@ -24,7 +24,7 @@ function navigierenSettingsRace(ctx: AiContext): AiAssistantResponse {
   return {
     mode: "support",
     message:
-      "Zielzeit und Renn-Bezug stellst du unter «Einstellungen» ein (Tab unten oder Navigation). Dort findest du das Feld «Zielzeit» (hh:mm:ss) sowie optionale Max-HF. " +
+      "Zielzeit und Renn-Bezug stellst du unter «Einstellungen» → «Training» ein: dort findest du das Feld «Zielzeit» (hh:mm:ss). Die optionale Max-HF liegt unter «Einstellungen» → «Profil». " +
       "Den strukturierten Trainingsplan mit Renn-Datum passt du über den AI Coach an (z. B. neuer Marathon-Termin) — immer mit Bestätigungskarte.",
     action: { ...action, preview: buildActionPreview(action, ctx) },
   };
@@ -111,7 +111,7 @@ export function trySupportCoachResponse(raw: string, ctx: AiContext): AiAssistan
       mode: "support",
       message:
         "**Datenschutz:** Trainings-, Log- und Plandaten werden **primär lokal** gehalten (Gerät oder diese WebApp). " +
-        "Wenn eine Cloud-KI aktiv ist, werden strukturierte Coach-Kontextpakete an den Konfigurations-Server geschickt, damit Antworten personalisiert sind — ohne dass du Daten manuell weiterleiten musst. **Export:** Einstellungen → Backup JSON; **alles entfernen:** App-Daten leeren oder App deinstallieren (je nach Plattform).",
+        "Wenn eine Cloud-KI aktiv ist, werden strukturierte Coach-Kontextpakete an den Konfigurations-Server geschickt, damit Antworten personalisiert sind — ohne dass du Daten manuell weiterleiten musst. **Export:** Einstellungen → Datenschutz & Daten → «Datenexport anfordern»; **alles entfernen:** App-Daten leeren oder App deinstallieren (je nach Plattform).",
     };
   }
 
@@ -123,8 +123,8 @@ export function trySupportCoachResponse(raw: string, ctx: AiContext): AiAssistan
     return {
       mode: "support",
       message:
-        "**Export:** Einstellungen → Backup-Bereich → JSON exportieren — darin sind die Session-Logs. Der strukturierte Plan liegt separat unter `training_plan_v2` im Gerätespeicher. " +
-        "Einen **native PDF-Export** gibt es nicht (Workaround: Wochenansicht Screenshots oder selbst aus JSON drucken).",
+        "**Export:** Einstellungen → Datenschutz & Daten → «Datenexport anfordern» — du bekommst eine Kopie deiner Daten per E-Mail. Einen Backup-Export in der App gibt es nicht. " +
+        "Einen **native PDF-Export** gibt es nicht (Workaround: Screenshots der Wochenansicht).",
       action: { ...actionEx, preview: buildActionPreview(actionEx, ctx) },
     };
   }
@@ -133,7 +133,7 @@ export function trySupportCoachResponse(raw: string, ctx: AiContext): AiAssistan
     return {
       mode: "support",
       message:
-        "Es gibt keinen eingebauten PDF-Export. Nutze Backup JSON für Logs oder die Wochen-/Übersicht-Ansicht visuell (Screenshot/Drucken aus dem Browser).",
+        "Es gibt keinen eingebauten PDF-Export. Nutze die Wochen-/Übersicht-Ansicht visuell (Screenshot/Drucken aus dem Browser) oder fordere unter Einstellungen → Datenschutz & Daten einen Datenexport an.",
     };
   }
 
@@ -142,7 +142,7 @@ export function trySupportCoachResponse(raw: string, ctx: AiContext): AiAssistan
     return {
       mode: "support",
       message:
-        "**Konto / Profil:** Es gibt **kein klassisches Login** und keine zentrale Passwort-Verwaltung in dieser App — keine Server-Kontodaten zum Zurücksetzen. Alles liegt **auf dem Gerät**. Profilfelder setzt du hier im Coach zurück (Aktion «Profil zurücksetzen» bestätigen) oder du leerst die Einstellungen manuell. Vor einem vollständigen Daten-Sweep: **Einstellungen → Backup JSON** exportieren.",
+        "**Konto / Profil:** Es gibt **kein klassisches Login** und keine zentrale Passwort-Verwaltung in dieser App — keine Server-Kontodaten zum Zurücksetzen. Alles liegt **auf dem Gerät**. Profilfelder setzt du hier im Coach zurück (Aktion «Profil zurücksetzen» bestätigen) oder du leerst die Felder unter Einstellungen → Profil und Training manuell. Vor einem vollständigen Daten-Sweep: **Einstellungen → Datenschutz & Daten → «Datenexport anfordern»**.",
     };
   }
 
@@ -179,15 +179,15 @@ export function trySupportCoachResponse(raw: string, ctx: AiContext): AiAssistan
         : kit === false
           ? "**HealthKit** meldet hier «nicht verfügbar» — nur echtes iPhone, kein Simulator-Limit umgehen."
           : connected
-            ? "Laut dieser App ist die Verbindung **gesetzt** — tippe unter Einstellungen auf «Aktivitäten aktualisieren». Prüfe, ob Workouts als **Lauf** typisiert sind; Rad/Cross wirken anders im Filter."
-            : "Noch **nicht verbunden** — Einstellungen → «Apple Health verbinden», Berechtigungen für Workouts/Distanz erteilen, dann Aktualisieren.";
+            ? "Laut dieser App ist die Verbindung **gesetzt** — tippe unter Einstellungen → Verbindungen auf «Aktivitäten aktualisieren». Prüfe, ob Workouts als **Lauf** typisiert sind; Rad/Cross wirken anders im Filter."
+            : "Noch **nicht verbunden** — Einstellungen → Verbindungen → «Apple Health verbinden», Berechtigungen für Workouts/Distanz erteilen, dann Aktualisieren.";
     const actionAh: AiAssistantAction = {
       type: "navigate_to_screen",
       payload: { targetScreen: "settings", targetScreenLabel: "Einstellungen" },
     };
     return {
       mode: "support",
-      message: `**Apple Health / Sync**\n${tail}\n\nÜber «Einstellungen» kannst du verbinden und Aktivitäten aktualisieren; unter «Leistung» siehst du die Zuordnung und Trends.`,
+      message: `**Apple Health / Sync**\n${tail}\n\nÜber «Einstellungen» → «Verbindungen» kannst du verbinden, Aktivitäten aktualisieren und zuordnen; unter «Leistung» siehst du die Zuordnung und Trends.`,
       action: { ...actionAh, preview: buildActionPreview(actionAh, ctx) },
     };
   }
@@ -221,7 +221,7 @@ export function trySupportCoachResponse(raw: string, ctx: AiContext): AiAssistan
     const z2 =
       mhr != null && Number.isFinite(mhr)
         ? `Mit deiner hinterlegten Max-HF **${mhr} bpm** gilt grob **Zone 2 ≈ ${Math.round(mhr * 0.65)}–${Math.round(mhr * 0.75)} bpm** (Daumenregel 65–75 %).`
-        : "Ohne Max-HF in den Einstellungen: **Zone 2** ist typisch **leichtes Gesprächstempo** / ca. **65–75 % HFmax** — trage optional deine Max-HF ein für konkretere Zonen.";
+        : "Ohne Max-HF im Profil: **Zone 2** ist typisch **leichtes Gesprächstempo** / ca. **65–75 % HFmax** — trage optional deine Max-HF unter Einstellungen → Profil ein für konkretere Zonen.";
     return {
       mode: "coach",
       message:
@@ -246,7 +246,7 @@ export function trySupportCoachResponse(raw: string, ctx: AiContext): AiAssistan
     return {
       mode: "support",
       message:
-        "**Abstürze:** App komplett beenden und neu öffnen, WebView/OS aktuell halten, freien Speicher prüfen. Tritt der Absturz beim Loggen eines Laufs auf: zuerst **Einstellungen → Backup JSON** sichern, dann neu starten. Wenn das wiederkehrt: Tab wechseln, erneut versuchen, und schreib mir, **welcher Button** oder **welche Liste** vor dem Crash aktiv war — ich schlage dir den nächsten sicheren Workflow Schritt für Schritt vor, alles hier im Chat.",
+        "**Abstürze:** App komplett beenden und neu öffnen, WebView/OS aktuell halten, freien Speicher prüfen. Tritt der Absturz beim Loggen eines Laufs auf: App neu starten und erneut versuchen. Wenn das wiederkehrt: Tab wechseln, erneut versuchen, und schreib mir, **welcher Button** oder **welche Liste** vor dem Crash aktiv war — ich schlage dir den nächsten sicheren Workflow Schritt für Schritt vor, alles hier im Chat.",
     };
   }
   if (/\b(gps)\b/.test(t) && /\b(falsch|kaputt|ging nicht|kein)\b/.test(t)) {

@@ -24,7 +24,6 @@
  */
 import { useState, useEffect, useLayoutEffect, useReducer, useRef, useMemo, useCallback, lazy, Suspense } from "react";
 import RecoveryVerlaufCard from "./components/RecoveryVerlaufCard";
-import BackupControls from "./BackupControls";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import {
@@ -75,6 +74,7 @@ import { linkPrepRecapToPlan, loadPrepRecaps } from "./lib/supabase/services/pre
 import RaceCalculator from "./components/RaceCalculator";
 import {
   APP_VERSION,
+  loadAppVersionLabel,
   LANGUAGE_SELECTION_ENABLED,
   PRIVACY_POLICY_URL,
   SETTINGS_DESTRUCTIVE_COLOR,
@@ -137,7 +137,6 @@ import {
   useRecoveryDomainRuntime,
 } from "./app/runtime";
 import { useAuth } from "./contexts/AuthContext";
-import { useTheme } from "./context/ThemeContext";
 import { useLanguage } from "./context/LanguageContext";
 import { useNotifications } from "./context/NotificationContext";
 import { useTranslation } from "react-i18next";
@@ -259,7 +258,6 @@ import {
   APPLE_HEALTH_READ_TYPES,
   healthKitFetchRecoveryDailyLast120Days,
   healthKitFetchRunningWorkoutsLast7Days,
-  healthKitFetchWorkoutsForAppStorage,
   appleHealthCheckPermission,
   healthKitForceRefreshWorkoutsLast3Days,
   healthKitIsAvailable,
@@ -1209,7 +1207,6 @@ function marathonLogRecordsDiffSyncKeys(prev, next) {
 
 export default function AppMain(){
   const { user, signOut, resetPassword } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const { language, setLanguage, languageLabels } = useLanguage();
   const { settings: notificationSettings, updateSettings: updateNotificationSettings } = useNotifications();
   const { t } = useTranslation();
@@ -1323,6 +1320,17 @@ export default function AppMain(){
   const [onboardingForNewPlan, setOnboardingForNewPlan] = useState(false);
   /** Einstellungen: Wurzel (Profilkarte + Bereiche) oder eine Detailseite — siehe `features/settings/settingsNavigation`. */
   const [settingsNav, dispatchSettingsNav] = useReducer(settingsNavReducer, SETTINGS_NAV_ROOT);
+  /** Web: package.json-Version; nativ ersetzt durch die echte App-Version samt Build. */
+  const [appVersionLabel, setAppVersionLabel] = useState(APP_VERSION);
+  useEffect(() => {
+    let cancelled = false;
+    void loadAppVersionLabel().then((label) => {
+      if (!cancelled) setAppVersionLabel(label);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const settingsPage = currentSettingsPage(settingsNav);
   const openSettingsPage = (page) => dispatchSettingsNav({ type: "open", page });
   const closeSettingsPage = () => dispatchSettingsNav({ type: "back" });
@@ -2152,19 +2160,6 @@ export default function AppMain(){
     })();
   }, [user?.id, logsRemoteReady]);
 
-  const handleBackupLogsImport = useCallback(
-    (imported) => {
-      setLogs(imported);
-      if (!user?.id || !logsRemoteReady) return;
-      for (const sid of Object.keys(imported)) {
-        const entry = imported[sid];
-        if (!entry || typeof entry !== "object") continue;
-        void saveSessionLog(user.id, sid, entry);
-      }
-    },
-    [user?.id, logsRemoteReady],
-  );
-
   useEffect(() => {
     if (typeof window === "undefined" || process.env.NODE_ENV !== "development") return;
     window.__DEV_FORCE_CARD = (workoutId) => {
@@ -2528,69 +2523,6 @@ export default function AppMain(){
     void save(result.logs, syncKeys);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Apple-Run-Merge nur bei neuen Health-Daten
   }, [healthRuns]);
-
-  /** TEMP: versteckter Settings-Trigger — 180d HealthKit + Training-Sync; Button danach entfernen. */
-  const runDebugAppleHealth180DayBackfill = useCallback(async () => {
-    if (Capacitor.getPlatform() !== "ios" || healthRunsFetchBusy) return;
-    setHealthRunsFetchBusy(true);
-    setAppleHealthLoadFeedback(null);
-    try {
-      const availabilityOk = await healthKitIsAvailable();
-      if (!availabilityOk) {
-        setAppleHealthLoadFeedback({
-          tone: "err",
-          text: "Apple Health ist nicht verfügbar.",
-        });
-        return;
-      }
-      const { stats, incomingStoredRuns, missingCyclingDistance } = await healthKitFetchWorkoutsForAppStorage({
-        daysBackFromTodayMidnight: 180,
-        logTag: "debug180d",
-      });
-      const mergedHealthRuns = mergeHealthRuns(healthRunsRef.current, incomingStoredRuns);
-      setHealthRuns(mergedHealthRuns);
-      const uid = userIdForHealthSyncRef.current;
-      if (uid && healthRemoteReadyRef.current) {
-        for (const inc of incomingStoredRuns) {
-          if (!inc?.runId || typeof inc.runId !== "string" || !inc.runId.trim()) continue;
-          const merged = mergedHealthRuns.find((r) => r.runId === inc.runId);
-          if (merged) void saveHealthWorkout(uid, merged);
-        }
-      }
-      setAppleHealthFetchStats({
-        fetchedTotal: stats.fetchedTotal,
-        syncedTotal: stats.syncedTotal,
-        runningCount: stats.runningCount,
-        cyclingCount: stats.cyclingCount,
-        ignoredCount: stats.ignoredCount,
-        unknownDistanceCount: stats.unknownDistanceCount,
-        missingCyclingDistance: !!missingCyclingDistance,
-      });
-      const syncResult = applyAppleHealthTrainingSync({
-        healthRuns: mergedHealthRuns,
-        planSessions: activeSessionsRef.current,
-        logs: logsRef.current,
-        maxAgeDays: 180,
-      });
-      if (syncResult.changed) {
-        const syncKeys = marathonLogRecordsDiffSyncKeys(logsRef.current, syncResult.logs);
-        await save(syncResult.logs, syncKeys);
-      }
-      setAppleHealthLoadFeedback({
-        tone: "ok",
-        text: `Debug 180 Tage: ${stats.syncedTotal} Workouts übernommen, Logs ${syncResult.changed ? "aktualisiert" : "unverändert"}.`,
-      });
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error("[AppMain] debug Apple Health 180d backfill", e);
-      setAppleHealthLoadFeedback({
-        tone: "err",
-        text: "Debug-Backfill (180 Tage) fehlgeschlagen.",
-      });
-    } finally {
-      setHealthRunsFetchBusy(false);
-    }
-  }, [healthRunsFetchBusy]);
 
   useEffect(() => {
     const todayYmd = getAppTodayYmd();
@@ -3861,13 +3793,11 @@ export default function AppMain(){
   const safeTopPad = "max(44px, env(safe-area-inset-top, 44px))";
   /** Platz für die schwebende Tab-Bar — eine Quelle für alle Tabs (`layout/bottomNavLayout.ts`). */
   const safeBottomContentPad = getBottomNavContentPadding();
-  const appRootBackground = theme === "light"
-    ? { backgroundColor: "var(--bg-primary)" }
-    : {
-        backgroundColor: "#070912",
-        backgroundImage: "radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",
-        backgroundRepeat: "no-repeat",
-      };
+  const appRootBackground = {
+    backgroundColor: "#070912",
+    backgroundImage: "radial-gradient(circle at top, #1a1f44 0%, #0b0b15 40%, #070912 100%)",
+    backgroundRepeat: "no-repeat",
+  };
   const mainScrollAreaStyle = {
     flex: 1,
     minHeight: 0,
@@ -5463,6 +5393,10 @@ export default function AppMain(){
               />
             </div>
 
+            <div style={{ flexShrink: 0 }}>
+              <RaceCalculator />
+            </div>
+
           </div>
       ):activeView==="overview"?(
         <div
@@ -5579,6 +5513,18 @@ export default function AppMain(){
                 );
               })}
             </div>
+          </SurfaceCard>
+          <SurfaceCard>
+            <div style={{fontSize:15,fontWeight:800,color:"#fff",marginBottom:6}}>Teilen</div>
+            <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.7,whiteSpace:"pre-line"}}>{shareSummary}</div>
+            <button
+              type="button"
+              onClick={copyShareSummary}
+              style={{marginTop:12,background:"rgba(56,189,248,0.18)",color:"#dbeafe",border:"1px solid rgba(56,189,248,0.28)",borderRadius:12,padding:"10px 12px",cursor:"pointer",fontSize:12,fontWeight:700}}
+            >
+              Zusammenfassung kopieren
+            </button>
+            {shareFeedback ? <div style={{fontSize:11,color:"var(--text-secondary)",marginTop:8}}>{shareFeedback}</div> : null}
           </SurfaceCard>
         </div>
       ):activeView==="coach"?(
@@ -5844,49 +5790,6 @@ export default function AppMain(){
                   {healthRunsFetchBusy ? "Lade …" : "3 Tage neu laden"}
                 </button>
               </div>
-              <button
-                type="button"
-                aria-hidden
-                tabIndex={-1}
-                onClick={() => void runDebugAppleHealth180DayBackfill()}
-                disabled={healthRunsFetchBusy || healthKitAvailable !== true}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  height: 44,
-                  marginTop: 2,
-                  padding: 0,
-                  border: "none",
-                  background: "red",
-                  cursor: healthRunsFetchBusy || healthKitAvailable !== true ? "default" : "pointer",
-                  opacity: 0.5,
-                }}
-              />
-              <button
-                type="button"
-                aria-hidden
-                tabIndex={-1}
-                onClick={() => {
-                  try {
-                    localStorage.removeItem(MIGRATION_TO_SUPABASE_DONE_KEY);
-                    localStorage.removeItem(SESSION_LOGS_MIGRATION_DONE_KEY);
-                  } catch {
-                    // ignore
-                  }
-                  window.location.reload();
-                }}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  height: 10,
-                  marginTop: 2,
-                  padding: 0,
-                  border: "none",
-                  background: "transparent",
-                  cursor: "pointer",
-                  opacity: 0.05,
-                }}
-              />
               {appleHealthConnectFeedback ? (
                 <div
                   style={{
@@ -6109,10 +6012,10 @@ export default function AppMain(){
                     {appleHealthFetchStats && appleHealthFetchStats.fetchedTotal === 0
                       ? "Keine Aktivitäten in den letzten 7 Tagen gefunden."
                       : appleHealthFetchStats && appleHealthFetchStats.fetchedTotal > 0 && appleHealthFetchStats.syncedTotal === 0
-                        ? "Keine Lauf-/Rad-Aktivitäten im Abfragezeitraum (siehe Hinweis oben)."
+                        ? "Keine Lauf-/Rad-Aktivitäten im Abfragezeitraum — Details unter Verbindungen › Apple Health."
                         : appleHealthFetchStats == null
-                          ? "Noch keine Aktivitäten geladen — „Aktivitäten aktualisieren“ tippen."
-                          : "Keine Lauf-/Rad-Daten in der App — oben Total/Import prüfen."}
+                          ? "Noch keine Aktivitäten geladen — unter Verbindungen › Apple Health „Aktivitäten aktualisieren“ tippen."
+                          : "Keine Lauf-/Rad-Daten in der App — Import-Zähler unter Verbindungen › Apple Health prüfen."}
                   </div>
                 </div>
               ) : selectionOptions.length === 0 ? (
@@ -6329,47 +6232,6 @@ export default function AppMain(){
               ) : settingsPage === "app" ? (
                 <>
                   <SettingsGroup padded>
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "16px 0",
-              borderBottom: "1px solid var(--border-default)",
-              marginTop: 12,
-            }}>
-              <div>
-                <div style={{ color: "var(--text-primary)", fontWeight: 500 }}>{t("settings.appearance")}</div>
-                <div style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 2 }}>
-                  {theme === "dark" ? t("settings.appearance_dark") : t("settings.appearance_light")}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={toggleTheme}
-                aria-label={theme === "dark" ? t("settings.appearance_light") : t("settings.appearance_dark")}
-                style={{
-                  width: 52,
-                  height: 30,
-                  borderRadius: 15,
-                  border: "none",
-                  background: theme === "dark" ? "#60a5fa" : "#cbd5e1",
-                  position: "relative",
-                  cursor: "pointer",
-                  transition: "background 0.2s",
-                }}
-              >
-                <div style={{
-                  position: "absolute",
-                  top: 3,
-                  left: theme === "dark" ? 24 : 3,
-                  width: 24,
-                  height: 24,
-                  borderRadius: "50%",
-                  background: "#fff",
-                  transition: "left 0.2s",
-                }} />
-              </button>
-            </div>
             {LANGUAGE_SELECTION_ENABLED ? (
             <div style={{ padding: "16px 0", borderBottom: "1px solid var(--border-default)" }}>
               <div style={{ color: "var(--text-primary)", fontWeight: 500, marginBottom: 10 }}>
@@ -6474,40 +6336,13 @@ export default function AppMain(){
               )}
             </div>
                   </SettingsGroup>
-                  <SettingsGroup>
-                    <SettingsRow label={SETTINGS_PAGE_TITLES.raceCalculator} onClick={() => openSettingsPage("raceCalculator")} />
-                    <SettingsRow label={SETTINGS_PAGE_TITLES.share} onClick={() => openSettingsPage("share")} />
-                  </SettingsGroup>
                 </>
-              ) : settingsPage === "raceCalculator" ? (
-                <SettingsGroup padded>
-                  <div style={{marginTop:14}}>
-                    <RaceCalculator noCard />
-                  </div>
-                </SettingsGroup>
-              ) : settingsPage === "share" ? (
-                <SettingsGroup padded>
-            <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.7,whiteSpace:"pre-line",marginTop:12}}>{shareSummary}</div>
-            <button
-              type="button"
-              onClick={copyShareSummary}
-              style={{marginTop:12,background:"rgba(56,189,248,0.18)",color:"#dbeafe",border:"1px solid rgba(56,189,248,0.28)",borderRadius:12,padding:"10px 12px",cursor:"pointer",fontSize:12,fontWeight:700}}
-            >
-              Zusammenfassung kopieren
-            </button>
-            {shareFeedback ? <div style={{fontSize:11,color:"var(--text-secondary)",marginTop:8}}>{shareFeedback}</div> : null}
-                </SettingsGroup>
               ) : settingsPage === "privacy" ? (
-                <>
-                  <SettingsGroup>
-                    <SettingsRow label={t("settings.privacy_policy")} href={PRIVACY_POLICY_URL} external />
-                    <SettingsRow label="Welche Daten MyRace nutzt" onClick={() => openSettingsPage("dataUsage")} />
-                    <SettingsRow label="Datenexport anfordern" href={buildDataExportMailto({ accountEmail: user?.email })} />
-                  </SettingsGroup>
-                  <SettingsGroup title="Backup" padded>
-                    <BackupControls logs={storedLogs} onImportSuccess={handleBackupLogsImport} />
-                  </SettingsGroup>
-                </>
+                <SettingsGroup>
+                  <SettingsRow label={t("settings.privacy_policy")} href={PRIVACY_POLICY_URL} external />
+                  <SettingsRow label="Welche Daten MyRace nutzt" onClick={() => openSettingsPage("dataUsage")} />
+                  <SettingsRow label="Datenexport anfordern" href={buildDataExportMailto({ accountEmail: user?.email })} />
+                </SettingsGroup>
               ) : settingsPage === "dataUsage" ? (
                 <SettingsDataUsagePage />
               ) : (
@@ -6535,15 +6370,15 @@ export default function AppMain(){
                   <SettingsGroup title="Hilfe">
                     <SettingsRow
                       label="Hilfe & Feedback"
-                      href={buildFeedbackMailto({ appVersion: APP_VERSION, userAgent: navigator.userAgent })}
+                      href={buildFeedbackMailto({ appVersion: appVersionLabel, userAgent: navigator.userAgent })}
                     />
                     <SettingsRow
                       label="Fehler melden"
-                      href={buildBugReportMailto({ appVersion: APP_VERSION, userAgent: navigator.userAgent })}
+                      href={buildBugReportMailto({ appVersion: appVersionLabel, userAgent: navigator.userAgent })}
                     />
                   </SettingsGroup>
                   <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,paddingBottom:8}}>
-                    <div style={{fontSize:13,color:"var(--text-muted)"}}>Version {APP_VERSION}</div>
+                    <div style={{fontSize:13,color:"var(--text-muted)"}}>Version {appVersionLabel}</div>
                     {user?.id ? (
                       <button
                         type="button"

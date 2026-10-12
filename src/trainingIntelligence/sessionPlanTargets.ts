@@ -19,7 +19,7 @@ const COACH_CARD_FIXED = {
   EINHEIT: "Einheit im geplanten Bereich umgesetzt",
   LAUF_ERKANNT: "Lauf erkannt",
   ASSIGN_HINT:
-    "Apple Health Lauf erkannt — in Einstellungen „Training wählen“ zum Zuordnen.",
+    "Apple Health Lauf erkannt — unter Einstellungen › Verbindungen › Aktivitäten zuordnen „Training wählen“.",
 } as const;
 
 export type HomeCoachFixed = {

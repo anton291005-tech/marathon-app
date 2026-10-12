@@ -33,9 +33,6 @@
   },
   "settings": {
     "title": "Ajustes",
-    "appearance": "Apariencia",
-    "appearance_dark": "Modo oscuro",
-    "appearance_light": "Modo claro",
     "language": "Idioma",
     "account": "Cuenta",
     "logout": "Cerrar sesión",

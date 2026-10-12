@@ -183,7 +183,7 @@ export function buildTodayAppleCoachLines(input: {
     return {
       kind: "no_confident_match",
       summary: "Verbunden — kein Lauf passt konservant zur heutigen Plan-Distanz.",
-      detail: "In Einstellungen kannst du einen Lauf manuell zuordnen.",
+      detail: "Unter Einstellungen › Verbindungen › Aktivitäten zuordnen kannst du einen Lauf manuell zuordnen.",
     };
   }
 

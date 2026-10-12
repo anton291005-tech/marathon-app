@@ -1,34 +1,25 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { useLayoutEffect } from "react";
 
-type Theme = "dark" | "light";
+/** Schlüssel des früheren Hell/Dunkel-Schalters. */
+export const LEGACY_THEME_STORAGE_KEY = "myrace-theme";
 
-interface ThemeContextType {
-  theme: Theme;
-  toggleTheme: () => void;
+/**
+ * Die App ist fest dunkel. Entfernt die gespeicherte Wahl des früheren Schalters, damit niemand
+ * im hellen Theme hängen bleibt, und setzt `data-theme` (daran hängen die CSS-Variablen).
+ */
+export function enforceDarkTheme(): void {
+  document.documentElement.setAttribute("data-theme", "dark");
+  try {
+    localStorage.removeItem(LEGACY_THEME_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
 }
-
-const ThemeContext = createContext<ThemeContextType>({
-  theme: "dark",
-  toggleTheme: () => {},
-});
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    return (localStorage.getItem("myrace-theme") as Theme) ?? "dark";
-  });
+  useLayoutEffect(() => {
+    enforceDarkTheme();
+  }, []);
 
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("myrace-theme", theme);
-  }, [theme]);
-
-  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
-
-  return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <>{children}</>;
 }
-
-export const useTheme = () => useContext(ThemeContext);

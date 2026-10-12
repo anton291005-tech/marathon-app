@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 }
 
 [data-theme="dark"] {
@@ -21,27 +21,6 @@
   --accent-rest: #475569;
 
   --shadow: rgba(0,0,0,0.4);
-}
-
-[data-theme="light"] {
-  --bg-primary: #f8fafc;
-  --bg-secondary: #f1f5f9;
-  --bg-card: #ffffff;
-  --bg-input: #ffffff;
-  --bg-surface: rgba(0,0,0,0.04);
-
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
-
-  --border-default: rgba(0, 0, 0, 0.1);
-  --border-input: rgba(0, 0, 0, 0.15);
-
-  --accent-run: #2563eb;
-  --accent-bike: #059669;
-  --accent-rest: #94a3b8;
-
-  --shadow: rgba(0,0,0,0.08);
 }
 
 body {

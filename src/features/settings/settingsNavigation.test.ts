@@ -32,8 +32,7 @@ describe("settingsNavReducer", () => {
 
   test("open(Unterseite) legt sie über ihren Bereich — auch direkt von der Wurzel", () => {
     expect(open(SETTINGS_NAV_ROOT, "healthAssignment").stack).toEqual(["connections", "healthAssignment"]);
-    expect(open(open(SETTINGS_NAV_ROOT, "app"), "raceCalculator").stack).toEqual(["app", "raceCalculator"]);
-    expect(open(open(SETTINGS_NAV_ROOT, "app"), "share").stack).toEqual(["app", "share"]);
+    expect(open(open(SETTINGS_NAV_ROOT, "privacy"), "dataUsage").stack).toEqual(["privacy", "dataUsage"]);
   });
 
   test("open(anderer Bereich) ersetzt den Stapel, statt ihn wachsen zu lassen", () => {
@@ -52,9 +51,9 @@ describe("settingsNavReducer", () => {
   });
 
   test("back(): Unterseite → Bereich → Wurzel, auf der Wurzel wirkungslos", () => {
-    const sub = open(SETTINGS_NAV_ROOT, "share");
+    const sub = open(SETTINGS_NAV_ROOT, "dataUsage");
     const section = back(sub);
-    expect(section.stack).toEqual(["app"]);
+    expect(section.stack).toEqual(["privacy"]);
     expect(section.motion).toBe(-1);
     const root = back(section);
     expect(root.stack).toEqual([]);
@@ -70,7 +69,7 @@ describe("settingsNavReducer", () => {
   });
 
   test("der Eingangs-State wird nicht verändert", () => {
-    const state = open(SETTINGS_NAV_ROOT, "share");
+    const state = open(SETTINGS_NAV_ROOT, "dataUsage");
     const snapshot = JSON.stringify(state);
     back(state);
     open(state, "profile");
@@ -88,6 +87,13 @@ describe("Seiten-Metadaten", () => {
       expect(SETTINGS_PAGE_TITLES[sub as SettingsPageId]).toBeTruthy();
       expect(SETTINGS_SECTION_IDS).toContain(parent);
     }
+  });
+
+  test("Werkzeuge sind keine Einstellungsseiten mehr", () => {
+    expect(Object.keys(SETTINGS_SUBPAGE_PARENT).sort()).toEqual(["dataUsage", "healthAssignment"]);
+    const state = open(SETTINGS_NAV_ROOT, "app");
+    expect(open(state, "raceCalculator" as SettingsPageId)).toBe(state);
+    expect(open(state, "share" as SettingsPageId)).toBe(state);
   });
 
   test("genau sechs Bereiche in der vereinbarten Reihenfolge", () => {

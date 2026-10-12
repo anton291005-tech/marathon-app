@@ -1,5 +1,6 @@
 import {
   APP_VERSION,
+  loadAppVersionLabel,
   SUPPORT_EMAIL,
   buildBugReportMailto,
   buildDataExportMailto,
@@ -8,6 +9,17 @@ import {
   buildMailtoUrl,
   parseIosVersion,
 } from "./appInfo";
+
+const mockNative = { value: false };
+const mockGetInfo = jest.fn();
+
+jest.mock("@capacitor/core", () => ({
+  Capacitor: { isNativePlatform: () => mockNative.value },
+}));
+
+jest.mock("@capacitor/app", () => ({
+  App: { getInfo: () => mockGetInfo() },
+}));
 
 const IPHONE_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
@@ -23,6 +35,38 @@ describe("appInfo", () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     expect(APP_VERSION).toBe(require("../../../package.json").version);
     expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  describe("loadAppVersionLabel", () => {
+    afterEach(() => {
+      mockNative.value = false;
+      mockGetInfo.mockReset();
+    });
+
+    test("Web: package.json-Version, ohne das Plugin zu fragen", async () => {
+      await expect(loadAppVersionLabel()).resolves.toBe(APP_VERSION);
+      expect(mockGetInfo).not.toHaveBeenCalled();
+    });
+
+    test("nativ: echte App-Version mit Build", async () => {
+      mockNative.value = true;
+      mockGetInfo.mockResolvedValue({ version: "1.2.0", build: "34" });
+      await expect(loadAppVersionLabel()).resolves.toBe("1.2.0 (34)");
+    });
+
+    test("nativ ohne Build: nur die Version", async () => {
+      mockNative.value = true;
+      mockGetInfo.mockResolvedValue({ version: "1.2.0", build: "" });
+      await expect(loadAppVersionLabel()).resolves.toBe("1.2.0");
+    });
+
+    test("nativ, Plugin scheitert oder liefert nichts: package.json-Version", async () => {
+      mockNative.value = true;
+      mockGetInfo.mockRejectedValue(new Error("unimplemented"));
+      await expect(loadAppVersionLabel()).resolves.toBe(APP_VERSION);
+      mockGetInfo.mockResolvedValue({ version: "" });
+      await expect(loadAppVersionLabel()).resolves.toBe(APP_VERSION);
+    });
   });
 
   test("parseIosVersion liest die Version aus dem WebView-User-Agent", () => {

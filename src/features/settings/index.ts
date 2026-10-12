@@ -11,6 +11,7 @@ export {
   buildBugReportMailto,
   buildDataExportMailto,
   buildFeedbackMailto,
+  loadAppVersionLabel,
 } from "./appInfo";
 export { LANGUAGE_SELECTION_ENABLED } from "./settingsFlags";
 export { buildSettingsGoalLine } from "./settingsGoalLine";

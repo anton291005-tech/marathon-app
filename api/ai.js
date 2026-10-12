@@ -39,7 +39,7 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({
       mode: "support",
       message:
-        "Es gab einen internen Fehler beim Coach-Dienst. Tippe deine Frage **erneut ab**, wechsle kurz den Tab und zurück, oder sichere vorher **Einstellungen → Backup JSON** — dein Plan bleibt lokal auf dem Gerät. Wenn es weiter hakt, formuliere dieselbe Bitte mit einem Satz weniger Details.",
+        "Es gab einen internen Fehler beim Coach-Dienst. Tippe deine Frage **erneut ab**, oder wechsle kurz den Tab und zurück — dein Plan bleibt unverändert. Wenn es weiter hakt, formuliere dieselbe Bitte mit einem Satz weniger Details.",
       action: null,
     });
   }

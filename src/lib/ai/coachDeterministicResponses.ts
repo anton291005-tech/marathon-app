@@ -704,7 +704,7 @@ export function tryDeterministicCoachResponse(userInput: string, context: AiCont
         mode: "coach",
         message:
           "Beim automatischen Marathon-Plan ist ein Integritätsfehler aufgetreten — der Entwurf wurde nicht übernommen. " +
-          "Versuche denselben Befehl mit einem klaren Datum (Tag + Monat) erneut, oder passe den bestehenden Plan Schritt für Schritt im **Woche**-Tab an. Wenn das wieder fehlschlägt: **Einstellungen → Backup JSON** sichern, App neu laden, und beschreib mir kurz dein gewünschtes Renn-Datum — ich formuliere dir dann einen konkreten manuellen Planaufbau ohne Generator.",
+          "Versuche denselben Befehl mit einem klaren Datum (Tag + Monat) erneut, oder passe den bestehenden Plan Schritt für Schritt im **Woche**-Tab an. Wenn das wieder fehlschlägt: App neu laden und beschreib mir kurz dein gewünschtes Renn-Datum — ich formuliere dir dann einen konkreten manuellen Planaufbau ohne Generator.",
       };
     }
     return actionWithItems(
