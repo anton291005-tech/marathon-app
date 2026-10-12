@@ -16,6 +16,12 @@ describe("stripDecorativeEmoji", () => {
     }
   });
 
+  test("Plan-Texte ohne Emoji bleiben unverändert", () => {
+    for (const text of ["12,0 km · Längster Lauf", "Woche 3 – Aufbau", "5×1000 m @ 3:55", "#1 Tempo", "20°C"]) {
+      expect(stripDecorativeEmoji(text)).toBe(text);
+    }
+  });
+
   test("nur Emoji ergibt leeren Text", () => {
     expect(stripDecorativeEmoji("🏆")).toBe("");
   });
