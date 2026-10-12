@@ -53,9 +53,9 @@ function formatDataSummary(ctx: AiContext): string {
   const mhr = ctx.maxHeartRateBpm != null && Number.isFinite(ctx.maxHeartRateBpm) ? `${ctx.maxHeartRateBpm} bpm` : "nicht gesetzt";
   const race = ctx.raceDateIso ? new Date(ctx.raceDateIso).toLocaleDateString("de-DE") : "kein Renn-Datum im Plan erkannt";
   const lines = [
-    `**Lokal gespeicherte Übersicht**`,
-    `- Trainingsplan: ${ctx.plan.length} Wochen, ${planSessions} Einheiten (SSOT: training_plan_v2 + optionale Patches).`,
-    `- Session-Logs: ${logKeys} Einträge (marathonLogs).`,
+    `**Übersicht deiner gespeicherten Daten**`,
+    `- Trainingsplan: ${ctx.plan.length} Wochen, ${planSessions} Einheiten.`,
+    `- Session-Logs: ${logKeys} Einträge.`,
     `- Zielzeit: ${target} · optionale Max-HF: ${mhr}.`,
     `- Renn-Datum (aus Plan): ${race}.`,
   ];
@@ -68,12 +68,11 @@ function formatDataSummary(ctx: AiContext): string {
     if (snap.adherence) {
       lines.push(`- Plan & Umsetzung (nur fällige Einheiten bis heute): ${snap.adherence.score}% — ${snap.adherence.band}.`);
     }
-    lines.push(`- Typische Speicher-Keys: ${snap.localStorageKeysHint.slice(0, 8).join(", ")} …`);
   } else {
     lines.push(`- Hinweis: Momentaufnahme der Laufzeit konnte nicht gebaut werden — siehe Liste oben.`);
   }
   lines.push(
-    `Es gibt **kein Cloud-Kundenkonto** in dieser Version: deine Daten liegen auf dem Gerät (und optional verteiltes Log-Backing, falls aktiviert).`,
+    `Konto und Trainingsdaten sind in deinem Konto gespeichert (Supabase), eine Kopie liegt auf dem Gerät. Details: Einstellungen → Datenschutz & Daten → «Welche Daten MyRace nutzt».`,
   );
   return lines.join("\n");
 }
@@ -110,8 +109,8 @@ export function trySupportCoachResponse(raw: string, ctx: AiContext): AiAssistan
     return {
       mode: "support",
       message:
-        "**Datenschutz:** Trainings-, Log- und Plandaten werden **primär lokal** gehalten (Gerät oder diese WebApp). " +
-        "Wenn eine Cloud-KI aktiv ist, werden strukturierte Coach-Kontextpakete an den Konfigurations-Server geschickt, damit Antworten personalisiert sind — ohne dass du Daten manuell weiterleiten musst. **Export:** Einstellungen → Datenschutz & Daten → «Datenexport anfordern»; **alles entfernen:** App-Daten leeren oder App deinstallieren (je nach Plattform).",
+        "**Datenschutz:** Konto, Trainings-, Log- und Plandaten werden in deinem Konto bei **Supabase** gespeichert. " +
+        "Coach-Fragen und die Plan-Erstellung werden an **Anthropic (Claude)** gesendet — der Coach bekommt dafür strukturierte Kontextpakete (Plan, Logs, Health-Workouts, Erholungswerte), damit Antworten personalisiert sind; deine E-Mail-Adresse wird nicht mitgeschickt. Was genau genutzt wird: Einstellungen → Datenschutz & Daten → «Welche Daten MyRace nutzt». **Export:** Einstellungen → Datenschutz & Daten → «Datenexport anfordern» (per E-Mail); **alles entfernen:** Einstellungen → Konto & Hilfe → «Konto löschen».",
     };
   }
 
@@ -142,7 +141,7 @@ export function trySupportCoachResponse(raw: string, ctx: AiContext): AiAssistan
     return {
       mode: "support",
       message:
-        "**Konto / Profil:** Es gibt **kein klassisches Login** und keine zentrale Passwort-Verwaltung in dieser App — keine Server-Kontodaten zum Zurücksetzen. Alles liegt **auf dem Gerät**. Profilfelder setzt du hier im Coach zurück (Aktion «Profil zurücksetzen» bestätigen) oder du leerst die Felder unter Einstellungen → Profil und Training manuell. Vor einem vollständigen Daten-Sweep: **Einstellungen → Datenschutz & Daten → «Datenexport anfordern»**.",
+        "**Konto / Profil:** Du meldest dich mit **E-Mail und Passwort** an. **Passwort zurücksetzen:** Einstellungen → Konto & Hilfe → «Passwort zurücksetzen» — du bekommst eine Mail mit Link. **Konto löschen:** Einstellungen → Konto & Hilfe → «Konto löschen» — entfernt das Konto und alle dazu gespeicherten Daten. Profilfelder setzt du hier im Coach zurück (Aktion «Profil zurücksetzen» bestätigen) oder du leerst die Felder unter Einstellungen → Profil und Training manuell. Vor dem Löschen: **Einstellungen → Datenschutz & Daten → «Datenexport anfordern»**.",
     };
   }
 
@@ -267,14 +266,14 @@ export function trySupportCoachResponse(raw: string, ctx: AiContext): AiAssistan
     return {
       mode: "support",
       message:
-        "**Benachrichtigungen:** Diese Codebasis enthält **keine Push-Infrastruktur** — es gibt keine app-internen Erinnerungen per Push. Für Erinnerungen nutze Kalender-/Watch-Apps parallel.",
+        "**Benachrichtigungen:** Es gibt eine tägliche **Trainings-Erinnerung** — in der iOS-App unter Einstellungen → App einschalten und Uhrzeit wählen. Weitere Benachrichtigungen gibt es nicht.",
     };
   }
   if (/\b(plan)\b/.test(t) && /\b(weg|verschwunden|leer|reload)\b/.test(t)) {
     return {
       mode: "support",
       message:
-        "**Trainingsplan fehlt:** Der Plan liegt in `training_plan_v2`. Leere Daten (Browser-Private-Modus, anderer Browser, Daten gelöscht) zeigen einen leeren Stand — restore nur wenn du Backup/Export hast. Prüfe, ob ein **Coach-Neuplan** zuletzt bestätigt wurde.",
+        "**Trainingsplan fehlt:** Der Plan ist in deinem Konto gespeichert. Prüfe, ob du mit dem richtigen Konto angemeldet bist und eine Internetverbindung besteht, und schau unter Einstellungen → Training, welcher Plan aktiv ist. Prüfe auch, ob ein **Coach-Neuplan** zuletzt bestätigt wurde.",
     };
   }
 
