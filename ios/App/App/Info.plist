@@ -20,22 +20,52 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.myrace.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>myrace</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSCalendarsUsageDescription</key>
-	<string>MyRace liest deine Kalendertermine, um Trainingseinheiten an Tagen mit freier Zeit zu planen. Termine werden nicht verändert.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<false/>
+	</dict>
 	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>MyRace liest deine Kalendertermine, um Trainingseinheiten an Tagen mit freier Zeit zu planen. Termine werden nicht verändert.</string>
+	<key>NSCalendarsUsageDescription</key>
 	<string>MyRace liest deine Kalendertermine, um Trainingseinheiten an Tagen mit freier Zeit zu planen. Termine werden nicht verändert.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Diese App liest deine Trainingsdaten, um dein Training zu analysieren.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Diese App speichert Trainingsdaten, um deinen Fortschritt zu verbessern.</string>
-	<key>NSAppTransportSecurity</key>
+	<key>UIApplicationSceneManifest</key>
 	<dict>
-		<key>NSAllowsLocalNetworking</key>
+		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
 	</dict>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
@@ -60,16 +90,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>myrace</string>
-			</array>
-			<key>CFBundleURLName</key>
-			<string>com.myrace.app</string>
-		</dict>
-	</array>
 </dict>
 </plist>
