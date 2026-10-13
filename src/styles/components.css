@@ -30,6 +30,139 @@
 
 /* TabBar */
 .mr-tabbar { display: flex; box-sizing: border-box; background: var(--surface-1); border-top: 1px solid var(--line); }
-.mr-tab { flex: 1; min-width: 0; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--ink-3); font: 600 10px/12px var(--font-sans); background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; white-space: nowrap; }
+/* Tabs teilen den freien Platz gleich auf, starten aber bei ihrer Wortbreite: „Einstellungen" passt in 10 px
+   auf 390 px Breite nicht in ein Sechstel und lief sonst über den Bildschirmrand. */
+.mr-tab { flex: 1 1 auto; min-width: 0; margin: 0; padding: 0 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--ink-3); font: 600 10px/12px var(--font-sans); background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; white-space: nowrap; }
 .mr-tab.is-active { color: var(--accent-text); }
 .mr-tab:focus-visible { outline: none; box-shadow: inset var(--shadow-focus); border-radius: var(--radius-s); }
+
+/* Typo-Helfer */
+.mr-num { font-family: var(--font-rounded); font-variant-numeric: tabular-nums; }
+.mr-label { font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); }
+.mr-caption { margin: 0; font-size: 13px; line-height: 18px; color: var(--ink-3); }
+.mr-unit { font-family: var(--font-sans); font-size: 17px; line-height: 22px; font-weight: 600; color: var(--ink-3); }
+.mr-skeleton { display: inline-block; border-radius: var(--radius-s); background: var(--surface-2); animation: pulse 1.2s ease-in-out infinite; vertical-align: middle; }
+
+/* Screen-Rahmen und Kopf (Heute, Woche): Datum/Phase klein, Titel in title-l, rechts Chip oder Aktionen */
+.mr-screen { box-sizing: border-box; width: 100%; min-width: 0; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; font-family: var(--font-sans); color: var(--ink); }
+.mr-screen > * { flex: none; }
+.mr-screen--today { padding: var(--space-3) var(--space-4) var(--space-8); gap: var(--space-6); }
+.mr-screen--week { padding: var(--space-2) var(--space-4) var(--space-2); gap: var(--space-4); }
+.mr-screen-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); min-width: 0; }
+.mr-screen-head__text { min-width: 0; }
+.mr-screen-head__meta { font-size: 13px; line-height: 18px; color: var(--ink-3); }
+.mr-screen-head__title { margin: 2px 0 0; font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+.mr-screen-head__aside { display: flex; align-items: center; gap: var(--space-2); flex: none; }
+.mr-screen-head__aside > .mr-chip { margin-bottom: var(--space-1); }
+.mr-round-btn { width: var(--size-touch); height: var(--size-touch); margin: 0; padding: 0; border: 0; border-radius: var(--radius-pill); background: var(--surface-1); color: var(--ink); display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mr-round-btn:not([disabled]):active { background: var(--surface-2); }
+.mr-round-btn[disabled] { color: var(--ink-3); cursor: default; }
+.mr-round-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+/* Card */
+.mr-card { box-sizing: border-box; min-width: 0; background: var(--surface-1); border-radius: var(--radius-l); padding: var(--space-5); color: var(--ink); }
+.mr-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
+.mr-card__title { margin: 0; font-size: 17px; line-height: 22px; font-weight: 600; }
+.mr-card__meta { font-size: 13px; line-height: 18px; color: var(--ink-3); white-space: nowrap; }
+.mr-card__note { margin: var(--space-4) 0 0; font-size: 13px; line-height: 18px; color: var(--ink-3); }
+.mr-card__more { display: inline-flex; align-items: center; gap: 6px; min-height: var(--size-touch); margin: var(--space-1) 0 calc(-1 * var(--space-3)); padding: 0; border: 0; background: transparent; color: var(--accent-text); font: 600 13px/18px var(--font-sans); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mr-card__detail { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--line); font-size: 13px; line-height: 18px; color: var(--ink-2); overflow-wrap: anywhere; }
+.mr-card__detail p { margin: 0; }
+.mr-card__detail .mr-btn { align-self: flex-start; margin-top: var(--space-1); }
+
+/* Fortschrittsbalken: 4 px, Spur surface-3, Füllung accent (Status nur mit Wort daneben) */
+.mr-progress { height: 4px; border-radius: var(--radius-s); background: var(--surface-3); overflow: hidden; }
+.mr-progress__bar { height: 100%; background: var(--accent); transition: width .3s ease-out; }
+.mr-progress__bar--good { background: var(--status-good); }
+.mr-progress__bar--fair { background: var(--status-fair); }
+.mr-progress__bar--low { background: var(--status-low); }
+
+/* Zeile „Bezeichnung … Wert / 100" mit Balken (Vorbereitung) */
+.mr-meter { display: block; width: 100%; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mr-meter__row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
+.mr-meter__label { font-size: 15px; line-height: 22px; }
+.mr-meter__value { font-family: var(--font-rounded); font-variant-numeric: tabular-nums; font-size: 17px; line-height: 22px; font-weight: 600; white-space: nowrap; }
+.mr-meter__value small { font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--ink-3); }
+.mr-meter__value--empty { color: var(--ink-3); }
+.mr-meter .mr-progress { margin-top: var(--space-2); }
+.mr-meter-list { display: flex; flex-direction: column; gap: var(--space-4); }
+
+/* Wochen-Kilometer: Ist groß, Soll klein daneben */
+.mr-km { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
+.mr-km__value { font-family: var(--font-rounded); font-variant-numeric: tabular-nums; font-size: 36px; line-height: 40px; font-weight: 700; letter-spacing: -0.01em; }
+
+/* MetricTile */
+.mr-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.mr-tile { box-sizing: border-box; min-width: 0; background: var(--surface-2); border-radius: var(--radius-m); padding: 14px; display: flex; flex-direction: column; justify-content: space-between; gap: var(--space-2); }
+.mr-tile__value { font-family: var(--font-rounded); font-variant-numeric: tabular-nums; font-size: 24px; line-height: 28px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.mr-tile__value small { font-family: var(--font-sans); font-size: 15px; font-weight: 600; color: var(--ink-3); }
+
+/* TodayHero */
+.mr-hero { box-sizing: border-box; min-width: 0; background: var(--surface-1); border-radius: var(--radius-xl); padding: var(--space-6) var(--space-5) var(--space-5); color: var(--ink); }
+.mr-hero__open { display: block; width: 100%; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mr-hero__open:focus-visible { outline: none; box-shadow: var(--shadow-focus); border-radius: var(--radius-s); }
+.mr-hero__top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); min-height: 16px; }
+.mr-hero__distance { display: flex; align-items: baseline; gap: var(--space-1); margin-top: var(--space-5); }
+.mr-hero__km { font-family: var(--font-rounded); font-variant-numeric: tabular-nums; font-size: 56px; line-height: 56px; font-weight: 700; letter-spacing: -0.02em; }
+.mr-hero__title { font-size: 20px; line-height: 26px; font-weight: 600; margin-top: var(--space-2); overflow-wrap: anywhere; }
+.mr-hero__title--lead { font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -0.01em; margin-top: var(--space-5); }
+.mr-hero__facts { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-4); color: var(--ink-2); font-size: 15px; line-height: 22px; }
+.mr-hero__fact { display: flex; align-items: flex-start; gap: var(--space-2); min-width: 0; }
+.mr-hero__fact svg { flex: none; margin-top: 3px; }
+.mr-hero__fact span { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.mr-hero__reason { margin: var(--space-2) 0 0; font-size: 15px; line-height: 22px; color: var(--ink-2); }
+.mr-hero__actions { display: grid; grid-template-columns: 2fr 1fr; gap: var(--space-3); margin-top: var(--space-6); }
+.mr-hero__actions--single { grid-template-columns: 1fr; }
+.mr-hero__actions .mr-btn { padding: 0 var(--space-3); }
+
+/* Woche: Kopfkarte mit km-Fortschritt und schlanker Kalenderzeile */
+.mr-week-summary { padding: 18px var(--space-5) var(--space-5); }
+.mr-week-summary--action { padding-bottom: var(--space-1); }
+.mr-week-summary__top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.mr-week-summary__done { font-size: 13px; line-height: 18px; color: var(--ink-2); white-space: nowrap; }
+.mr-week-summary .mr-progress { margin-top: var(--space-3); }
+.mr-week-action { display: flex; align-items: center; gap: 10px; width: 100%; height: var(--size-touch); margin: var(--space-3) 0 0; padding: 0; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--accent-text); font: 600 15px/22px var(--font-sans); text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mr-week-action span { flex: 1; min-width: 0; }
+.mr-week-action svg:last-child { color: var(--ink-3); }
+
+/* Woche: Tageszeilen. Feste Höhen (50/54/56), damit Mo–So auf 390 × 844 ohne Scrollen passt. */
+.mr-week-list { background: var(--surface-1); border-radius: var(--radius-l); overflow: hidden; }
+.mr-week-row { box-sizing: border-box; display: flex; align-items: center; gap: 14px; height: 50px; padding: 0 var(--space-4); color: var(--ink); -webkit-tap-highlight-color: transparent; }
+.mr-week-row + .mr-week-row { border-top: 1px solid var(--line); }
+.mr-week-row--session { height: 54px; cursor: pointer; }
+.mr-week-row--session:active { background: var(--surface-2); }
+.mr-week-row--session:focus-visible { outline: none; box-shadow: inset var(--shadow-focus); }
+.mr-week-row.is-today { height: 56px; background: var(--accent-tint); }
+.mr-week-row.is-today, .mr-week-row.is-today + .mr-week-row { border-top-color: transparent; }
+.mr-week-row__day { width: 30px; flex: none; text-align: center; }
+.mr-week-row__dow { font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.mr-week-row__date { font-family: var(--font-rounded); font-variant-numeric: tabular-nums; font-size: 17px; line-height: 20px; font-weight: 600; color: var(--ink-2); }
+.mr-week-row.is-today .mr-week-row__dow { color: var(--accent-text); }
+.mr-week-row.is-today .mr-week-row__date { color: var(--ink); font-weight: 700; }
+.mr-week-row__icon { display: flex; flex: none; color: var(--ink-3); }
+.mr-week-row__icon--run { color: var(--sport-run); }
+.mr-week-row__icon--bike { color: var(--sport-bike); }
+.mr-week-row__icon--strength { color: var(--sport-strength); }
+.mr-week-row__text { flex: 1; min-width: 0; }
+.mr-week-row__title { font-size: 15px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mr-week-row__sub { font-size: 13px; line-height: 18px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mr-week-row.is-today .mr-week-row__title { font-weight: 600; }
+.mr-week-row.is-today .mr-week-row__sub { color: var(--accent-text); }
+.mr-week-row.is-settled .mr-week-row__title { color: var(--ink-2); }
+.mr-week-row--rest .mr-week-row__title { color: var(--ink-3); }
+.mr-week-row__km { flex: none; font-family: var(--font-rounded); font-variant-numeric: tabular-nums; font-size: 17px; line-height: 20px; font-weight: 600; white-space: nowrap; }
+.mr-week-row__km small { font-family: var(--font-sans); font-size: 13px; font-weight: 400; color: var(--ink-3); }
+.mr-week-row__badge { width: 26px; height: 26px; flex: none; border-radius: var(--radius-pill); background: var(--status-good-tint); color: var(--status-good); display: flex; align-items: center; justify-content: center; }
+/* Kalender-Aktion je Einheit: 44 px Trefferfläche, optisch nur das Icon (negative Ränder holen die Breite zurück). */
+.mr-week-row__cal { width: var(--size-touch); height: var(--size-touch); flex: none; margin: 0 -10px 0 -18px; padding: 0; border: 0; background: transparent; color: var(--ink-3); display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mr-week-row__cal:active { color: var(--ink); }
+.mr-week-row__cal:focus-visible { outline: none; box-shadow: inset var(--shadow-focus); border-radius: var(--radius-s); }
+
+/* Hinweis-/Auswahlfläche im Woche-Tab (Kalenderabgleich) */
+.mr-panel { box-sizing: border-box; background: var(--surface-1); border-radius: var(--radius-l); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); font-size: 13px; line-height: 18px; color: var(--ink-2); }
+.mr-panel--row { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.mr-panel--scroll { max-height: min(60vh, 420px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.mr-panel__actions { display: flex; gap: var(--space-1); flex: none; align-self: flex-end; }
+.mr-panel__error { color: var(--status-low); }
+.mr-panel__option { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin: 0; padding: 10px var(--space-3); border: 0; border-radius: var(--radius-m); background: var(--surface-2); color: var(--ink); font: 600 15px/20px var(--font-sans); text-align: left; cursor: pointer; }
+.mr-panel__option small { font-size: 13px; line-height: 18px; font-weight: 400; color: var(--status-low); }

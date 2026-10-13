@@ -156,7 +156,7 @@ import {
   resolveWeekDisplayRunKm,
 } from "./weeklyAnalysis";
 import { readRemoteStorage, writeRemoteStorage } from "./storage";
-import { computePlanAdherenceScore, computePlanDueSessionCounts, isSessionDueByYmd, planAdherenceTextColor } from "./coach/adherenceScore";
+import { computePlanAdherenceScore, computePlanDueSessionCounts, isSessionDueByYmd } from "./coach/adherenceScore";
 import { getAiContext } from "./lib/ai/getAiContext";
 import { AI_COACH_AVAILABLE_SCREENS } from "./lib/ai/aiCoachAvailableScreens";
 import { loadProfile, saveProfile } from "./lib/supabase/services/profilesService";
@@ -264,10 +264,13 @@ import {
   healthKitRequestReadAuthorization,
 } from "./health/healthDataService";
 import type { PermissionState } from "./recovery/recoveryDisplayState";
-import { formatScore100 } from "./ui/formatScore100";
-import { Activity, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Footprints, House, Info, MessageCircle, Route, Settings, Star } from "lucide-react";
-import { ICON_SIZE, ICON_SIZE_S, ICON_STROKE, SessionTypeIcon } from "./ui/icons";
+import { Activity, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Footprints, House, MessageCircle, Route, Settings, Star } from "lucide-react";
+import { ICON_SIZE, ICON_SIZE_S, ICON_STROKE, getSessionSportWord } from "./ui/icons";
 import { StatusChip } from "./ui/StatusChip";
+import { ScreenHeader } from "./ui/ScreenHeader";
+import { formatDayDateDe, formatHrFactDe, formatKmDe } from "./ui/formatDe";
+import { PrepCard, TodayHero, WeekProgressCard } from "./features/today/TodayCards";
+import { WeekDayRow, WeekPlaceholderRow, WeekSummaryCard } from "./features/week/WeekRows";
 import {
   logRunBikeTotalFromHealthDev,
   logWorkoutSanityCheckDev,
@@ -292,20 +295,13 @@ import {
   getTrainingLoadRecommendation,
 } from "./trainingLoadRecommendation";
 import {
-  LAYOUT_SPACING,
   getCompactScreenSpacing,
-  HOME_DENSITY_SCALES,
   getBottomNavBottomOffset,
   getBottomNavContentPadding,
-  getHomeBaseDensity,
-  getHomeSpacing,
-  nextHomeDensity,
   validateClearOfBottomNav,
-  validateNoVerticalOverflow,
   validateSiblingStackNoOverlap,
   BOTTOM_NAV_HEIGHT_PX,
 } from "./layout";
-import { getWeekSessionRowWrapStyle, getWeekStackContainerStyle, shouldWeekStackScroll } from "./layout/weekStackLayout";
 import {
   beginAppFrame,
   getAppCalendarYmd,
@@ -681,10 +677,6 @@ const FIRST_30K_ID = LONG_RUN_SESSIONS.find((session) => getSessionPlannedDistan
 
 const PHASE_ORDER = Object.keys(PI);
 const VIEW_ORDER = ["home","week","performance","overview","coach","settings"];
-
-function clampPct(value){
-  return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
-}
 
 /**
  * Zugeordnete Health-Workouts inkl. Typ (Step 6–8).
@@ -1067,25 +1059,6 @@ function getFuelingHints(session){
     ];
   }
   return [];
-}
-
-function getHeroTitle(session){
-  if(!session){
-    return "Ruhetag";
-  }
-  const title = typeof session.title === "string" && session.title.trim() ? session.title : "Training";
-  const display = getDisplayPlannedDistanceKm(session);
-  if(display != null && display > 0 && !title.toLowerCase().includes("km")){
-    return `${formatKm(display).toFixed(1)} km ${title}`;
-  }
-  return title;
-}
-
-/** Matches `TI` training-type colors (Home hero dot, badges, etc.). */
-function getSessionTypeAccentColor(type){
-  if(!type)return "var(--text-muted)";
-  const meta = TI[type];
-  return meta?.col ?? "var(--text-muted)";
 }
 
 /** Prominente 3er-Stat-Box-Reihe (Distanz/Tempo/HF) im Session-Detail-Modal — zweitgrößte visuelle Ebene nach dem Titel. */
@@ -1511,17 +1484,9 @@ export default function AppMain(){
   const [viewMotionDir,setViewMotionDir]=useState(0);
   /** Home: „Vorbereitungs Einschätzung“ — Details standardmäßig eingeklappt */
   const [homeCoachAssessmentExpanded, setHomeCoachAssessmentExpanded] = useState(false);
-  /** Layout: Viewport-Budget — Dichte-Stufe (0 comfortable · 1 compact · 2 dense) + Auto-Collapse Sekundärinfos */
-  const [homeDensity, setHomeDensity] = useState(0);
-  const homeViewportTight = homeDensity >= 1;
-  const homeDensityViewportHeightRef = useRef(0);
   const mainContentAreaRef = useRef(null);
   const bottomNavRef = useRef(null);
-  const homeMainColumnRef = useRef(null);
-  const homeUpperRef = useRef(null);
-  const homeTailRef = useRef(null);
   const weekSessionStackRef = useRef(null);
-  const prevHomeViewportTightRef = useRef(false);
   /** Session-Modal: Trainingsziele (Details unter „Mehr anzeigen“) */
   /** Session-Modal: „Mehr anzeigen“ für Workout-Struktur (Intervall/Tempo/Rennen) & Fueling-Hinweise (Long Run/Rennen). */
   const [modalMoreDetailsExpanded, setModalMoreDetailsExpanded] = useState(false);
@@ -2719,12 +2684,6 @@ export default function AppMain(){
   const safeWIdx = displayPlan.length > 0 ? Math.min(wIdx, displayPlan.length - 1) : 0;
   const w = displayPlan.length > 0 ? displayPlan[safeWIdx] : null;
   const wSessions = getWeekSessionList(w);
-  const weekHasExpandedSessionDesc = wSessions.some((s) => !!weekTabDescExpandedById[s.id]);
-  const weekStackShouldScroll = shouldWeekStackScroll({
-    hasExpandedSessionDesc: weekHasExpandedSessionDesc,
-    pendingCalendarProposal,
-    weekCalendarBatchProposal,
-  });
   const ph=PI[w?.phase ?? ""] ?? PI["base"] ?? PI["BASE"] ?? { label:"Woche", col:"var(--text-secondary)", bg:"var(--border-default)" };
   // Week 1 mid-week start: show greyed placeholder cells for days before plan start
   const WEEK_DAYS_DE = ["Mo","Di","Mi","Do","Fr","Sa","So"];
@@ -2804,12 +2763,10 @@ export default function AppMain(){
   };
   const doneSessions = ACTIVE_SESSIONS.filter((session) => isSessionLogDone(logs[session.id]));
   const doneSess=doneSessions.length;
-  const totalRunTargetKm = DISPLAY_PLAN_RUNNING_SESSIONS.reduce((sum, s) => sum + getSessionPlannedDistanceKm(s), 0);
   const loggedRunKm = DISPLAY_PLAN_RUNNING_SESSIONS.reduce(
     (sum, session) => sum + getLoggedKm(session, logs[session.id], healthRunById),
     0,
   );
-  const kmPct=totalRunTargetKm>0?Math.round((loggedRunKm/totalRunTargetKm)*100):0;
   const longRuns = LONG_RUN_SESSIONS.length;
   const doneLongRuns = LONG_RUN_SESSIONS.filter((session) => isSessionLogDone(logs[session.id])).length;
   const hardSessions = ACTIVE_SESSIONS.filter((session) => ["interval","tempo","race"].includes(session.type)).length;
@@ -3266,11 +3223,38 @@ export default function AppMain(){
   const dashboardHealthOnlyDone = dashboardDone && dashboardLog?.done !== true;
   const dashboardHealthDone = !!(dashboardLog?.assignedRun?.runId);
   const healthSuggestPending = !!(dashboardLog?.suggestedHealthRunId && !dashboardLog?.assignedRun?.runId);
-  const homeTodayHeadline = useMemo(() => {
-    if (isRestDay) return "Rest Day";
-    if (!homeRunSession) return "Ruhetag";
-    return getHeroTitle(homeRunSession);
-  }, [isRestDay, homeRunSession]);
+  /** Heute-Hero: Planwoche der angezeigten Einheit („Woche 1 von 8"). */
+  const homeHeroWeek = dashboardSession
+    ? displayPlan.find((week) => getWeekSessionList(week).some((session) => session.id === dashboardSession.id)) ?? null
+    : null;
+  /** Ohne Einheit am heutigen Tag zeigt der Hero die nächste offene — dann steht ihr Datum im Label. */
+  const homeHeroLabel = [
+    homeRunSession ? getSessionSportWord(homeRunSession.type) : null,
+    homeRunSession && todayNextSession?.mode === "next" ? `${homeRunSession.day}, ${homeRunSession.date}` : null,
+    homeHeroWeek ? `Woche ${homeHeroWeek.wn ?? displayPlan.indexOf(homeHeroWeek) + 1} von ${displayPlan.length}` : null,
+  ].filter(Boolean).join(" · ");
+  /** Plan-Status (Kalender) — nur wenn Plan-Datum bekannt; nach Planstart nur bei erledigter/übersprungener Heute-Session */
+  const homeHeroChip = !firstTrainingStart
+    ? null
+    : !hasCalendarStarted
+      ? { tone: "plain", text: `Plan startet am ${blockStartLabel}` }
+      : dashboardStatus === "done"
+        ? { tone: "good", text: "Erledigt" }
+        : dashboardStatus === "skipped"
+          ? { tone: "neutral", text: "Ausgelassen" }
+          : null;
+  /** Heute-Karte „Diese Woche": nur wenn heute in einer Planwoche liegt; Zahlen wie im Woche-Tab. */
+  const homeWeek = todayNextSession?.mode === "today" ? homeHeroWeek : null;
+  const homeWeekAnalysis = homeWeek ? (homeWeek === w ? weekAnalysis : analyzeWeek(homeWeek, logs, appNow, healthRunById)) : null;
+  const homeWeekBounds = homeWeek ? getPlanWeekTimeBoundsMs(homeWeek) : null;
+  const homeWeekRunKm = homeWeekAnalysis
+    ? resolveWeekDisplayRunKm(
+        homeWeekBounds
+          ? sumRunBikeTotalKmFromHealthInRange(healthRuns, homeWeekBounds.startMs, homeWeekBounds.endMs).runKm
+          : 0,
+        homeWeekAnalysis.actualKm,
+      )
+    : 0;
   const homeAppleHealthBadge = useMemo(() => {
     if (!homeRunSession) {
       return { label: "Kein Training geplant", tone: "muted" };
@@ -3299,9 +3283,6 @@ export default function AppMain(){
     isHealthConnected,
     healthKitAvailable,
   ]);
-  const ringRadius = 38;
-  const ringCircumference = 2 * Math.PI * ringRadius;
-  const ringDashOffset = ringCircumference * (1 - (prepProgressPct / 100));
 
   const deferAppleHealthPreview =
     !!(dashboardLog?.assignedRun?.runId) ||
@@ -3775,19 +3756,7 @@ export default function AppMain(){
     ? modalCompletionSummary
     : modalCompletionSummaryEnriched;
 
-  /** Eingeklappte Einschätzung: kompaktere Home-Card-Paddings (Scroll siehe Main-Area — temporär aktiv). */
-  const homeScrollLocked = activeView === "home" && !homeCoachAssessmentExpanded;
-  const homeScale = HOME_DENSITY_SCALES[homeDensity] ?? "comfortable";
-  const hs = getHomeSpacing(homeScale, homeCoachAssessmentExpanded);
-  /** Prep-Ring-Box; Abstand Ring→primäre Actions (Done/Skip), dann Card. */
-  const HOME_PREP_RING_PX = hs.ringPx;
-  const spacingRingToPrimaryActions = hs.ringToActions;
-  /** Zwischen Hero-Block und Coach-/Metrik-Säule bzw. innerhalb der scrollbaren Tail-Säule */
-  const homeBelowFoldStackGap = hs.belowFoldGap;
-  const homeColumnGap = hs.columnGap;
-  const homeRingReservedMinHeight = HOME_PREP_RING_PX + spacingRingToPrimaryActions;
   const compactScreen = getCompactScreenSpacing();
-  const spacing = { xs: LAYOUT_SPACING.xs, sm: LAYOUT_SPACING.sm, md: LAYOUT_SPACING.md };
   const safeTopPad = "max(44px, env(safe-area-inset-top, 44px))";
   /** Platz für die Tab-Bar — eine Quelle für alle Tabs (`layout/bottomNavLayout.ts`). */
   const safeBottomContentPad = getBottomNavContentPadding();
@@ -3813,7 +3782,7 @@ export default function AppMain(){
     overscrollBehavior: "none",
   };
   /**
-   * Home / Übersicht: kein äußerer Seiten-Scroll — flex-Säule; Home-Tail (Coach/Metriken) scrollt intern bei Bedarf.
+   * Home / Übersicht: kein äußerer Seiten-Scroll — flex-Säule; Home scrollt in sich (`mr-screen`).
    */
   const mainScrollAreaStyleHome: typeof mainScrollAreaStyle = {
     ...mainScrollAreaStyle,
@@ -3923,90 +3892,8 @@ export default function AppMain(){
     // no console logging in production path
   }, []);
 
-  /** Dichte zurücksetzen, sobald sich der Home-Zustand ändert — `nextHomeDensity` verdichtet nur. */
-  const homePrepCompleted = !!prepCompleted;
-  useLayoutEffect(() => {
-    if (activeView !== "home") return;
-    const vh = window.visualViewport?.height ?? window.innerHeight;
-    setHomeDensity(getHomeBaseDensity(vh));
-    // Auf-/Zuklappen der Einschätzung setzt bewusst nicht zurück: sonst würde das Aufklappen auf engen
-    // Screens einen frischen Übergang „tight" erzeugen und sofort wieder einklappen.
-  }, [activeView, homePrepCompleted]);
-
-  useLayoutEffect(() => {
-    if (activeView !== "home") return;
-    const main = homeMainColumnRef.current;
-    const upper = homeUpperRef.current;
-    const tail = homeTailRef.current;
-    if (!main || !upper || !tail) return;
-    const measure = () => {
-      const vh = window.visualViewport?.height ?? window.innerHeight;
-      // Ignore changes caused by keyboard open/close (>150px offset) —
-      // @capacitor/keyboard with resize:'body' handles those separately.
-      const keyboardOffset = window.innerHeight - vh;
-      if (keyboardOffset > 150) return;
-      const base = getHomeBaseDensity(vh);
-      const viewportChanged = Math.abs(vh - homeDensityViewportHeightRef.current) > 1;
-      homeDensityViewportHeightRef.current = vh;
-      // Neuer Viewport: zurück auf die Basisstufe; gemessen wird im nächsten Lauf (homeDensity ist Dep).
-      if (viewportChanged && homeDensity !== base) {
-        setHomeDensity(base);
-        return;
-      }
-      // Überlänge der Tail-Säule = das, was unten (direkt über der Tab-Bar) abgeschnitten würde.
-      const overflowPx = tail.scrollHeight - tail.clientHeight;
-      // Bisherige Heuristik bleibt: Kopf-Säule lässt der Tail-Säule zu wenig Platz → mindestens kompakt.
-      const headerTight = upper.getBoundingClientRect().height + 168 > main.clientHeight + 2;
-      // resize/visualViewport/ResizeObserver feuern im selben Frame auf demselben DOM: nur von der Stufe
-      // aus verdichten, mit der gemessen wurde — sonst zählt ein Überlauf doppelt (0 → 1 → 2).
-      setHomeDensity((prev) =>
-        prev !== homeDensity
-          ? prev
-          : nextHomeDensity(prev, {
-              overflowPx,
-              viewportHeightPx: vh,
-              coachExpanded: homeCoachAssessmentExpanded,
-              headerTight,
-            }),
-      );
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(main);
-    ro.observe(upper);
-    ro.observe(tail);
-    if (tail.firstElementChild) ro.observe(tail.firstElementChild);
-    window.addEventListener("resize", measure);
-    window.visualViewport?.addEventListener("resize", measure);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", measure);
-      window.visualViewport?.removeEventListener("resize", measure);
-    };
-  }, [
-    activeView,
-    homeCoachAssessmentExpanded,
-    homeDensity,
-    view,
-    homeRunSession,
-    dashboardStatus,
-    isRestDay,
-    prepProgressPct,
-    wIdx,
-  ]);
-
-  useEffect(() => {
-    if (homeViewportTight && !prevHomeViewportTightRef.current && homeCoachAssessmentExpanded) {
-      setHomeCoachAssessmentExpanded(false);
-    }
-    prevHomeViewportTightRef.current = homeViewportTight;
-  }, [homeViewportTight, homeCoachAssessmentExpanded]);
-
   useLayoutEffect(() => {
     if (typeof process !== "undefined" && process.env.NODE_ENV === "production") return;
-    if (activeView === "home" && !homeCoachAssessmentExpanded && homeMainColumnRef.current) {
-      validateNoVerticalOverflow(homeMainColumnRef.current, "home-default", 10);
-    }
     if (activeView === "week" && weekSessionStackRef.current) {
       const cards = Array.from(weekSessionStackRef.current.querySelectorAll("[data-layout-week-card]")).filter(
         (n) => n instanceof HTMLElement,
@@ -4015,11 +3902,7 @@ export default function AppMain(){
     }
     // Jeder Tab: der Inhaltsbereich endet oberhalb der Tab-Bar.
     validateClearOfBottomNav(mainContentAreaRef.current, bottomNavRef.current, `bottom-nav:${activeView}`);
-    // Home in dichtester Stufe: was jetzt noch überläuft, muss gescrollt werden (nur kleine Geräte erwartet).
-    if (activeView === "home" && !homeCoachAssessmentExpanded && homeDensity === 2 && homeTailRef.current) {
-      validateNoVerticalOverflow(homeTailRef.current, "home-tail-dense", 2);
-    }
-  }, [activeView, homeDensity, homeCoachAssessmentExpanded, weekTabDescExpandedById, wIdx, view, pendingCalendarProposal, weekCalendarBatchProposal]);
+  }, [activeView, weekTabDescExpandedById, wIdx, view, pendingCalendarProposal, weekCalendarBatchProposal]);
 
   return(
     <div
@@ -4036,7 +3919,7 @@ export default function AppMain(){
         display: "flex",
         flexDirection: "column",
         position: "relative",
-        backgroundColor: "#070912",
+        backgroundColor: "var(--surface-0)",
         color: "var(--text-primary)",
         fontFamily: "'Segoe UI',system-ui,sans-serif",
         fontSize: 14,
@@ -4113,7 +3996,7 @@ export default function AppMain(){
             }}
           >
             <Footprints aria-hidden size={48} strokeWidth={ICON_STROKE} color="var(--ink-3)" />
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#f1f5f9" }}>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--ink)" }}>
               Kein Plan vorhanden
             </h2>
             <p
@@ -4151,1092 +4034,288 @@ export default function AppMain(){
             </button>
           </div>
         ) : (
-        <div
-          ref={homeMainColumnRef}
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            overflowX: "hidden",
-            width: "100%",
-            maxWidth: "100%",
-            boxSizing: "border-box",
-            paddingLeft: hs.horizontalPadding,
-            paddingRight: hs.horizontalPadding,
-            gap: homeColumnGap,
-            alignItems: "stretch",
-            ...viewTransitionStyle,
-          }}
-        >
-          {/* ── HERO + RING + ACTIONS: Kopf-Säule (LayoutBudget — kein flex-grow) ─────────── */}
-          <div
-            ref={homeUpperRef}
-            style={{
-              position: "relative",
-              paddingTop: 0,
-              paddingBottom: 0,
-              flex: "0 0 auto",
-              display: "flex",
-              flexDirection: "column",
-              width: "100%",
-              minWidth: 0,
-            }}
-          >
-
-            {/* Primärer Lauf-Block (flach) → Apple Health → Ring */}
-            <div
-              data-tour="today-session"
-              style={{
-                width: "100%",
-                minWidth: 0,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                textAlign: "center",
-                paddingTop: 2,
-                paddingBottom: homeScrollLocked ? 4 : 6,
-                flexShrink: 0,
-                boxSizing: "border-box",
-                gap: hs.statusStackGap,
-              }}
-            >
-              {prepCompleted ? (
-                <PrepCompleteHeroCard
-                  raceName={prepCompleted.raceName}
-                  raceYmd={prepCompleted.raceYmd}
-                  goalSeconds={prepGoalSeconds}
-                  finish={prepFinishDisplay}
-                  raceDistanceKm={prepRaceDistanceKm}
-                  planEndedWithoutRace={prepCompleted.completedBy === "plan_ended"}
-                  compact={homeScrollLocked}
-                  onOpenRecap={() => void openPrepRecap("story")}
-                  recapLoading={prepRecapOpening}
-                  onStartNewPrep={prepRecapUserId ? () => void startNewPrep() : undefined}
-                  newPrepStarting={newPrep.starting}
-                  newPrepError={newPrep.error}
-                />
-              ) : (
-              <>
-              <div
-                style={{
-                  width: "100%",
-                  maxWidth: "min(100%, 340px)",
-                  margin: "0 auto",
-                  padding: homeScrollLocked ? "4px 6px" : "8px 10px",
-                  boxSizing: "border-box",
-                }}
-              >
-                {homeRunSession ? (
-                  <div
-                    style={{
-                      fontSize: 10,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.1em",
-                      color: "rgba(100,116,139,0.92)",
-                      fontWeight: 700,
-                      marginBottom: 6,
-                      textAlign: "center",
-                    }}
-                  >
-                    Heute · Training
-                  </div>
-                ) : null}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                    minWidth: 0,
-                  }}
-                >
-                  {homeRunSession ? (
-                    <span
-                      aria-hidden
-                      style={{
-                        width: 11,
-                        height: 11,
-                        borderRadius: 999,
-                        backgroundColor: getSessionTypeAccentColor(homeRunSession.type),
-                        flexShrink: 0,
-                      }}
-                    />
-                  ) : null}
-                  <span
-                    style={{
-                      fontSize: homeScrollLocked ? 24 : 26,
-                      fontWeight: 800,
-                      color: "#f8fafc",
-                      lineHeight: 1.15,
-                      letterSpacing: "-0.03em",
-                      overflowWrap: "anywhere",
-                      textAlign: "center",
-                      minWidth: 0,
-                    }}
-                  >
-                    {homeTodayHeadline}
-                    {homeRunSession && (() => {
-                      return dashboardStatus === "done" ? (
-                        <span
-                          aria-label="Erledigt"
-                          style={{
-                            marginLeft: 8,
-                            color: "var(--status-good)",
-                            verticalAlign: "baseline",
-                            display: "inline-block",
-                          }}
-                        >
-                          <Check aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />
-                        </span>
-                      ) : null;
-                    })()}
-                  </span>
-                </div>
-              </div>
-
-              {homeRunSession ? (
-                <div
-                  style={{
-                    width: "100%",
-                    maxWidth: "min(100%, 340px)",
-                    margin: "0 auto",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "stretch",
-                    gap: 6,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 750,
-                      color: "rgba(226,232,240,0.78)",
-                      textAlign: "center",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      letterSpacing: "0.01em",
-                    }}
-                  >
-                    {formatSessionHrTargetLine(homeRunSession, preferences.maxHeartRateBpm, w)}
-                  </div>
-                </div>
-              ) : (
-                !isRestDay ? (
-                  <div
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "rgba(148,163,184,0.95)",
-                      letterSpacing: "0.02em",
-                    }}
-                  >
-                    Kein Training geplant
-                  </div>
-                ) : null
-              )}
-              </>
-              )}
-            </div>
-
-            {/* Plan-Status (Kalender) — nur wenn Plan-Datum bekannt; nach Planstart nur bei erledigter/übersprungener Heute-Session */}
-            {firstTrainingStart && (!hasCalendarStarted || dashboardStatus !== "open") ? (
-              <div style={{ position: "relative", display: "flex", justifyContent: "center", marginBottom: homeScrollLocked ? 4 : 6, flexShrink: 0, width: "100%" }}>
-                {!hasCalendarStarted ? (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--border-default)", border: "1px solid var(--border-default)", borderRadius: 999, padding: homeScrollLocked ? "2px 8px" : "3px 10px" }}>
-                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#475569", display: "inline-block" }} />
-                    <span style={{ fontSize: homeScrollLocked ? 10 : 11, color: "#475569", fontWeight: 700 }}>Plan startet am {blockStartLabel}</span>
-                  </div>
-                ) : dashboardStatus === "done" ? (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.22)", borderRadius: 999, padding: homeScrollLocked ? "2px 8px" : "3px 10px" }}>
-                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
-                    <span style={{ fontSize: homeScrollLocked ? 10 : 11, color: "#86efac", fontWeight: 700 }}>Heute erledigt</span>
-                  </div>
-                ) : (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 999, padding: homeScrollLocked ? "2px 8px" : "3px 10px" }}>
-                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#f87171", display: "inline-block" }} />
-                    <span style={{ fontSize: homeScrollLocked ? 10 : 11, color: "#fca5a5", fontWeight: 700 }}>Übersprungen</span>
-                  </div>
-                )}
-              </div>
+        <div className="mr-screen mr-screen--today" style={viewTransitionStyle}>
+          <ScreenHeader meta={formatDayDateDe(appNow)} title="Heute">
+            {recoveryPresentation.session.status ? (
+              <StatusChip tone={recoveryPresentation.session.status}>
+                Erholung {String(recoveryPresentation.session.label).toLowerCase()}
+              </StatusChip>
             ) : null}
+          </ScreenHeader>
 
-            {/* Ring: reservierter Block — paddingBottom = Abstand zu Done/Skip/Info */}
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                width: "100%",
-                minWidth: 0,
-                flexShrink: 0,
-                minHeight: homeRingReservedMinHeight,
-                paddingBottom: spacingRingToPrimaryActions,
-                boxSizing: "border-box",
-              }}
-            >
-              <div
-                style={{
-                  position: "relative",
-                  width: HOME_PREP_RING_PX,
-                  height: HOME_PREP_RING_PX,
-                  flexShrink: 0,
-                  maxWidth: "100%",
-                }}
-              >
-                  <svg viewBox="0 0 120 120" style={{width:"100%",height:"100%",display:"block"}}>
-                    <defs>
-                      <linearGradient id="prepRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#4ade80" />
-                        <stop offset="100%" stopColor="#ecfdf5" />
-                      </linearGradient>
-                    </defs>
-                    <circle
-                      cx="60"
-                      cy="60"
-                      r={ringRadius}
-                      fill="none"
-                      stroke="var(--border-default)"
-                      strokeWidth="7.5"
-                    />
-                    <circle
-                      cx="60"
-                      cy="60"
-                      r={ringRadius}
-                      fill="none"
-                      stroke="url(#prepRingGrad)"
-                      strokeWidth="8.2"
-                      strokeLinecap="round"
-                      strokeDasharray={`${ringCircumference} ${ringCircumference}`}
-                      strokeDashoffset={ringDashOffset}
-                      transform="rotate(-90 60 60)"
-                      style={{transition:"stroke-dashoffset .5s ease-out"}}
-                    />
-                  </svg>
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: "50%",
-                      top: "50%",
-                      transform: "translate(-50%, -50%)",
-                      margin: 0,
-                      padding: 0,
-                    fontSize: hs.ringFontPx,
-                    fontWeight: 800,
-                    color: "#f8fafc",
-                    letterSpacing: "-0.03em",
-                    whiteSpace: "nowrap",
-                    lineHeight: 1,
-                    textAlign: "center",
-                  }}
-                >
-                  {prepProgressPct}%
-                  </div>
-                </div>
+          {prepCompleted ? (
+            <div data-tour="today-session">
+              <PrepCompleteHeroCard
+                raceName={prepCompleted.raceName}
+                raceYmd={prepCompleted.raceYmd}
+                goalSeconds={prepGoalSeconds}
+                finish={prepFinishDisplay}
+                raceDistanceKm={prepRaceDistanceKm}
+                planEndedWithoutRace={prepCompleted.completedBy === "plan_ended"}
+                onOpenRecap={() => void openPrepRecap("story")}
+                recapLoading={prepRecapOpening}
+                onStartNewPrep={prepRecapUserId ? () => void startNewPrep() : undefined}
+                newPrepStarting={newPrep.starting}
+                newPrepError={newPrep.error}
+              />
             </div>
+          ) : (
+            <TodayHero
+              data-tour="today-session"
+              label={homeHeroLabel}
+              session={
+                homeRunSession
+                  ? {
+                      title: typeof homeRunSession.title === "string" && homeRunSession.title.trim() ? homeRunSession.title : "Training",
+                      distanceKm: getDisplayPlannedDistanceKm(homeRunSession),
+                      // Kraft hat keinen Zielbereich („nicht primär relevant") — dann lieber keine Zeile.
+                      hrFact: homeRunSession.type === "strength" ? "" : formatHrFactDe(formatSessionHrTargetLine(homeRunSession, preferences.maxHeartRateBpm, w)),
+                      hint: typeof homeRunSession.desc === "string" ? homeRunSession.desc.trim() : "",
+                    }
+                  : null
+              }
+              restReason={
+                isRestDay
+                  ? (typeof dashboardSession?.desc === "string" && dashboardSession.desc.trim()) || "Heute steht kein Training im Plan."
+                  : "Kein Training geplant."
+              }
+              status={dashboardStatus}
+              chip={homeHeroChip}
+              canToggleDone={!dashboardHealthOnlyDone}
+              onToggleDone={() => homeRunSession && quickCompleteSession(homeRunSession)}
+              onToggleSkip={() => homeRunSession && quickSkipSession(homeRunSession)}
+              onOpenDetails={() => homeRunSession && openModal(homeRunSession)}
+            />
+          )}
 
-            {/* Done / Skip / Session-Details — Info rechts, nicht in der Einschätzungs-Card */}
-            {prepCompleted ? null : (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "stretch",
-                gap: 8,
-                width: "100%",
-                minWidth: 0,
-                boxSizing: "border-box",
-                flexShrink: 0,
-              }}
-            >
-              {dashboardStatus !== "skipped" && !dashboardHealthOnlyDone ? (
-              <button
-                className={`dashboard-action mr-btn ${dashboardStatus === "done" ? "mr-btn--secondary" : "mr-btn--primary"}`}
-                type="button"
-                onClick={() => homeRunSession && quickCompleteSession(homeRunSession)}
-                disabled={!homeRunSession}
-                aria-label={dashboardStatus === "done" ? "Erledigt-Markierung rückgängig machen" : undefined}
-                style={{ flex: 2, height: 46, padding: "0 12px" }}
-              >
-                {dashboardStatus === "done" ? "Rückgängig" : (
-                  <>
-                    <Check aria-hidden size={18} strokeWidth={ICON_STROKE} />
-                    Erledigt
-                  </>
-                )}
-              </button>
-              ) : null}
-              {dashboardStatus !== "done" ? (
-              <button
-                className="dashboard-action mr-btn mr-btn--secondary"
-                type="button"
-                onClick={() => homeRunSession && quickSkipSession(homeRunSession)}
-                disabled={!homeRunSession}
-                aria-label={dashboardStatus === "skipped" ? "Übersprungen-Markierung rückgängig machen" : undefined}
-                style={{ flex: 1, height: 46, padding: "0 12px" }}
-              >
-                {dashboardStatus === "skipped" ? "Rückgängig" : "Auslassen"}
-              </button>
-              ) : null}
-              <button
-                type="button"
-                className="dashboard-action mr-btn mr-btn--secondary"
-                onClick={() => homeRunSession && openModal(homeRunSession)}
-                disabled={!homeRunSession}
-                style={{ flex: "0 0 46px", width: 46, height: 46, padding: 0 }}
-                aria-label="Details zur Einheit öffnen"
-              >
-                <Info aria-hidden size={ICON_SIZE} strokeWidth={ICON_STROKE} />
-              </button>
-            </div>
-            )}
-          </div>
-
-          {/* ── Coach + Metriken: scrollbare Tail-Säule (verhindert äußeren Home-Scroll) ─ */}
-          <div
-            ref={homeTailRef}
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowX: "hidden",
-              overflowY: "auto",
-              display: "flex",
-              flexDirection: "column",
-              gap: homeBelowFoldStackGap,
-              WebkitOverflowScrolling: "touch",
-              overscrollBehaviorY: "contain",
-            }}
+          {devMarkOncePerFrame("home:recovery_score", uiRecoveryScore0_100, { view: "home" })}
+          {productionMarkOncePerFrame("home:recovery_score", uiRecoveryScore0_100, { view: "home" })}
+          <PrepCard
+            data-tour="recovery-card"
+            doneSessions={doneSess}
+            totalSessions={ACTIVE_SESSIONS.length}
+            adherenceScore={planAdherence.score}
+            recoveryScore={uiRecoveryScore0_100 != null ? Number.parseFloat(String(uiRecoveryScoreDisplay)) : null}
+            recoveryLoading={isRecoveryHydrating}
+            recoveryTone={recoveryPresentation.session.status}
+            note={
+              prepCompleted
+                ? null
+                : marathonPrediction.ready && marathonPrediction.predictedTime && marathonPrediction.predictedSeconds != null
+                  ? `Aktuelle Prognose: ${marathonPrediction.predictedTime}`
+                  : "Für eine Zielzeit-Prognose fehlen noch abgeschlossene Einheiten."
+            }
+            onOpenAdherence={() => navigateToView("coach")}
+            onOpenRecovery={() => navigateToView("performance")}
+            expanded={homeCoachAssessmentExpanded}
+            onToggleExpanded={() => setHomeCoachAssessmentExpanded((v) => !v)}
+            moreLabel={t("plan.show_more")}
           >
-          {/* ── BELOW-FOLD CONTENT (Einschätzung → Metriken) ─ */}
-          <div style={{display:"flex",flexDirection:"column",gap:homeBelowFoldStackGap,flexShrink:0,width:"100%",minWidth:0,boxSizing:"border-box"}}>
-
-            {/* Daily coach decision card — Header → Plan → Performance */}
-            <div
-              data-tour="recovery-card"
-              style={{
-                width:"100%",
-                maxWidth:"100%",
-                minWidth:0,
-                boxSizing:"border-box",
-                borderRadius:18,
-                border:"1px solid rgba(56,189,248,0.22)",
-                background:"linear-gradient(160deg,rgba(12,22,36,0.92),rgba(10,16,28,0.88))",
-                padding: hs.coachCardPadding,
-                display:"flex",
-                flexDirection:"column",
-                gap: hs.coachCardGap,
-                color:"var(--text-primary)",
-              }}
-            >
-              {/* Header + Plan-Zeile: feste 8px-Lücke, eine Zeile für Label + Score */}
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  width: "100%",
-                  minWidth: 0,
-                  gap: 8,
-                }}
-              >
-                <div style={{ width: "100%", minWidth: 0, margin: 0, padding: 0 }}>
-                  <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "#7c8aa5", fontWeight: 700 }}>Vorbereitungs Einschätzung</div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => navigateToView("coach")}
-                  style={{
-                    width: "100%",
-                    margin: 0,
-                    marginTop: 0,
-                    padding: 0,
-                    border: "none",
-                    background: "transparent",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    font: "inherit",
-                    color: "inherit",
-                    display: "block",
-                    minWidth: 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      paddingBottom: 6,
-                      borderBottom: "1px solid var(--border-default)",
-                      marginTop: 0,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 10,
-                        minWidth: 0,
-                        marginTop: 0,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 10,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.12em",
-                          color: "rgba(100,116,139,0.95)",
-                          fontWeight: 700,
-                          flex: "1 1 auto",
-                          minWidth: 0,
-                          lineHeight: 1.2,
-                        }}
-                      >
-                        Plan &amp; Umsetzung
-                      </span>
-                      <span
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          flexShrink: 0,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 14,
-                            fontWeight: 850,
-                            color: planAdherenceTextColor(planAdherence.band),
-                            lineHeight: 1,
-                          }}
-                        >
-                          {formatScore100(planAdherence.score)}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => navigateToView("performance")}
-                  style={{
-                    width: "100%",
-                    margin: 0,
-                    marginTop: 0,
-                    padding: 0,
-                    border: "none",
-                    background: "transparent",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    font: "inherit",
-                    color: "inherit",
-                    display: "block",
-                    minWidth: 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      paddingBottom: 6,
-                      borderBottom: "1px solid var(--border-default)",
-                      marginTop: 0,
-                    }}
-                  >
-                    {devMarkOncePerFrame("home:recovery_score", uiRecoveryScore0_100, { view: "home" })}
-                    {productionMarkOncePerFrame("home:recovery_score", uiRecoveryScore0_100, { view: "home" })}
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 10,
-                        minWidth: 0,
-                        marginTop: 0,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 10,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.12em",
-                          color: "rgba(100,116,139,0.95)",
-                          fontWeight: 700,
-                          flex: "1 1 auto",
-                          minWidth: 0,
-                          lineHeight: 1.2,
-                        }}
-                      >
-                        Erholung
-                      </span>
-                      <span
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          flexShrink: 0,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 14,
-                            fontWeight: 850,
-                            color: recoveryPresentation.homeKpi.colorHex,
-                            lineHeight: 1,
-                          }}
-                        >
-                          {isRecoveryHydrating && uiRecoveryScore0_100 == null ? (
-                            <span style={{ display: "inline-block", width: 42, height: 14, borderRadius: 4, background: "var(--bg-surface)", animation: "pulse 1.2s ease-in-out infinite", verticalAlign: "middle" }} />
-                          ) : uiRecoveryScore0_100 != null ? formatScore100(uiRecoveryScoreDisplay) : "Keine Daten verfügbar"}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              </div>
-
-              {homeCoachAssessmentExpanded ? (
-                <div
-                  style={{
-                    paddingTop: 6,
-                    paddingBottom: 6,
-                  }}
-                >
-                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(100,116,139,0.95)", fontWeight: 700, marginBottom: 6 }}>
-                    Leistung &amp; Coach-Feedback
-                  </div>
-
-                  {/* Coach-Status: compact, dynamic 1-sentence summary (UI-only microcopy) */}
-                  <div
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: 12,
-                      background: "rgba(15,23,42,0.4)",
-                      border: "1px solid var(--border-default)",
-                      marginBottom: 12,
-                    }}
-                  >
-                    <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(100,116,139,0.88)", fontWeight: 700, marginBottom: 8 }}>
-                      Coach-Status
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 10, minWidth: 0 }}>
-                      <span style={{ fontSize: 15, fontWeight: 800, color: "#f8fafc", flex: "1 1 auto", minWidth: 0, overflowWrap: "anywhere" }}>Coach &amp; Details</span>
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "rgba(226,232,240,0.82)",
-                        lineHeight: 1.45,
-                        marginTop: 6,
-                        whiteSpace: "normal",
-                        overflowWrap: "anywhere",
-                        minWidth: 0,
-                      }}
-                    >
-                      {sanitizeOneSentence((() => {
-                        const s = recoveryPresentation.homeKpi.score0_100;
-                        const load = trainingLoadRec.status;
-                        if (s == null) return "Erholungsdaten fehlen – heute konservativ bleiben.";
-                        if (s >= 80 && load === "green") return "Die Trainingsbelastung wird gut toleriert – du bist gut erholt.";
-                        if (s >= 70 && load !== "red") return "Du bist gut erholt und an die aktuelle Belastung angepasst.";
-                        if (s >= 70 && load === "red") return "Gute Erholung, aber Ermüdung erhöht – Intensität im Blick behalten.";
-                        if (s >= 55 && load === "green") return "Leistung stabil – Intensität kontrolliert halten.";
-                        if (load === "red") return "Ermüdung erhöht – Intensität reduzieren und Erholung priorisieren.";
-                        return "Erholung niedrig – locker bleiben und Ruhe priorisieren.";
-                      })(), "home:coach_status")}
-                    </div>
-                    {homeCoachFixed.assignHint ? (
-                      <div style={{ fontSize: 11, color: "#7dd3fc", marginTop: 8, overflowWrap: "anywhere", minWidth: 0 }}>{homeCoachFixed.assignHint}</div>
-                    ) : null}
-                    {todayAppleCoach.showConnectHint ? (
-                      <button
-                        type="button"
-                        onClick={() => navigateToView("settings")}
-                        style={{
-                          marginTop: 8,
-                          alignSelf: "flex-start",
-                          background: "rgba(56,189,248,0.14)",
-                          border: "1px solid rgba(56,189,248,0.32)",
-                          borderRadius: 10,
-                          padding: "10px 14px",
-                          minHeight: 44,
-                          color: "#7dd3fc",
-                          fontSize: 12,
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Apple Health verbinden
-                      </button>
-                    ) : null}
-                  </div>
-
-                  {/* Gesamteinordnung Marathon-Vorbereitung (aggregiert, kein Plan-vs-Ist pro Einheit) */}
-                  <div
-                    style={{
-                      padding: "10px 12px",
-                      borderRadius: 12,
-                      background: "rgba(56,189,248,0.07)",
-                      border: "1px solid rgba(56,189,248,0.2)",
-                    }}
-                  >
-                    {devMarkOncePerFrame("home:overall_prep", homeOverallPrepLines.join("|"), { view: "home" })}
-                    {productionMarkOncePerFrame("home:overall_prep", homeOverallPrepLines.join("|"), {
-                      view: "home",
-                    })}
-                    <div
-                      style={{
-                        fontSize: 9,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.1em",
-                        color: "rgba(100,116,139,0.88)",
-                        fontWeight: 700,
-                        marginBottom: 8,
-                      }}
-                    >
-                      Gesamtvorbereitung
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "rgba(226,232,240,0.82)",
-                        lineHeight: 1.55,
-                        fontWeight: 550,
-                      }}
-                    >
-                      {homeOverallPrepLines.map((ln, i) => (
-                        <div key={i} style={{ marginBottom: i === homeOverallPrepLines.length - 1 ? 0 : 8 }}>
-                          {ln}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setHomeCoachAssessmentExpanded((v) => !v)}
-                style={{
-                  alignSelf:"flex-start",
-                  margin:0,
-                  marginTop: spacing.xs,
-                  padding:"6px 0",
-                  border:"none",
-                  background:"transparent",
-                  cursor:"pointer",
-                  fontSize:12,
-                  fontWeight:700,
-                  color:"#7dd3fc",
-                  letterSpacing:"0.02em",
-                }}
-              >
-                {homeCoachAssessmentExpanded ? "Weniger anzeigen" : t("plan.show_more")}
-                <span style={{ marginLeft: 6, display: "inline-flex", verticalAlign: "middle" }} aria-hidden>{homeCoachAssessmentExpanded ? <ChevronUp size={ICON_SIZE_S} strokeWidth={ICON_STROKE} /> : <ChevronDown size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />}</span>
-              </button>
-            </div>
-
-            {/* Metrics group — cleaner, softer and less boxy */}
-            <div style={{display:"flex",flexDirection:"column",gap: homeScrollLocked ? 5 : 6,padding: homeScrollLocked ? "6px 8px" : "8px 10px",borderRadius:18,background:"linear-gradient(160deg,rgba(15,23,42,0.33),rgba(12,18,34,0.2))",border:"1px solid var(--border-default)",width:"100%",minWidth:0,boxSizing:"border-box"}}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:4}}>
-                <div style={{padding:hs.metricsTopTilePadding,textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Erholung</div>
-                  {isRecoveryHydrating && recoveryPresentation.session.label === "Keine Daten"
-                    ? <span style={{ display: "inline-block", width: 30, height: 13, borderRadius: 3, background: "var(--bg-surface)", animation: "pulse 1.2s ease-in-out infinite", verticalAlign: "middle" }} />
-                    : <StatusChip tone={recoveryPresentation.session.status ?? "neutral"}>{recoveryPresentation.session.label}</StatusChip>}
-                </div>
-                <div style={{padding:hs.metricsTopTilePadding,textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Belastung</div>
-                  <StatusChip tone={weeklyFatigue.tone}>{weeklyFatigue.word}</StatusChip>
-                </div>
-                <div style={{padding:hs.metricsTopTilePadding,textAlign:"center",borderRadius:12,background:"rgba(15,23,42,0.34)"}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.09em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:3}}>Serie</div>
-                  <div style={{fontSize:16,fontWeight:800,color:"#c4b5fd",lineHeight:1}}>
-                    {consistencyStats.sessionStreak}<span style={{fontSize:10,color:"var(--ink-3)",marginLeft:3}}>{consistencyStats.sessionStreak === 1 ? "Tag" : "Tage"}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:5}}>
-                {[
-                  { label: "Plan", value: `${prepProgressPct}%`, sub: "Fortschritt", color: "#10b981" },
-                  { label: "km", value: `${Math.round(loggedRunKm)}`, sub: `${kmPct}%`, color: "#38bdf8" },
-                  { label: "Lange Läufe", value: `${doneLongRuns}/${longRuns}`, sub: "erledigt", color: "#f59e0b" },
-                  { label: "Qualität", value: `${doneHardSessions}/${hardSessions}`, sub: "erledigt", color: "#fb7185" },
-                ].map(m=>(
-                  <div
-                    key={m.label}
-                    style={{
-                      padding: hs.metricsTilePadding,
-                      borderRadius: 12,
-                      background: "rgba(15,23,42,0.28)",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      textAlign: "center",
-                      gap: hs.metricsTileGap,
-                    }}
-                  >
-                    <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700}}>{m.label}</div>
-                    <div style={{fontSize:16,fontWeight:800,color:m.color,lineHeight:1.05}}>{m.value}</div>
-                    <div style={{fontSize:11,color:"rgba(148,163,184,0.5)"}}>{m.sub}</div>
-                  </div>
+            {homeCoachAssessmentExpanded ? (
+              <>
+                {/* Coach-Status: compact, dynamic 1-sentence summary (UI-only microcopy) */}
+                <p>
+                  {sanitizeOneSentence((() => {
+                    const s = recoveryPresentation.homeKpi.score0_100;
+                    const load = trainingLoadRec.status;
+                    if (s == null) return "Erholungsdaten fehlen – heute konservativ bleiben.";
+                    if (s >= 80 && load === "green") return "Die Trainingsbelastung wird gut toleriert – du bist gut erholt.";
+                    if (s >= 70 && load !== "red") return "Du bist gut erholt und an die aktuelle Belastung angepasst.";
+                    if (s >= 70 && load === "red") return "Gute Erholung, aber Ermüdung erhöht – Intensität im Blick behalten.";
+                    if (s >= 55 && load === "green") return "Leistung stabil – Intensität kontrolliert halten.";
+                    if (load === "red") return "Ermüdung erhöht – Intensität reduzieren und Erholung priorisieren.";
+                    return "Erholung niedrig – locker bleiben und Ruhe priorisieren.";
+                  })(), "home:coach_status")}
+                </p>
+                {homeCoachFixed.assignHint ? <p>{homeCoachFixed.assignHint}</p> : null}
+                {todayAppleCoach.showConnectHint ? (
+                  <button type="button" className="mr-btn mr-btn--secondary mr-btn--small" onClick={() => navigateToView("settings")}>
+                    Apple Health verbinden
+                  </button>
+                ) : null}
+                {/* Gesamteinordnung Marathon-Vorbereitung (aggregiert, kein Plan-vs-Ist pro Einheit) */}
+                {devMarkOncePerFrame("home:overall_prep", homeOverallPrepLines.join("|"), { view: "home" })}
+                {productionMarkOncePerFrame("home:overall_prep", homeOverallPrepLines.join("|"), {
+                  view: "home",
+                })}
+                {homeOverallPrepLines.map((ln, i) => (
+                  <p key={i}>{ln}</p>
                 ))}
-              </div>
-            </div>
+              </>
+            ) : null}
+          </PrepCard>
 
-          </div>
-          </div>
+          <WeekProgressCard
+            week={
+              homeWeek && homeWeekAnalysis
+                ? { rangeLabel: homeWeek.dates ?? "", actualKm: homeWeekRunKm, plannedKm: homeWeekAnalysis.plannedKm }
+                : null
+            }
+            longRuns={{ done: doneLongRuns, total: longRuns }}
+            quality={{ done: doneHardSessions, total: hardSessions }}
+            streakDays={consistencyStats.sessionStreak}
+          />
         </div>
         )
       ):activeView==="week"?(
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              width: "100%",
-              display: "flex",
-              flexDirection: "column",
-              padding: `${Math.max(2, compactScreen.screenPaddingY - 2)}px ${compactScreen.screenPaddingX}px`,
-              boxSizing: "border-box",
-              overflow: "hidden",
-              ...viewTransitionStyle,
-            }}
-          >
-            <div data-tour="week-header" style={{ flexShrink: 0, background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:16,padding:"4px 6px 4px",boxShadow:"0 20px 40px var(--shadow)"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <button onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} style={{background:wIdx===0?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid var(--border-default)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===0?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}} aria-label="Vorherige Woche"><ChevronLeft aria-hidden size={ICON_SIZE} strokeWidth={ICON_STROKE} /></button>
-                <div style={{flex:1,textAlign:"center",minWidth:0}}>
-                  <span style={{display:"inline-block",padding:"3px 9px",borderRadius:999,fontSize:11,fontWeight:700,background:ph.bg,color:ph.col,marginBottom:4}}>{ph.label}</span>
-                  <div style={{fontSize:17,fontWeight:800,color:"var(--text-primary)",lineHeight:1.2}}>{w?.label ?? ""}</div>
-                  <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:2}}>{w?.dates ?? ""}</div>
-                </div>
-                <button onClick={()=>setWIdx(i=>Math.min(displayPlan.length-1,i+1))} disabled={wIdx===displayPlan.length-1} style={{background:wIdx===displayPlan.length-1?"rgba(15,23,42,0.7)":"#1e293b",border:"1px solid var(--border-default)",color:"#cbd5e1",width:36,height:36,borderRadius:11,cursor:wIdx===displayPlan.length-1?"not-allowed":"pointer",fontSize:17,display:"flex",alignItems:"center",justifyContent:"center"}} aria-label="Nächste Woche"><ChevronRight aria-hidden size={ICON_SIZE} strokeWidth={ICON_STROKE} /></button>
-              </div>
-
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:3,marginTop:2}}>
-                <div style={{minWidth:0}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:2}}>{t("plan.planned_km")}</div>
-                  <div style={{fontSize:18,fontWeight:800,color:"#38bdf8",lineHeight:1.1}}>{weekAnalysis.plannedKm} km</div>
-                  <div style={{fontSize:11,color:"rgba(148,163,184,0.48)",marginTop:2}}>{t("plan.week_label")}</div>
-                  {Math.abs(weekAnalysis.plannedLoadKm - weekAnalysis.plannedKm) > 0.05 ? (
-                    <div style={{ fontSize: 10, color: "rgba(148,163,184,0.4)", marginTop: 3, lineHeight: 1.2 }}>
-                      Trainingsvolumen: {formatKm(weekAnalysis.plannedLoadKm)} km
-                    </div>
-                  ) : null}
-                </div>
-                <div style={{minWidth:0}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.52)",fontWeight:700,marginBottom:2}}>{t("plan.actual_km")}</div>
-                  <div style={{fontSize:18,fontWeight:800,color:"#10b981",lineHeight:1.1}}>{resolveWeekDisplayRunKm(weekHealthKpi.runKm, weekAnalysis.actualKm).toFixed(1)} km</div>
-                  <div style={{fontSize:11,color:"rgba(148,163,184,0.48)",marginTop:2}}>{Math.round(clampPct(weekAnalysis.plannedKm > 0 ? (resolveWeekDisplayRunKm(weekHealthKpi.runKm, weekAnalysis.actualKm) / weekAnalysis.plannedKm) * 100 : 0))}% erledigt</div>
-                  {weekHealthKpi.bikeKm > 0.05 ? (
-                    <div style={{ fontSize: 10, color: "rgba(148,163,184,0.38)", marginTop: 4, lineHeight: 1.35 }}>
-                      + Rad (Health): {weekHealthKpi.bikeKm.toFixed(1)} km · Gesamt: {weekHealthKpi.totalKm.toFixed(1)} km
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              <div style={{marginTop:2}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,fontSize:11,color:"#7c8aa5",marginBottom:2}}>
-                  <span>{t("plan.progress")}</span>
-                  <span style={{fontWeight:700,color:"rgba(226,232,240,0.75)",whiteSpace:"nowrap"}}>{Math.round(clampPct(weekAnalysis.plannedKm > 0 ? (resolveWeekDisplayRunKm(weekHealthKpi.runKm, weekAnalysis.actualKm) / weekAnalysis.plannedKm) * 100 : 0))}%</span>
-                </div>
-                <div style={{height:6,background:"rgba(15,23,42,0.85)",borderRadius:999,overflow:"hidden"}}>
-                  <div style={{height:"100%",background:"linear-gradient(90deg,#10b981,#38bdf8)",borderRadius:999,width:`${clampPct(weekAnalysis.plannedKm > 0 ? (resolveWeekDisplayRunKm(weekHealthKpi.runKm, weekAnalysis.actualKm) / weekAnalysis.plannedKm) * 100 : 0)}%`,transition:"width .3s"}}/>
-                </div>
-              </div>
-
-              <div style={{display:"flex",gap:3,marginTop:2}}>
-                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"3px 4px",borderRadius:10,background:"rgba(10,14,26,0.55)",border:"1px solid var(--border-default)"}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:2}}>{t("plan.units")}</div>
-                  <div style={{fontSize:15,fontWeight:800,color:"var(--text-primary)",lineHeight:1.15}}>{weekAnalysis.doneSessions}/{weekAnalysis.plannedTrainSessions}</div>
-                </div>
-                <div style={{flex:1,minWidth:0,textAlign:"center",padding:"3px 4px",borderRadius:10,background:"rgba(10,14,26,0.55)",border:"1px solid var(--border-default)"}}>
-                  <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"rgba(148,163,184,0.48)",fontWeight:700,marginBottom:2}}>{t("plan.intensive")}</div>
-                  <div style={{fontSize:15,fontWeight:800,color:"#fb7185",lineHeight:1.15}}>{weekAnalysis.intenseDone}/{weekAnalysis.intensePlanned}</div>
-                </div>
-              </div>
-            </div>
-
-            {scheduleBlocks.length > 0 && w && !pendingCalendarProposal && !weekCalendarBatchProposal && (
-              <button
-                onClick={handleScanWeekForCalendarConflicts}
-                style={{
-                  flexShrink: 0,
-                  marginTop: 6,
-                  background: "rgba(15,23,42,0.82)",
-                  border: "1px solid var(--border-default)",
-                  borderRadius: 12,
-                  padding: "8px 12px",
-                  color: "#cbd5e1",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                }}
-              >
-                <CalendarDays aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />
-                Woche auf Kalenderkonflikte prüfen
+          <div ref={weekSessionStackRef} className="mr-screen mr-screen--week" style={viewTransitionStyle}>
+            <ScreenHeader
+              meta={[ph.label, w?.dates].filter(Boolean).join(" · ")}
+              title={w ? `Woche ${w.wn ?? safeWIdx + 1}` : "Woche"}
+            >
+              <button type="button" className="mr-round-btn" onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} aria-label="Vorherige Woche">
+                <ChevronLeft aria-hidden size={20} strokeWidth={ICON_STROKE} />
               </button>
+              <button type="button" className="mr-round-btn" onClick={()=>setWIdx(i=>Math.min(displayPlan.length-1,i+1))} disabled={wIdx>=displayPlan.length-1} aria-label="Nächste Woche">
+                <ChevronRight aria-hidden size={20} strokeWidth={ICON_STROKE} />
+              </button>
+            </ScreenHeader>
+
+            <WeekSummaryCard
+              data-tour="week-header"
+              actualKm={resolveWeekDisplayRunKm(weekHealthKpi.runKm, weekAnalysis.actualKm)}
+              plannedKm={weekAnalysis.plannedKm}
+              doneSessions={weekAnalysis.doneSessions}
+              plannedSessions={weekAnalysis.plannedTrainSessions}
+              onSyncCalendar={
+                scheduleBlocks.length > 0 && w && !pendingCalendarProposal && !weekCalendarBatchProposal
+                  ? handleScanWeekForCalendarConflicts
+                  : undefined
+              }
+            />
+
+            {pendingCalendarProposal && (
+              pendingCalendarProposal.mode === "select" ? (
+                <div data-layout-week-card="1" className="mr-panel mr-panel--scroll">
+                  <span className="mr-label">Anderen Tag wählen</span>
+                  {pendingCalendarProposal.candidates.length === 0 ? (
+                    <span>Keine anderen Tage in dieser Woche verfügbar.</span>
+                  ) : pendingCalendarProposal.candidates.map(candidate => (
+                    <button
+                      type="button"
+                      key={candidate.targetSessionId}
+                      className="mr-panel__option"
+                      onClick={()=>handleSelectCalendarReassignmentTarget(candidate.targetSessionId)}
+                    >
+                      {candidate.label}
+                      {candidate.isConflict && (
+                        <small>
+                          Ungünstig{candidate.warningReason ? `: ${candidate.warningReason}` : ""}
+                        </small>
+                      )}
+                    </button>
+                  ))}
+                  <div className="mr-panel__actions">
+                    <button type="button" className="mr-btn mr-btn--ghost mr-btn--small" onClick={handleCancelCalendarReassignment}>Abbrechen</button>
+                  </div>
+                </div>
+              ) : pendingCalendarProposal.action ? (
+                <div data-layout-week-card="1" className="mr-panel--scroll">
+                  <AiActionCard
+                    action={pendingCalendarProposal.action}
+                    onConfirm={handleConfirmCalendarReassignment}
+                    onCancel={handleCancelCalendarReassignment}
+                    onEdit={handleEditCalendarReassignment}
+                  />
+                </div>
+              ) : (
+                <div data-layout-week-card="1" className="mr-panel mr-panel--row">
+                  <span>{pendingCalendarProposal.noConflict ? "Kein Konflikt an diesem Tag." : `Keine sinnvolle Alternative im Kalender gefunden.${pendingCalendarProposal.conflictCause ? ` Konflikt ${pendingCalendarProposal.conflictCause}.` : ""}`}</span>
+                  <div className="mr-panel__actions">
+                    {pendingCalendarProposal.noConflict && (
+                      <button type="button" className="mr-btn mr-btn--ghost mr-btn--small" onClick={handleEditCalendarReassignment}>Trotzdem Tag wählen</button>
+                    )}
+                    <button type="button" className="mr-btn mr-btn--ghost mr-btn--small" onClick={handleCancelCalendarReassignment}>OK</button>
+                  </div>
+                </div>
+              )
+            )}
+            {weekCalendarBatchProposal && (
+              weekCalendarBatchProposal.status === "no-conflicts" ? (
+                <div data-layout-week-card="1" className="mr-panel mr-panel--row">
+                  <span>Keine Kalenderkonflikte in dieser Woche gefunden.</span>
+                  <div className="mr-panel__actions">
+                    <button type="button" className="mr-btn mr-btn--ghost mr-btn--small" onClick={handleCancelWeekCalendarBatch}>OK</button>
+                  </div>
+                </div>
+              ) : weekCalendarBatchProposal.status === "blocked" ? (
+                <div data-layout-week-card="1" className="mr-panel">
+                  <span className="mr-panel__error">
+                    Konnte nicht automatisch aufgelöst werden: {(weekCalendarBatchProposal.blockedReasons || []).join(" ")}
+                  </span>
+                  <span>Bitte einzelne Konflikte über das Kalender-Symbol an der Einheit bearbeiten.</span>
+                  <div className="mr-panel__actions">
+                    <button type="button" className="mr-btn mr-btn--ghost mr-btn--small" onClick={handleCancelWeekCalendarBatch}>OK</button>
+                  </div>
+                </div>
+              ) : weekCalendarBatchProposal.action ? (
+                <div data-layout-week-card="1" className="mr-panel--scroll">
+                  <AiActionCard
+                    action={weekCalendarBatchProposal.action}
+                    onConfirm={handleConfirmWeekCalendarBatch}
+                    onCancel={handleCancelWeekCalendarBatch}
+                    onEdit={handleCancelWeekCalendarBatch}
+                  />
+                </div>
+              ) : (
+                <div data-layout-week-card="1" className="mr-panel mr-panel--row">
+                  <span>Keine automatisch lösbaren Konflikte gefunden.</span>
+                  <div className="mr-panel__actions">
+                    <button type="button" className="mr-btn mr-btn--ghost mr-btn--small" onClick={handleCancelWeekCalendarBatch}>OK</button>
+                  </div>
+                </div>
+              )
             )}
 
-            <div
-              ref={weekSessionStackRef}
-              style={{
-                flex: 1,
-                minHeight: 0,
-                display: "flex",
-                flexDirection: "column",
-                marginTop: 2,
-                overflowX: "hidden",
-                overscrollBehaviorY: "contain",
-                ...getWeekStackContainerStyle({
-                  scrollMode: weekStackShouldScroll,
-                  hasSessionRows: wSessions.length > 0,
-                }),
-              }}
-            >
-              {wSessions.length === 0 && (
-                <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:18,padding:18,fontSize:13,color:"var(--text-secondary)",lineHeight:1.6}}>
-                  Für diese Woche sind keine Einheiten im Plan hinterlegt.
-                </div>
-              )}
-              {missingLeadingDays.map(dayLabel=>(
-                <div key={`pre-start-${dayLabel}`} style={{flex:"1 1 0%",minHeight:0,display:"flex",flexDirection:"column"}}>
-                  <div style={{
-                    background:"rgba(11,16,28,0.55)",
-                    border:"1px solid var(--border-default)",
-                    borderRadius:10,
-                    display:"flex",
-                    alignItems:"center",
-                    gap:8,
-                    padding:"4px 8px",
-                    opacity:0.45,
-                    flex:1,
-                    minHeight:0,
-                  }}>
-                    <div style={{width:34,flexShrink:0,textAlign:"center",fontSize:10,fontWeight:800,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.08em"}}>{dayLabel}</div>
-                    <div style={{fontSize:11,color:"#475569",fontStyle:"italic"}}>vor Planstart</div>
-                  </div>
-                </div>
-              ))}
-              {pendingCalendarProposal && (
-                pendingCalendarProposal.mode === "select" ? (
-                  <div data-layout-week-card="1" style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,display:"flex",flexDirection:"column",gap:8,flexShrink:0,maxHeight:"min(60vh, 420px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
-                    <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700}}>Anderen Tag wählen</div>
-                    {pendingCalendarProposal.candidates.length === 0 ? (
-                      <span style={{fontSize:13,color:"var(--text-secondary)"}}>Keine anderen Tage in dieser Woche verfügbar.</span>
-                    ) : pendingCalendarProposal.candidates.map(candidate => (
-                      <button
-                        key={candidate.targetSessionId}
-                        onClick={()=>handleSelectCalendarReassignmentTarget(candidate.targetSessionId)}
-                        style={{
-                          display:"flex",
-                          flexDirection:"column",
-                          alignItems:"flex-start",
-                          gap:2,
-                          textAlign:"left",
-                          background:"rgba(15,23,42,0.82)",
-                          border:candidate.isConflict?"1px solid rgba(248,113,113,0.4)":"1px solid var(--border-default)",
-                          borderRadius:11,
-                          padding:"10px 12px",
-                          cursor:"pointer",
-                        }}
-                      >
-                        <span style={{fontSize:13,fontWeight:700,color:"#dbe7ff"}}>{candidate.label}</span>
-                        {candidate.isConflict && (
-                          <span style={{fontSize:11,color:"var(--status-low)"}}>
-                            Ungünstig{candidate.warningReason ? `: ${candidate.warningReason}` : ""}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                    <button onClick={handleCancelCalendarReassignment} style={{alignSelf:"flex-end",background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700,fontSize:13}}>Abbrechen</button>
-                  </div>
-                ) : (
-                  <div data-layout-week-card="1" style={{flexShrink:0,maxHeight:"min(60vh, 420px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
-                    {pendingCalendarProposal.action ? (
-                      <AiActionCard
-                        action={pendingCalendarProposal.action}
-                        onConfirm={handleConfirmCalendarReassignment}
-                        onCancel={handleCancelCalendarReassignment}
-                        onEdit={handleEditCalendarReassignment}
-                      />
-                    ) : (
-                      <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,fontSize:13,color:"var(--text-secondary)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                        <span>{pendingCalendarProposal.noConflict ? "Kein Konflikt an diesem Tag." : `Keine sinnvolle Alternative im Kalender gefunden.${pendingCalendarProposal.conflictCause ? ` Konflikt ${pendingCalendarProposal.conflictCause}.` : ""}`}</span>
-                        <span style={{display:"flex",gap:12,flexShrink:0}}>
-                          {pendingCalendarProposal.noConflict && (
-                            <button onClick={handleEditCalendarReassignment} style={{background:"transparent",border:"none",color:"#93c5fd",cursor:"pointer",fontWeight:700}}>Trotzdem Tag wählen</button>
-                          )}
-                          <button onClick={handleCancelCalendarReassignment} style={{background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700}}>OK</button>
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )
-              )}
-              {weekCalendarBatchProposal && (
-                <div data-layout-week-card="1" style={{flexShrink:0,maxHeight:"min(60vh, 420px)",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
-                  {weekCalendarBatchProposal.status === "no-conflicts" ? (
-                    <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,fontSize:13,color:"var(--text-secondary)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                      <span>Keine Kalenderkonflikte in dieser Woche gefunden.</span>
-                      <button onClick={handleCancelWeekCalendarBatch} style={{background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700}}>OK</button>
-                    </div>
-                  ) : weekCalendarBatchProposal.status === "blocked" ? (
-                    <div style={{background:"var(--bg-card)",border:"1px solid rgba(248,113,113,0.4)",borderRadius:14,padding:12,display:"flex",flexDirection:"column",gap:8}}>
-                      <span style={{fontSize:13,color:"#f87171",lineHeight:1.5}}>
-                        Konnte nicht automatisch aufgelöst werden: {(weekCalendarBatchProposal.blockedReasons || []).join(" ")}
-                      </span>
-                      <span style={{fontSize:12,color:"var(--text-secondary)"}}>Bitte einzelne Konflikte über den Kalender-Button pro Einheit bearbeiten.</span>
-                      <button onClick={handleCancelWeekCalendarBatch} style={{alignSelf:"flex-end",background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700,fontSize:13}}>OK</button>
-                    </div>
-                  ) : weekCalendarBatchProposal.action ? (
-                    <AiActionCard
-                      action={weekCalendarBatchProposal.action}
-                      onConfirm={handleConfirmWeekCalendarBatch}
-                      onCancel={handleCancelWeekCalendarBatch}
-                      onEdit={handleCancelWeekCalendarBatch}
+            {wSessions.length === 0 ? (
+              <div className="mr-panel">Für diese Woche sind keine Einheiten im Plan hinterlegt.</div>
+            ) : (
+              <div className="mr-week-list">
+                {missingLeadingDays.map(dayLabel=>(
+                  <WeekPlaceholderRow key={`pre-start-${dayLabel}`} dayLabel={dayLabel}>Vor Planstart</WeekPlaceholderRow>
+                ))}
+                {wSessions.map(session=>{
+                  const log=logs[session.id];
+                  const status = getSessionStatus(log);
+                  const isRest = session.type === "rest";
+                  const sessionDate = parseSessionDateLabel(session.date);
+                  const isToday = !!sessionDate && sessionDate.toDateString() === appNow.toDateString();
+                  const plannedKm = getDisplayPlannedDistanceKm(session);
+                  const milestoneLabels = getSessionMilestones(session, w, milestoneMeta).map((milestone) => milestone.label).join(" · ");
+                  // Ist-km nur nennen, wenn gemessen/eingetragen — getLoggedKm fällt sonst auf die Plan-Distanz zurück.
+                  const hasMeasuredKm =
+                    Number(log?.assignedRun?.distanceKm) > 0 || parseFloat(String(log?.actualKm || "").replace(",", ".")) > 0;
+                  const actualKm = status === "done" && hasMeasuredKm ? getLoggedKm(session, log, healthRunById) : 0;
+                  const planPart = plannedKm != null && plannedKm > 0 ? `Plan ${formatKmDe(plannedKm)}` : null;
+                  const subtitle = isRest
+                    ? null
+                    : status === "done"
+                      ? [actualKm > 0 ? `${formatKmDe(actualKm)} km gelaufen` : "Erledigt", planPart ? (actualKm > 0 ? planPart : `${planPart} km`) : null].filter(Boolean).join(" · ")
+                      : status === "skipped"
+                        ? "Ausgelassen"
+                        : [isToday ? "Heute" : null, milestoneLabels || getSessionHrZoneShort(session, w || undefined)].filter(Boolean).join(" · ") || null;
+                  return(
+                    <WeekDayRow
+                      key={session.id}
+                      dayLabel={session.day}
+                      dayNumber={sessionDate ? sessionDate.getDate() : null}
+                      type={session.type}
+                      title={session.title}
+                      subtitle={subtitle}
+                      distanceKm={plannedKm}
+                      state={isRest ? "open" : status}
+                      isToday={isToday}
+                      onOpen={isRest ? undefined : ()=>openModal(session)}
+                      onCalendar={
+                        !isRest && scheduleBlocks.length > 0 && !lockedSessionIds.has(session.id)
+                          ? ()=>handleProposeCalendarReassignment(session.id)
+                          : undefined
+                      }
                     />
-                  ) : (
-                    <div style={{background:"var(--bg-card)",border:"1px solid var(--border-default)",borderRadius:14,padding:12,fontSize:13,color:"var(--text-secondary)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                      <span>Keine automatisch lösbaren Konflikte gefunden.</span>
-                      <button onClick={handleCancelWeekCalendarBatch} style={{background:"transparent",border:"none",color:"#7c8aa5",cursor:"pointer",fontWeight:700}}>OK</button>
-                    </div>
-                  )}
-                </div>
-              )}
-              {wSessions.map(session=>{
-                const ti=TI[session.type];
-                const weekTitleColor = session.type === "rest" ? "var(--text-secondary)" : ti?.col || "#fff";
-                const log=logs[session.id];
-                const status = getSessionStatus(log);
-                const isDone=status==="done";
-                const isSkipped=status==="skipped";
-                const milestones = getSessionMilestones(session, w, milestoneMeta);
-                const milestoneLabels = milestones.map((milestone) => milestone.label).join(" · ");
-                const hasHint = session.type !== "rest";
-                const weekCompact = !weekHasExpandedSessionDesc;
-                const sessionRowWrap = getWeekSessionRowWrapStyle(weekStackShouldScroll);
-                const sessionCardShell = {
-                  background:isDone
-                    ?"linear-gradient(160deg,rgba(7,36,31,0.94),rgba(13,19,32,0.96))"
-                    : isSkipped
-                      ?"linear-gradient(160deg,rgba(40,14,14,0.9),rgba(18,18,30,0.96))"
-                      :"linear-gradient(160deg,rgba(18,18,36,0.98),rgba(11,16,28,0.94))",
-                  borderRadius: 14,
-                  display:"flex",
-                  gap: 10,
-                  alignItems:"center",
-                  cursor:hasHint?"pointer":"default",
-                  opacity:session.type==="rest"?0.78:1,
-                  border:`1px solid ${isDone?"rgba(16,185,129,0.26)":isSkipped?"rgba(248,113,113,0.2)":"var(--border-default)"}`,
-                  boxShadow:isDone?"0 12px 30px rgba(16,185,129,0.08)":isSkipped?"0 12px 28px rgba(248,113,113,0.08)":"0 14px 32px rgba(2,6,23,0.16)",
-                  minHeight: 0,
-                };
-                const displayPk = getDisplayPlannedDistanceKm(session);
-                return(
-                  <div key={session.id} style={sessionRowWrap} data-layout-week-card="1">
-                  <div
-                    onClick={()=>hasHint&&openModal(session)}
-                    style={{...sessionCardShell,padding: weekCompact ? "8px 10px" : "10px 12px"}}
-                  >
-                    <div style={{width: weekCompact ? 30 : 36,flexShrink:0,textAlign:"center"}}>
-                      <div style={{fontSize: weekCompact ? 9 : 10,fontWeight:800,color:"var(--text-secondary)",textTransform:"uppercase",letterSpacing:"0.08em"}}>{session.day}</div>
-                      <div style={{marginTop: weekCompact ? 3 : 4,width: weekCompact ? 30 : 36,height: weekCompact ? 30 : 36,borderRadius:10,background:`${ti.col}1a`,border:`1px solid ${ti.col}33`,display:"flex",alignItems:"center",justifyContent:"center",color:ti.col}}><SessionTypeIcon type={session.type} size={weekCompact ? ICON_SIZE_S : 18} /></div>
-                    </div>
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{fontSize: weekCompact ? 14 : 15,fontWeight:700,color:weekTitleColor,lineHeight:1.3,overflowWrap:"anywhere"}}>
-                        {session.title}
-                      </div>
-                      {(displayPk != null && displayPk > 0) || milestoneLabels ? (
-                        <div style={{fontSize: weekCompact ? 12 : 13,fontWeight:600,color:"var(--ink-2)",marginTop:2}}>
-                          {[displayPk != null && displayPk > 0 ? `${formatKm(displayPk).toFixed(1)} km` : null, milestoneLabels || null].filter(Boolean).join(" · ")}
-                        </div>
-                      ) : null}
-                    </div>
-
-                    {hasHint && (
-                      <button
-                        onClick={(e)=>{e.stopPropagation(); quickCompleteSession(session);}}
-                        style={{
-                          width:34,
-                          height:34,
-                          flexShrink:0,
-                          borderRadius:12,
-                          border:`1px solid ${isDone?"rgba(16,185,129,0.28)":"var(--border-default)"}`,
-                          background:isDone?"rgba(16,185,129,0.18)":"rgba(15,23,42,0.82)",
-                          color:isDone?"#86efac":"#cbd5e1",
-                          cursor:"pointer",
-                          display:"flex",
-                          alignItems:"center",
-                          justifyContent:"center",
-                          padding:0,
-                          transition:"transform .18s ease, background .18s ease"
-                        }}
-                        aria-label={`${session.title} schnell als erledigt markieren`}
-                      >
-                        <Check aria-hidden size={18} strokeWidth={ICON_STROKE} />
-                      </button>
-                    )}
-                    {hasHint && scheduleBlocks.length > 0 && !lockedSessionIds.has(session.id) && (
-                      <button
-                        onClick={(e)=>{e.stopPropagation(); handleProposeCalendarReassignment(session.id);}}
-                        style={{
-                          width:34,
-                          height:34,
-                          flexShrink:0,
-                          borderRadius:12,
-                          border:"1px solid var(--border-default)",
-                          background:"rgba(15,23,42,0.82)",
-                          color:"#cbd5e1",
-                          cursor:"pointer",
-                          display:"flex",
-                          alignItems:"center",
-                          justifyContent:"center",
-                          padding:0,
-                        }}
-                        aria-label={`${session.title} an Kalender anpassen`}
-                      >
-                        <CalendarDays aria-hidden size={18} strokeWidth={ICON_STROKE} />
-                      </button>
-                    )}
-                  </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div
-              style={{
-                flexShrink: 0,
-                marginTop: 2,
-                display: "flex",
-                justifyContent: "center",
-                gap: 6,
-                paddingTop: 4,
-                paddingBottom: 4,
-                flexWrap: "wrap",
-              }}
-            >
-              {displayPlan.map((week,i)=>{
-                const weekSessions=getWeekSessionList(week);
-                const weekDone=weekSessions.filter(session=>isSessionLogDone(logs[session.id])).length;
-                const weekSkipped=weekSessions.filter(session=>logs[session.id]?.skipped).length;
-                const weekTotal=weekSessions.filter(session=>session.type!=="rest").length;
-                const full=weekTotal>0&&weekDone===weekTotal;
-                return(
-                  <button key={week.wn} onClick={()=>setWIdx(i)} style={{width:i===wIdx?28:10,height:10,borderRadius:999,cursor:"pointer",background:i===wIdx?"#f8fafc":full?"#10b981":weekSkipped>0?"#f87171":weekDone>0?"#38bdf8":"#1e293b",border:"none",transition:"all .2s"}} aria-label={`Woche ${week.wn} öffnen`} />
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
       ):activeView==="performance"?(
           <div
