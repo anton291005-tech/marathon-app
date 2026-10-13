@@ -61,8 +61,6 @@ type WeekDayRowProps = {
   isToday?: boolean;
   /** Öffnet die Einheit; ohne Handler ist die Zeile nicht bedienbar (Ruhetag). */
   onOpen?: () => void;
-  /** Einheit an den Kalender anpassen; ohne Handler kein Kalender-Icon. */
-  onCalendar?: () => void;
 };
 
 /** Eine Tageszeile: Wochentag + Datum, Sport-Icon, Titel, rechts km oder Erledigt-Häkchen. */
@@ -76,7 +74,6 @@ export function WeekDayRow({
   state = "open",
   isToday = false,
   onOpen,
-  onCalendar,
 }: WeekDayRowProps) {
   const isRest = type === "rest";
   const className = [
@@ -93,7 +90,6 @@ export function WeekDayRow({
         tabIndex: 0,
         onClick: onOpen,
         onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
-          if (e.target !== e.currentTarget) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             onOpen();
@@ -123,19 +119,6 @@ export function WeekDayRow({
           {formatKmDe(distanceKm)}
           <small> km</small>
         </span>
-      ) : null}
-      {onCalendar ? (
-        <button
-          type="button"
-          className="mr-week-row__cal"
-          onClick={(e) => {
-            e.stopPropagation();
-            onCalendar();
-          }}
-          aria-label={`${title} an Kalender anpassen`}
-        >
-          <CalendarDays aria-hidden size={18} strokeWidth={ICON_STROKE} />
-        </button>
       ) : null}
     </div>
   );

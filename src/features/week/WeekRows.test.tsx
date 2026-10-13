@@ -2,14 +2,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { WeekDayRow, WeekSummaryCard } from "./WeekRows";
 
 describe("WeekDayRow", () => {
-  test("offene Einheit zeigt km; Kalender-Symbol öffnet nicht die Einheit", () => {
+  test("offene Einheit zeigt km und öffnet beim Tippen die Einheit; kein Kalender-Symbol in der Zeile", () => {
     const onOpen = jest.fn();
-    const onCalendar = jest.fn();
-    render(<WeekDayRow dayLabel="Sa" dayNumber={17} type="long" title="Langer Lauf" distanceKm={16.5} onOpen={onOpen} onCalendar={onCalendar} />);
+    render(<WeekDayRow dayLabel="Sa" dayNumber={17} type="long" title="Langer Lauf" distanceKm={16.5} onOpen={onOpen} />);
     expect(screen.getByText("16,5")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Langer Lauf an Kalender anpassen" }));
-    expect(onCalendar).toHaveBeenCalledTimes(1);
-    expect(onOpen).not.toHaveBeenCalled();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
     fireEvent.click(screen.getByText("Langer Lauf"));
     expect(onOpen).toHaveBeenCalledTimes(1);
   });

@@ -2694,9 +2694,9 @@ export default function AppMain(){
   // Erledigt/übersprungen/vergangen: weder Quelle noch Ziel eines Kalender-Tauschs.
   const lockedSessionIds = buildLockedSessionIds(displayPlan, logs);
 
-  const handleProposeCalendarReassignment = (sessionId)=>{
-    if (!w) return;
-    const proposal = proposeSingleSessionCalendarReassignment(displayPlan, w, sessionId, scheduleBlocks, lockedSessionIds);
+  const handleProposeCalendarReassignment = (sessionId, week = w)=>{
+    if (!week) return;
+    const proposal = proposeSingleSessionCalendarReassignment(displayPlan, week, sessionId, scheduleBlocks, lockedSessionIds);
     if (proposal.status === "locked") return;
     if (proposal.status === "no-conflict") {
       setPendingCalendarProposal({ sessionId, action: null, patches: [], candidates: proposal.candidates, mode: "preview", noConflict: true });
@@ -2708,6 +2708,14 @@ export default function AppMain(){
   // Zwischen Vorschlag und Bestätigung kann eine Session erledigt/übersprungen worden sein (✓-Button bleibt aktiv).
   const touchesLockedSession = (patches)=> patches.some(patch => lockedSessionIds.has(patch.sessionId));
 
+  /** Aus der Detailansicht der Einheit: schließen, zur Woche der Einheit wechseln, dort den Vorschlag zeigen. */
+  const handleProposeCalendarReassignmentFromDetail = (session, week)=>{
+    const idx = displayPlan.indexOf(week);
+    if (idx >= 0) setWIdx(idx);
+    closeModal();
+    navigateToView("week");
+    handleProposeCalendarReassignment(session.id, week);
+  };
   const handleConfirmCalendarReassignment = ()=>{
     if (pendingCalendarProposal?.patches?.length && !touchesLockedSession(pendingCalendarProposal.patches)) {
       handleAiApplyPlanPatches(null, null, pendingCalendarProposal.patches);
@@ -4243,7 +4251,7 @@ export default function AppMain(){
                   <span className="mr-panel__error">
                     Konnte nicht automatisch aufgelöst werden: {(weekCalendarBatchProposal.blockedReasons || []).join(" ")}
                   </span>
-                  <span>Bitte einzelne Konflikte über das Kalender-Symbol an der Einheit bearbeiten.</span>
+                  <span>Bitte einzelne Konflikte über „An Kalender anpassen" in der jeweiligen Einheit bearbeiten.</span>
                   <div className="mr-panel__actions">
                     <button type="button" className="mr-btn mr-btn--ghost mr-btn--small" onClick={handleCancelWeekCalendarBatch}>OK</button>
                   </div>
@@ -4306,11 +4314,6 @@ export default function AppMain(){
                       state={isRest ? "open" : status}
                       isToday={isToday}
                       onOpen={isRest ? undefined : ()=>openModal(session)}
-                      onCalendar={
-                        !isRest && scheduleBlocks.length > 0 && !lockedSessionIds.has(session.id)
-                          ? ()=>handleProposeCalendarReassignment(session.id)
-                          : undefined
-                      }
                     />
                   );
                 })}
@@ -5499,6 +5502,17 @@ export default function AppMain(){
                     accent={TI[modal.type]?.col || "#f87171"}
                   />
                 </div>
+              ) : null}
+
+              {modal.type !== "rest" && scheduleBlocks.length > 0 && !lockedSessionIds.has(modal.id) ? (
+                <button
+                  type="button"
+                  className="mr-btn mr-btn--secondary mr-btn--block"
+                  onClick={() => handleProposeCalendarReassignmentFromDetail(modal, modalWeek)}
+                >
+                  <CalendarDays aria-hidden size={18} strokeWidth={ICON_STROKE} />
+                  An Kalender anpassen
+                </button>
               ) : null}
 
               {modalShowMoreDetailsToggle ? (

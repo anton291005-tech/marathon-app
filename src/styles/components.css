@@ -153,10 +153,6 @@
 .mr-week-row__km { flex: none; font-family: var(--font-rounded); font-variant-numeric: tabular-nums; font-size: 17px; line-height: 20px; font-weight: 600; white-space: nowrap; }
 .mr-week-row__km small { font-family: var(--font-sans); font-size: 13px; font-weight: 400; color: var(--ink-3); }
 .mr-week-row__badge { width: 26px; height: 26px; flex: none; border-radius: var(--radius-pill); background: var(--status-good-tint); color: var(--status-good); display: flex; align-items: center; justify-content: center; }
-/* Kalender-Aktion je Einheit: 44 px Trefferfläche, optisch nur das Icon (negative Ränder holen die Breite zurück). */
-.mr-week-row__cal { width: var(--size-touch); height: var(--size-touch); flex: none; margin: 0 -10px 0 -18px; padding: 0; border: 0; background: transparent; color: var(--ink-3); display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.mr-week-row__cal:active { color: var(--ink); }
-.mr-week-row__cal:focus-visible { outline: none; box-shadow: inset var(--shadow-focus); border-radius: var(--radius-s); }
 
 /* Hinweis-/Auswahlfläche im Woche-Tab (Kalenderabgleich) */
 .mr-panel { box-sizing: border-box; background: var(--surface-1); border-radius: var(--radius-l); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); font-size: 13px; line-height: 18px; color: var(--ink-2); }
