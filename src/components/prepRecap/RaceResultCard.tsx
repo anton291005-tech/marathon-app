@@ -1,5 +1,4 @@
 import type { CSSProperties } from "react";
-import SurfaceCard from "../SurfaceCard";
 import {
   finishTimeSourceNote,
   formatFinishTime,
@@ -34,24 +33,6 @@ function noTimeHeadline(completedBy: PrepCompletedBy): string {
   return "Renntag vorbei";
 }
 
-const tileStyle: CSSProperties = {
-  background: "rgba(9,11,26,0.88)",
-  borderRadius: 14,
-  padding: "12px 10px",
-  border: "1px solid rgba(148,163,184,0.12)",
-  minWidth: 0,
-  textAlign: "center",
-};
-
-const tileLabelStyle: CSSProperties = {
-  fontSize: 10,
-  textTransform: "uppercase",
-  letterSpacing: "0.1em",
-  color: "#64748b",
-  fontWeight: 700,
-  marginBottom: 6,
-};
-
 /** Leistung nach Plan-Ende: Rennergebnis statt Prognose/Sub-3/Confidence für ein vergangenes Rennen. */
 export default function RaceResultCard({
   raceName,
@@ -73,88 +54,34 @@ export default function RaceResultCard({
   const heading = completedBy === "plan_ended" ? "Vorbereitung abgeschlossen" : "Rennergebnis";
 
   return (
-    <SurfaceCard
-      data-testid="race-result-card"
-      style={{ border: "1px solid rgba(34,197,94,0.22)", boxShadow: "0 20px 44px rgba(2,6,23,0.32)", ...style }}
-    >
-      <div
-        style={{
-          fontSize: 12,
-          textTransform: "uppercase",
-          letterSpacing: "0.12em",
-          color: "#7c8aa5",
-          fontWeight: 700,
-          marginBottom: 10,
-          textAlign: "center",
-        }}
-      >
-        {heading}
-      </div>
+    <section className="mr-card" data-testid="race-result-card" style={style}>
+      <span className="mr-label">{heading}</span>
       {raceName ? (
-        <div
-          style={{
-            fontSize: 18,
-            fontWeight: 800,
-            color: "#f8fafc",
-            textAlign: "center",
-            overflowWrap: "anywhere",
-            marginBottom: 4,
-          }}
-        >
+        <div className="mr-card__title" style={{ marginTop: 8, overflowWrap: "anywhere" }}>
           {raceName}
         </div>
       ) : null}
-      {dateLabel ? (
-        <div style={{ fontSize: 12, color: "#64748b", textAlign: "center", fontWeight: 600, marginBottom: 12 }}>
-          {dateLabel}
-        </div>
-      ) : null}
+      {dateLabel ? <p className="mr-caption">{dateLabel}</p> : null}
 
       {finish ? (
         <>
-          <div
-            data-testid="race-result-time"
-            style={{
-              fontSize: 40,
-              fontWeight: 800,
-              color: "#fff",
-              letterSpacing: "-0.04em",
-              lineHeight: 1.05,
-              textAlign: "center",
-              marginBottom: 4,
-            }}
-          >
+          <div className="mr-metric-l" data-testid="race-result-time" style={{ marginTop: 12 }}>
             {formatFinishTime(finish.seconds)}
           </div>
-          {sourceNote ? (
-            <div style={{ fontSize: 12, color: "#64748b", textAlign: "center", fontWeight: 600, marginBottom: 4 }}>
-              {sourceNote}
-            </div>
-          ) : null}
-          {reachedLine ? (
-            <div style={{ fontSize: 13, color: "#86efac", textAlign: "center", fontWeight: 750, marginBottom: 4 }}>
-              {reachedLine}
-            </div>
-          ) : null}
+          {sourceNote ? <p className="mr-caption" style={{ marginTop: 4 }}>{sourceNote}</p> : null}
+          {reachedLine ? <p className="mr-card__text">{reachedLine}</p> : null}
           {pace || goalLabel ? (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: pace && goalLabel ? "1fr 1fr" : "1fr",
-                gap: 12,
-                marginTop: 12,
-              }}
-            >
+            <div className="mr-cols mr-cols--2 mr-card__divided">
               {pace ? (
-                <div style={tileStyle}>
-                  <div style={tileLabelStyle}>Pace</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#e2e8f0" }}>{pace}</div>
+                <div>
+                  <div className="mr-cols__label">Pace</div>
+                  <div className="mr-cols__value">{pace}</div>
                 </div>
               ) : null}
               {goalLabel ? (
-                <div style={tileStyle}>
-                  <div style={tileLabelStyle}>Zielvorgabe</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#e2e8f0" }}>{goalLabel.replace(/^Ziel:\s*/, "")}</div>
+                <div>
+                  <div className="mr-cols__label">Zielvorgabe</div>
+                  <div className="mr-cols__value">{goalLabel.replace(/^Ziel:\s*/, "")}</div>
                 </div>
               ) : null}
             </div>
@@ -162,39 +89,24 @@ export default function RaceResultCard({
         </>
       ) : (
         <>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#f8fafc", textAlign: "center", marginBottom: 4 }}>
+          <div className="t-title-m" style={{ marginTop: 12 }}>
             {noTimeHeadline(completedBy)}
           </div>
-          {goalLabel ? (
-            <div style={{ fontSize: 12, color: "#64748b", textAlign: "center", fontWeight: 600 }}>{goalLabel}</div>
-          ) : null}
+          {goalLabel ? <p className="mr-caption" style={{ marginTop: 4 }}>{goalLabel}</p> : null}
         </>
       )}
       {onEditFinishTime && editFinishTimeLabel && completedBy !== "plan_ended" ? (
-        <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
-          <button
-            type="button"
-            className="dashboard-action"
-            data-testid="race-result-edit-time"
-            onClick={onEditFinishTime}
-            disabled={editFinishTimeLoading}
-            style={{
-              minHeight: 40,
-              padding: "0 18px",
-              borderRadius: 999,
-              border: "1px solid rgba(148,163,184,0.28)",
-              background: "rgba(148,163,184,0.08)",
-              color: "#e2e8f0",
-              fontSize: 13,
-              fontWeight: 750,
-              cursor: editFinishTimeLoading ? "default" : "pointer",
-              opacity: editFinishTimeLoading ? 0.6 : 1,
-            }}
-          >
-            {editFinishTimeLabel}
-          </button>
-        </div>
+        <button
+          type="button"
+          className="mr-btn mr-btn--secondary mr-btn--mid"
+          data-testid="race-result-edit-time"
+          onClick={onEditFinishTime}
+          disabled={editFinishTimeLoading}
+          style={{ marginTop: 16 }}
+        >
+          {editFinishTimeLabel}
+        </button>
       ) : null}
-    </SurfaceCard>
+    </section>
   );
 }

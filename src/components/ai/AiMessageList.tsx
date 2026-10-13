@@ -1,4 +1,6 @@
+import { MessageCircle } from "lucide-react";
 import AiActionCard from "./AiActionCard";
+import { ICON_STROKE } from "../../ui/icons";
 import type { AiAssistantAction } from "../../lib/ai/types";
 
 export type UiChatMessage = {
@@ -29,9 +31,8 @@ export default function AiMessageList({
   onRetryError,
 }: Props) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="mr-chat">
       {messages.map((message) => {
-        const isUser = message.role === "user";
         if (message.type === "action" && message.action) {
           return (
             <AiActionCard
@@ -44,52 +45,34 @@ export default function AiMessageList({
             />
           );
         }
+        if (message.role === "user") {
+          return (
+            <div key={message.id} className="mr-msg--user">
+              {message.text}
+            </div>
+          );
+        }
         const isError = message.type === "error";
         return (
-          <div
-            key={message.id}
-            style={{
-              alignSelf: isUser ? "flex-end" : "flex-start",
-              maxWidth: "88%",
-              background: isUser
-                ? "linear-gradient(135deg, rgba(56,189,248,0.22), rgba(59,130,246,0.22))"
-                : "rgba(15,23,42,0.82)",
-              border: `1px solid ${isUser ? "rgba(56,189,248,0.35)" : "rgba(148,163,184,0.18)"}`,
-              color: isUser ? "#e0f2fe" : "#dbeafe",
-              borderRadius: 14,
-              padding: "10px 12px",
-              fontSize: 13,
-              lineHeight: 1.5,
-            }}
-          >
+          <div key={message.id} className="mr-msg--coach">
+            <div className="mr-msg__who">
+              <MessageCircle aria-hidden size={14} strokeWidth={ICON_STROKE} />
+              Coach
+            </div>
             {message.type === "loading" ? (
-              "Coach denkt…"
+              <p className="mr-msg__text mr-msg__text--muted">Coach denkt…</p>
             ) : (
               <>
-                {message.text}
-                {isError &&
-                message.retryPrompt &&
-                message.retryPrompt.trim() &&
-                onRetryError ? (
-                  <div style={{ marginTop: 10 }}>
-                    <button
-                      type="button"
-                      onClick={() => onRetryError(message.id, message.retryPrompt as string)}
-                      disabled={!!busy}
-                      style={{
-                        background: busy ? "rgba(30,41,59,0.5)" : "rgba(30,41,59,0.8)",
-                        border: "1px solid rgba(148,163,184,0.2)",
-                        color: busy ? "#64748b" : "#cbd5e1",
-                        borderRadius: 10,
-                        padding: "8px 12px",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: busy ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      Erneut versuchen
-                    </button>
-                  </div>
+                <p className={isError ? "mr-msg__text mr-msg__text--error" : "mr-msg__text"}>{message.text}</p>
+                {isError && message.retryPrompt && message.retryPrompt.trim() && onRetryError ? (
+                  <button
+                    type="button"
+                    className="mr-btn mr-btn--secondary mr-btn--small"
+                    onClick={() => onRetryError(message.id, message.retryPrompt as string)}
+                    disabled={!!busy}
+                  >
+                    Erneut versuchen
+                  </button>
                 ) : null}
               </>
             )}

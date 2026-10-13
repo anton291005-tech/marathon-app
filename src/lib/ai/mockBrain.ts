@@ -258,7 +258,7 @@ function buildRiskPreview(risk: ReturnType<typeof detectRiskSignals>) {
         "48-72h Last deutlich reduzieren, nur schmerzfreie Bewegung.",
         "Rueckkehr erst bei Schmerzfreiheit im Alltag und lockeren Schritten.",
       ],
-      confirmLabel: "Uebernehmen",
+      confirmLabel: "Übernehmen",
       secondaryLabel: "Bearbeiten",
       cancelLabel: "Abbrechen",
     };
@@ -271,7 +271,7 @@ function buildRiskPreview(risk: ReturnType<typeof detectRiskSignals>) {
         "Stattdessen locker 20-40 Min oder kompletter Ruhetag.",
         `Naechster Qualitaetstermin: ${risk.nextKeySession}.`,
       ],
-      confirmLabel: "Uebernehmen",
+      confirmLabel: "Übernehmen",
       secondaryLabel: "Bearbeiten",
       cancelLabel: "Abbrechen",
     };
@@ -283,7 +283,7 @@ function buildRiskPreview(risk: ReturnType<typeof detectRiskSignals>) {
         "Nur Spaziergang/Mobility und nur fieberfrei.",
       "Dann 20-30 Min Testlauf und 24h checken.",
     ],
-    confirmLabel: "Uebernehmen",
+    confirmLabel: "Übernehmen",
     secondaryLabel: "Bearbeiten",
     cancelLabel: "Abbrechen",
   };

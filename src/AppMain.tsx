@@ -97,7 +97,6 @@ import {
   settingsBackLabel,
   settingsNavReducer,
 } from "./features/settings";
-import SurfaceCard from "./components/SurfaceCard";
 import { pluralDe } from "./utils/pluralDe";
 import { AccountDeleteDialog } from "./components/AccountDeleteDialog";
 import { cancelAllPendingNotifications } from "./services/notificationService";
@@ -141,7 +140,6 @@ import { useLanguage } from "./context/LanguageContext";
 import { useNotifications } from "./context/NotificationContext";
 import { useTranslation } from "react-i18next";
 import {
-  formatKm,
   getDisplayPlannedDistanceKm,
   getSessionPlannedDistanceKm,
   type SessionLog,
@@ -271,6 +269,7 @@ import { ScreenHeader } from "./ui/ScreenHeader";
 import { formatDateRangeDe, formatDayDateDe, formatHrFactDe, formatKmDe } from "./ui/formatDe";
 import { PrepCard, TodayHero, WeekProgressCard } from "./features/today/TodayCards";
 import { WeekDayRow, WeekPlaceholderRow, WeekSummaryCard } from "./features/week/WeekRows";
+import { PlanProgressCard, PlanTiles, ShareRow } from "./features/overview/OverviewCards";
 import {
   logRunBikeTotalFromHealthDev,
   logWorkoutSanityCheckDev,
@@ -295,7 +294,6 @@ import {
   getTrainingLoadRecommendation,
 } from "./trainingLoadRecommendation";
 import {
-  getCompactScreenSpacing,
   getBottomNavBottomOffset,
   getBottomNavContentPadding,
   validateClearOfBottomNav,
@@ -349,17 +347,6 @@ const TAB_BAR_ITEMS = [
   { key: "coach", label: "Coach", Icon: MessageCircle },
   { key: "settings", label: "Einstellungen", Icon: Settings },
 ];
-const TI = {
-  rest:     { label:"Ruhe",  col:"#4b5563" },
-  easy:     { label:"Lockerer Lauf", col:"#10b981" },
-  interval: { label:"Intervall",  col:"#ef4444" },
-  tempo:    { label:"Tempo",  col:"#f59e0b" },
-  long:     { label:"Langer Lauf", col:"#3b82f6" },
-  strength: { label:"Krafttraining",  col:"#8b5cf6" },
-  bike:     { label:"Rennrad",  col:"#06b6d4" },
-  race:     { label:"Rennen",  col:"#fbbf24" },
-};
-
 /** Session-Detail: Workout-Struktur (Warm-up/Main Set/Cool-down) nur für strukturierte, intensive Einheiten. */
 const MODAL_STRUCTURED_WORKOUT_TYPES = new Set(["interval", "tempo", "race"]);
 
@@ -1061,23 +1048,12 @@ function getFuelingHints(session){
   return [];
 }
 
-/** Prominente 3er-Stat-Box-Reihe (Distanz/Tempo/HF) im Session-Detail-Modal — zweitgrößte visuelle Ebene nach dem Titel. */
-function StatBox({ label, value, sublabel, accent }){
-  return (
-    <div style={{background:"rgba(13,16,33,0.86)",border:"1px solid var(--border-default)",borderRadius:16,padding:"12px 10px",minWidth:0,textAlign:"center"}}>
-      <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",marginBottom:6,fontWeight:700}}>{label}</div>
-      <div style={{fontSize:19,fontWeight:800,color:accent || "#fff",lineHeight:1.15,overflowWrap:"anywhere"}}>{value}</div>
-      {sublabel ? <div style={{fontSize:11,color:"var(--text-secondary)",marginTop:5,lineHeight:1.3,overflowWrap:"anywhere"}}>{sublabel}</div> : null}
-    </div>
-  );
-}
-
 function DetailBlock({ title, children }){
   return (
-    <div style={{background:"rgba(9,11,26,0.92)",border:"1px solid var(--border-default)",borderRadius:18,padding:16}}>
-      <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7c8aa5",fontWeight:700,marginBottom:12}}>{title}</div>
+    <section className="mr-card">
+      <div className="mr-label" style={{ marginBottom: 12 }}>{title}</div>
       {children}
-    </div>
+    </section>
   );
 }
 
@@ -2451,13 +2427,9 @@ export default function AppMain(){
   const {
     recoveryDomain,
     recoveryPresentation,
-    sleepStatus,
-    hrvStatus,
-    rhrStatus,
     homeRecoverySleep7dDisplay,
     homeRecoveryHrv7dDisplay,
     homeRecoveryRhr7dDisplay,
-    homeRecoveryLoad7dDisplay,
     uiRecoveryScore0_100,
     uiRecoveryScoreDisplay,
     recoveryState,
@@ -3255,6 +3227,27 @@ export default function AppMain(){
   const homeWeek = todayNextSession?.mode === "today" ? homeHeroWeek : null;
   const homeWeekAnalysis = homeWeek ? (homeWeek === w ? weekAnalysis : analyzeWeek(homeWeek, logs, appNow, healthRunById)) : null;
   const homeWeekBounds = homeWeek ? getPlanWeekTimeBoundsMs(homeWeek) : null;
+  /** Übersicht: laufende Planwoche (-1 vor Planstart, Wochenzahl nach Planende) und die Phasen in Planreihenfolge. */
+  const overviewWeekIdx = !hasCalendarStarted
+    ? -1
+    : homeHeroWeek && !prepCompleted
+      ? displayPlan.indexOf(homeHeroWeek)
+      : displayPlan.length;
+  const overviewCurrentPhaseKey = displayPlan[overviewWeekIdx]?.phase ?? null;
+  const overviewPhases = PHASE_ORDER
+    .map((key) => ({ key, phase: PI[key], weeks: displayPlan.filter((week) => week.phase === key) }))
+    .filter((entry) => entry.weeks.length > 0);
+  /** Übersicht-Kopf: Zielrennen und Tage bis dahin („Marathon · noch 50 Tage"). */
+  const overviewMeta = (() => {
+    if (prepCompleted) return "Vorbereitung abgeschlossen";
+    const race = findGoalRaceSession(displayPlan);
+    if (!race) return "Dein Trainingsplan";
+    const raceKm = resolveRaceDistanceKm(race.session, null) ?? 0;
+    const raceWord = raceKm >= 42 ? "Marathon" : raceKm >= 21 ? "Halbmarathon" : "Rennen";
+    const days = calendarDaysBetweenYmd(getAppCalendarYmd(appNow), race.ymd);
+    if (!Number.isFinite(days) || days < 0) return raceWord;
+    return `${raceWord} · ${days === 0 ? "heute" : days === 1 ? "noch 1 Tag" : `noch ${days} Tage`}`;
+  })();
   /** Datumsbereich aus den Einheiten der Woche („12.–18. Okt"); `week.dates` ist bei generierten Plänen leer. */
   const formatPlanWeekRange = (week, bounds) =>
     bounds ? formatDateRangeDe(new Date(bounds.startMs), new Date(bounds.endMs)) : (week?.dates ?? "");
@@ -3767,7 +3760,6 @@ export default function AppMain(){
     ? modalCompletionSummary
     : modalCompletionSummaryEnriched;
 
-  const compactScreen = getCompactScreenSpacing();
   const safeTopPad = "max(44px, env(safe-area-inset-top, 44px))";
   /** Platz für die Tab-Bar — eine Quelle für alle Tabs (`layout/bottomNavLayout.ts`). */
   const safeBottomContentPad = getBottomNavContentPadding();
@@ -4324,22 +4316,22 @@ export default function AppMain(){
             )}
           </div>
       ):activeView==="performance"?(
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              padding: "8px 12px 14px",
-              boxSizing: "border-box",
-              overflowY: "auto",
-              overflowX: "hidden",
-              WebkitOverflowScrolling: "touch",
-              ...viewTransitionStyle,
-            }}
-          >
-            <div data-tour="performance-card" style={{ flexShrink: 0 }}>
+          <div className="mr-screen mr-screen--stack" style={viewTransitionStyle}>
+            <ScreenHeader meta="Erholung, Form und Prognose" title="Leistung" />
+
+            <div
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+            >
+              <RecoveryVerlaufCard
+                presentation={recoveryPresentation.verlauf}
+                tone={recoveryPresentation.session.status}
+                toneLabel={recoveryPresentation.session.label}
+              />
+            </div>
+
+            <div data-tour="performance-card">
               {prepCompleted ? (
                 <RaceResultCard
                   raceName={prepCompleted.raceName}
@@ -4362,179 +4354,109 @@ export default function AppMain(){
                 targetTimeLabel={targetTimeDisplay}
                 confidenceLabel={marathonConfidenceLabel}
                 coachHints={coachHints}
-                weekProgress={
-                  weekAnalysis.plannedKm > 0
-                    ? {
-                        plannedKm: weekAnalysis.plannedKm,
-                        actualKm: resolveWeekDisplayRunKm(weekHealthKpi.runKm, weekAnalysis.actualKm),
-                        plannedLoadKm: weekAnalysis.plannedLoadKm,
-                      }
-                    : null
-                }
-                recoveryBlendHint={
-                  marathonPrediction.ready &&
-                    uiRecoveryScore0_100 != null &&
-                    uiRecoveryScore0_100 < 50
-                    ? "Prognose leicht konservativ — Erholung unter 50."
-                    : null
-                }
               />
               )}
             </div>
 
-            <div
-              onTouchStart={(e) => e.stopPropagation()}
-              onTouchMove={(e) => e.stopPropagation()}
-              onTouchEnd={(e) => e.stopPropagation()}
-            >
-              <RecoveryVerlaufCard
-                presentation={{
-                  ...recoveryPresentation.verlauf,
-                  load7dDisplay: homeRecoveryLoad7dDisplay,
-                }}
-                sleepStatus={sleepStatus}
-                hrvStatus={hrvStatus}
-                rhrStatus={rhrStatus}
-              />
-            </div>
-
-            <div style={{ flexShrink: 0 }}>
-              <RaceCalculator />
-            </div>
-
+            <RaceCalculator />
           </div>
       ):activeView==="overview"?(
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            overflowX: "hidden",
-            overflowY: "auto",
-            WebkitOverflowScrolling: "touch",
-            padding: `${compactScreen.screenPaddingY}px ${compactScreen.screenPaddingX}px`,
-            display: "flex",
-            flexDirection: "column",
-            gap: compactScreen.cardGap,
-            ...viewTransitionStyle,
-          }}
-        >
-          <SurfaceCard data-tour="overview-card">
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,flexWrap:"wrap",gap:6}}>
-              <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>Alle Wochen</div>
-              <div style={{fontSize:10,color:"var(--text-secondary)"}}>Längster Lauf: {Math.round(longestLongRunKm)} km</div>
-            </div>
+        <div className="mr-screen mr-screen--stack" style={viewTransitionStyle}>
+          <ScreenHeader meta={overviewMeta} title="Übersicht" />
 
-            <div style={{ display: "flex", flexDirection: "column", gap: compactScreen.cardGap }}>
-              {PHASE_ORDER.map((phaseKey)=>{
-                const phaseWeeks=displayPlan.filter(week=>week.phase===phaseKey);
-                if (phaseWeeks.length === 0) return null;
-                const phase=PI[phaseKey];
+          <PlanProgressCard
+            data-tour="overview-card"
+            doneSessions={doneSess}
+            totalSessions={ACTIVE_SESSIONS.length}
+            weekLabel={
+              overviewWeekIdx >= 0 && overviewWeekIdx < displayPlan.length
+                ? `Woche ${displayPlan[overviewWeekIdx].wn ?? overviewWeekIdx + 1} von ${displayPlan.length}`
+                : null
+            }
+            totalWeeks={displayPlan.length}
+            currentWeekIndex={overviewWeekIdx}
+            phases={overviewPhases.map(({ key, phase, weeks }) => ({
+              key,
+              label: phase.label,
+              weeks: weeks.length,
+              current: key === overviewCurrentPhaseKey,
+            }))}
+          />
+
+          <div>
+            <div className="mr-label mr-section-label">Phasen</div>
+            <div className="mr-list">
+              {overviewPhases.map(({ key: phaseKey, phase, weeks: phaseWeeks })=>{
                 const expanded = !!overviewPhaseExpandedByKey[phaseKey];
+                const isCurrent = phaseKey === overviewCurrentPhaseKey;
                 return(
-                  <div
-                    key={phaseKey}
-                    style={{
-                      borderRadius:14,
-                      border:`1px solid ${phase.col}2a`,
-                      background:"rgba(9,12,22,0.88)",
-                      overflow:"hidden",
-                      flexShrink:0,
-                    }}
-                  >
-                    <div style={{padding:"6px 8px 6px"}}>
-                      <div style={{fontSize:13,fontWeight:800,color:phase.col,lineHeight:1.25}}>{phase.label}</div>
-                      <div style={{fontSize:10,color:"var(--text-secondary)",marginTop:2,lineHeight:1.35}}>
-                        {pluralDe(phaseWeeks.length, "Woche", "Wochen")}
-                        {phaseWeeks.length > 0
-                          ? ` · Woche ${phaseWeeks[0].wn}${phaseWeeks.length > 1 ? `–${phaseWeeks[phaseWeeks.length - 1].wn}` : ""}`
-                          : ""}
+                  <div key={phaseKey}>
+                    <button
+                      type="button"
+                      className={isCurrent ? "mr-row is-current" : "mr-row"}
+                      aria-expanded={expanded}
+                      onClick={()=>setOverviewPhaseExpandedByKey((prev)=>({ ...prev, [phaseKey]: !prev[phaseKey] }))}
+                    >
+                      <div className="mr-row__text">
+                        <div className="mr-row__title">{phase.label}</div>
+                        <div className="mr-row__sub">
+                          Woche {phaseWeeks[0].wn}{phaseWeeks.length > 1 ? `–${phaseWeeks[phaseWeeks.length - 1].wn}` : ""} · {pluralDe(phaseWeeks.length, "Woche", "Wochen")}
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={()=>setOverviewPhaseExpandedByKey((prev)=>({ ...prev, [phaseKey]: !prev[phaseKey] }))}
-                        style={{
-                          width:"100%",
-                          marginTop:4,
-                          padding:"8px 10px",
-                          minHeight:40,
-                          boxSizing:"border-box",
-                          border:"1px solid rgba(56,189,248,0.22)",
-                          borderRadius:10,
-                          background:"rgba(15,23,42,0.55)",
-                          color:"#7dd3fc",
-                          fontSize:11,
-                          fontWeight:700,
-                          cursor:"pointer",
-                          textAlign:"center",
-                        }}
-                      >
-                        {expanded ? "Weniger anzeigen" : t("plan.show_more")}
-                      </button>
-                    </div>
-                    {expanded ? (
-                      <div style={{display:"flex",flexDirection:"column",gap:8,padding:"0 6px 0 8px"}}>
-                        {phaseWeeks.map(week=>{
-                          const idx=displayPlan.indexOf(week);
-                          const phaseWeekSessions=getWeekSessionList(week);
-                          const weekDone=phaseWeekSessions.filter(session=>isSessionLogDone(logs[session.id])).length;
-                          const weekSkipped=phaseWeekSessions.filter(session=>logs[session.id]?.skipped).length;
-                          const weekTotal=phaseWeekSessions.filter(session=>session.type!=="rest").length;
-                          const weekPct=weekTotal > 0 ? Math.round((weekDone / weekTotal) * 100) : 0;
-                          const weekRunKm = getWeekRunningDistanceKm(week);
-                          const weekLoadKm = getWeekPlannedLoadKm(week);
-                          // WARNING: week.km is legacy — peak-phase heuristic only (may not match session sum).
-                          const phaseHasPeak = week.km >= 90;
-                          return(
-                            <button
-                              key={week.wn}
-                              onClick={()=>{setWIdx(idx);setView("week");}}
-                              style={{background:"rgba(11,15,28,0.9)",borderRadius:12,padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",border:"1px solid var(--border-default)",textAlign:"left",flexShrink:0}}
-                            >
-                              <div style={{minWidth:0}}>
-                                <div style={{fontSize:12,fontWeight:700,color:"#fff"}}>{week.label}</div>
-                                <div style={{ fontSize: 10, color: "#7c8aa5", marginTop: 2 }}>
-                                  {week.dates} · {formatKm(weekRunKm).toFixed(1)} km
-                                  {Math.abs(weekLoadKm - weekRunKm) > 0.05 ? (
-                                    <span style={{ display: "block", fontSize: 9, color: "rgba(148,163,184,0.45)", marginTop: 2 }}>
-                                      Trainingsvolumen: {formatKm(weekLoadKm)} km
-                                    </span>
-                                  ) : null}
-                                </div>
-                                {phaseHasPeak ? <div style={{fontSize:10,color:"#10b981",marginTop:3,fontWeight:700}}>Spitzenwoche</div> : null}
-                                {weekSkipped > 0 ? <div style={{fontSize:10,color:"#fca5a5",marginTop:3,fontWeight:700}}>{weekSkipped} ausgelassen</div> : null}
-                              </div>
-                              <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:8}}>
-                                <div style={{width:56,height:5,background:"#0b0f1c",borderRadius:999,overflow:"hidden"}}>
-                                  <div style={{height:"100%",background:phase.col,borderRadius:999,width:`${weekPct}%`}}/>
-                                </div>
-                                <div style={{fontSize:12,fontWeight:700,color:phase.col,minWidth:36,textAlign:"right"}}>{weekDone}/{weekTotal}</div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : null}
+                      {isCurrent ? <span className="mr-chip mr-chip--accent mr-chip--plain mr-chip--small">Aktuell</span> : null}
+                      <span className="mr-row__chev">
+                        {expanded
+                          ? <ChevronDown aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />
+                          : <ChevronRight aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />}
+                      </span>
+                    </button>
+                    {expanded ? phaseWeeks.map(week=>{
+                      const idx=displayPlan.indexOf(week);
+                      const phaseWeekSessions=getWeekSessionList(week);
+                      const weekDone=phaseWeekSessions.filter(session=>isSessionLogDone(logs[session.id])).length;
+                      const weekSkipped=phaseWeekSessions.filter(session=>logs[session.id]?.skipped).length;
+                      const weekTotal=phaseWeekSessions.filter(session=>session.type!=="rest").length;
+                      const weekRunKm = getWeekRunningDistanceKm(week);
+                      const weekLoadKm = getWeekPlannedLoadKm(week);
+                      // WARNING: week.km is legacy — peak-phase heuristic only (may not match session sum).
+                      const phaseHasPeak = week.km >= 90;
+                      return(
+                        <button
+                          type="button"
+                          key={week.wn}
+                          className="mr-row mr-row--sub"
+                          onClick={()=>{setWIdx(idx);setView("week");}}
+                        >
+                          <div className="mr-row__text">
+                            <div className="mr-row__title">{week.label}</div>
+                            <div className="mr-row__sub">
+                              {[
+                                formatPlanWeekRange(week, getPlanWeekTimeBoundsMs(week)),
+                                `${formatKmDe(weekRunKm)} km`,
+                                Math.abs(weekLoadKm - weekRunKm) > 0.05 ? `Trainingsvolumen ${formatKmDe(weekLoadKm)} km` : null,
+                                phaseHasPeak ? "Spitzenwoche" : null,
+                                weekSkipped > 0 ? `${weekSkipped} ausgelassen` : null,
+                              ].filter(Boolean).join(" · ")}
+                            </div>
+                          </div>
+                          <span className="mr-row__value">{weekDone}/{weekTotal}</span>
+                          <span className="mr-row__chev"><ChevronRight aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} /></span>
+                        </button>
+                      );
+                    }) : null}
                   </div>
                 );
               })}
             </div>
-          </SurfaceCard>
-          <SurfaceCard>
-            <div style={{fontSize:15,fontWeight:800,color:"#fff",marginBottom:6}}>Teilen</div>
-            <div style={{fontSize:12,color:"#cbd5e1",lineHeight:1.7,whiteSpace:"pre-line"}}>{shareSummary}</div>
-            <button
-              type="button"
-              onClick={copyShareSummary}
-              style={{marginTop:12,background:"rgba(56,189,248,0.18)",color:"#dbeafe",border:"1px solid rgba(56,189,248,0.28)",borderRadius:12,padding:"10px 12px",cursor:"pointer",fontSize:12,fontWeight:700}}
-            >
-              Zusammenfassung kopieren
-            </button>
-            {shareFeedback ? <div style={{fontSize:11,color:"var(--text-secondary)",marginTop:8}}>{shareFeedback}</div> : null}
-          </SurfaceCard>
+          </div>
+
+          <PlanTiles longestRunKm={Math.round(longestLongRunKm)} longRuns={longRuns} qualitySessions={hardSessions} />
+
+          <ShareRow feedback={shareFeedback} onCopy={copyShareSummary} />
         </div>
       ):activeView==="coach"?(
-        <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,gap:6,...viewTransitionStyle}}>
-          <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",padding:"0 10px"}}>
+        <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,...viewTransitionStyle}}>
+          <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
             <AiCoachPanel
               getContext={buildCoachAiContext}
               onApplyPlanPatches={handleAiApplyPlanPatches}
@@ -5454,56 +5376,64 @@ export default function AppMain(){
       {modal&&modalWeek&&modalWorkout&&(modalCompletionSummaryDisplay ? (
         <PostWorkoutSummaryCard open summary={modalCompletionSummaryDisplay} onDone={closeModal} onEdit={() => setModalEditMode(true)} />
       ) : (
-        <div onClick={closeModal} style={{position:"fixed",inset:0,background:"rgba(2,6,23,0.82)",display:"flex",alignItems:"stretch",justifyContent:"center",padding:0,zIndex:1000}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(180deg,#0c1020 0%, #090d18 100%)",width:"100%",maxWidth:720,height:"100%",overflowY:"auto",borderLeft:"1px solid var(--border-default)",borderRight:"1px solid var(--border-default)"}}>
-            <div style={{padding:"calc(18px + max(0px, env(safe-area-inset-top, 0px))) 16px 140px",display:"flex",flexDirection:"column",gap:18}}>
-              <div style={{display:"flex",justifyContent:"flex-end"}}>
-                <button onClick={closeModal} style={{background:"rgba(15,23,42,0.8)",border:"1px solid var(--border-default)",color:"#cbd5e1",borderRadius:12,padding:"10px 12px",cursor:"pointer",fontSize:13}}>Schließen</button>
-              </div>
+        <div onClick={closeModal} className="mr-sheet-scrim">
+          <div onClick={e=>e.stopPropagation()} className="mr-sheet">
+            <div className="mr-sheet__body">
+              <button type="button" className="mr-btn mr-btn--ghost mr-btn--small mr-sheet__close" onClick={closeModal}>Schließen</button>
 
-              <div style={{textAlign:"center",marginTop:-10}}>
-                <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.12em",color:"#7c8aa5",fontWeight:700,marginBottom:6}}>Einheit</div>
-                <div style={{fontSize:26,fontWeight:800,color:"#fff",lineHeight:1.2,overflowWrap:"anywhere"}}>
-                  {modal.title}
-                </div>
-                <div style={{fontSize:12,color:"var(--text-secondary)",marginTop:6}}>{[`${modal.day}, ${modal.date}`, modalWeek.label, ...modalMilestones.map((milestone) => milestone.label)].join(" · ")}</div>
+              <div>
+                <div className="mr-label" style={{ marginBottom: 8 }}>Einheit</div>
+                <ScreenHeader
+                  meta={[`${modal.day}, ${modal.date}`, modalWeek.label, ...modalMilestones.map((milestone) => milestone.label)].join(" · ")}
+                  title={modal.title}
+                />
               </div>
 
               {modal.type !== "rest" ? (
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8}}>
-                  <StatBox
-                    label="Distanz"
-                    value={(() => {
-                      const displayPk = getDisplayPlannedDistanceKm(modal);
-                      return displayPk != null && displayPk > 0 ? `${formatKm(displayPk).toFixed(1)} km` : "–";
-                    })()}
-                    accent="#38bdf8"
-                  />
-                  <StatBox
-                    label="Tempo"
-                    value={(() => {
-                      if (modal.type === "strength") return "–";
+                <div className="mr-tiles">
+                  {(() => {
+                    const displayPk = getDisplayPlannedDistanceKm(modal);
+                    const hasKm = displayPk != null && displayPk > 0;
+                    return (
+                      <div className={hasKm ? "mr-tile mr-tile--plain" : "mr-tile mr-tile--plain mr-tile--empty"}>
+                        <span className="mr-label">Distanz</span>
+                        <span className="mr-tile__value">
+                          {hasKm ? formatKmDe(displayPk) : "—"}
+                          {hasKm ? <small className="mr-tile__unit"> km</small> : null}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                  {(() => {
+                    let pace = null;
+                    if (modal.type !== "strength") {
                       const pr = parsePlannedPaceRangeMinPerKm(modal.pace);
                       if (pr) {
-                        return pr.min === pr.max
+                        pace = pr.min === pr.max
                           ? formatPaceMinPerKmLabel(pr.min)
                           : `${formatPaceMinPerKmLabel(pr.min)}–${formatPaceMinPerKmLabel(pr.max)}`;
+                      } else if (modal.pace && String(modal.pace).trim()) {
+                        pace = String(modal.pace).trim();
                       }
-                      if (modal.pace && String(modal.pace).trim()) return String(modal.pace).trim();
-                      return "–";
-                    })()}
-                    accent="#c084fc"
-                  />
-                  <StatBox
-                    label="Herzfrequenz"
-                    value={getSessionHrZoneShort(modal, modalWeek || undefined) || "–"}
-                    sublabel={(() => {
-                      const zone = getSessionHrZoneShort(modal, modalWeek || undefined);
-                      const range = getHrRangeForZone(zone, preferences.maxHeartRateBpm);
-                      return range ? `${range.min}–${range.max} bpm` : null;
-                    })()}
-                    accent={TI[modal.type]?.col || "#f87171"}
-                  />
+                    }
+                    return (
+                      <div className={pace ? "mr-tile mr-tile--plain" : "mr-tile mr-tile--plain mr-tile--empty"}>
+                        <span className="mr-label">Tempo</span>
+                        <span className="mr-tile__value mr-tile__value--word" style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{pace ?? "—"}</span>
+                      </div>
+                    );
+                  })()}
+                  {(() => {
+                    const zone = getSessionHrZoneShort(modal, modalWeek || undefined);
+                    const range = getHrRangeForZone(zone, preferences.maxHeartRateBpm);
+                    return (
+                      <div className={zone ? "mr-tile mr-tile--plain" : "mr-tile mr-tile--plain mr-tile--empty"}>
+                        <span className="mr-label">Herzfrequenz</span>
+                        <span className="mr-tile__value mr-tile__value--word">{zone || "—"}</span>
+                        {range ? <span className="mr-tile__foot">{range.min}–{range.max} bpm</span> : null}
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : null}
 
@@ -5522,53 +5452,42 @@ export default function AppMain(){
                 <div>
                   <button
                     type="button"
+                    className="mr-card__more"
+                    style={{ margin: 0 }}
+                    aria-expanded={modalMoreDetailsExpanded}
                     onClick={() => setModalMoreDetailsExpanded((v) => !v)}
-                    style={{
-                      margin: 0,
-                      padding: "6px 0",
-                      border: "none",
-                      background: "transparent",
-                      cursor: "pointer",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "#7dd3fc",
-                      letterSpacing: "0.02em",
-                      textAlign: "left",
-                    }}
                   >
                     {modalMoreDetailsExpanded ? "Weniger anzeigen" : t("plan.show_more")}
-                    <span style={{ marginLeft: 6, display: "inline-flex", verticalAlign: "middle" }} aria-hidden>
-                      {modalMoreDetailsExpanded ? <ChevronUp size={ICON_SIZE_S} strokeWidth={ICON_STROKE} /> : <ChevronDown size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />}
-                    </span>
+                    {modalMoreDetailsExpanded ? <ChevronUp aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} /> : <ChevronDown aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />}
                   </button>
                   {modalMoreDetailsExpanded ? (
                     <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:8}}>
                       {modalShowWorkoutStructure ? (
-                        <DetailBlock title="Workout-Struktur">
-                          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                        <DetailBlock title="Aufbau der Einheit">
+                          <div className="mr-steps">
                             <div>
-                              <div style={{fontSize:12,fontWeight:700,color:"#38bdf8",marginBottom:4}}>Warm-up</div>
-                              <div style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.6}}>{modalWorkout.warmup}</div>
+                              <div className="mr-steps__name">Einlaufen</div>
+                              <p className="mr-steps__text">{modalWorkout.warmup}</p>
                             </div>
                             <div>
-                              <div style={{fontSize:12,fontWeight:700,color:"#f59e0b",marginBottom:4}}>Main Set</div>
-                              <div style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.6}}>{modalWorkout.mainSet}</div>
+                              <div className="mr-steps__name">Hauptteil</div>
+                              <p className="mr-steps__text">{modalWorkout.mainSet}</p>
                             </div>
                             <div>
-                              <div style={{fontSize:12,fontWeight:700,color:"#10b981",marginBottom:4}}>Cool-down</div>
-                              <div style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.6}}>{modalWorkout.cooldown}</div>
+                              <div className="mr-steps__name">Auslaufen</div>
+                              <p className="mr-steps__text">{modalWorkout.cooldown}</p>
                             </div>
                           </div>
                         </DetailBlock>
                       ) : null}
 
                       {modalFuelingHints.length > 0 ? (
-                        <DetailBlock title="Fueling-Hinweise">
-                          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                        <DetailBlock title="Verpflegung">
+                          <div className="mr-steps">
                             {modalFuelingHints.map((hint) => (
-                              <div key={hint} style={{fontSize:13,color:"var(--text-primary)",lineHeight:1.7}}>
+                              <p key={hint} className="mr-steps__text" style={{ margin: 0 }}>
                                 {hint}
-                              </div>
+                              </p>
                             ))}
                           </div>
                         </DetailBlock>
@@ -5578,64 +5497,66 @@ export default function AppMain(){
                 </div>
               ) : null}
 
-              <div style={{paddingTop:14,borderTop:"1px solid var(--border-default)",display:"flex",flexDirection:"column",gap:14}}>
+              <div className="mr-card mr-sheet__form">
                 {(() => {
                   const displayPk = getDisplayPlannedDistanceKm(modal);
                   return displayPk != null && displayPk > 0 ? (
                   <div>
-                    <label style={{display:"block",fontSize:10,fontWeight:600,color:"rgba(124,138,165,0.75)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>Tatsächliche km</label>
+                    <label htmlFor="session-actual-km" className="mr-field-label">Tatsächliche km</label>
                     <input
+                      id="session-actual-km"
+                      className="mr-field"
                       type="number"
                       step="0.1"
-                      placeholder={`Distanzziel: ${formatKm(displayPk).toFixed(1)} km`}
+                      placeholder={`Distanzziel: ${formatKmDe(displayPk)} km`}
                       value={form.actualKm}
                       onChange={e=>setForm(f=>({...f,actualKm:e.target.value}))}
-                      style={{width:"100%",background:"var(--bg-primary)",border:"1px solid var(--border-input)",borderRadius:12,padding:"12px 14px",color:"var(--text-primary)",fontSize:14,boxSizing:"border-box"}}
                     />
                   </div>
                   ) : null;
                 })()}
 
                 <div>
-                  <label style={{display:"block",fontSize:10,fontWeight:600,color:"rgba(124,138,165,0.75)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>Gefühl</label>
-                  <div style={{display:"flex",gap:8}}>
+                  <span className="mr-field-label">Gefühl</span>
+                  <div className="mr-rating">
                     {[1,2,3,4,5].map(n=>(
-                      <button key={n} onClick={()=>setForm(f=>({...f,feeling:n}))} style={{flex:1,background:form.feeling>=n?"rgba(245,158,11,0.2)":"var(--bg-primary)",border:`1px solid ${form.feeling>=n?"#f59e0b":"var(--border-default)"}`,borderRadius:12,padding:"10px 0",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:form.feeling>=n?"#f59e0b":"var(--ink-3)"}} aria-label={`Gefühl ${n} von 5`}>
+                      <button type="button" key={n} onClick={()=>setForm(f=>({...f,feeling:n}))} className={form.feeling>=n ? "mr-rating__star is-on" : "mr-rating__star"} aria-label={`Gefühl ${n} von 5`} aria-pressed={form.feeling===n}>
                         <Star aria-hidden size={ICON_SIZE} strokeWidth={ICON_STROKE} fill={form.feeling>=n?"currentColor":"none"} />
                       </button>
                     ))}
                   </div>
-                  <div style={{fontSize:12,color:"var(--text-secondary)",textAlign:"center",marginTop:8}}>
+                  <p className="mr-caption" style={{ marginTop: 8, minHeight: 18 }}>
                     {["","Sehr schwer","Schlecht","Okay","Gut","Sehr gut"][form.feeling]}
-                  </div>
+                  </p>
                 </div>
 
                 <div>
-                  <label style={{display:"block",fontSize:10,fontWeight:600,color:"rgba(124,138,165,0.75)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>Notizen</label>
+                  <label htmlFor="session-notes" className="mr-field-label">Notizen</label>
                   <textarea
-                    placeholder="Wie lief's? Besonderheiten? Stimmung?"
+                    id="session-notes"
+                    className="mr-field"
+                    placeholder="Wie lief es? Besonderheiten?"
                     value={form.notes}
                     onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
-                    style={{width:"100%",background:"var(--bg-primary)",border:"1px solid var(--border-input)",borderRadius:12,padding:"12px 14px",color:"var(--text-primary)",fontSize:13,boxSizing:"border-box",minHeight:92,resize:"vertical"}}
                   />
                 </div>
 
-                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:14,color:"var(--text-primary)"}}>
-                  <input type="checkbox" checked={form.done} onChange={e=>setForm(f=>({...f,done:e.target.checked,skipped:e.target.checked?false:f.skipped}))} style={{width:18,height:18,accentColor:"#10b981"}}/>
-                  Als abgeschlossen markieren
-                </label>
-                <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:14,color:"var(--text-primary)"}}>
-                  <input type="checkbox" checked={form.skipped} onChange={e=>setForm(f=>({...f,skipped:e.target.checked,done:e.target.checked?false:f.done}))} style={{width:18,height:18,accentColor:"#f87171"}}/>
-                  Als ausgelassen markieren
-                </label>
+                <div>
+                  <label className="mr-check">
+                    <input type="checkbox" checked={form.done} onChange={e=>setForm(f=>({...f,done:e.target.checked,skipped:e.target.checked?false:f.skipped}))}/>
+                    Als abgeschlossen markieren
+                  </label>
+                  <label className="mr-check">
+                    <input type="checkbox" checked={form.skipped} onChange={e=>setForm(f=>({...f,skipped:e.target.checked,done:e.target.checked?false:f.done}))}/>
+                    Als ausgelassen markieren
+                  </label>
+                </div>
               </div>
             </div>
 
-            <div style={{position:"sticky",bottom:0,padding:16,background:"linear-gradient(180deg,rgba(9,13,24,0) 0%, rgba(9,13,24,0.94) 18%, rgba(9,13,24,1) 100%)",borderTop:"1px solid var(--border-default)"}}>
-              <div style={{display:"flex",gap:10}}>
-                <button onClick={closeModal} style={{flex:1,background:"#0b1220",border:"1px solid var(--border-default)",color:"var(--text-secondary)",borderRadius:14,padding:"13px",cursor:"pointer",fontSize:14,fontWeight:600}}>Abbrechen</button>
-                <button className="mr-primary" onClick={saveModal} style={{flex:1.4,background:"var(--accent)",border:"none",color:"var(--on-accent)",borderRadius:14,padding:"13px",cursor:"pointer",fontSize:14,fontWeight:700}}>Speichern</button>
-              </div>
+            <div className="mr-sheet__foot">
+              <button type="button" className="mr-btn mr-btn--secondary" onClick={closeModal}>Abbrechen</button>
+              <button type="button" className="mr-btn mr-btn--primary" onClick={saveModal}>Speichern</button>
             </div>
           </div>
         </div>

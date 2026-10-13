@@ -11,16 +11,16 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 80) return "#10b981";
-  if (score >= 60) return "#f59e0b";
-  return "#ef4444";
+  if (score >= 80) return "var(--status-good)";
+  if (score >= 60) return "var(--status-fair)";
+  return "var(--status-low)";
 }
 
 function statusColor(status: "green" | "yellow" | "red" | "na"): string {
-  if (status === "green") return "#10b981";
-  if (status === "yellow") return "#f59e0b";
-  if (status === "red") return "#ef4444";
-  return "rgba(148,163,184,0.45)";
+  if (status === "green") return "var(--status-good)";
+  if (status === "yellow") return "var(--status-fair)";
+  if (status === "red") return "var(--status-low)";
+  return "var(--ink-3)";
 }
 
 function fmtKm(v: number | null): string {
@@ -65,9 +65,9 @@ function renderHrActualNode(
           margin: 0,
           padding: "6px 10px",
           borderRadius: 10,
-          border: "1px solid rgba(59,130,246,0.45)",
-          background: "rgba(59,130,246,0.12)",
-          color: "#93c5fd",
+          border: "1px solid var(--surface-2)",
+          background: "var(--surface-2)",
+          color: "var(--ink-2)",
           fontSize: 12,
           fontWeight: 800,
           cursor: "pointer",
@@ -92,17 +92,17 @@ function paceCompareExtra(
 ): { text: string; color: string } | null {
   const res = comparePace(actual ?? null, planned?.min ?? null, planned?.max ?? null);
   if (res.status === "unknown") return null;
-  if (res.status === "in_range") return { text: res.label, color: "#10b981" };
-  if (res.status === "faster") return { text: res.label, color: "#f59e0b" };
-  return { text: res.label, color: "#ef4444" };
+  if (res.status === "in_range") return { text: res.label, color: "var(--status-good)" };
+  if (res.status === "faster") return { text: res.label, color: "var(--status-fair)" };
+  return { text: res.label, color: "var(--status-low)" };
 }
 
 function hrCompareExtra(actual: number | null, planned: { min: number; max: number } | null): { text: string; color: string } | null {
   const res = compareHR(actual ?? null, planned?.min ?? null, planned?.max ?? null);
   if (res.status === "unknown") return null;
-  if (res.status === "in_range") return { text: res.label, color: "#10b981" };
-  if (res.status === "above") return { text: res.label, color: res.deltaBpm <= 2 ? "#f59e0b" : "#ef4444" };
-  return { text: res.label, color: "#f59e0b" };
+  if (res.status === "in_range") return { text: res.label, color: "var(--status-good)" };
+  if (res.status === "above") return { text: res.label, color: res.deltaBpm <= 2 ? "var(--status-fair)" : "var(--status-low)" };
+  return { text: res.label, color: "var(--status-fair)" };
 }
 
 function intervalPaceDeltaVersusTarget(
@@ -121,9 +121,9 @@ function intervalPaceDeltaVersusTarget(
   }
   const d = Math.round(intervalAvgSec - targetSec);
   const abs = Math.abs(d);
-  if (abs <= 10) return { text: "Tempo im Plan (Intervalle)", color: "#10b981" };
+  if (abs <= 10) return { text: "Tempo im Plan (Intervalle)", color: "var(--status-good)" };
   const sign = d > 0 ? "+" : "−";
-  const color = abs <= 20 ? "#f59e0b" : "#ef4444";
+  const color = abs <= 20 ? "var(--status-fair)" : "var(--status-low)";
   return { text: `${sign}${abs}s/km vs Ziel`, color };
 }
 
@@ -163,7 +163,7 @@ function ScoreRing({
         cy={RING_CY}
         r={RING_R}
         fill="none"
-        stroke="rgba(148,163,184,0.14)"
+        stroke="var(--surface-3)"
         strokeWidth={RING_STROKE}
       />
       {/* animated foreground arc */}
@@ -189,7 +189,7 @@ function ScoreRing({
         y={RING_CY - 3}
         textAnchor="middle"
         dominantBaseline="central"
-        fill="#f8fafc"
+        fill="var(--ink)"
         fontSize={30}
         fontWeight={900}
         style={{ fontFamily: "system-ui,-apple-system,sans-serif" }}
@@ -202,7 +202,7 @@ function ScoreRing({
         y={RING_CY + 19}
         textAnchor="middle"
         dominantBaseline="central"
-        fill="rgba(148,163,184,0.7)"
+        fill="var(--ink-2)"
         fontSize={12}
         fontWeight={700}
         style={{ fontFamily: "system-ui,-apple-system,sans-serif" }}
@@ -250,8 +250,8 @@ function MetricTile({
     <div
       style={{
         borderRadius: 14,
-        background: "rgba(15,23,42,0.65)",
-        border: "1px solid rgba(148,163,184,0.1)",
+        background: "var(--surface-2)",
+        border: "1px solid var(--surface-2)",
         padding: "10px 9px 11px",
         minWidth: 0,
         display: "flex",
@@ -273,7 +273,7 @@ function MetricTile({
             fontWeight: 900,
             letterSpacing: "0.1em",
             textTransform: "uppercase",
-            color: "rgba(148,163,184,0.7)",
+            color: "var(--ink-2)",
           }}
         >
           {label}
@@ -285,7 +285,7 @@ function MetricTile({
           <div
             style={{
               fontSize: 10,
-              color: "rgba(148,163,184,0.55)",
+              color: "var(--ink-3)",
               marginBottom: 2,
             }}
           >
@@ -294,7 +294,7 @@ function MetricTile({
           <div
             style={{
               fontSize: 11,
-              color: "#94a3b8",
+              color: "var(--ink-2)",
               fontWeight: 700,
               marginBottom: 7,
               lineHeight: 1.35,
@@ -309,7 +309,7 @@ function MetricTile({
       <div
         style={{
           fontSize: 10,
-          color: "rgba(148,163,184,0.55)",
+          color: "var(--ink-3)",
           marginBottom: 2,
         }}
       >
@@ -318,7 +318,7 @@ function MetricTile({
       <div
         style={{
           fontSize: compactActual ? 14 : 17,
-          color: "#f8fafc",
+          color: "var(--ink)",
           fontWeight: 900,
           lineHeight: 1.25,
           minWidth: 0,
@@ -513,7 +513,7 @@ export function PostWorkoutSummaryCard(props: {
           position: "fixed",
           inset: 0,
           zIndex: 1200,
-          background: "rgba(2,6,23,0.72)",
+          background: "var(--scrim)",
           backdropFilter: "blur(8px)",
           display: "flex",
           alignItems: "flex-end",
@@ -527,8 +527,8 @@ export function PostWorkoutSummaryCard(props: {
             width: "min(680px, 100%)",
             maxHeight: `calc(100dvh - env(safe-area-inset-top, 24px) - 16px)`,
             borderRadius: "22px 22px 0 0",
-            background: "linear-gradient(180deg, #0d1526 0%, #080c17 100%)",
-            border: "1px solid rgba(148,163,184,0.13)",
+            background: "var(--surface-1)",
+            border: "1px solid var(--line)",
             borderBottom: "none",
             overflow: "hidden",
             animation: "pws-slide-up 360ms cubic-bezier(0.34,1.56,0.64,1) both",
@@ -551,14 +551,14 @@ export function PostWorkoutSummaryCard(props: {
                   cx="18"
                   cy="18"
                   r="16"
-                  fill="rgba(16,185,129,0.13)"
-                  stroke="rgba(16,185,129,0.38)"
+                  fill="var(--status-good-tint)"
+                  stroke="var(--status-good)"
                   strokeWidth="1.5"
                 />
                 <path
                   d="M9.5 18.5 L15.5 24 L26.5 12"
                   fill="none"
-                  stroke="#10b981"
+                  stroke="var(--status-good)"
                   strokeWidth="3"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -578,7 +578,7 @@ export function PostWorkoutSummaryCard(props: {
                   fontSize: 10,
                   textTransform: "uppercase",
                   letterSpacing: "0.12em",
-                  color: "rgba(148,163,184,0.7)",
+                  color: "var(--ink-2)",
                   fontWeight: 800,
                 }}
               >
@@ -588,7 +588,7 @@ export function PostWorkoutSummaryCard(props: {
                 style={{
                   fontSize: 17,
                   fontWeight: 850,
-                  color: "#f8fafc",
+                  color: "var(--ink)",
                   marginTop: 4,
                   lineHeight: 1.2,
                   overflowWrap: "break-word",
@@ -600,7 +600,7 @@ export function PostWorkoutSummaryCard(props: {
               <div
                 style={{
                   fontSize: 13,
-                  color: "rgba(148,163,184,0.75)",
+                  color: "var(--ink-2)",
                   marginTop: 3,
                 }}
               >
@@ -634,7 +634,7 @@ export function PostWorkoutSummaryCard(props: {
                   fontSize: 10,
                   textTransform: "uppercase",
                   letterSpacing: "0.12em",
-                  color: "rgba(148,163,184,0.6)",
+                  color: "var(--ink-2)",
                   fontWeight: 800,
                   marginBottom: 10,
                 }}
@@ -645,7 +645,7 @@ export function PostWorkoutSummaryCard(props: {
               <div
                 style={{
                   fontSize: 13,
-                  color: "rgba(148,163,184,0.75)",
+                  color: "var(--ink-2)",
                   marginTop: 8,
                   fontWeight: 600,
                 }}
@@ -707,25 +707,25 @@ export function PostWorkoutSummaryCard(props: {
                   marginBottom: 14,
                   padding: "12px 14px",
                   borderRadius: 14,
-                  background: "rgba(15,23,42,0.65)",
-                  border: "1px solid rgba(148,163,184,0.1)",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--surface-2)",
                   display: "flex",
                   flexDirection: "column",
                   gap: 6,
                 }}
               >
                 {logFeelingLabel ? (
-                  <div style={{ fontSize: 14, color: "#f8fafc", fontWeight: 800 }}>{logFeelingLabel}</div>
+                  <div style={{ fontSize: 14, color: "var(--ink)", fontWeight: 800 }}>{logFeelingLabel}</div>
                 ) : null}
                 {logNotes ? (
-                  <div style={{ fontSize: 13, color: "#e2e8f0", lineHeight: 1.5, overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>
+                  <div style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.5, overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>
                     {logNotes}
                   </div>
                 ) : null}
               </div>
             ) : null}
             {isLogOnly && visibleTileCount === 0 && !logFeelingLabel && !logNotes ? (
-              <div style={{ fontSize: 13, color: "rgba(148,163,184,0.75)", lineHeight: 1.5, marginBottom: 14 }}>
+              <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5, marginBottom: 14 }}>
                 Als erledigt markiert, ohne aufgezeichnete Werte.
               </div>
             ) : null}
@@ -737,8 +737,8 @@ export function PostWorkoutSummaryCard(props: {
                 marginBottom: 18,
                 padding: "12px 14px",
                 borderRadius: 14,
-                background: "rgba(59,130,246,0.06)",
-                border: "1px solid rgba(59,130,246,0.14)",
+                background: "var(--surface-2)",
+                border: "1px solid var(--surface-2)",
               }}
             >
               <div
@@ -747,7 +747,7 @@ export function PostWorkoutSummaryCard(props: {
                   fontWeight: 900,
                   letterSpacing: "0.12em",
                   textTransform: "uppercase",
-                  color: "rgba(147,197,253,0.75)",
+                  color: "var(--ink-2)",
                   marginBottom: 7,
                 }}
               >
@@ -757,7 +757,7 @@ export function PostWorkoutSummaryCard(props: {
                 <div
                   style={{
                     fontSize: 13,
-                    color: "#e2e8f0",
+                    color: "var(--ink)",
                     lineHeight: 1.5,
                     fontWeight: 500,
                   }}
@@ -768,7 +768,7 @@ export function PostWorkoutSummaryCard(props: {
                 <div
                   style={{
                     fontSize: 13,
-                    color: "rgba(148,163,184,0.55)",
+                    color: "var(--ink-3)",
                     lineHeight: 1.5,
                     fontWeight: 400,
                   }}
@@ -784,8 +784,8 @@ export function PostWorkoutSummaryCard(props: {
           <div
             style={{
               padding: `12px 18px calc(18px + env(safe-area-inset-bottom, 0px))`,
-              borderTop: "1px solid rgba(148,163,184,0.1)",
-              background: "rgba(2,6,23,0.18)",
+              borderTop: "1px solid var(--line)",
+              background: "transparent",
               display: "flex",
               gap: 10,
             }}
@@ -796,9 +796,9 @@ export function PostWorkoutSummaryCard(props: {
                 onClick={props.onEdit}
                 style={{
                   flex: "0 0 auto",
-                  border: "1px solid rgba(148,163,184,0.28)",
-                  background: "rgba(15,23,42,0.8)",
-                  color: "#cbd5e1",
+                  border: "1px solid var(--surface-2)",
+                  background: "var(--surface-2)",
+                  color: "var(--ink)",
                   borderRadius: 14,
                   padding: "14px 18px",
                   fontSize: 15,
@@ -816,8 +816,8 @@ export function PostWorkoutSummaryCard(props: {
                 flex: 1,
                 minWidth: 0,
                 border: "none",
-                background: "linear-gradient(180deg,#10b981,#059669)",
-                color: "#fff",
+                background: "var(--accent)",
+                color: "var(--on-accent)",
                 borderRadius: 14,
                 padding: "14px",
                 fontSize: 15,

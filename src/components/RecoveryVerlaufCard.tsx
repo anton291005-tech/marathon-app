@@ -1,228 +1,110 @@
-import SurfaceCard from "./SurfaceCard";
 import type { RecoveryFactorPill, RecoveryVerlaufCardPresentation } from "../recovery/recoveryPresentation";
+import { StatusChip } from "../ui/StatusChip";
 
-function RecoveryMiniTrend({
-  values,
-  width,
-  height,
-}: {
-  values: number[];
-  width: number;
-  height: number;
-}) {
-  const pts = values.length >= 2 ? values : values.length === 1 ? [values[0]!, values[0]!] : [50, 50];
-  const displayMin = Math.max(0, Math.min(...pts) - 5);
-  const displayMax = Math.min(100, Math.max(...pts) + 5);
-  const pad = 4;
-  const xAt = (i: number) => pad + (i / Math.max(1, pts.length - 1)) * (width - 2 * pad);
-  const yAt = (v: number) => {
-    const t = displayMax === displayMin ? 0.5 : (v - displayMin) / (displayMax - displayMin);
-    return height - pad - t * (height - 2 * pad);
-  };
-  const linePts = pts.map((v, i) => `${xAt(i)},${yAt(v)}`).join(" ");
-  const areaD =
-    `M ${xAt(0)},${yAt(pts[0]!)} ` +
-    pts
-      .slice(1)
-      .map((v, i) => `L ${xAt(i + 1)},${yAt(v)}`)
-      .join(" ") +
-    ` L ${xAt(pts.length - 1)},${height} L ${xAt(0)},${height} Z`;
+type Tone = "good" | "fair" | "low";
 
-  return (
-    <svg width={width} height={height} style={{ display: "block" }}>
-      <path d={areaD} fill="rgba(56,189,248,0.08)" stroke="none" />
-      <polyline
-        fill="none"
-        stroke="rgba(56,189,248,0.85)"
-        strokeWidth="2"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        points={linePts}
-      />
-      {pts.map((v, i) => (
-        <circle
-          key={i}
-          cx={xAt(i)}
-          cy={yAt(v)}
-          r={i === pts.length - 1 ? 3.5 : 2}
-          fill={i === pts.length - 1 ? "rgba(56,189,248,1)" : "rgba(56,189,248,0.5)"}
-        />
-      ))}
-    </svg>
-  );
+const WEEKDAY_LETTERS_DE = ["S", "M", "D", "M", "D", "F", "S"] as const;
+
+function weekdayLetter(ymd: string | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd ?? "");
+  if (!m) return "";
+  return WEEKDAY_LETTERS_DE[new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay()];
 }
 
-function FactorPill({ label, trend, context, available, trendColor }: RecoveryFactorPill) {
+/** „78/100 (7d)" → „78"; ohne Zahl `null`. */
+function scoreFromContext(context: string): string | null {
+  const m = /^(\d+)\s*\/\s*100/.exec(context);
+  return m ? m[1] : null;
+}
+
+/** Akutlast als ein Wort für die Kachel. */
+function loadWord(context: string): string | null {
+  if (context === "niedrig") return "Niedrig";
+  if (context === "moderat") return "Moderat";
+  if (context === "hohe Akutlast") return "Hoch";
+  return null;
+}
+
+function ScoreTile({ factor }: { factor: RecoveryFactorPill | undefined }) {
+  if (!factor) return null;
+  const value = factor.available ? scoreFromContext(factor.context) : null;
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 3,
-        flex: "1 1 auto",
-        minWidth: 76,
-        maxWidth: 110,
-        borderRadius: 12,
-        padding: "8px 10px",
-        background: "rgba(15,23,42,0.75)",
-        border: "1px solid rgba(148,163,184,0.12)",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 9,
-          textTransform: "uppercase",
-          letterSpacing: "0.07em",
-          color: "#7c8aa5",
-          fontWeight: 700,
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 18,
-          fontWeight: 800,
-          color: available ? trendColor : "#4b5563",
-          lineHeight: 1,
-        }}
-      >
-        {available ? trend : "—"}
-      </div>
-      <div
-        style={{
-          fontSize: 10,
-          color: available ? "#94a3b8" : "#4b5563",
-          fontWeight: 600,
-          lineHeight: 1.3,
-        }}
-      >
-        {context}
-      </div>
+    <div className={value == null ? "mr-tile mr-tile--empty" : "mr-tile"}>
+      <span className="mr-label">{factor.label}</span>
+      <span className="mr-tile__value">{value ?? "—"}</span>
+      <span className="mr-tile__foot">{value == null ? "Keine Daten" : "Ø 7 Tage"}</span>
     </div>
   );
 }
 
 type Props = {
   presentation: RecoveryVerlaufCardPresentation;
+  /** Stufe und Wort des Chips (wie auf Heute); ohne Stufe zeigt der Chip den Zustand („Wird ermittelt"). */
+  tone?: Tone;
+  toneLabel?: string;
 };
 
 /**
  * Display-only: all interpretation lives in `getRecoveryPresentationState` (recoveryPresentation.ts).
+ * Aufbau nach docs/design-system/mockups/leistung.html.
  */
-export default function RecoveryVerlaufCard({ presentation: p }: Props) {
-  const { header, factors, trendValues, insightText, insightShowWarning } = p;
+export default function RecoveryVerlaufCard({ presentation: p, tone, toneLabel }: Props) {
+  const { header, factors, trendValues, trendDates, insightText, insightShowWarning } = p;
+  const byId = (id: string) => factors.find((f) => f.id === id);
+  const load = byId("load");
+  const loadValue = load?.available ? loadWord(load.context) : null;
+  const trend = byId("trend");
+  const trendWord = trend?.available ? trend.context.replace(/\s*\(7d\)$/, "") : null;
+  const caption = [header.deltaLine, trendWord ? `7 Tage ${trendWord}` : null].filter(Boolean).join(" · ");
 
   return (
-    <SurfaceCard style={{ flexShrink: 0 }}>
-      <div
-        style={{
-          fontSize: 11,
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-          color: "#7c8aa5",
-          fontWeight: 700,
-          marginBottom: 14,
-        }}
-      >
-        Recovery
+    <section className="mr-card mr-recovery">
+      <div className="mr-card__top">
+        <span className="mr-label">Erholung heute</span>
+        {tone && toneLabel ? <StatusChip tone={tone}>{toneLabel}</StatusChip> : <StatusChip tone="plain">{header.statusLabel}</StatusChip>}
       </div>
 
-      {/* Header: large score + status label + delta */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          gap: 14,
-          marginBottom: 16,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 64,
-            fontWeight: 900,
-            color: header.statusColor,
-            lineHeight: 1,
-            letterSpacing: "-0.03em",
-            minWidth: 80,
-          }}
-        >
-          {header.score !== null ? header.score : "—"}
-        </div>
-        <div style={{ flex: 1, paddingBottom: 6 }}>
-          <div
-            style={{
-              fontSize: 17,
-              fontWeight: 800,
-              color: "#e2e8f0",
-              lineHeight: 1.2,
-            }}
-          >
-            {header.statusLabel}
+      <div className="mr-recovery__main">
+        <div>
+          <div className="mr-recovery__score">
+            <span className={header.score !== null ? "mr-metric-xl" : "mr-metric-xl mr-metric--empty"}>
+              {header.score !== null ? header.score : "—"}
+            </span>
+            <span className="mr-unit">/ 100</span>
           </div>
-          {header.deltaLine ? (
-            <div
-              style={{
-                fontSize: 12,
-                color: "#94a3b8",
-                fontWeight: 600,
-                marginTop: 3,
-              }}
-            >
-              {header.deltaLine}
-            </div>
-          ) : null}
+          {caption ? <div className="mr-caption">{caption}</div> : null}
         </div>
-      </div>
-
-      {/* Contributing factor pills */}
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          flexWrap: "wrap",
-          marginBottom: 16,
-        }}
-      >
-        {factors.map((f) => (
-          <FactorPill key={f.id} {...f} />
-        ))}
-      </div>
-
-      {/* Mini trend: last 7 days */}
-      {trendValues.length >= 2 ? (
-        <div style={{ marginBottom: 14 }}>
+        {trendValues.length >= 2 ? (
           <div
-            style={{
-              fontSize: 10,
-              color: "#64748b",
-              fontWeight: 600,
-              marginBottom: 6,
-              letterSpacing: "0.04em",
-            }}
+            role="img"
+            aria-label={`Erholung der letzten 7 Tage${trendWord ? `, ${trendWord}` : ""}`}
+            className={tone ? `mr-daybars mr-daybars--${tone}` : "mr-daybars"}
           >
-            Letzte 7 Tage
+            {trendValues.map((v, i) => (
+              <div key={i} className={i === trendValues.length - 1 ? "mr-daybars__day is-latest" : "mr-daybars__day"}>
+                <div className="mr-daybars__bar" style={{ height: Math.round(8 + (Math.max(0, Math.min(100, v)) / 100) * 48) }} />
+                <span className="mr-daybars__label">{weekdayLetter(trendDates?.[i])}</span>
+              </div>
+            ))}
           </div>
-          <RecoveryMiniTrend values={trendValues} width={240} height={40} />
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
-      {/* Insight text */}
+      <div className="mr-tiles">
+        <ScoreTile factor={byId("sleep")} />
+        <ScoreTile factor={byId("hrv")} />
+        {load ? (
+          <div className={loadValue == null ? "mr-tile mr-tile--empty" : "mr-tile"}>
+            <span className="mr-label">{load.label}</span>
+            <span className="mr-tile__value mr-tile__value--word">{loadValue ?? "—"}</span>
+            <span className="mr-tile__foot">{loadValue == null ? "Unbekannt" : "aktuell"}</span>
+          </div>
+        ) : null}
+      </div>
+
       {insightText ? (
-        <div
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            background: insightShowWarning ? "rgba(245,158,11,0.08)" : "rgba(15,23,42,0.65)",
-            border: `1px solid ${insightShowWarning ? "rgba(245,158,11,0.25)" : "rgba(148,163,184,0.12)"}`,
-            fontSize: 13,
-            color: "#e2e8f0",
-            lineHeight: 1.5,
-          }}
-        >
-          {insightText}
-        </div>
+        <p className={insightShowWarning ? "mr-card__insight mr-card__insight--warn" : "mr-card__insight"}>{insightText}</p>
       ) : null}
-    </SurfaceCard>
+    </section>
   );
 }

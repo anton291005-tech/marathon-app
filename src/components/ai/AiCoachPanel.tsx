@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ArrowUp } from "lucide-react";
 import AiMessageList, { type UiChatMessage } from "./AiMessageList";
 import { executeAiAction } from "../../lib/ai/actions";
 import { runCoachAgent } from "../../lib/ai/coachAgent";
@@ -269,58 +270,24 @@ export default function AiCoachPanel({
   };
 
   return (
-    <div style={{ padding: "16px 16px 40px", display: "flex", flexDirection: "column", gap: 12, minHeight: "calc(100vh - 160px)" }}>
-      <div
-        style={{
-          background: "var(--bg-card)",
-          border: "1px solid var(--border-input)",
-          borderRadius: 18,
-          padding: "14px 14px 10px",
-        }}
-      >
-        <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text-primary)" }}>Coach</div>
-        <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-          Coach + Navigator. Plananpassungen werden immer erst als Action Card zur Bestätigung gezeigt.
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+    <div className="mr-coach">
+      <div className="mr-coach__top">
+        <header className="mr-screen-head mr-screen-head--sub">
+          <div className="mr-screen-head__text">
+            <h1 className="mr-screen-head__title">Coach</h1>
+            <div className="mr-screen-head__meta">Kennt deinen Plan, deine Läufe und deine Erholung.</div>
+          </div>
+        </header>
+        <div className="mr-quick">
           {QUICK_ACTIONS.map((chip) => (
-            <button
-              key={chip}
-              onClick={() => sendMessage(chip)}
-              disabled={busy}
-              style={{
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border-input)",
-                color: "var(--text-primary)",
-                borderRadius: 999,
-                padding: "7px 11px",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: busy ? "not-allowed" : "pointer",
-                opacity: busy ? 0.7 : 1,
-              }}
-            >
+            <button type="button" key={chip} className="mr-quick__chip" onClick={() => sendMessage(chip)} disabled={busy}>
               {chip}
             </button>
           ))}
         </div>
       </div>
 
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-          background: "var(--bg-secondary)",
-          border: "1px solid var(--border-default)",
-          borderRadius: 18,
-          padding: 12,
-          minHeight: 280,
-        }}
-      >
+      <div ref={scrollRef} className="mr-coach__scroll">
         <AiMessageList
           messages={messages}
           busy={busy}
@@ -333,8 +300,9 @@ export default function AiCoachPanel({
         />
       </div>
 
-      <div style={{ display: "flex", gap: 8 }}>
+      <div className="mr-composer">
         <input
+          className="mr-composer__input"
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => {
@@ -345,33 +313,16 @@ export default function AiCoachPanel({
           }}
           disabled={busy}
           placeholder={t("coach.placeholder")}
-          style={{
-            flex: 1,
-            background: "var(--bg-primary)",
-            border: "1px solid var(--border-input)",
-            borderRadius: 12,
-            padding: "12px 12px",
-            color: "var(--text-primary)",
-            fontSize: 14,
-            opacity: busy ? 0.65 : 1,
-          }}
+          aria-label="Nachricht an den Coach"
         />
-        <button className="mr-primary"
+        <button
+          type="button"
+          className="mr-composer__send"
           onClick={() => void sendMessage()}
           disabled={!canSend}
-          style={{
-            background: "var(--accent)",
-            border: "none",
-            color: "var(--on-accent)",
-            borderRadius: 12,
-            padding: "0 14px",
-            fontSize: 13,
-            fontWeight: 800,
-            cursor: canSend ? "pointer" : "not-allowed",
-            opacity: canSend ? 1 : 0.7,
-          }}
+          aria-label={t("coach.send")}
         >
-          {t("coach.send")}
+          <ArrowUp aria-hidden size={20} strokeWidth={2} />
         </button>
       </div>
     </div>

@@ -56,6 +56,13 @@ function last7SeriesValues(series: DailyRecoveryComputed[]): number[] {
   return sorted.slice(-7).map((s) => Math.round(s.smoothedLatentR));
 }
 
+function last7SeriesDates(series: DailyRecoveryComputed[]): string[] {
+  return series
+    .map((s) => s.date)
+    .sort((a, b) => a.localeCompare(b))
+    .slice(-7);
+}
+
 export type RecoveryFactorPill = {
   id: string;
   label: string;
@@ -80,6 +87,8 @@ export type RecoveryVerlaufCardPresentation = {
   factors: RecoveryFactorPill[];
   /** Smoothed latent R values for last ≤7 days (newest last). */
   trendValues: number[];
+  /** Kalendertage (YYYY-MM-DD) zu `trendValues`, gleiche Reihenfolge — für die Tagesbuchstaben der Balken. */
+  trendDates: string[];
   insightText: string | null;
   insightShowWarning: boolean;
   /** 7-day fallback sleep line when live KPI uses fallback path. */
@@ -190,6 +199,7 @@ function buildVerlaufCardPresentation(
     },
     factors: buildFactorPills(domain),
     trendValues: last7SeriesValues(domain.series),
+    trendDates: last7SeriesDates(domain.series),
     insightText: isInitial ? null : (domain.insight.text || null),
     insightShowWarning: domain.insight.showWarning,
     fallback7d: domain.homeRecoveryFallback7dBreakdown
