@@ -142,11 +142,9 @@
 .mr-week-row.is-today .mr-week-row__dow { color: var(--accent-text); }
 .mr-week-row.is-today .mr-week-row__date { color: var(--ink); font-weight: 700; }
 .mr-week-row__icon { display: flex; flex: none; color: var(--ink-3); }
-/* Laufeinheiten neutral; Markenrot trägt nur die heutige Zeile. */
-.mr-week-row__icon--run { color: var(--ink-2); }
-.mr-week-row.is-today .mr-week-row__icon--run { color: var(--sport-run); }
-.mr-week-row__icon--bike { color: var(--sport-bike); }
-.mr-week-row__icon--strength { color: var(--sport-strength); }
+/* Einheiten aller Sportarten neutral; Markenrot trägt nur die heutige Zeile. Ruhetage bleiben ink-3. */
+.mr-week-row--session .mr-week-row__icon { color: var(--ink-2); }
+.mr-week-row--session.is-today .mr-week-row__icon { color: var(--accent); }
 .mr-week-row__text { flex: 1; min-width: 0; }
 .mr-week-row__title { font-size: 15px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mr-week-row__sub { font-size: 13px; line-height: 18px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

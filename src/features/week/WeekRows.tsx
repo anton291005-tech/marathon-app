@@ -1,6 +1,6 @@
 import type { KeyboardEvent, ReactNode } from "react";
 import { CalendarDays, Check, ChevronRight } from "lucide-react";
-import { ICON_SIZE_S, ICON_STROKE, SessionTypeIcon, getSessionSport } from "../../ui/icons";
+import { ICON_SIZE_S, ICON_STROKE, SessionTypeIcon } from "../../ui/icons";
 import { formatKmDe } from "../../ui/formatDe";
 
 type WeekSummaryCardProps = {
@@ -103,7 +103,7 @@ export function WeekDayRow({
         <div className="mr-week-row__dow">{dayLabel}</div>
         {dayNumber != null ? <div className="mr-week-row__date">{dayNumber}</div> : null}
       </div>
-      <span className={`mr-week-row__icon mr-week-row__icon--${getSessionSport(type)}`}>
+      <span className="mr-week-row__icon">
         <SessionTypeIcon type={type} size={20} />
       </span>
       <div className="mr-week-row__text">
