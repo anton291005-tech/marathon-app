@@ -31,7 +31,7 @@ export default function MarathonPredictionCard({
     <section className="mr-card" style={style}>
       <div className="mr-card__top">
         <span className="mr-label">Marathon-Prognose</span>
-        {targetTimeLabel ? <span className="mr-card__meta">Ziel {targetTimeLabel}</span> : null}
+        {targetTimeLabel ? <span className="mr-card__meta">{/^Ziel\b/.test(targetTimeLabel) ? targetTimeLabel : `Ziel ${targetTimeLabel}`}</span> : null}
       </div>
 
       {ready ? (

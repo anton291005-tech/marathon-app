@@ -124,8 +124,11 @@ import {
 } from "./lib/supabase/migrations/migrateLocalDataToSupabase";
 import AiCoachPanel from "./components/ai/AiCoachPanel";
 import { PostWorkoutSummaryCard } from "./components/PostWorkoutSummaryCard";
+import { SessionDetailSheet } from "./features/session/SessionDetailSheet";
+import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
+import { buildHealthRunSuggestion, buildSessionFlow, estimateDurationMin, parseKmInput } from "./features/session/sessionDetailModel";
 import { getCoachFeedback } from "./coachFeedback";
-import { usePostWorkoutSummary } from "./hooks/usePostWorkoutSummary";
+import { normalizePostWorkoutSummary, usePostWorkoutSummary } from "./hooks/usePostWorkoutSummary";
 import { usePostWorkoutHrEnrichment } from "./hooks/usePostWorkoutHrEnrichment";
 import {
   useAiCoachChatMessagesState,
@@ -262,7 +265,7 @@ import {
   healthKitRequestReadAuthorization,
 } from "./health/healthDataService";
 import type { PermissionState } from "./recovery/recoveryDisplayState";
-import { Activity, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Footprints, House, MessageCircle, Route, Settings, Star } from "lucide-react";
+import { Activity, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Footprints, House, MessageCircle, Route, Settings } from "lucide-react";
 import { ICON_SIZE, ICON_SIZE_S, ICON_STROKE, getSessionSportWord } from "./ui/icons";
 import { StatusChip } from "./ui/StatusChip";
 import { ScreenHeader } from "./ui/ScreenHeader";
@@ -347,8 +350,6 @@ const TAB_BAR_ITEMS = [
   { key: "coach", label: "Coach", Icon: MessageCircle },
   { key: "settings", label: "Einstellungen", Icon: Settings },
 ];
-/** Session-Detail: Workout-Struktur (Warm-up/Main Set/Cool-down) nur für strukturierte, intensive Einheiten. */
-const MODAL_STRUCTURED_WORKOUT_TYPES = new Set(["interval", "tempo", "race"]);
 
 const s=(id,day,date,type,title,km,desc,pace)=>({id,day,date,type,title,km,desc,pace});
 
@@ -769,45 +770,6 @@ function getSessionMilestones(session, week, meta){
   return milestones;
 }
 
-function parseWorkoutStructure(session){
-  const rawParts = (session.desc || "")
-    .split("·")
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  let warmup = "Locker einrollen und mobilisieren.";
-  let mainSet = session.desc || "Nach Plan locker und kontrolliert absolvieren.";
-  let cooldown = "Ruhig auslaufen oder aktiv regenerieren.";
-
-  if(rawParts.length >= 3){
-    warmup = rawParts[0];
-    cooldown = rawParts[rawParts.length - 1];
-    mainSet = rawParts.slice(1, -1).join(" · ");
-  }else if(rawParts.length === 2){
-    warmup = rawParts[0];
-    mainSet = rawParts[1];
-    cooldown = "Locker auslaufen und kurz runterfahren.";
-  }else if(session.type === "interval" || session.type === "tempo"){
-    warmup = "10-20 Minuten locker + Mobilität.";
-    mainSet = session.desc;
-    cooldown = "10-15 Minuten locker auslaufen.";
-  }else if(session.type === "long"){
-    warmup = "Sehr ruhig anlaufen und Puls niedrig halten.";
-    mainSet = session.desc;
-    cooldown = "Kurz auslaufen, trinken und Fueling direkt starten.";
-  }else if(session.type === "strength"){
-    warmup = "Allgemeines Warm-up + Aktivierung.";
-    mainSet = session.desc;
-    cooldown = "Leicht mobilisieren und Spannung lösen.";
-  }else if(session.type === "bike"){
-    warmup = "10 Minuten locker einrollen.";
-    mainSet = session.desc;
-    cooldown = "5-10 Minuten sehr locker ausfahren.";
-  }
-
-  return { warmup, mainSet, cooldown };
-}
-
 function formatSecondsToRaceTime(totalSeconds){
   const safeSeconds = Math.max(0, Math.round(totalSeconds));
   const hours = Math.floor(safeSeconds / 3600);
@@ -1048,15 +1010,6 @@ function getFuelingHints(session){
   return [];
 }
 
-function DetailBlock({ title, children }){
-  return (
-    <section className="mr-card">
-      <div className="mr-label" style={{ marginBottom: 12 }}>{title}</div>
-      {children}
-    </section>
-  );
-}
-
 /** Rückblick im Session-Modal: nachgeladener Puls wird nur angezeigt, nie ins Log geschrieben. */
 function noopPersistWorkoutHeartRate() {}
 
@@ -1242,9 +1195,8 @@ export default function AppMain(){
     return map;
   }, [baseWeekMetaByStartIso, trainingPlanV2]);
   const [modal,setModal]=useState(null);
-  const [form,setForm]=useState({feeling:0,actualKm:"",notes:"",done:false,skipped:false});
   /** Erledigte Session: Modal zeigt die Conclusion Card; „Bearbeiten" wechselt ins Formular. */
-  const [modalEditMode,setModalEditMode]=useState(false);
+  const [modalEntryOpen,setModalEntryOpen]=useState(false);
   const [view,setView]=useState(DEFAULT_VIEW);
   /** Übersicht „Alle Wochen“: pro Trainingsphase ein-/ausklappbar */
   const [overviewPhaseExpandedByKey, setOverviewPhaseExpandedByKey] = useState(() => ({}));
@@ -1465,7 +1417,6 @@ export default function AppMain(){
   const weekSessionStackRef = useRef(null);
   /** Session-Modal: Trainingsziele (Details unter „Mehr anzeigen“) */
   /** Session-Modal: „Mehr anzeigen“ für Workout-Struktur (Intervall/Tempo/Rennen) & Fueling-Hinweise (Long Run/Rennen). */
-  const [modalMoreDetailsExpanded, setModalMoreDetailsExpanded] = useState(false);
   /** Leistung: Recovery-Verlauf — Kurzerklärung ein-/ausklappbar */
   /** Woche-Tab: Beschreibungstext (`session.desc`) pro Einheit ein-/ausklappbar */
   const [weekTabDescExpandedById, setWeekTabDescExpandedById] = useState(() => ({}));
@@ -1578,10 +1529,6 @@ export default function AppMain(){
     }
     return m;
   }, [healthRuns]);
-
-  useEffect(() => {
-    setModalMoreDetailsExpanded(false);
-  }, [modal?.id]);
 
   const appleHealthRunsLinkedCount = useMemo(() => {
     const assigned = new Set();
@@ -2129,10 +2076,9 @@ export default function AppMain(){
   }, [healthRuns]);
 
   /** Generische Zuordnung: `workout` aus `healthRuns` → Log mit `workoutId` + `canonicalActivityType` (Lauf & Rennrad). */
-  const assignHealthRunToSession = async (session, workout) => {
+  /** Logs mit `workout` an `session` gebunden (bei anderen Sessions gelöst) — ohne zu speichern. */
+  const buildLogsWithAssignedRun = (session, workout) => {
     const arPayload = buildAssignedRunFromWorkout(workout);
-    storedHealthRunToWorkout(workout);
-    // no console logging in production path
     const nextLogs = { ...logs };
     const syncSessionIds = [];
     for (const sid of Object.keys(nextLogs)) {
@@ -2152,7 +2098,12 @@ export default function AppMain(){
       assignedRun: arPayload,
     };
     syncSessionIds.push(session.id);
-    // no console logging in production path
+    return { nextLogs, syncSessionIds };
+  };
+
+  const assignHealthRunToSession = async (session, workout) => {
+    storedHealthRunToWorkout(workout);
+    const { nextLogs, syncSessionIds } = buildLogsWithAssignedRun(session, workout);
     await save(nextLogs, syncSessionIds);
   };
 
@@ -2224,13 +2175,11 @@ export default function AppMain(){
   };
 
   const openModal=(session)=>{
-    setModalEditMode(false);
-    const ex=logs[session.id]||{};
-    setForm({feeling:ex.feeling||0,actualKm:ex.actualKm||"",notes:ex.notes||"",done:ex.done||false,skipped:ex.skipped||false});
+    setModalEntryOpen(false);
     setModal(session);
   };
 
-  const closeModal=()=>{setModal(null);setModalEditMode(false);};
+  const closeModal=()=>{setModal(null);setModalEntryOpen(false);};
 
   const navigateToView = (nextView, forcedDirection = null)=>{
     const currentView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
@@ -2303,11 +2252,43 @@ export default function AppMain(){
     triggerSwipe(event.deltaX > 0 ? 1 : -1);
   };
 
-  const saveModal=async()=>{
+  /** Eintragen-Sheet: speichert den Eintrag als erledigt; optional mit dem vorgeschlagenen Health-Lauf verknüpft. */
+  const saveModalEntry=async(values)=>{
+    if(!modal)return;
+    const suggestedRun = values.adoptSuggestion ? healthRunById.get(logs[modal.id]?.suggestedHealthRunId) : null;
+    const { nextLogs, syncSessionIds } = suggestedRun
+      ? buildLogsWithAssignedRun(modal, suggestedRun)
+      : { nextLogs: { ...logs }, syncSessionIds: [modal.id] };
+    nextLogs[modal.id] = {
+      ...(nextLogs[modal.id] || {}),
+      ...(values.actualKm !== undefined ? { actualKm: values.actualKm } : {}),
+      feeling: values.feeling,
+      notes: values.notes,
+      done: true,
+      skipped: false,
+      at: getAppNow().toISOString(),
+    };
+    await save(nextLogs, syncSessionIds);
+    closeModal();
+  };
+
+  /** Eintrag zurücknehmen: Einheit wieder offen, Gefühl/Notiz/km bleiben im Log. */
+  const reopenModalEntry=async()=>{
     if(!modal)return;
     const prev = logs[modal.id] || {};
-    await save({...logs,[modal.id]:{...prev,...form,at:getAppNow().toISOString()}}, [modal.id]);
-    setModal(null);
+    await save({...logs,[modal.id]:{...prev,done:false,skipped:false,at:getAppNow().toISOString()}}, [modal.id]);
+    closeModal();
+  };
+
+  const toggleModalSkip=async()=>{
+    if(!modal)return;
+    await quickSkipSession(modal);
+    closeModal();
+  };
+
+  const handleDiscussSessionWithCoach=()=>{
+    closeModal();
+    navigateToView("coach");
   };
 
   const displayPlan = useDisplayPlanFromTrainingState(trainingPlanV2, aiPlanPatches);
@@ -3172,12 +3153,19 @@ export default function AppMain(){
   const modalLog = modal ? logs[modal.id] : null;
   const modalWeek = modal ? displayPlan.find((week) => getWeekSessionList(week).some((session) => session.id === modal.id)) : null;
   const modalMilestones = modal && modalWeek ? getSessionMilestones(modal, modalWeek, milestoneMeta) : [];
-  const modalWorkout = modal ? parseWorkoutStructure(modal) : null;
   const modalFuelingHints = modal ? getFuelingHints(modal) : [];
-  /** Workout-Struktur (Warm-up/Main Set/Cool-down) nur bei strukturierten Einheiten — Easy/Long/Ruhetag/Kraft/Rad bleiben schlicht. */
-  const modalShowWorkoutStructure = modal ? MODAL_STRUCTURED_WORKOUT_TYPES.has(modal.type) : false;
-  /** „Mehr anzeigen“-Toggle erscheint nur, wenn es tatsächlich Workout-Struktur oder Fueling-Hinweise zu zeigen gibt. */
-  const modalShowMoreDetailsToggle = modalShowWorkoutStructure || modalFuelingHints.length > 0;
+  /** Ablauf mit km nur, wenn der Plan die Aufteilung nennt — sonst kein Abschnitt. */
+  const modalFlow = modal ? buildSessionFlow(modal) : null;
+  const modalStatus = getSessionStatus(modalLog);
+  const modalPlannedKm = (() => {
+    const km = modal ? getDisplayPlannedDistanceKm(modal) : null;
+    return km != null && km > 0 ? km : null;
+  })();
+  /** Erkannter, noch nicht zugeordneter Health-Lauf — nur dann gibt es den Vorschlag im Eintragen-Sheet. */
+  const modalSuggestedRun =
+    modalLog?.suggestedHealthRunId && !modalLog?.assignedRun?.runId
+      ? healthRunById.get(modalLog.suggestedHealthRunId) ?? null
+      : null;
   const todayNextSession = decisionTodayNextSession;
   const firstTrainingSession = ACTIVE_SESSIONS[0] || null;
   const firstTrainingDate = firstTrainingSession ? parseSessionDateLabel(firstTrainingSession.date) : null;
@@ -3741,24 +3729,70 @@ export default function AppMain(){
    * Health-Workout, sonst nur Log). Reines Lesen — kein Abschluss-Event, keine Persistenz.
    */
   const modalCompletionSummary =
-    modal && modalWeek && modalWorkout && !modalEditMode
-      ? (() => {
-          const modalLog = logs[modal.id];
-          if (getSessionStatus(modalLog) !== "done") return null;
-          return postWorkoutSummary.getStoredSessionConclusion(modal.id);
-        })()
+    modal && modalWeek && modalStatus === "done"
+      ? postWorkoutSummary.getStoredSessionConclusion(modal.id)
       : null;
   const modalCompletionIsLogOnly = modalCompletionSummary?.source === "log";
 
   // Ansehen schreibt nichts: der nachgeladene Puls wird hier nur angezeigt, nicht ins Log übernommen.
   const modalCompletionSummaryEnriched = usePostWorkoutHrEnrichment(
     modalCompletionIsLogOnly ? null : modalCompletionSummary,
-    !!(modal && modalWeek && modalWorkout && modalCompletionSummary && !modalCompletionIsLogOnly),
+    !!(modal && modalWeek && modalCompletionSummary && !modalCompletionIsLogOnly),
     { logs, healthRuns, persistWorkoutHeartRate: noopPersistWorkoutHeartRate },
   );
   const modalCompletionSummaryDisplay = modalCompletionIsLogOnly
     ? modalCompletionSummary
     : modalCompletionSummaryEnriched;
+
+  /** Plan-Kacheln der Detailansicht: nur Werte, die der Plan hergibt. */
+  const modalPlan = (() => {
+    if (!modal || modal.type === "rest") return null;
+    const paceRange = modal.type !== "strength" ? parsePlannedPaceRangeMinPerKm(modal.pace) : null;
+    const paceClock = (minPerKm) => formatPaceMinPerKmLabel(minPerKm).replace(" min/km", "");
+    const paceText = modal.type !== "strength" && typeof modal.pace === "string" ? modal.pace.trim() : "";
+    const pace = paceRange
+      ? paceRange.min === paceRange.max
+        ? paceClock(paceRange.min)
+        : `${paceClock(paceRange.min)}–${paceClock(paceRange.max)}`
+      : paceText || null;
+    const zone = getSessionHrZoneShort(modal, modalWeek || undefined);
+    return {
+      distanceKm: modalPlannedKm,
+      durationMin: estimateDurationMin(modal.type, modalPlannedKm, paceRange),
+      pace,
+      paceUnit: paceRange ? "min/km" : null,
+      zone,
+      hrRange: getHrRangeForZone(zone, preferences.maxHeartRateBpm),
+    };
+  })();
+
+  /** Ist-Werte der erledigten Einheit aus Log + verknüpftem Health-Lauf; fehlende Werte bleiben `null`. */
+  const modalResult = (() => {
+    const summary = modalCompletionSummaryDisplay ? normalizePostWorkoutSummary(modalCompletionSummaryDisplay) : null;
+    if (!modal || !summary) return null;
+    const positive = (v) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null);
+    const hrBpm = summary.hrPresentation?.kind === "bpm" ? summary.hrPresentation.value : summary.actual.hrBpm;
+    const evaluation = modalLog?.runEvaluation;
+    const linked = !!modalLog?.assignedRun?.runId;
+    return {
+      actualKm: positive(summary.actual.distanceKm),
+      plannedKm: modalPlannedKm,
+      durationSec: positive(summary.actual.durationSec),
+      paceSecPerKm: modal.type === "bike" ? null : positive(summary.actual.paceSecPerKm),
+      hrBpm: positive(hrBpm),
+      verdict: linked && evaluation?.label && evaluation.status !== "no_match" ? evaluation.label : null,
+      verdictGood: evaluation?.status === "ideal" || evaluation?.status === "ideal_distance_only",
+      source: linked ? "Apple Health" : null,
+      feeling: modalLog?.feeling ?? null,
+      notes: typeof modalLog?.notes === "string" && modalLog.notes.trim() ? modalLog.notes.trim() : null,
+    };
+  })();
+
+  /** Distanzfeld im Eintragen-Sheet: bisheriger Eintrag, sonst Plan-km. Mit verknüpftem Health-Lauf zählt dessen Distanz — kein Feld. */
+  const modalEntryInitialKm = (() => {
+    if (!modal || modalPlannedKm == null || modalLog?.assignedRun?.runId) return null;
+    return parseKmInput(String(modalLog?.actualKm ?? "")) ?? modalPlannedKm;
+  })();
 
   const safeTopPad = "max(44px, env(safe-area-inset-top, 44px))";
   /** Platz für die Tab-Bar — eine Quelle für alle Tabs (`layout/bottomNavLayout.ts`). */
@@ -5373,194 +5407,41 @@ export default function AppMain(){
         })}
       </nav>
 
-      {modal&&modalWeek&&modalWorkout&&(modalCompletionSummaryDisplay ? (
-        <PostWorkoutSummaryCard open summary={modalCompletionSummaryDisplay} onDone={closeModal} onEdit={() => setModalEditMode(true)} />
-      ) : (
-        <div onClick={closeModal} className="mr-sheet-scrim">
-          <div onClick={e=>e.stopPropagation()} className="mr-sheet">
-            <div className="mr-sheet__body">
-              <button type="button" className="mr-btn mr-btn--ghost mr-btn--small mr-sheet__close" onClick={closeModal}>Schließen</button>
+      {modal&&modalWeek ? (
+        <SessionDetailSheet
+          meta={[`${modal.day}, ${modal.date}`, modalWeek.label, ...modalMilestones.map((milestone) => milestone.label)].join(" · ")}
+          title={modal.title}
+          status={modalStatus}
+          plan={modalPlan}
+          purpose={typeof modal.desc === "string" && modal.desc.trim() ? modal.desc.trim() : null}
+          flow={modalFlow}
+          fuelingHints={modalFuelingHints}
+          result={modalResult}
+          onClose={closeModal}
+          onAdjustToCalendar={
+            modal.type !== "rest" && scheduleBlocks.length > 0 && !lockedSessionIds.has(modal.id)
+              ? () => handleProposeCalendarReassignmentFromDetail(modal, modalWeek)
+              : undefined
+          }
+          onDiscussWithCoach={handleDiscussSessionWithCoach}
+          onEnter={() => setModalEntryOpen(true)}
+          onToggleSkip={toggleModalSkip}
+        />
+      ) : null}
 
-              <div>
-                <div className="mr-label" style={{ marginBottom: 8 }}>Einheit</div>
-                <ScreenHeader
-                  meta={[`${modal.day}, ${modal.date}`, modalWeek.label, ...modalMilestones.map((milestone) => milestone.label)].join(" · ")}
-                  title={modal.title}
-                />
-              </div>
-
-              {modal.type !== "rest" ? (
-                <div className="mr-tiles">
-                  {(() => {
-                    const displayPk = getDisplayPlannedDistanceKm(modal);
-                    const hasKm = displayPk != null && displayPk > 0;
-                    return (
-                      <div className={hasKm ? "mr-tile mr-tile--plain" : "mr-tile mr-tile--plain mr-tile--empty"}>
-                        <span className="mr-label">Distanz</span>
-                        <span className="mr-tile__value">
-                          {hasKm ? formatKmDe(displayPk) : "—"}
-                          {hasKm ? <small className="mr-tile__unit"> km</small> : null}
-                        </span>
-                      </div>
-                    );
-                  })()}
-                  {(() => {
-                    let pace = null;
-                    if (modal.type !== "strength") {
-                      const pr = parsePlannedPaceRangeMinPerKm(modal.pace);
-                      if (pr) {
-                        pace = pr.min === pr.max
-                          ? formatPaceMinPerKmLabel(pr.min)
-                          : `${formatPaceMinPerKmLabel(pr.min)}–${formatPaceMinPerKmLabel(pr.max)}`;
-                      } else if (modal.pace && String(modal.pace).trim()) {
-                        pace = String(modal.pace).trim();
-                      }
-                    }
-                    return (
-                      <div className={pace ? "mr-tile mr-tile--plain" : "mr-tile mr-tile--plain mr-tile--empty"}>
-                        <span className="mr-label">Tempo</span>
-                        <span className="mr-tile__value mr-tile__value--word" style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{pace ?? "—"}</span>
-                      </div>
-                    );
-                  })()}
-                  {(() => {
-                    const zone = getSessionHrZoneShort(modal, modalWeek || undefined);
-                    const range = getHrRangeForZone(zone, preferences.maxHeartRateBpm);
-                    return (
-                      <div className={zone ? "mr-tile mr-tile--plain" : "mr-tile mr-tile--plain mr-tile--empty"}>
-                        <span className="mr-label">Herzfrequenz</span>
-                        <span className="mr-tile__value mr-tile__value--word">{zone || "—"}</span>
-                        {range ? <span className="mr-tile__foot">{range.min}–{range.max} bpm</span> : null}
-                      </div>
-                    );
-                  })()}
-                </div>
-              ) : null}
-
-              {modal.type !== "rest" && scheduleBlocks.length > 0 && !lockedSessionIds.has(modal.id) ? (
-                <button
-                  type="button"
-                  className="mr-btn mr-btn--secondary mr-btn--block"
-                  onClick={() => handleProposeCalendarReassignmentFromDetail(modal, modalWeek)}
-                >
-                  <CalendarDays aria-hidden size={18} strokeWidth={ICON_STROKE} />
-                  An Kalender anpassen
-                </button>
-              ) : null}
-
-              {modalShowMoreDetailsToggle ? (
-                <div>
-                  <button
-                    type="button"
-                    className="mr-card__more"
-                    style={{ margin: 0 }}
-                    aria-expanded={modalMoreDetailsExpanded}
-                    onClick={() => setModalMoreDetailsExpanded((v) => !v)}
-                  >
-                    {modalMoreDetailsExpanded ? "Weniger anzeigen" : t("plan.show_more")}
-                    {modalMoreDetailsExpanded ? <ChevronUp aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} /> : <ChevronDown aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />}
-                  </button>
-                  {modalMoreDetailsExpanded ? (
-                    <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:8}}>
-                      {modalShowWorkoutStructure ? (
-                        <DetailBlock title="Aufbau der Einheit">
-                          <div className="mr-steps">
-                            <div>
-                              <div className="mr-steps__name">Einlaufen</div>
-                              <p className="mr-steps__text">{modalWorkout.warmup}</p>
-                            </div>
-                            <div>
-                              <div className="mr-steps__name">Hauptteil</div>
-                              <p className="mr-steps__text">{modalWorkout.mainSet}</p>
-                            </div>
-                            <div>
-                              <div className="mr-steps__name">Auslaufen</div>
-                              <p className="mr-steps__text">{modalWorkout.cooldown}</p>
-                            </div>
-                          </div>
-                        </DetailBlock>
-                      ) : null}
-
-                      {modalFuelingHints.length > 0 ? (
-                        <DetailBlock title="Verpflegung">
-                          <div className="mr-steps">
-                            {modalFuelingHints.map((hint) => (
-                              <p key={hint} className="mr-steps__text" style={{ margin: 0 }}>
-                                {hint}
-                              </p>
-                            ))}
-                          </div>
-                        </DetailBlock>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <div className="mr-card mr-sheet__form">
-                {(() => {
-                  const displayPk = getDisplayPlannedDistanceKm(modal);
-                  return displayPk != null && displayPk > 0 ? (
-                  <div>
-                    <label htmlFor="session-actual-km" className="mr-field-label">Tatsächliche km</label>
-                    <input
-                      id="session-actual-km"
-                      className="mr-field"
-                      type="number"
-                      step="0.1"
-                      placeholder={`Distanzziel: ${formatKmDe(displayPk)} km`}
-                      value={form.actualKm}
-                      onChange={e=>setForm(f=>({...f,actualKm:e.target.value}))}
-                    />
-                  </div>
-                  ) : null;
-                })()}
-
-                <div>
-                  <span className="mr-field-label">Gefühl</span>
-                  <div className="mr-rating">
-                    {[1,2,3,4,5].map(n=>(
-                      <button type="button" key={n} onClick={()=>setForm(f=>({...f,feeling:n}))} className={form.feeling>=n ? "mr-rating__star is-on" : "mr-rating__star"} aria-label={`Gefühl ${n} von 5`} aria-pressed={form.feeling===n}>
-                        <Star aria-hidden size={ICON_SIZE} strokeWidth={ICON_STROKE} fill={form.feeling>=n?"currentColor":"none"} />
-                      </button>
-                    ))}
-                  </div>
-                  <p className="mr-caption" style={{ marginTop: 8, minHeight: 18 }}>
-                    {["","Sehr schwer","Schlecht","Okay","Gut","Sehr gut"][form.feeling]}
-                  </p>
-                </div>
-
-                <div>
-                  <label htmlFor="session-notes" className="mr-field-label">Notizen</label>
-                  <textarea
-                    id="session-notes"
-                    className="mr-field"
-                    placeholder="Wie lief es? Besonderheiten?"
-                    value={form.notes}
-                    onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
-                  />
-                </div>
-
-                <div>
-                  <label className="mr-check">
-                    <input type="checkbox" checked={form.done} onChange={e=>setForm(f=>({...f,done:e.target.checked,skipped:e.target.checked?false:f.skipped}))}/>
-                    Als abgeschlossen markieren
-                  </label>
-                  <label className="mr-check">
-                    <input type="checkbox" checked={form.skipped} onChange={e=>setForm(f=>({...f,skipped:e.target.checked,done:e.target.checked?false:f.done}))}/>
-                    Als ausgelassen markieren
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div className="mr-sheet__foot">
-              <button type="button" className="mr-btn mr-btn--secondary" onClick={closeModal}>Abbrechen</button>
-              <button type="button" className="mr-btn mr-btn--primary" onClick={saveModal}>Speichern</button>
-            </div>
-          </div>
-        </div>
-      ))}
+      {modal&&modalWeek&&modalEntryOpen ? (
+        <SessionEntrySheet
+          mode={modalStatus === "done" ? "edit" : "create"}
+          subtitle={[modal.title, modalPlannedKm != null ? `Plan ${formatKmDe(modalPlannedKm)} km` : null].filter(Boolean).join(" · ")}
+          initialKm={modalEntryInitialKm}
+          initialFeeling={modalLog?.feeling ?? null}
+          initialNotes={typeof modalLog?.notes === "string" ? modalLog.notes : ""}
+          suggestion={modalSuggestedRun ? buildHealthRunSuggestion(modalSuggestedRun, appNow) : null}
+          onSave={saveModalEntry}
+          onClose={() => setModalEntryOpen(false)}
+          onReopen={modalLog?.done === true && !modalLog?.assignedRun?.runId ? reopenModalEntry : undefined}
+        />
+      ) : null}
 
       {showOnboarding ? (
         <Onboarding

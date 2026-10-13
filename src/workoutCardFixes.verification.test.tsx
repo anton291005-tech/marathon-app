@@ -151,43 +151,43 @@ describe("TEST BLOCK 2 — Heart rate display", () => {
   });
 });
 
-describe("TEST BLOCK 3 — Info card switching (static + hook contract)", () => {
-  test("8. Completed + summary: modal branch uses PostWorkoutSummaryCard first (not Session Details root)", () => {
-    expect(APP_TSX).toMatch(
-      /\{modal&&modalWeek&&modalWorkout&&\(modalCompletionSummaryDisplay \?\s*\(\s*\n\s*<PostWorkoutSummaryCard/,
-    );
-    expect(APP_TSX).toContain("getSessionStatus(modalLog) !== \"done\"");
+describe("TEST BLOCK 3 — Einheit-Detailansicht (static + hook contract)", () => {
+  test("8. Erledigt: Ist-Werte kommen aus der gespeicherten Conclusion (Log + verknüpfter Health-Lauf)", () => {
+    expect(APP_TSX).toMatch(/modal && modalWeek && modalStatus === "done"\s*\? postWorkoutSummary\.getStoredSessionConclusion\(modal\.id\)/);
+    expect(APP_TSX).toContain("result={modalResult}");
   });
 
-  test("9. Upcoming: modalCompletionSummaryDisplay null → Einheit-Details still present in false branch", () => {
-    expect(APP_TSX).toMatch(/modalCompletionSummaryDisplay \?[\s\S]*>Einheit<\/div>/);
-    expect(APP_TSX).toContain(">Einheit</div>");
+  test("9. Eine Detailansicht für geplant und erledigt; das alte Formular mit Schließen/Abbrechen ist weg", () => {
+    expect(APP_TSX).toMatch(/\{modal&&modalWeek \? \(\s*\n\s*<SessionDetailSheet/);
+    expect(APP_TSX).not.toContain(">Einheit</div>");
+    expect(APP_TSX).not.toContain(">Schließen</button>");
+    expect(APP_TSX).not.toContain("Als abgeschlossen markieren");
   });
 
-  test("9b. Erledigt: Bearbeiten in der Card wechselt ins Formular; jedes Öffnen/Schließen startet wieder mit der Card", () => {
-    expect(APP_TSX).toContain("modal && modalWeek && modalWorkout && !modalEditMode");
-    expect(APP_TSX).toContain("onEdit={() => setModalEditMode(true)}");
-    expect(APP_TSX).toMatch(/const openModal=\(session\)=>\{\s*setModalEditMode\(false\);/);
-    expect(APP_TSX).toMatch(/const closeModal=\(\)=>\{setModal\(null\);setModalEditMode\(false\);\};/);
-    expect(APP_TSX).toContain("postWorkoutSummary.getStoredSessionConclusion(modal.id)");
+  test("9b. Eintragen ist ein eigenes Sheet; jedes Öffnen/Schließen startet wieder mit der Detailansicht", () => {
+    expect(APP_TSX).toContain("onEnter={() => setModalEntryOpen(true)}");
+    expect(APP_TSX).toMatch(/\{modal&&modalWeek&&modalEntryOpen \? \(\s*\n\s*<SessionEntrySheet/);
+    expect(APP_TSX).toMatch(/const openModal=\(session\)=>\{\s*setModalEntryOpen\(false\);/);
+    expect(APP_TSX).toMatch(/const closeModal=\(\)=>\{setModal\(null\);setModalEntryOpen\(false\);\};/);
     // Ansehen schreibt nicht: das Enrichment im Rückblick läuft mit No-op-Persist.
     expect(APP_TSX).toMatch(/modalCompletionSummaryEnriched = usePostWorkoutHrEnrichment\([\s\S]{0,400}persistWorkoutHeartRate: noopPersistWorkoutHeartRate/);
   });
 
-  test("10. Skipped: completion summary gate is getSessionStatus !== done (skipped yields Session path)", () => {
-    expect(APP_TSX).toContain("getSessionStatus(modalLog) !== \"done\"");
+  test("10. Skipped: Ist-Werte nur bei Status done (ausgelassen zeigt die Plan-Ansicht)", () => {
+    expect(APP_TSX).toContain("const modalStatus = getSessionStatus(modalLog);");
+    expect(APP_TSX).toContain("status={modalStatus}");
   });
 
-  test("11. Next-day upcoming: only done + summary swaps card (documented structure)", () => {
-    expect(APP_TSX).toContain("modalCompletionSummaryDisplay");
-    expect(APP_TSX).toMatch(/modalCompletionSummaryDisplay \? \(.*PostWorkoutSummaryCard/s);
+  test("11. Health-Vorschlag im Eintragen-Sheet nur mit erkanntem, noch nicht zugeordnetem Lauf", () => {
+    expect(APP_TSX).toMatch(/modalLog\?\.suggestedHealthRunId && !modalLog\?\.assignedRun\?\.runId/);
+    expect(APP_TSX).toContain("suggestion={modalSuggestedRun ? buildHealthRunSuggestion(modalSuggestedRun, appNow) : null}");
   });
 
-  test("12. Single PostWorkoutSummaryCard import; modal uses same props shape as popup", () => {
+  test("12. PostWorkoutSummaryCard bleibt das Popup nach dem Workout (ein Import, eine Verwendung)", () => {
     const importMatches = APP_TSX.match(/import \{ PostWorkoutSummaryCard \} from "\.\/components\/PostWorkoutSummaryCard"/g);
     expect(importMatches?.length).toBe(1);
     expect(APP_TSX).toContain("<PostWorkoutSummaryCard\n          open={postWorkoutSummary.visible}\n          summary={postWorkoutSummaryDisplay}");
-    expect(APP_TSX).toContain("<PostWorkoutSummaryCard open summary={modalCompletionSummaryDisplay}");
+    expect(APP_TSX.match(/<PostWorkoutSummaryCard/g)?.length).toBe(1);
   });
 });
 
