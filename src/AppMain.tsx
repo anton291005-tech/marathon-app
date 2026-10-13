@@ -268,7 +268,7 @@ import { Activity, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Chevron
 import { ICON_SIZE, ICON_SIZE_S, ICON_STROKE, getSessionSportWord } from "./ui/icons";
 import { StatusChip } from "./ui/StatusChip";
 import { ScreenHeader } from "./ui/ScreenHeader";
-import { formatDayDateDe, formatHrFactDe, formatKmDe } from "./ui/formatDe";
+import { formatDateRangeDe, formatDayDateDe, formatHrFactDe, formatKmDe } from "./ui/formatDe";
 import { PrepCard, TodayHero, WeekProgressCard } from "./features/today/TodayCards";
 import { WeekDayRow, WeekPlaceholderRow, WeekSummaryCard } from "./features/week/WeekRows";
 import {
@@ -3255,6 +3255,9 @@ export default function AppMain(){
   const homeWeek = todayNextSession?.mode === "today" ? homeHeroWeek : null;
   const homeWeekAnalysis = homeWeek ? (homeWeek === w ? weekAnalysis : analyzeWeek(homeWeek, logs, appNow, healthRunById)) : null;
   const homeWeekBounds = homeWeek ? getPlanWeekTimeBoundsMs(homeWeek) : null;
+  /** Datumsbereich aus den Einheiten der Woche („12.–18. Okt"); `week.dates` ist bei generierten Plänen leer. */
+  const formatPlanWeekRange = (week, bounds) =>
+    bounds ? formatDateRangeDe(new Date(bounds.startMs), new Date(bounds.endMs)) : (week?.dates ?? "");
   const homeWeekRunKm = homeWeekAnalysis
     ? resolveWeekDisplayRunKm(
         homeWeekBounds
@@ -4156,7 +4159,7 @@ export default function AppMain(){
           <WeekProgressCard
             week={
               homeWeek && homeWeekAnalysis
-                ? { rangeLabel: homeWeek.dates ?? "", actualKm: homeWeekRunKm, plannedKm: homeWeekAnalysis.plannedKm }
+                ? { rangeLabel: formatPlanWeekRange(homeWeek, homeWeekBounds), actualKm: homeWeekRunKm, plannedKm: homeWeekAnalysis.plannedKm }
                 : null
             }
             longRuns={{ done: doneLongRuns, total: longRuns }}
@@ -4168,7 +4171,7 @@ export default function AppMain(){
       ):activeView==="week"?(
           <div ref={weekSessionStackRef} className="mr-screen mr-screen--week" style={viewTransitionStyle}>
             <ScreenHeader
-              meta={[ph.label, w?.dates].filter(Boolean).join(" · ")}
+              meta={[ph.label, formatPlanWeekRange(w, weekBoundsForHealthKpi)].filter(Boolean).join(" · ")}
               title={w ? `Woche ${w.wn ?? safeWIdx + 1}` : "Woche"}
             >
               <button type="button" className="mr-round-btn" onClick={()=>setWIdx(i=>Math.max(0,i-1))} disabled={wIdx===0} aria-label="Vorherige Woche">

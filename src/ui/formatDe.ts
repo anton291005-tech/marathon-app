@@ -19,6 +19,15 @@ export function formatDayDateDe(date: Date): string {
   return `${WEEKDAYS_SHORT_DE[date.getDay()]}, ${date.getDate()}. ${MONTHS_SHORT_DE[date.getMonth()]}`;
 }
 
+/** „12.–18. Okt"; über die Monatsgrenze „28. Sep – 4. Okt". */
+export function formatDateRangeDe(start: Date, end: Date): string {
+  const endLabel = `${end.getDate()}. ${MONTHS_SHORT_DE[end.getMonth()]}`;
+  if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+    return start.getDate() === end.getDate() ? endLabel : `${start.getDate()}.–${endLabel}`;
+  }
+  return `${start.getDate()}. ${MONTHS_SHORT_DE[start.getMonth()]} – ${endLabel}`;
+}
+
 /** Score 0–100 als ganze Zahl; ohne berechenbaren Wert `null` (Anzeige dann `—`). */
 export function clampScore100(value: number | null | undefined): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;

@@ -1,4 +1,4 @@
-import { clampScore100, formatDayDateDe, formatHrFactDe, formatKmDe } from "./formatDe";
+import { clampScore100, formatDateRangeDe, formatDayDateDe, formatHrFactDe, formatKmDe } from "./formatDe";
 
 describe("formatDe", () => {
   test("Kilometer mit Dezimalkomma, Sollwert ohne ,0", () => {
@@ -12,6 +12,12 @@ describe("formatDe", () => {
   test("Datum als Wochentag, Tag und Monat", () => {
     expect(formatDayDateDe(new Date(2026, 9, 15))).toBe("Do, 15. Okt");
     expect(formatDayDateDe(new Date(2027, 2, 1))).toBe("Mo, 1. Mär");
+  });
+
+  test("Datumsbereich einer Woche, auch über die Monatsgrenze", () => {
+    expect(formatDateRangeDe(new Date(2026, 9, 12), new Date(2026, 9, 18, 23, 59))).toBe("12.–18. Okt");
+    expect(formatDateRangeDe(new Date(2026, 8, 28), new Date(2026, 9, 4))).toBe("28. Sep – 4. Okt");
+    expect(formatDateRangeDe(new Date(2026, 9, 18), new Date(2026, 9, 18))).toBe("18. Okt");
   });
 
   test("Score wird gerundet und begrenzt, ohne Wert null", () => {

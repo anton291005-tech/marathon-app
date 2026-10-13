@@ -92,8 +92,10 @@
 .mr-km__value { font-family: var(--font-rounded); font-variant-numeric: tabular-nums; font-size: 36px; line-height: 40px; font-weight: 700; letter-spacing: -0.01em; }
 
 /* MetricTile */
-.mr-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
-.mr-tile { box-sizing: border-box; min-width: 0; background: var(--surface-2); border-radius: var(--radius-m); padding: 14px; display: flex; flex-direction: column; justify-content: space-between; gap: var(--space-2); }
+/* Spalten mindestens so breit wie ihr Inhalt: „Lange Läufe" bleibt einzeilig, der Rest teilt sich gleich auf. */
+.mr-tiles { display: grid; grid-template-columns: repeat(3, minmax(max-content, 1fr)); gap: var(--space-2); }
+.mr-tile { box-sizing: border-box; min-width: 0; background: var(--surface-2); border-radius: var(--radius-m); padding: 14px 10px; display: flex; flex-direction: column; justify-content: space-between; gap: var(--space-2); }
+.mr-tile .mr-label { white-space: nowrap; }
 .mr-tile__value { font-family: var(--font-rounded); font-variant-numeric: tabular-nums; font-size: 24px; line-height: 28px; font-weight: 600; color: var(--ink); white-space: nowrap; }
 .mr-tile__value small { font-family: var(--font-sans); font-size: 15px; font-weight: 600; color: var(--ink-3); }
 
@@ -127,20 +129,22 @@
 
 /* Woche: Tageszeilen. Feste Höhen (50/54/56), damit Mo–So auf 390 × 844 ohne Scrollen passt. */
 .mr-week-list { background: var(--surface-1); border-radius: var(--radius-l); overflow: hidden; }
-.mr-week-row { box-sizing: border-box; display: flex; align-items: center; gap: 14px; height: 50px; padding: 0 var(--space-4); color: var(--ink); -webkit-tap-highlight-color: transparent; }
+.mr-week-row { box-sizing: border-box; display: flex; align-items: center; gap: var(--space-3); height: 50px; padding: 0 var(--space-4); color: var(--ink); -webkit-tap-highlight-color: transparent; }
 .mr-week-row + .mr-week-row { border-top: 1px solid var(--line); }
 .mr-week-row--session { height: 54px; cursor: pointer; }
 .mr-week-row--session:active { background: var(--surface-2); }
 .mr-week-row--session:focus-visible { outline: none; box-shadow: inset var(--shadow-focus); }
 .mr-week-row.is-today { height: 56px; background: var(--accent-tint); }
 .mr-week-row.is-today, .mr-week-row.is-today + .mr-week-row { border-top-color: transparent; }
-.mr-week-row__day { width: 30px; flex: none; text-align: center; }
+.mr-week-row__day { width: 28px; flex: none; text-align: center; }
 .mr-week-row__dow { font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
 .mr-week-row__date { font-family: var(--font-rounded); font-variant-numeric: tabular-nums; font-size: 17px; line-height: 20px; font-weight: 600; color: var(--ink-2); }
 .mr-week-row.is-today .mr-week-row__dow { color: var(--accent-text); }
 .mr-week-row.is-today .mr-week-row__date { color: var(--ink); font-weight: 700; }
 .mr-week-row__icon { display: flex; flex: none; color: var(--ink-3); }
-.mr-week-row__icon--run { color: var(--sport-run); }
+/* Laufeinheiten neutral; Markenrot trägt nur die heutige Zeile. */
+.mr-week-row__icon--run { color: var(--ink-2); }
+.mr-week-row.is-today .mr-week-row__icon--run { color: var(--sport-run); }
 .mr-week-row__icon--bike { color: var(--sport-bike); }
 .mr-week-row__icon--strength { color: var(--sport-strength); }
 .mr-week-row__text { flex: 1; min-width: 0; }
