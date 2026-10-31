@@ -8,6 +8,8 @@ const {
   computeWeekStartDates,
   computeWeekDayCounts,
   buildVolumeContext,
+  weekLabelFor,
+  RECOVERY_WEEK_FOCUS,
   generateMarathonPlanV2ToRace,
   getWeekTotalKmFromPlan,
   defaultStructureForWeeks,
@@ -565,8 +567,8 @@ async function generateFullPlanByPhases(client, profile) {
     metaByWeekStart.set(startIso, {
       wn: weekNumber,
       phase: entry.phase,
-      label: entry.label,
-      focus: entry.focus,
+      label: weekLabelFor(weekNumber, entry.phase),
+      focus: weekIsDeload[idx] === true ? RECOVERY_WEEK_FOCUS : entry.focus,
       isRecoveryWeek: weekIsDeload[idx] === true,
     });
   });

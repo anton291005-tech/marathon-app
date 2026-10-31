@@ -1,9 +1,13 @@
 export type TrainingPhase = "base" | "build" | "peak" | "taper";
 
+/**
+ * Ein Phasenname pro Phase, überall gleich (Wochenliste, Detail, Rückblick).
+ * Spiegel: PHASE_LABEL_DE in api/_lib/deterministicPlanGenerator.js, gepinnt durch planLabelParity.test.js.
+ */
 export function trainingPhaseLabelDe(phase: TrainingPhase): string {
-  if (phase === "base") return "Base";
-  if (phase === "build") return "Build";
-  if (phase === "peak") return "Peak";
+  if (phase === "base") return "Grundlage";
+  if (phase === "build") return "Aufbau";
+  if (phase === "peak") return "Spitze";
   return "Taper";
 }
 

@@ -186,7 +186,7 @@ describe("generateMarathonPlanV2ToRace distance/volume/rest", () => {
     for (const week of plan.weeks) {
       const label = week.meta?.label ?? "";
       // Must start with a known phase label
-      expect(label).toMatch(/^(Base|Build|Peak|Taper) W\d+( ⬇️)?$/);
+      expect(label).toMatch(/^(Grundlage|Aufbau|Spitze|Taper) W\d+( ⬇️)?$/);
       // Recovery weeks must have ⬇️, non-recovery must not
       if (week.meta?.isRecoveryWeek) {
         expect(label).toContain("⬇️");

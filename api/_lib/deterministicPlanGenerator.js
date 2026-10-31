@@ -18,11 +18,18 @@ const {
 
 const DE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
+/** Ein Phasenname pro Phase, überall gleich (Wochenliste, Detail, Rückblick). Spiegel: src/planV2/trainingPhase.ts. */
+const PHASE_LABEL_DE = { base: "Grundlage", build: "Aufbau", peak: "Spitze", taper: "Taper" };
+
 function trainingPhaseLabelDe(phase) {
-  if (phase === "base") return "Base";
-  if (phase === "build") return "Build";
-  if (phase === "peak") return "Peak";
-  return "Taper";
+  return PHASE_LABEL_DE[phase] ?? PHASE_LABEL_DE.taper;
+}
+
+const RECOVERY_WEEK_FOCUS = "Entlastungswoche – Volumen reduziert, Adaptationen festigen";
+
+/** Wochenlabel: Wochennummer und der eine Phasenname — kein Freitext aus Claudes Struktur. */
+function weekLabelFor(weekNumber, phase) {
+  return `Woche ${weekNumber} · ${trainingPhaseLabelDe(phase)}`;
 }
 
 function normalizeTrainingPhase(raw) {
@@ -183,7 +190,8 @@ function getPhaseProgress01(weekInPhase, weeksInPhase) {
 function buildWeekPhaseSchedule(totalWeeks, claudePhases) {
   const blocks = claudePhases.map((p) => ({
     phase: normalizeTrainingPhase(p.name),
-    label: p.label?.trim() || trainingPhaseLabelDe(normalizeTrainingPhase(p.name)),
+    // Claudes Freitext-Label ("Entwicklungsphase") wird verworfen: der Phasenname ist PHASE_LABEL_DE.
+    label: trainingPhaseLabelDe(normalizeTrainingPhase(p.name)),
     focus: p.focus?.trim() || "",
     weeks: Math.max(1, Math.round(p.weeks)),
   }));
@@ -796,15 +804,12 @@ function generateMarathonPlanV2ToRace(
       const displayDate =
         startIso === firstWeekStartIso && firstWeekStartIso !== firstWeekMonIso ? s : mon;
 
-      const displayLabel = currentWeekPhaseInfo?.label ?? trainingPhaseLabelDe(phase);
       metaByWeekStart.set(startIso, {
         wn: weekIdx,
         phase,
-        label: isRecoveryWeek ? `${displayLabel} W${weekIdx} ⬇️` : `${displayLabel} W${weekIdx}`,
+        label: weekLabelFor(weekIdx, phase),
         dates: `${formatDeDate(displayDate)} ff.`,
-        focus: isRecoveryWeek
-          ? "⬇️ Entlastungswoche – Volumen reduziert, Adaptationen festigen"
-          : focus,
+        focus: isRecoveryWeek ? RECOVERY_WEEK_FOCUS : focus,
         isRecoveryWeek,
       });
     }
@@ -896,6 +901,10 @@ function getWeekTotalKmFromPlan(fullPlan, weekNumber) {
 
 module.exports = {
   normalizeTrainingPhase,
+  trainingPhaseLabelDe,
+  weekLabelFor,
+  RECOVERY_WEEK_FOCUS,
+  PHASE_LABEL_DE,
   parseWeeklyKmTarget,
   parseOnboardingRaceDate,
   buildWeekPhaseSchedule,

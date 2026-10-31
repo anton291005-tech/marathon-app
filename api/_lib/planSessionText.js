@@ -17,10 +17,11 @@ const round1 = (x) => Math.round(x * 10) / 10;
 const PAUSE_SECONDS = 90;
 const PAUSE_KM = PAUSE_SECONDS / 300;
 
-/** Zone je Einheitentyp; Entlastungswochen: lockere Läufe in Zone 1. */
+/** Zone je Einheitentyp; Entlastungswochen: lockere Läufe in Zone 1. Spiegel: src/trainingIntelligence/hrZones.ts. */
 const ZONE_FOR_SESSION = {
   easy: "Zone 2",
   long: "Zone 2",
+  bike: "Zone 2",
   tempo: "Zone 3–4",
   interval: "Zone 4–5",
   race: "Zone 4–5",

@@ -1,0 +1,20 @@
+{
+  "phaseLabels": { "base": "Grundlage", "build": "Aufbau", "peak": "Spitze", "taper": "Taper" },
+  "zones": [
+    { "type": "easy", "recovery": false, "zone": "Zone 2" },
+    { "type": "easy", "recovery": true, "zone": "Zone 1" },
+    { "type": "long", "recovery": false, "zone": "Zone 2" },
+    { "type": "bike", "recovery": false, "zone": "Zone 2" },
+    { "type": "tempo", "recovery": false, "zone": "Zone 3–4" },
+    { "type": "interval", "recovery": false, "zone": "Zone 4–5" },
+    { "type": "race", "recovery": false, "zone": "Zone 4–5" },
+    { "type": "strength", "recovery": false, "zone": null },
+    { "type": "rest", "recovery": false, "zone": null }
+  ],
+  "pulseBands": {
+    "Zone 1": [0.5, 0.6],
+    "Zone 2": [0.6, 0.75],
+    "Zone 3–4": [0.76, 0.88],
+    "Zone 4–5": [0.8, 0.95]
+  }
+}

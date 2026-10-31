@@ -210,6 +210,24 @@ describe("I6 eine Zonensprache: kein GA/HFmax/bpm im Text, Zone im Text = Zone d
   });
 });
 
+describe("I7 ein Phasenname pro Woche, überall gleich", () => {
+  const NAMES = { base: "Grundlage", build: "Aufbau", peak: "Spitze", taper: "Taper" };
+  it.each(cases)("%s", (_n, source, combo) => {
+    const plan = planOf(source, combo);
+    plan.weeks.forEach((week, i) => {
+      const { phase, label, isRecoveryWeek, focus } = week.meta;
+      expect(label).toBe(`Woche ${i + 1} · ${NAMES[phase]}`);
+      for (const [other, name] of Object.entries(NAMES)) {
+        if (other !== phase && name !== NAMES[phase]) expect(label).not.toContain(name);
+      }
+      expect(label).not.toMatch(/Entwicklungsphase|Tapering|Base|Build|Peak|⬇/);
+      if (isRecoveryWeek) expect(String(focus).toLowerCase()).toContain("entlastung");
+    });
+    // Nach dem Rennen gibt es keine Phase mehr: die letzte Woche endet am Renntag
+    expect(plan.weeks[plan.weeks.length - 1].workouts.every((w) => ymdOf(w) <= combo.raceYmd)).toBe(true);
+  });
+});
+
 describe("Selbstprüfung des Generators (checkPlanInvariants) meldet nichts", () => {
   it.each(cases)("%s", (_n, source, combo) => {
     const plan = planOf(source, combo);

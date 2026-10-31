@@ -1,4 +1,5 @@
 import { getAppNow } from "../../core/time/timeSystem";
+import { plannedHrRangeForSessionType } from "../../trainingIntelligence/hrZones";
 import { isSessionLogDone } from "../../appSmartFeatures";
 import type { IntervalIntensitySnapshot, StoredHealthRun } from "../../healthRuns";
 import { getStoredHealthRunCanonicalType } from "../../healthRuns";
@@ -31,21 +32,6 @@ export type BackfillIntervalWorkoutScoresResult = {
 function numOrNull(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
-}
-
-function plannedHrRangeForSessionType(
-  sessionType: string,
-  maxHrBpm: number | null | undefined,
-): { min: number; max: number } | null {
-  const mh = typeof maxHrBpm === "number" && Number.isFinite(maxHrBpm) && maxHrBpm > 80 ? maxHrBpm : null;
-  if (!mh) return null;
-  const t = String(sessionType || "").toLowerCase();
-  if (t === "easy" || t === "long") return { min: Math.round(mh * 0.65), max: Math.round(mh * 0.78) };
-  if (t === "tempo") return { min: Math.round(mh * 0.82), max: Math.round(mh * 0.9) };
-  if (t === "interval") return { min: Math.round(mh * 0.88), max: Math.round(mh * 0.95) };
-  if (t === "race") return { min: Math.round(mh * 0.9), max: Math.round(mh * 0.97) };
-  if (t === "bike") return { min: Math.round(mh * 0.6), max: Math.round(mh * 0.78) };
-  return null;
 }
 
 function expectedHrFromRange(range: { min: number; max: number } | null): number | null {

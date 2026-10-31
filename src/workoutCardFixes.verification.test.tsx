@@ -140,14 +140,22 @@ describe("TEST BLOCK 2 — Heart rate display", () => {
     expect(screen.queryAllByText("—").length).toBe(0);
   });
 
-  test("7. Planned HR shows fixed zone BPM map in cases 4–6", () => {
-    const expectedPlanned = "120–140 bpm";
+  test("7. Planned HR shows the bpm band from the one zone source (user max HR), not a fixed zone map", () => {
+    const expectedPlanned = `${plannedHr.min}–${plannedHr.max} bpm`;
     for (const actual of [148, null] as const) {
       const summary = makeSummary({ actualHrBpm: actual, plannedHr });
       const { unmount } = render(<PostWorkoutSummaryCard open summary={summary} onDone={() => {}} />);
       expect(screen.getByText(expectedPlanned)).toBeInTheDocument();
       unmount();
     }
+  });
+
+  test("7b. Without a planned bpm band only the zone is shown — no invented bpm", () => {
+    const summary = makeSummary({ actualHrBpm: 148, plannedHr });
+    summary.planned.hrBpm = null;
+    render(<PostWorkoutSummaryCard open summary={summary} onDone={() => {}} />);
+    expect(screen.getByText("Zone 2")).toBeInTheDocument();
+    expect(screen.queryByText(/120–140 bpm/)).toBeNull();
   });
 });
 
