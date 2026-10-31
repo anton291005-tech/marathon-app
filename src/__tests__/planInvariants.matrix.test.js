@@ -14,6 +14,11 @@ const { COMBOS } = require("../testSupport/planMatrix");
 const { deterministicPlan, claudePlan, localDate } = require("../testSupport/planSources");
 const { buildVolumeContext } = require("../../api/_lib/deterministicPlanGenerator");
 const { checkPlanInvariants } = require("../../api/_lib/planInvariants");
+const {
+  getSessionPlannedDistanceKm,
+  parseStructuredWorkoutSpecFromDesc,
+  computeStructuredWorkoutDistance,
+} = require("../sessionDistance");
 
 const SOURCES = ["deterministic", "chaos", "chaos-notaper"];
 const plans = new Map();
@@ -161,6 +166,45 @@ describe("I4 keine harte Einheit am Vortag von Long Run oder Rennen", () => {
       const next = sorted[i + 1];
       if (isHard(w) && next && daysBetween(ymdOf(next), ymdOf(w)) === 1) {
         expect(["long", "race"]).not.toContain(next.sessionType);
+      }
+    });
+  });
+});
+
+describe("I5 km einer Einheit = Summe ihrer Bausteine (±10 %), Text nennt dieselben km", () => {
+  it.each(cases)("%s", (_n, source, combo) => {
+    const plan = planOf(source, combo);
+    const hard = plan.workouts.filter(isHard);
+    expect(hard.length).toBeGreaterThan(0);
+    for (const w of hard) {
+      // Quelle 1: Beschreibung, gelesen vom Client-Parser
+      const parsed = parseStructuredWorkoutSpecFromDesc(w.desc);
+      expect(parsed).not.toBeNull();
+      const fromText = computeStructuredWorkoutDistance(parsed.workout);
+      expect(Math.abs(fromText - w.km)).toBeLessThanOrEqual(0.1 * w.km);
+      // Quelle 2: die Distanz, die der Client tatsächlich für die Einheit verwendet
+      const resolved = getSessionPlannedDistanceKm({ km: w.km, type: w.sessionType, desc: w.desc, structured: w.structured });
+      expect(Math.abs(resolved - w.km)).toBeLessThanOrEqual(0.1 * w.km);
+      expect(Math.abs(resolved - w.km)).toBeLessThanOrEqual(0.2);
+    }
+    for (const w of plan.workouts.filter((x) => x.sessionType === "easy" || x.sessionType === "long")) {
+      for (const m of String(w.desc).matchAll(/(\d+(?:,\d+)?)\s*km/g)) {
+        expect(Number(m[1].replace(",", "."))).toBeCloseTo(w.km, 1);
+      }
+    }
+  });
+});
+
+describe("I6 eine Zonensprache: kein GA/HFmax/bpm im Text, Zone im Text = Zone der Einheit", () => {
+  const ZONE = { easy: "Zone 2", long: "Zone 2", tempo: "Zone 3–4", interval: "Zone 4–5", race: "Zone 4–5" };
+  it.each(cases)("%s", (_n, source, combo) => {
+    const plan = planOf(source, combo);
+    plan.weeks.forEach((week) => {
+      for (const w of week.workouts) {
+        const text = `${w.title} ${w.desc}`;
+        expect(text).not.toMatch(/GA\s?[12]|HF\s?max|bpm|%|Puls|Herzfrequenz/i);
+        const expected = w.sessionType === "easy" && week.meta?.isRecoveryWeek ? "Zone 1" : ZONE[w.sessionType];
+        for (const z of text.match(/Zone \d(?:–\d)?/g) ?? []) expect(z).toBe(expected);
       }
     });
   });

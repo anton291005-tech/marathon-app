@@ -9,9 +9,21 @@
  *   1 Plan endet mit dem Rennen · 2 Anfahrt (Renntag −2/−1) · 3 genau ein Long Run pro Woche
  *   4 keine harte Einheit am Vortag von Long Run/Rennen · 5 Long-Run-Progression · 6 Wochenumfang aufs Ziel
  *   7 Long-Run-Anteil ≤ 30 %/33 % (Überschuss wird gestrichen, nie auf Intervall/Tempo gelegt)
+ *   8 Bausteine → km, Titel und Beschreibung aus den Bausteinen (planSessionText.js), nie aus Claudes Freitext
  *
  * Reine Funktionen, keine I/O, keine Nutzerinhalte im Log.
  */
+
+const {
+  shapeHardSession,
+  renderSession,
+  kmFromDesc,
+  isValidStructure,
+  cleanPace,
+  zoneForSession,
+  fmtKm,
+  BANNED_TEXT,
+} = require("./planSessionText");
 
 const DAY_MS = 86400000;
 const HARD_TYPES = new Set(["interval", "tempo"]);
@@ -325,7 +337,7 @@ function enforcePlanInvariants(input, ctx) {
 
     const items = hardItems().concat(easyItems());
     const km = items.length > 0 ? distribute(remaining, items) : [];
-    const shape = ctx.shapeSession ?? ((w, v) => ({ ...w, km: round1(v) }));
+    const shape = ctx.shapeSession ?? shapeHardSession;
     hard.forEach((i, k) => {
       days[i] = shape(days[i], km[k], ctx);
     });
@@ -352,7 +364,31 @@ function enforcePlanInvariants(input, ctx) {
     });
   }
 
-  return days;
+  // 8 — Bausteine und Text: km = Summe der Bausteine, Titel/Beschreibung daraus erzeugt
+  return days.map((w, i) => finalizeSession(w, i, days, ctx));
+}
+
+function finalizeSession(w, index, days, ctx) {
+  if (w.sessionType === "rest") return { ...w, desc: w.desc || "Ruhetag.", structured: null, pace: null };
+  if (!RUN_TYPES.has(w.sessionType) && w.sessionType !== "race") return w;
+  let session = { ...w };
+  if (isHard(session) && !isValidStructure(session.structured, session.km)) {
+    session = shapeHardSession(session, session.km, ctx);
+  }
+  if (!isHard(session)) session = { ...session, structured: null };
+  const wn = weekIndexOf(dayOf(session), mondayOf(ctx.startYmd));
+  const text = renderSession(session, {
+    isRecoveryWeek: ctx.isDeload?.[wn - 1] === true,
+    raceTitle: ctx.raceTitle || "Rennen",
+  });
+  return {
+    ...session,
+    title: text.title,
+    desc: text.desc,
+    structured: text.structured,
+    pace: cleanPace(session.pace),
+    intensity: isHard(session) || session.sessionType === "race" ? "high" : session.sessionType === "long" ? "medium" : "low",
+  };
 }
 
 /** Verschiebt harte Einheiten vom Vortag eines Long Runs/Rennens auf einen lockeren Tag, sonst herabstufen. */
@@ -533,6 +569,30 @@ function checkPlanInvariants(workouts, ctx) {
       });
     }
   }
+  // I5 — km einer Einheit = Summe ihrer Bausteine (±10 %), km im Text = km der Einheit
+  days.forEach((w) => {
+    if (isHard(w)) {
+      const sum = kmFromDesc(w.desc);
+      if (!(sum > 0)) problems.push(`I5: ${w.sessionType} am ${dayOf(w)} ohne Bausteine im Text`);
+      else if (Math.abs(sum - w.km) > 0.1 * w.km) problems.push(`I5: ${w.sessionType} am ${dayOf(w)}: ${w.km} km, Bausteine ${sum} km`);
+    } else if ((w.sessionType === "easy" || w.sessionType === "long") && typeof w.desc === "string") {
+      for (const m of w.desc.matchAll(/(\d+(?:,\d+)?)\s*km/g)) {
+        if (m[1] !== fmtKm(w.km)) problems.push(`I5: Text nennt ${m[1]} km, Einheit hat ${w.km} km (${dayOf(w)})`);
+      }
+    }
+  });
+
+  // I6 — eine Zonensprache: keine GA-Begriffe, keine %HFmax/bpm im Text, Zone im Text = Zone der Einheit
+  days.forEach((w) => {
+    const text = `${w.title ?? ""} ${w.desc ?? ""}`;
+    if (BANNED_TEXT.test(text)) problems.push(`I6: Pulsbegriff im Text am ${dayOf(w)}`);
+    const wn = weekIndexOf(dayOf(w), startMonday);
+    const zone = zoneForSession(w.sessionType, ctx.isDeload?.[wn - 1] === true);
+    const mentioned = text.match(/Zone \d(?:–\d)?/g) ?? [];
+    for (const z of mentioned) {
+      if (z !== zone) problems.push(`I6: Text nennt ${z}, Einheit gehört zu ${zone} (${dayOf(w)})`);
+    }
+  });
   return problems;
 }
 
