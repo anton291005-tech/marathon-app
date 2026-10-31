@@ -26,11 +26,12 @@ function deDate(ms) {
 }
 
 /** Eine Kombination: Start immer ein Montag, Rennwoche ist die letzte der `weeks` Wochen. */
-function buildCombo(distance, weeks, goal, raceDow) {
+function buildCombo(distance, weeks, goal, raceDow, startOffset = 0) {
   const raceMs = RACE_WEEK_MONDAY + (raceDow === 0 ? 6 : raceDow - 1) * DAY_MS;
-  const startMs = RACE_WEEK_MONDAY - (weeks - 1) * 7 * DAY_MS;
+  // startOffset > 0: Planstart mitten in der ersten Woche (Mo + offset), die erste Woche ist eine Teilwoche
+  const startMs = RACE_WEEK_MONDAY - (weeks - 1) * 7 * DAY_MS + startOffset * DAY_MS;
   return {
-    id: `${distance.key}-${weeks}w-${goal}-${raceDow === 0 ? "So" : "Di"}`,
+    id: `${distance.key}-${weeks}w-${goal}-${raceDow === 0 ? "So" : "Di"}${startOffset ? `-Start+${startOffset}` : ""}`,
     distance,
     weeks,
     goal,
@@ -62,4 +63,16 @@ for (const distance of DISTANCES) {
   }
 }
 
-module.exports = { DISTANCES, WEEK_COUNTS, GOALS, RACE_DOWS, COMBOS, buildCombo, ymdOf, deDate, DAY_MS };
+// Teilwoche am Planstart: Start Di…So der ersten Woche
+const PARTIAL_COMBOS = [];
+for (const distance of DISTANCES) {
+  for (const weeks of [8, 12]) {
+    for (const startOffset of [1, 2, 3, 4, 5, 6]) {
+      for (const raceDow of RACE_DOWS) {
+        PARTIAL_COMBOS.push(buildCombo(distance, weeks, "finish", raceDow, startOffset));
+      }
+    }
+  }
+}
+
+module.exports = { DISTANCES, WEEK_COUNTS, GOALS, RACE_DOWS, COMBOS, PARTIAL_COMBOS, buildCombo, ymdOf, deDate, DAY_MS };

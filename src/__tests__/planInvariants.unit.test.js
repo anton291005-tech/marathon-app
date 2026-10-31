@@ -1,6 +1,7 @@
 // Randfälle von enforcePlanInvariants / distribute, ohne die Generatoren.
 
 const { enforcePlanInvariants, distribute, checkPlanInvariants, addDays, dowOf } = require("../../api/_lib/planInvariants");
+const { clampLongRunToWeekPercent } = require("../../api/_lib/planWorkoutUtils");
 
 const START = "2026-11-02"; // Montag
 const mk = (ymd, sessionType, km) => ({
@@ -77,17 +78,45 @@ describe("enforcePlanInvariants", () => {
     expect(out[2].sessionType).not.toBe("race");
   });
 
-  it("Long-Run-Überschuss landet nie auf Intervall/Tempo", () => {
-    const week = chaosWeeks(START, "2026-11-08");
+  it("Long-Run-Überschuss landet nie auf Intervall/Tempo (Clamp, Jest)", () => {
+    const week = [
+      { sessionType: "long", sport: "run", km: 30 },
+      { sessionType: "interval", sport: "run", km: 10 },
+      { sessionType: "tempo", sport: "run", km: 10 },
+      { sessionType: "easy", sport: "run", km: 10 },
+      { sessionType: "rest", sport: "rest", km: 0 },
+    ];
+    const out = clampLongRunToWeekPercent(week, 60, 0.3);
+    expect(out[0].km).toBe(18);
+    expect(out[1].km).toBe(10);
+    expect(out[2].km).toBe(10);
+    expect(out[3].km).toBe(22); // nur der lockere Lauf nimmt die 12 km Überschuss auf
+    const noEasy = clampLongRunToWeekPercent(week.filter((w) => w.sessionType !== "easy"), 50, 0.3);
+    expect(noEasy[0].km).toBe(15);
+    expect(noEasy[1].km).toBe(10);
+    expect(noEasy[2].km).toBe(10);
+  });
+
+  it("Long-Run-Anteil in der Woche ≤ 30 %, Struktur-Einheiten behalten ihre Bausteine", () => {
     const ctx = baseCtx("2026-11-15", { weeklyKmTargets: [40, 40], peakLongRunKm: 30 });
-    const out = enforcePlanInvariants([...week, ...chaosWeeks("2026-11-09", "2026-11-15")], ctx);
+    const out = enforcePlanInvariants([...chaosWeeks(START, "2026-11-08"), ...chaosWeeks("2026-11-09", "2026-11-15")], ctx);
     const first = out.slice(0, 7);
     const total = first.reduce((s, w) => s + w.km, 0);
     const long = first.find((w) => w.sessionType === "long");
-    if (long) expect(long.km / total).toBeLessThanOrEqual(0.3 + 0.005);
+    expect(long).toBeDefined();
+    expect(long.km / total).toBeLessThanOrEqual(0.3);
     for (const w of first.filter((x) => x.sessionType === "interval" || x.sessionType === "tempo")) {
-      expect(w.km).toBeLessThanOrEqual(14);
+      expect(w.desc).toMatch(/km WU/);
+      expect(w.desc).toMatch(/km CD/);
     }
+  });
+
+  it("Stub-Woche am Planstart bekommt keinen Long Run", () => {
+    const stubStart = "2026-11-07"; // Samstag
+    const ctx = { ...baseCtx("2026-11-15"), startYmd: stubStart, weeklyKmTargets: [10, 40] };
+    const out = enforcePlanInvariants(chaosWeeks(stubStart, "2026-11-15"), ctx);
+    const stub = out.filter((w) => w.dateIso.slice(0, 10) <= "2026-11-08");
+    expect(stub.some((w) => w.sessionType === "long")).toBe(false);
   });
 
   it("ist stabil: ein zweiter Durchlauf ändert die Struktur nicht", () => {

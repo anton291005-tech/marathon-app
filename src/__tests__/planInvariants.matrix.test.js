@@ -3,6 +3,9 @@
 //   deterministic — deterministischer Generator
 //   chaos         — Mock-Claude mit allen Audit-Defekten
 //   chaos-notaper — dasselbe, aber Claudes Struktur hat 0 Taper-Wochen
+//   fallback      — jeder Phasen-Aufruf schlägt fehl → deterministischer Fallback im Claude-Pfad
+//   fallback-partial — nur der erste Phasen-Aufruf schlägt fehl (Chunk-Fallback gemischt mit Chaos)
+// Zusätzlich PARTIAL_COMBOS: Planstart mitten in der ersten Woche (Teilwoche), 8 und 12 Wochen, Start Di…So.
 // Geprüft wird am fertigen Plan (plan.workouts / plan.weeks), unabhängig von checkPlanInvariants.
 
 const mockCreate = jest.fn();
@@ -10,8 +13,8 @@ jest.mock("@anthropic-ai/sdk", () => jest.fn());
 process.env.ANTHROPIC_API_KEY = "test-key-plan-matrix";
 
 const Anthropic = require("@anthropic-ai/sdk");
-const { COMBOS } = require("../testSupport/planMatrix");
-const { deterministicPlan, claudePlan, localDate } = require("../testSupport/planSources");
+const { COMBOS, PARTIAL_COMBOS } = require("../testSupport/planMatrix");
+const { deterministicPlan, claudePlan, claudeRun, localDate } = require("../testSupport/planSources");
 const { buildVolumeContext } = require("../../api/_lib/deterministicPlanGenerator");
 const { checkPlanInvariants } = require("../../api/_lib/planInvariants");
 const {
@@ -20,7 +23,8 @@ const {
   computeStructuredWorkoutDistance,
 } = require("../sessionDistance");
 
-const SOURCES = ["deterministic", "chaos", "chaos-notaper"];
+const SOURCES = ["deterministic", "chaos", "chaos-notaper", "fallback", "fallback-partial"];
+const ALL_COMBOS = [...COMBOS, ...PARTIAL_COMBOS];
 const plans = new Map();
 
 const ymdOf = (w) => String(w.dateIso).slice(0, 10);
@@ -35,17 +39,34 @@ beforeAll(async () => {
   jest.spyOn(console, "log").mockImplementation(() => {});
   jest.spyOn(console, "warn").mockImplementation(() => {});
   Anthropic.mockImplementation(() => ({ messages: { create: mockCreate } }));
-  for (const combo of COMBOS) {
+  for (const combo of ALL_COMBOS) {
     plans.set(`deterministic|${combo.id}`, deterministicPlan(combo));
-    plans.set(`chaos|${combo.id}`, await claudePlan(combo, "default", mockCreate));
-    plans.set(`chaos-notaper|${combo.id}`, await claudePlan(combo, "no-taper", mockCreate));
+    for (const variant of ["chaos", "chaos-notaper", "fallback", "fallback-partial"]) {
+      plans.set(`${variant}|${combo.id}`, await claudePlan(combo, variant === "chaos" ? "default" : variant === "chaos-notaper" ? "no-taper" : variant, mockCreate));
+    }
   }
-}, 120000);
+}, 600000);
 
 afterAll(() => jest.restoreAllMocks());
 
-const cases = SOURCES.flatMap((source) => COMBOS.map((combo) => [`${source} ${combo.id}`, source, combo]));
+const cases = SOURCES.flatMap((source) => ALL_COMBOS.map((combo) => [`${source} ${combo.id}`, source, combo]));
 const planOf = (source, combo) => plans.get(`${source}|${combo.id}`);
+
+describe("Fallback-Quellen nehmen wirklich den Fallback-Pfad", () => {
+  const combo = COMBOS.find((c) => c.id === "10k-8w-finish-Di");
+
+  it("fallback: alle Phasen laufen über den deterministischen Fallback", async () => {
+    const { diagnostics } = await claudeRun(combo, "fallback", mockCreate);
+    expect(diagnostics.length).toBeGreaterThan(0);
+    expect(diagnostics.every((d) => d.status === "fallback")).toBe(true);
+  });
+
+  it("fallback-partial: die erste Phase fällt zurück, die übrigen kommen von Claude", async () => {
+    const { diagnostics } = await claudeRun(combo, "fallback-partial", mockCreate);
+    expect(diagnostics[0].status).toBe("fallback");
+    expect(diagnostics.slice(1).every((d) => d.status === "claude")).toBe(true);
+  });
+});
 
 describe("Plan-Grundlage", () => {
   it.each(cases)("%s: Plan hat Wochen und endet mit dem Rennen", (_n, source, combo) => {
@@ -196,7 +217,7 @@ describe("I5 km einer Einheit = Summe ihrer Bausteine (±10 %), Text nennt diese
 });
 
 describe("I6 eine Zonensprache: kein GA/HFmax/bpm im Text, Zone im Text = Zone der Einheit", () => {
-  const ZONE = { easy: "Zone 2", long: "Zone 2", tempo: "Zone 3–4", interval: "Zone 4–5", race: "Zone 4–5" };
+  const ZONE = { easy: "Zone 2", long: "Zone 2", bike: "Zone 2", tempo: "Zone 3–4", interval: "Zone 4–5", race: "Zone 4–5" };
   it.each(cases)("%s", (_n, source, combo) => {
     const plan = planOf(source, combo);
     plan.weeks.forEach((week) => {

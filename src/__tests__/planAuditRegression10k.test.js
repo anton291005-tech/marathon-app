@@ -178,7 +178,8 @@ describe("Audit 10-km-Plan (Rennen Di 01.12.2026)", () => {
     }
     const sunday = plan.workouts.find((w) => ymd(w) === "2026-11-01");
     expect(sunday.desc).not.toMatch(/18 km/);
-    if (sunday.sessionType === "long") expect(sunday.desc).toContain(String(sunday.km).replace(".", ",") + " km");
+    expect(sunday.sessionType).toBe("long");
+    expect(sunday.desc).toContain(String(sunday.km).replace(".", ",") + " km");
   });
 
   it("6. Eine Zonensprache: kein GA2, keine 60–70 % HFmax, Zone im Text = Zone der Einheit", () => {

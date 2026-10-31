@@ -280,12 +280,17 @@ function enforcePlanInvariants(input, ctx) {
       });
       return;
     }
-    if (longs.length > 1) {
+    if (idxs.length < 5) {
+      // Stub-Woche (Planstart mitten in der Woche): zu kurz für einen Long Run
+      longs.forEach((i) => {
+        days[i] = asEasy(days[i]);
+      });
+    } else if (longs.length > 1) {
       const keep = longs.reduce((a, b) => (days[b].km > days[a].km ? b : a));
       longs.forEach((i) => {
         if (i !== keep) days[i] = asEasy(days[i]);
       });
-    } else if (longs.length === 0 && idxs.length >= 5) {
+    } else if (longs.length === 0) {
       const onDow = idxs.find(
         (i) => !approachIdx.has(i) && days[i].sessionType === "easy" && dowOf(dayOf(days[i])) === longRunDow,
       );
@@ -359,7 +364,7 @@ function enforcePlanInvariants(input, ctx) {
       const others = total - days[longIdx].km;
       if (others <= 0) return;
       const share = longRunShare(ctx, wi + 1, total);
-      const maxLong = round1((share / (1 - share)) * others);
+      const maxLong = Math.floor(((share / (1 - share)) * others) * 10) / 10;
       if (days[longIdx].km > maxLong) days[longIdx] = { ...days[longIdx], km: maxLong };
     });
   }
@@ -368,13 +373,38 @@ function enforcePlanInvariants(input, ctx) {
   return days.map((w, i) => finalizeSession(w, i, days, ctx));
 }
 
+const SUPPORT_DEFAULTS = {
+  bike: { title: "Radfahren", desc: "Lockeres Radfahren in Zone 2." },
+  strength: { title: "Krafttraining", desc: "Rumpf, Beine, funktionelle Übungen." },
+  swim: { title: "Schwimmen", desc: "Lockeres Schwimmen." },
+};
+
+/**
+ * Rad, Kraft, Schwimmen: gleiche Textregel wie bei Läufen. Titel/Beschreibung mit GA-Begriffen, Prozent, bpm,
+ * Puls oder einer falschen Zone fallen auf einen Standardtext zurück; Freitext-Pace entfällt.
+ */
+function cleanSupportSession(w) {
+  const fallback = SUPPORT_DEFAULTS[w.sessionType];
+  const expectedZone = zoneForSession(w.sessionType, false);
+  const clean = (text) => {
+    if (typeof text !== "string" || !text.trim() || BANNED_TEXT.test(text)) return false;
+    return (text.match(/Zone \d(?:–\d)?/g) ?? []).every((z) => z === expectedZone);
+  };
+  return {
+    ...w,
+    title: clean(w.title) ? w.title : (fallback?.title ?? "Training"),
+    desc: clean(w.desc) ? w.desc : (fallback?.desc ?? "Training."),
+    pace: cleanPace(w.pace),
+  };
+}
+
 function finalizeSession(w, index, days, ctx) {
   if (w.sessionType === "rest") {
     // Titel immer "Ruhetag": Claudes Freitext ("Ruhetag vor Renntag" drei Tage vorher) wäre irreführend.
     const desc = typeof w.desc === "string" && w.desc.trim() && !BANNED_TEXT.test(w.desc) ? w.desc : "Ruhetag.";
     return { ...w, title: "Ruhetag", desc, structured: null, pace: null };
   }
-  if (!RUN_TYPES.has(w.sessionType) && w.sessionType !== "race") return w;
+  if (!RUN_TYPES.has(w.sessionType) && w.sessionType !== "race") return cleanSupportSession(w);
   let session = { ...w };
   if (isHard(session) && !isValidStructure(session.structured, session.km)) {
     session = shapeHardSession(session, session.km, ctx);

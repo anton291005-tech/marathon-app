@@ -69,7 +69,10 @@ function chaosWorkoutsForWeek(wn, startIso, raceIso) {
     if (ymd === raceIso) {
       workouts.push({ ...base, type: "race", title: "Renntag", km: 10, description: "Rennen." });
     } else if (d === 0) {
-      workouts.push({ ...base, type: "rest", title: "Ruhetag vor Renntag", km: 0, description: "Frei." });
+      // Montag: abwechselnd Ruhetag, Rad und Kraft mit GA-/HFmax-Text (Rad/Kraft dürfen den Textfilter nicht umgehen)
+      if (wn % 3 === 1) workouts.push({ ...base, type: "rest", title: "Ruhetag vor Renntag", km: 0, description: "Frei." });
+      else if (wn % 3 === 2) workouts.push({ ...base, sport: "bike", type: "bike", title: "GA1 Rad", km: 0, description: "GA1 bei 65 % HFmax, 120 bpm, Zone 4." });
+      else workouts.push({ ...base, sport: "strength", type: "strength", title: "Kraft 70 % HFmax", km: 0, description: "Puls bei 140 bpm." });
     } else if (d === 1) {
       workouts.push({ ...base, type: "interval", title: "Intervalle", km: 15, description: "2 km + 6×(3 min/90 s) + 2 km im GA2-Bereich, Zone 4–5." });
     } else if (d === 2) {
@@ -105,10 +108,28 @@ function chaosReply(params, combo, variant) {
   return { content: [{ type: "text", text: JSON.stringify({ weeks, workouts }) }], usage: {} };
 }
 
-async function claudePlan(combo, variant, mockCreate) {
-  mockCreate.mockImplementation(async (params) => chaosReply(params, combo, variant));
-  const { plan } = await generateFullPlanByPhases({ messages: { create: mockCreate } }, combo.profile);
-  return plan;
+/**
+ * variant: "default" | "no-taper" — Chaos-Antworten;
+ *          "fallback" — jeder Phasen-Aufruf schlägt fehl (nur der Struktur-Aufruf klappt) → deterministischer Fallback;
+ *          "fallback-partial" — nur der erste Phasen-Aufruf schlägt fehl, die übrigen liefern Chaos.
+ */
+async function claudeRun(combo, variant, mockCreate) {
+  let phaseCalls = 0;
+  mockCreate.mockImplementation(async (params) => {
+    const isStructure = String(params.system ?? "").includes("phases (Phasenstruktur)");
+    if (!isStructure) {
+      phaseCalls += 1;
+      if (variant === "fallback" || (variant === "fallback-partial" && phaseCalls === 1)) {
+        throw new Error("Claude phase failed (test)");
+      }
+    }
+    return chaosReply(params, combo, variant === "no-taper" ? "no-taper" : "default");
+  });
+  return generateFullPlanByPhases({ messages: { create: mockCreate } }, combo.profile);
 }
 
-module.exports = { deterministicPlan, claudePlan, chaosReply, chaosWorkoutsForWeek, localDate };
+async function claudePlan(combo, variant, mockCreate) {
+  return (await claudeRun(combo, variant, mockCreate)).plan;
+}
+
+module.exports = { deterministicPlan, claudePlan, claudeRun, chaosReply, chaosWorkoutsForWeek, localDate };
