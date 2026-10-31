@@ -613,6 +613,32 @@ function computeWeekStartDates(start, raceDay) {
   return { weekStarts, weekKeyOverrides, firstWeekStartIso, firstWeekMonIso, totalWeeks: weekIdx };
 }
 
+/** Anzahl Plantage (Start bis Renntag, jeweils inklusive) pro Plan-Woche; Index = Wochennummer - 1. */
+function computeWeekDayCounts(start, raceDay) {
+  const { weekKeyOverrides } = computeWeekStartDates(start, raceDay);
+  let s = startOfLocalDay(start);
+  let r = startOfLocalDay(raceDay);
+  if (r.getTime() < s.getTime()) {
+    const t = r;
+    r = s;
+    s = t;
+  }
+  const counts = [];
+  let lastWeekKey = "";
+  const day = new Date(s);
+  while (day.getTime() <= r.getTime()) {
+    const monIso = isoDateOf(mondayOfWeekContaining(day));
+    const startIso = weekKeyOverrides?.get(monIso) ?? monIso;
+    if (startIso !== lastWeekKey) {
+      lastWeekKey = startIso;
+      counts.push(0);
+    }
+    counts[counts.length - 1] += 1;
+    day.setDate(day.getDate() + 1);
+  }
+  return counts;
+}
+
 function generateMarathonPlanV2ToRace(
   start,
   raceDay,
@@ -787,6 +813,7 @@ module.exports = {
   parseOnboardingRaceDate,
   buildWeekPhaseSchedule,
   computeWeekStartDates,
+  computeWeekDayCounts,
   generateMarathonPlanV2ToRace,
   extractWorkoutsForPhase,
   getWeekTotalKmFromPlan,
