@@ -84,7 +84,8 @@ function countTrailingTaperWeeks(phaseSchedule) {
  *
  * - Basis-Kurve (smoothstep) von startWeeklyKm bis peakTargetKm in der letzten Nicht-Taper-Woche.
  *   Entlastungswochen sind ein Dip relativ zu dieser Kurve und setzen sie nicht zurück.
- * - Entlastung im 3:1-Rhythmus, nie in der Peak-Woche, der Woche davor und im Taper.
+ * - Entlastung im 3:1-Rhythmus, nie in der Peak-Woche, der Woche davor, im Taper und in `protectedWeeks`
+ *   (die Woche mit dem längsten Lauf wird nicht entlastet).
  * - Taper: Anteil am Spitzenumfang laut TAPER_FRACTIONS. Die Rennwoche = Renndistanz plus Anteil für die
  *   übrigen Tage bis zum Rennen (Tage davor / 7), nie das Volumen einer vollen Woche.
  * - Wochen mit weniger als 7 Tagen (Planstart mitten in der Woche) werden anteilig skaliert.
@@ -99,7 +100,15 @@ function countTrailingTaperWeeks(phaseSchedule) {
  * }} params
  * @returns {{ targets: number[], isDeload: boolean[] }}
  */
-function computeVolumePlan({ totalWeeks, phaseSchedule, startWeeklyKm, peakTargetKm, weekDays, raceKm = 0 }) {
+function computeVolumePlan({
+  totalWeeks,
+  phaseSchedule,
+  startWeeklyKm,
+  peakTargetKm,
+  weekDays,
+  raceKm = 0,
+  protectedWeeks = [],
+}) {
   const targets = new Array(totalWeeks).fill(0);
   const isDeload = new Array(totalWeeks).fill(false);
   const taperWeeks = Math.min(countTrailingTaperWeeks(phaseSchedule), Math.max(0, totalWeeks - 1));
@@ -118,7 +127,8 @@ function computeVolumePlan({ totalWeeks, phaseSchedule, startWeeklyKm, peakTarge
     let value;
 
     if (weekNumber <= peakWeek) {
-      const deload = weekNumber % DELOAD_EVERY_N_WEEKS === 0 && weekNumber <= peakWeek - 2;
+      const deload =
+        weekNumber % DELOAD_EVERY_N_WEEKS === 0 && weekNumber <= peakWeek - 2 && !protectedWeeks.includes(weekNumber);
       isDeload[weekNumber - 1] = deload;
       value = deload ? trend(weekNumber) * DELOAD_FACTOR : trend(weekNumber);
       if (days < 7) value = (value * days) / 7;

@@ -1,0 +1,114 @@
+// Plan-Quellen für die Invarianten-Matrix: deterministischer Generator und ein "Chaos-Claude",
+// der absichtlich die Defekte aus dem Audit des 10-km-Plans liefert (fallender Umfang, Long Run in W1,
+// Sa-Tempo vor So-Long-Run, harte Einheit 2 Tage vor dem Rennen, Läufe nach dem Rennen, GA2/HFmax-Text,
+// km ≠ Beschreibung, eigenes Phasenlabel).
+
+const { generateMarathonPlanV2ToRace, defaultStructureForWeeks } = require("../../api/_lib/deterministicPlanGenerator");
+const { generateFullPlanByPhases } = require("../../api/_lib/phasedFullPlanGenerator");
+
+const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const DAY_MS = 86400000;
+
+const localDate = (ymd) => {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+
+function deterministicPlan(combo) {
+  const { profile } = combo;
+  const rules = defaultStructureForWeeks(combo.weeks).rules;
+  return generateMarathonPlanV2ToRace(
+    localDate(combo.startYmd),
+    localDate(combo.raceYmd),
+    combo.goal,
+    profile.raceDistanceKm,
+    profile.weeklyKmRange,
+    undefined,
+    rules,
+    undefined,
+    profile.raceTargetTime ?? undefined,
+  );
+}
+
+// ── Chaos-Claude ──────────────────────────────────────────────────────────────────────────
+function chaosStructure(variant, weeks) {
+  const phases =
+    variant === "no-taper"
+      ? [
+          { name: "base", weeks: Math.ceil(weeks * 0.5), label: "Aerober Grundlagenblock", focus: "Basis" },
+          { name: "build", weeks: Math.floor(weeks * 0.3), label: "Entwicklungsphase", focus: "Aufbau" },
+          { name: "peak", weeks: weeks - Math.ceil(weeks * 0.5) - Math.floor(weeks * 0.3), label: "Spezifische Vorbereitung", focus: "Spitze" },
+        ]
+      : [
+          { name: "base", weeks: 6, label: "Aerober Grundlagenblock", focus: "Basis" },
+          { name: "build", weeks: 5, label: "Entwicklungsphase", focus: "Aufbau" },
+          { name: "peak", weeks: 4, label: "Spezifische Vorbereitung", focus: "Spitze" },
+          { name: "taper", weeks: 5, label: "Tapering", focus: "Erholen" },
+        ];
+  return {
+    analysis: "Chaos",
+    phases,
+    sessionNames: {},
+    // Samstag-Tempo direkt vor dem Sonntags-Long-Run, Intervall am Dienstag
+    rules: { restDays: [1], longRunDay: 0, intervalDay: 2, tempoDay: 6, maxTrainingDaysPerWeek: 5, weeklyKmMultiplier: 1 },
+  };
+}
+
+function chaosWorkoutsForWeek(wn, startIso, raceIso) {
+  const start = Date.parse(`${startIso}T00:00:00Z`);
+  const mondayOffset = (new Date(start).getUTCDay() + 6) % 7;
+  const monday = start - mondayOffset * DAY_MS;
+  const workouts = [];
+  for (let d = 0; d < 7; d += 1) {
+    const ms = monday + d * DAY_MS;
+    if (ms < start) continue;
+    const ymd = new Date(ms).toISOString().slice(0, 10);
+    const id = `w${wn}-${DAY_NAMES[d].toLowerCase()}`;
+    const base = { id, weekId: `w${wn}`, day: DAY_NAMES[d], date: ymd, dateIso: `${ymd}T12:00:00.000Z`, phase: "BUILD" };
+    const km = 14 - wn * 0.4; // Umfang fällt
+    if (ymd === raceIso) {
+      workouts.push({ ...base, type: "race", title: "Renntag", km: 10, description: "Rennen." });
+    } else if (d === 0) {
+      workouts.push({ ...base, type: "rest", title: "Ruhetag vor Renntag", km: 0, description: "Frei." });
+    } else if (d === 1) {
+      workouts.push({ ...base, type: "interval", title: "Intervalle", km: 15, description: "2 km + 6×(3 min/90 s) + 2 km im GA2-Bereich, Zone 4–5." });
+    } else if (d === 2) {
+      workouts.push({ ...base, type: "easy", title: "GA1-Dauerlauf", km: Math.max(5, km), description: "Locker bei 60–70 % HFmax, GA1." });
+    } else if (d === 3) {
+      workouts.push({ ...base, type: "tempo", title: "Tempodauerlauf", km: 11, description: "Tempo-Block." });
+    } else if (d === 4) {
+      workouts.push({ ...base, type: "easy", title: "Lockerer Lauf", km: 8, description: "Locker." });
+    } else if (d === 5) {
+      workouts.push({ ...base, type: "tempo", title: "Samstags-Tempo", km: 12, description: "Zone 3–4 direkt vor dem Long Run." });
+    } else {
+      workouts.push({ ...base, type: "long", title: "Long Run", km: 16.5, description: "Langer Lauf über 18 km." });
+    }
+  }
+  return workouts;
+}
+
+/** Antwort der Mock-Claude-API: Struktur-Aufruf oder Phasen-Aufruf (anhand des System-Prompts erkannt). */
+function chaosReply(params, combo, variant) {
+  const system = String(params.system ?? "");
+  if (system.includes("phases (Phasenstruktur)")) {
+    return { content: [{ type: "text", text: JSON.stringify(chaosStructure(variant, combo.weeks)) }], usage: {} };
+  }
+  const userMessage = String(params.messages?.[0]?.content ?? "");
+  const weekRe = /- Woche (\d+) \(global w\d+\): startIso=(\d{4}-\d{2}-\d{2})/g;
+  const workouts = [];
+  const weeks = [];
+  let match;
+  while ((match = weekRe.exec(userMessage))) {
+    weeks.push({ id: `w${match[1]}`, label: `Woche ${match[1]}`, startIso: match[2], totalKm: 0 });
+    workouts.push(...chaosWorkoutsForWeek(Number(match[1]), match[2], combo.raceYmd));
+  }
+  return { content: [{ type: "text", text: JSON.stringify({ weeks, workouts }) }], usage: {} };
+}
+
+async function claudePlan(combo, variant, mockCreate) {
+  mockCreate.mockImplementation(async (params) => chaosReply(params, combo, variant));
+  const { plan } = await generateFullPlanByPhases({ messages: { create: mockCreate } }, combo.profile);
+  return plan;
+}
+
+module.exports = { deterministicPlan, claudePlan, chaosReply, chaosWorkoutsForWeek, localDate };

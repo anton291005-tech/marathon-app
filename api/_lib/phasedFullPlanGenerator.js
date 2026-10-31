@@ -3,11 +3,11 @@
 const { generatePlanStructureWithClaude } = require("./claudePlanGenerator");
 const {
   normalizeTrainingPhase,
-  parseWeeklyKmTarget,
   parseOnboardingRaceDate,
   buildWeekPhaseSchedule,
   computeWeekStartDates,
   computeWeekDayCounts,
+  buildVolumeContext,
   generateMarathonPlanV2ToRace,
   getWeekTotalKmFromPlan,
   defaultStructureForWeeks,
@@ -22,22 +22,21 @@ const {
   scalePhaseWorkoutsForContinuity,
   groupWorkoutsByWeekStart,
   sumWeekKm,
-  applyLongRunCapPerWeek,
-  clampPostRaceSessionsToRest,
 } = require("./planWorkoutUtils");
-const { getRecommendedVolume } = require("./raceVolumeReference");
-const {
-  computeVolumePlan,
-  resolveTaperWeeks,
-  resolvePeakKm,
-  applyTaperToSchedule,
-} = require("./weeklyVolumeProgression");
+const { enforcePlanInvariants, checkPlanInvariants } = require("./planInvariants");
 
 const PHASE_ORDER = ["base", "build", "peak", "taper"];
 const TOKENS_PER_WEEK = 1100;
 const BASE_OVERHEAD = 600;
 const MAX_TOKENS_CAP = 8192;
 const PHASE_CALL_TIMEOUT_MS = 90000;
+
+function raceTitleFor(profile) {
+  const km = profile.raceDistanceKm ?? 0;
+  if (km >= 42) return "Marathon";
+  if (km >= 21) return "Halbmarathon";
+  return `${Number.isInteger(km) ? km : String(km).replace(".", ",")} km`;
+}
 
 function calculateMaxTokensForPhase(weekCount) {
   const calculated = BASE_OVERHEAD + weekCount * TOKENS_PER_WEEK;
@@ -299,44 +298,28 @@ async function generateFullPlanByPhases(client, profile) {
   }
 
   const rules = structure.rules ?? defaultStructureForWeeks(totalWeeks).rules;
-  const volumeRef = getRecommendedVolume(profile.raceDistanceKm, profile.raceTargetTime, profile.raceGoal);
-  const weekDays = computeWeekDayCounts(startDay, raceDay);
-  // Taper-Länge ist eine Code-Regel (Distanz, Planlänge, Länge der Rennwoche), nicht Claudes Phasenaufteilung.
-  const taperWeeks = resolveTaperWeeks({
-    distKey: volumeRef.distKey,
-    totalWeeks,
-    raceWeekDays: weekDays[totalWeeks - 1] ?? 7,
-  });
-  const weekPhaseSchedule = applyTaperToSchedule(
-    buildWeekPhaseSchedule(totalWeeks, structure.phases),
+  const {
+    volumeRef,
     taperWeeks,
-  );
+    weekPhaseSchedule,
+    weeklyTarget,
+    volumeGapWarning,
+    effectivePeakKm,
+    weeklyKmTargets,
+    isDeload: weekIsDeload,
+  } = buildVolumeContext({
+    startDay,
+    raceDay,
+    structurePhases: structure.phases,
+    raceDistanceKm: profile.raceDistanceKm,
+    raceTargetTime: profile.raceTargetTime,
+    raceGoal: profile.raceGoal,
+    weeklyKmRange: profile.weeklyKmRange,
+    longRunDow: rules.longRunDay ?? 0,
+  });
+  // Taper-Länge ist eine Code-Regel (Distanz, Planlänge, Länge der Rennwoche), nicht Claudes Phasenaufteilung.
   const orderedPhases = phaseSpecsForSchedule(structure.phases, weekPhaseSchedule, totalWeeks);
 
-  const weekNumberByStartIso = new Map(
-    Object.entries(weekStarts ?? {}).map(([wn, startIso]) => [startIso, Number(wn)]),
-  );
-  const getPhaseForWeekStart = (weekStartIso) => {
-    const wn = weekNumberByStartIso.get(weekStartIso);
-    return wn ? weekPhaseSchedule[wn - 1]?.phase : undefined;
-  };
-
-  const weeklyTarget = parseWeeklyKmTarget(profile.weeklyKmRange);
-  const volumeGapWarning = weeklyTarget < volumeRef.baseKm[0] * 0.6;
-  const effectivePeakKm = resolvePeakKm({
-    referencePeakKm: volumeGapWarning
-      ? Math.min(volumeRef.peakKm[1], weeklyTarget * 1.6)
-      : volumeRef.peakKm[1],
-    startWeeklyKm: weeklyTarget,
-  });
-  const { targets: weeklyKmTargets, isDeload: weekIsDeload } = computeVolumePlan({
-    totalWeeks,
-    phaseSchedule: weekPhaseSchedule,
-    startWeeklyKm: weeklyTarget,
-    peakTargetKm: effectivePeakKm,
-    weekDays,
-    raceKm: profile.raceDistanceKm ?? 0,
-  });
   process.stdout.write(
     `[phased-plan] weeklyKmTargets ${JSON.stringify({ weeklyTarget, effectivePeakKm, taperWeeks, weeklyKmTargets })}\n`,
   );
@@ -357,6 +340,7 @@ async function generateFullPlanByPhases(client, profile) {
         undefined,
         rules,
         structure.phases,
+        profile.raceTargetTime,
       );
     }
     return deterministicFallbackPlan;
@@ -447,13 +431,8 @@ async function generateFullPlanByPhases(client, profile) {
         if (rawChunkWorkouts.length === 0) {
           throw new Error("no valid workouts after parse");
         }
-        // Ultra distances are exempt: raceVolumeReference.js's peakLongRunKm for ultra
-        // assumes a much higher long-run share of weekly volume than the 30%/33% rule.
-        const longRunCappedWorkouts =
-          volumeRef.distKey === "ultra"
-            ? rawChunkWorkouts
-            : applyLongRunCapPerWeek(rawChunkWorkouts, getPhaseForWeekStart);
-        const chunkWorkouts = clampPostRaceSessionsToRest(longRunCappedWorkouts, raceDayIso);
+        // Long-Run-Anteil, Anfahrt, Vortage und Rennende erzwingt enforcePlanInvariants über den ganzen Plan.
+        const chunkWorkouts = rawChunkWorkouts;
         phaseWorkouts.push(...chunkWorkouts);
 
         const chunkWeeks = groupWorkoutsByWeekStart(chunkWorkouts);
@@ -550,6 +529,34 @@ async function generateFullPlanByPhases(client, profile) {
     throw new Error("No workouts generated for any phase");
   }
 
+  const enforcedWorkouts = enforcePlanInvariants(allWorkouts, {
+    startYmd: isoDateOf(startDay),
+    raceYmd: raceDayIso,
+    raceKm: profile.raceDistanceKm,
+    raceTitle: raceTitleFor(profile),
+    distKey: volumeRef.distKey,
+    weeklyKmTargets,
+    isDeload: weekIsDeload,
+    weekPhaseSchedule,
+    peakLongRunKm: volumeRef.peakLongRunKm,
+    longRunDow: rules.longRunDay ?? 0,
+  });
+  const invariantViolations = checkPlanInvariants(enforcedWorkouts, {
+    startYmd: isoDateOf(startDay),
+    raceYmd: raceDayIso,
+    raceKm: profile.raceDistanceKm,
+    distKey: volumeRef.distKey,
+    isDeload: weekIsDeload,
+    weekDays: computeWeekDayCounts(startDay, raceDay),
+    weekPhaseSchedule,
+    totalWeeks,
+    taperWeeks,
+  });
+  // Nur Anzahl und Codes loggen, keine Inhalte.
+  process.stdout.write(
+    `[invariant-check] ${JSON.stringify({ violations: invariantViolations.length, codes: [...new Set(invariantViolations.map((v) => v.split(":")[0]))] })}\n`,
+  );
+
   const metaByWeekStart = new Map();
   weekPhaseSchedule.forEach((entry, idx) => {
     const weekNumber = idx + 1;
@@ -564,7 +571,7 @@ async function generateFullPlanByPhases(client, profile) {
     });
   });
 
-  const plan = rebuildPlanFromWorkouts(allWorkouts, metaByWeekStart, weekKeyOverrides);
+  const plan = rebuildPlanFromWorkouts(enforcedWorkouts, metaByWeekStart, weekKeyOverrides);
   const totalDurationMs = Date.now() - planStartTs;
   process.stdout.write(
     `[phased-plan] END ${JSON.stringify({
