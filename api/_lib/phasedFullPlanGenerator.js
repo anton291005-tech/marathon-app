@@ -40,6 +40,14 @@ function raceTitleFor(profile) {
   return `${Number.isInteger(km) ? km : String(km).replace(".", ",")} km`;
 }
 
+const WEEKDAYS_DE = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+
+/** " (Dienstag)" für das Renndatum "01.12.2026"; leer, wenn das Datum nicht lesbar ist. */
+function raceWeekdayLabel(raceDate) {
+  const day = parseOnboardingRaceDate(raceDate);
+  return day ? ` (${WEEKDAYS_DE[day.getDay()]})` : "";
+}
+
 function calculateMaxTokensForPhase(weekCount) {
   const calculated = BASE_OVERHEAD + weekCount * TOKENS_PER_WEEK;
   return Math.min(calculated, MAX_TOKENS_CAP);
@@ -79,7 +87,7 @@ SCHEMA (exakt einhalten):
     {
       "id": "w5-mo", "weekId": "w5", "day": "Mo", "date": "28. Jun",
       "type": "easy", "title": "Lockerer Dauerlauf", "km": 8,
-      "description": "GA1-Bereich, Herzfrequenz niedrig halten.", "phase": "${phaseUpper}"
+      "description": "Lockerer Dauerlauf in Zone 2.", "phase": "${phaseUpper}"
     }
   ]
 }
@@ -93,6 +101,8 @@ WICHTIG — NUR DIESE PHASE:
 - startIso: ISO-Datum des Montags der jeweiligen Woche
 - type: easy | tempo | interval | long | race | rest | bike | strength
 - Renntag nur in Taper-Phase am Renndatum: type "race", km = Renndistanz
+- Der Plan endet am Renntag: keine Einheiten danach, die zwei Tage davor nur locker oder frei
+- Keine harte Einheit (interval, tempo) am Tag vor einem Long Run oder vor dem Rennen
 - Ruhetage: type "rest", km: 0
 
 VOLUMEN (KRITISCH):
@@ -102,8 +112,9 @@ VOLUMEN (KRITISCH):
 
 EINHEITEN-ROTATION:
 - Intervalle, Tempo, Long Runs und Easy Runs variieren — keine repetitiven Wochen
-- Beschreibungen konkret mit Pace/Struktur
-- Titel ohne Wochennummern, beschreibend und abwechslungsreich`;
+- Titel ohne Wochennummern und ohne Zahlen, beschreibend und abwechslungsreich
+- Intensität nur als Zone 1–5 benennen. Keine GA1/GA2-Begriffe, keine Prozent- oder bpm-Angaben: Bausteine
+  und Pulsbereiche setzt die App selbst aus dem Einheitentyp, die Kilometer passt sie ans Wochenziel an`;
 }
 
 function buildPhaseUserMessage(profile, phaseSpec, context) {
@@ -147,7 +158,7 @@ ATHLET:
 - Aktuelles Niveau: ${profile.weeklyKmRange} km/Woche (Ziel-Mittelwert ~${weeklyTarget} km/Woche)
 - ${goalText}
 - Planstart: ${profile.planStartDate}
-- Renndatum: ${profile.raceDate}
+- Renndatum: ${profile.raceDate}${raceWeekdayLabel(profile.raceDate)}
 
 FACHLICHE VOLUMEN-REFERENZ (verbindlich für die Peak-Woche):
 - Empfohlenes Peak-Wochenvolumen für dieses Zielzeit-Niveau: ${volumeRef.peakKm[0]}-${effectivePeakKm} km

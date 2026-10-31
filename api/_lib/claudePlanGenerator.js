@@ -181,7 +181,7 @@ Das JSON muss exakt diesem Schema entsprechen:
     { "name": "taper", "weeks": 2, "label": "Tapering", "focus": "Erholen und schärfen" }
   ],
   "sessionNames": {
-    "easy": ["Regenerationslauf", "GA1-Dauerlauf", "Lockerer Grundlagenlauf", "Aerober Entwicklungslauf", "Ruhiger Dauerlauf"],
+    "easy": ["Regenerationslauf", "Lockerer Dauerlauf", "Lockerer Grundlagenlauf", "Aerober Entwicklungslauf", "Ruhiger Dauerlauf"],
     "tempo": ["Tempodauerlauf", "Schwellenlauf", "Progressiver Mittellauf", "Fahrtspiel", "Kraftausdauer-Lauf"],
     "interval": ["Bahnintervalle 1000m", "Kurze Intervalle 400m", "Bergläufe", "Tempoläufe 3×2km", "VO2max-Intervalle"],
     "long": ["Langer Grundlagenlauf", "Progressiver Long Run", "Marathon-Pace-Long-Run", "Ausdauer-Entwicklungslauf"],
@@ -205,6 +205,8 @@ Das JSON muss exakt diesem Schema entsprechen:
 
 Tag-Zahlen für rules: 0=Sonntag, 1=Montag, 2=Dienstag, 3=Mittwoch, 4=Donnerstag, 5=Freitag, 6=Samstag
 intervalDay und tempoDay dürfen NICHT aufeinanderfolgend sein.
+Weder intervalDay noch tempoDay dürfen der Tag vor longRunDay sein (longRunDay 0 = Sonntag → kein Samstag).
+Intensität nur als Zone 1–5 benennen, keine GA1/GA2-Begriffe.
 Präferenzen des Läufers vollständig berücksichtigen.`;
 
 async function callClaudeForStructure(client, profile, extraInstruction) {

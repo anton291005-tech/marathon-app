@@ -369,7 +369,11 @@ function enforcePlanInvariants(input, ctx) {
 }
 
 function finalizeSession(w, index, days, ctx) {
-  if (w.sessionType === "rest") return { ...w, desc: w.desc || "Ruhetag.", structured: null, pace: null };
+  if (w.sessionType === "rest") {
+    // Titel immer "Ruhetag": Claudes Freitext ("Ruhetag vor Renntag" drei Tage vorher) wäre irreführend.
+    const desc = typeof w.desc === "string" && w.desc.trim() && !BANNED_TEXT.test(w.desc) ? w.desc : "Ruhetag.";
+    return { ...w, title: "Ruhetag", desc, structured: null, pace: null };
+  }
   if (!RUN_TYPES.has(w.sessionType) && w.sessionType !== "race") return w;
   let session = { ...w };
   if (isHard(session) && !isValidStructure(session.structured, session.km)) {
