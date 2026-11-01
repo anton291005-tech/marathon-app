@@ -197,6 +197,15 @@ Während der Recherche zu Schritt 6/8 als unbenutzt identifiziert — noch nicht
 - `src/components/ai/SwapConfirmationCard.tsx` — nur vom eigenen Test (`AiCoachPanel.swapConfirm.test.tsx`) referenziert, kein Produktions-Import gefunden. Der echte Live-Pfad läuft über `AiActionCard.tsx`.
 - `App.tsx:2553` (`DetailBlock title="Warum diese Einheit?"`) — Legacy-Datei, nicht im Live-Pfad (`AppMain.tsx`); einziges bestehendes "Warum"-UI-Pattern, aber tot. Relevant für Schritt 8, falls das Pattern reaktiviert statt neu gebaut werden soll.
 
+## Plan-Generator-Regeln (`fix/plan-generator-rules`) — Stand 2026-11-01
+Harte Invarianten für Onboarding-Pläne sind als Code umgesetzt (`api/_lib/planInvariants.js`, `planSessionText.js`, `weeklyVolumeProgression.js`, `hrZones.ts`), nicht als Prompt-Regel: Umfang steigt bis zur Spitze (3:1), fester Taper, Rennen ist die letzte Einheit, Renntag −2/−1 locker oder frei, keine harte Einheit am Vortag von Long Run/Rennen, km = Summe der Bausteine, eine Zonensprache, eine Puls-Quelle, ein Phasenname. Matrix-Tests über 5 km/10 km/HM/Marathon × 6/8/12/16/20 Wochen × Finisher/Zielzeit. Branch gepusht, Merge nach `main` und Device-Test (iPhone 13) stehen aus.
+
+**Folgepunkte:**
+- **(a) Mindestplanlänge im Onboarding:** Halbmarathon und Marathon mindestens 6 Wochen. Kürzere Pläne liegen außerhalb der getesteten Matrix; bei 5 Wochen mit Stub-Woche am Start kann der längste Lauf 20 statt ≥ 21 Tage vor dem Rennen liegen.
+- **(b) I1/I2 auch für Teilwochen am Start:** Die Matrix-Prüfungen zu Umfangsverlauf und Long-Run-Verlauf überspringen Wochen mit weniger als 7 Tagen. Die Stub-Woche ist nur über I3–I7 und `checkPlanInvariants` abgesichert.
+- **(c) Altlast entfernen:** `applyLongRunCapPerWeek` und `clampPostRaceSessionsToRest` (`api/_lib/planWorkoutUtils.js`) sind nicht mehr verdrahtet. Zusammen mit `scripts/test-long-run-cap.js` löschen; den Clamp-Test (`clampLongRunToWeekPercent`) vorher nach Jest übernehmen, falls die Funktion bleibt.
+- **(d) Folge-Branch `fix/client-plan-rules`:** Client-Kopie des Generators `src/lib/ai/coachPlanMutations.ts` (`generateMarathonPlanV2ToRace`). Sie läuft im Onboarding-„vereinfachten Plan“ und im Coach-Chat (Marathon-Plan erzeugen, offline) und hat keine der Clamps (kein Long-Run-Cap, kein Rennende, kein Taper, Claudes Freitext-Label). Vorgehen: TS-Spiegel von `planInvariants`/`planSessionText` mit Paritätstest gegen die Server-Module (Muster `legacyYearAnchor`, `planLabelParity`).
+
 ## Out of Scope bis TestFlight
 UI/UX-Redesign, Triathlon-Erweiterung, Android, Apple-Watch-Companion — nicht anfassen, auch nicht "nebenbei".
 
