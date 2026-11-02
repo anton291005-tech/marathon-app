@@ -842,6 +842,11 @@ function generateMarathonPlanV2ToRace(
     weekPhaseSchedule: volumeContext.weekPhaseSchedule,
     peakLongRunKm: volumeContext.volumeRef.peakLongRunKm,
     longRunDow: aiRules?.longRunDay ?? 0,
+    restDows: Array.isArray(aiRules?.restDays)
+      ? aiRules.restDays
+      : restDayDow !== undefined
+        ? [restDayDow]
+        : raceConfig.restDaysPattern,
   });
 
   return rebuildPlanFromWorkouts(enforcedWorkouts, metaByWeekStart, weekKeyOverrides);

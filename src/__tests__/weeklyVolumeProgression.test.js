@@ -109,7 +109,8 @@ describe("I1 Wochenumfang: Aufbau bis zur Spitze, danach Taper", () => {
     expect(last).toBeGreaterThanOrEqual(Math.round(raceKm));
     // Höchstens Rennen + Volumen der Tage davor (6/7 des Spitzenumfangs bei voller Woche)
     expect(last).toBeLessThanOrEqual(Math.round(raceKm + (vp.peakKm * (vp.weekDays[vp.totalWeeks - 1] - 1)) / 7) + 1);
-    expect(vp.weekDays[vp.totalWeeks - 1]).toBe(combo.raceDow === 0 ? 7 : 2);
+    // Rennwoche Mo bis Renntag: Mo = 1 Tag … Sa = 6 Tage, So = volle Woche
+    expect(vp.weekDays[vp.totalWeeks - 1]).toBe(combo.raceDow === 0 ? 7 : combo.raceDow);
   });
 });
 

@@ -553,6 +553,7 @@ async function generateFullPlanByPhases(client, profile) {
     weekPhaseSchedule,
     peakLongRunKm: volumeRef.peakLongRunKm,
     longRunDow: rules.longRunDay ?? 0,
+    restDows: Array.isArray(rules.restDays) ? rules.restDays : [],
   });
   const invariantViolations = checkPlanInvariants(enforcedWorkouts, {
     startYmd: isoDateOf(startDay),

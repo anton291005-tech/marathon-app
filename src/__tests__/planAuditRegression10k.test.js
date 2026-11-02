@@ -1,4 +1,5 @@
-// Regression: der aktive 10-km-Plan aus dem Audit (8 Wochen, Start Mo 12.10.2026, Rennen Di 01.12.2026).
+// Regression: der aktive 10-km-Plan aus dem Audit (8 Wochen, Start Mo 12.10.2026, Rennen Di 01.12.2026)
+// und der Live-Plan d18e1bd8 (Rennen Di 22.12.2026, Fixture unter src/testSupport/fixtures).
 // Der Mock-Claude liefert genau die gemeldeten Defekte; jeder der 7 Punkte wird einzeln am Ergebnis geprüft.
 
 const mockCreate = jest.fn();
@@ -202,3 +203,115 @@ describe("Audit 10-km-Plan (Rennen Di 01.12.2026)", () => {
     });
   });
 });
+
+// ── Live-Plan d18e1bd8 (Live-Test 2026-11-01): 10 km Finisher, Start Mo 02.11.2026, Rennen Di 22.12.2026 ─────────
+// Gespeicherter Plan aus Supabase (vom alten main-Stand erzeugt) als Eingabe für enforcePlanInvariants. Gemeldet:
+// fallender Umfang, Long Run in W1 am längsten, zwei Rennen (So 20.12. und Di 22.12.), Läufe nach dem Rennen,
+// Mi Intervall + Do Tempo in W4–W7, Bausteine passen nicht zu den km.
+describe("Live-Plan d18e1bd8 (Rennen Di 22.12.2026) durch enforcePlanInvariants", () => {
+  const { enforcePlanInvariants, checkPlanInvariants } = require("../../api/_lib/planInvariants");
+  const { buildVolumeContext } = require("../../api/_lib/deterministicPlanGenerator");
+  const fixture = require("../testSupport/fixtures/livePlan10k-2026-12-22.json");
+  const { planStartYmd, raceYmd } = fixture.profile;
+  const localDay = (s) => {
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  };
+  const volume = buildVolumeContext({
+    startDay: localDay(planStartYmd),
+    raceDay: localDay(raceYmd),
+    structurePhases: fixture.phases,
+    raceDistanceKm: fixture.profile.raceDistanceKm,
+    raceTargetTime: null,
+    raceGoal: fixture.profile.raceGoal,
+    weeklyKmRange: fixture.profile.weeklyKmRange,
+    longRunDow: 0,
+  });
+  const enforceCtx = {
+    startYmd: planStartYmd,
+    raceYmd,
+    raceKm: 10,
+    raceTitle: "10-km-Rennen",
+    distKey: volume.volumeRef.distKey,
+    weeklyKmTargets: volume.weeklyKmTargets,
+    isDeload: volume.isDeload,
+    weekPhaseSchedule: volume.weekPhaseSchedule,
+    peakLongRunKm: volume.volumeRef.peakLongRunKm,
+    longRunDow: 0,
+  };
+  const checkCtx = {
+    startYmd: planStartYmd,
+    raceYmd,
+    raceKm: 10,
+    distKey: volume.volumeRef.distKey,
+    isDeload: volume.isDeload,
+    weekDays: volume.weekDays,
+    weekPhaseSchedule: volume.weekPhaseSchedule,
+    totalWeeks: volume.totalWeeks,
+    taperWeeks: volume.taperWeeks,
+  };
+  const out = enforcePlanInvariants(fixture.workouts, enforceCtx);
+  const sorted = [...out].sort((a, b) => ymd(a).localeCompare(ymd(b)));
+  const weekNo = (w) => Math.floor((Date.parse(ymd(w)) - Date.parse(planStartYmd)) / (7 * DAY_MS)) + 1;
+  const weeksOf = () => {
+    const weeks = new Map();
+    for (const w of sorted) weeks.set(weekNo(w), [...(weeks.get(weekNo(w)) ?? []), w]);
+    return weeks;
+  };
+  const runKm = (list) => list.reduce((s, w) => s + (w.sport !== "rest" && w.sessionType !== "race" ? w.km : 0), 0);
+
+  it("die Fixture zeigt die gemeldeten Defekte (sonst prüft der Test nichts)", () => {
+    const codes = new Set(checkPlanInvariants(fixture.workouts, checkCtx).map((p) => p.split(":")[0]));
+    for (const code of ["I1", "I2", "I3", "I5", "I6", "I8"]) expect(codes.has(code)).toBe(true);
+  });
+
+  it("nach enforce: 0 Verstöße gegen alle Invarianten", () => {
+    expect(checkPlanInvariants(out, checkCtx)).toEqual([]);
+  });
+
+  it("kein Mi Intervall + Do Tempo, überhaupt keine zwei harten Tage hintereinander", () => {
+    const hardOrRace = (w) => isHard(w) || w.sessionType === "race";
+    sorted.forEach((w, i) => {
+      if (i > 0) expect(hardOrRace(w) && hardOrRace(sorted[i - 1])).toBe(false);
+    });
+    for (const wed of ["2026-11-25", "2026-12-02", "2026-12-09", "2026-12-16"]) {
+      const mi = sorted.find((w) => ymd(w) === wed);
+      const doNext = sorted.find((w) => ymd(w) === addYmd(wed, 1));
+      expect(isHard(mi) && isHard(doNext)).toBe(false);
+    }
+    // die harten Einheiten werden verschoben, nicht pauschal gestrichen
+    expect(sorted.filter(isHard).length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("Rennen ist die letzte Einheit (Di 22.12.), genau ein Rennen, nichts danach", () => {
+    expect(sorted.filter((w) => w.sessionType === "race")).toHaveLength(1);
+    expect(sorted[sorted.length - 1].sessionType).toBe("race");
+    expect(ymd(sorted[sorted.length - 1])).toBe(raceYmd);
+    expect(sorted.find((w) => ymd(w) === "2026-12-20").sessionType).not.toBe("race");
+    expect(sorted.some((w) => ymd(w) > raceYmd)).toBe(false);
+  });
+
+  it("I9/I10: Long Run ≥ längster lockerer Lauf, 20–30 % der vollen Wochen (W1 war 14,4 km am längsten)", () => {
+    const weeks = weeksOf();
+    for (const [wn, list] of weeks) {
+      const long = list.find((w) => w.sessionType === "long");
+      if (!long) continue;
+      for (const w of list.filter((x) => x.sessionType === "easy")) expect(w.km).toBeLessThanOrEqual(long.km);
+      if (wn === weeks.size || list.length < 7) continue;
+      expect(long.km / runKm(list)).toBeGreaterThanOrEqual(0.195);
+      expect(long.km / runKm(list)).toBeLessThanOrEqual(0.305);
+    }
+    const longs = sorted.filter((w) => w.sessionType === "long");
+    expect(longs[0].km).toBeLessThan(Math.max(...longs.map((w) => w.km)));
+  });
+
+  it("Client-Anzeige: km der harten Einheiten = km der Einheit (war: 2,0 statt 9,6 km)", () => {
+    for (const w of sorted.filter(isHard)) {
+      expect(Math.abs(getSessionPlannedDistanceKm({ km: w.km, type: w.sessionType, desc: w.desc, structured: w.structured }) - w.km)).toBeLessThanOrEqual(0.2);
+    }
+  });
+});
+
+function addYmd(s, n) {
+  return new Date(Date.parse(`${s}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
+}

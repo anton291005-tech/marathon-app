@@ -1,7 +1,7 @@
 // Plan-Quellen für die Invarianten-Matrix: deterministischer Generator und ein "Chaos-Claude",
 // der absichtlich die Defekte aus dem Audit des 10-km-Plans liefert (fallender Umfang, Long Run in W1,
-// Sa-Tempo vor So-Long-Run, harte Einheit 2 Tage vor dem Rennen, Läufe nach dem Rennen, GA2/HFmax-Text,
-// km ≠ Beschreibung, eigenes Phasenlabel).
+// Sa-Tempo vor So-Long-Run, Mi-Intervall direkt vor Do-Tempo (Live-Plan), harte Einheit 2 Tage vor dem Rennen,
+// Läufe nach dem Rennen, GA2/HFmax-Text, km ≠ Beschreibung, eigenes Phasenlabel).
 
 const { generateMarathonPlanV2ToRace, defaultStructureForWeeks } = require("../../api/_lib/deterministicPlanGenerator");
 const { generateFullPlanByPhases } = require("../../api/_lib/phasedFullPlanGenerator");
@@ -32,6 +32,18 @@ function deterministicPlan(combo) {
 
 // ── Chaos-Claude ──────────────────────────────────────────────────────────────────────────
 function chaosStructure(variant, weeks) {
+  if (variant === "three-runs") {
+    // Finisher-Plan mit drei Lauftagen: vier Wunsch-Ruhetage (Mo, Mi, Fr, Sa), Intervall Di, Long Run So
+    return {
+      analysis: "Chaos drei Läufe",
+      phases: [
+        { name: "base", weeks: Math.ceil(weeks * 0.4), label: "Aerober Grundlagenblock", focus: "Basis" },
+        { name: "build", weeks: weeks - Math.ceil(weeks * 0.4), label: "Entwicklungsphase", focus: "Aufbau" },
+      ],
+      sessionNames: {},
+      rules: { restDays: [1, 3, 5, 6], longRunDay: 0, intervalDay: 2, maxTrainingDaysPerWeek: 3, weeklyKmMultiplier: 1 },
+    };
+  }
   const phases =
     variant === "no-taper"
       ? [
@@ -54,6 +66,28 @@ function chaosStructure(variant, weeks) {
   };
 }
 
+/**
+ * Drei Läufe pro Woche: ungerade Wochen Long Run + Intervall + locker, gerade Wochen Long Run + 2× locker.
+ * Dort sind I9 und die 30-%-Grenze nur mit der Gleichverteilung (longRunCap) gleichzeitig erfüllbar.
+ */
+function threeRunWorkoutsForWeek(wn, startIso, raceIso) {
+  const start = Date.parse(`${startIso}T00:00:00Z`);
+  const monday = start - ((new Date(start).getUTCDay() + 6) % 7) * DAY_MS;
+  const workouts = [];
+  for (let d = 0; d < 7; d += 1) {
+    const ms = monday + d * DAY_MS;
+    if (ms < start) continue;
+    const ymd = new Date(ms).toISOString().slice(0, 10);
+    const base = { id: `w${wn}-${DAY_NAMES[d].toLowerCase()}`, weekId: `w${wn}`, day: DAY_NAMES[d], date: ymd, dateIso: `${ymd}T12:00:00.000Z`, phase: "BUILD" };
+    if (ymd === raceIso) workouts.push({ ...base, type: "race", title: "Renntag", km: 10, description: "Rennen." });
+    else if (d === 1 && wn % 2 === 1) workouts.push({ ...base, type: "interval", title: "Intervalle", km: 9, description: "6×800 m im GA2-Bereich." });
+    else if (d === 1 || d === 3) workouts.push({ ...base, type: "easy", title: "GA1-Lauf", km: 14, description: "Locker bei 65 % HFmax." });
+    else if (d === 6) workouts.push({ ...base, type: "long", title: "Long Run", km: 8, description: "Langer Lauf über 20 km." });
+    else workouts.push({ ...base, type: "rest", title: "Ruhetag", km: 0, description: "Frei." });
+  }
+  return workouts;
+}
+
 function chaosWorkoutsForWeek(wn, startIso, raceIso) {
   const start = Date.parse(`${startIso}T00:00:00Z`);
   const mondayOffset = (new Date(start).getUTCDay() + 6) % 7;
@@ -73,9 +107,12 @@ function chaosWorkoutsForWeek(wn, startIso, raceIso) {
       if (wn % 3 === 1) workouts.push({ ...base, type: "rest", title: "Ruhetag vor Renntag", km: 0, description: "Frei." });
       else if (wn % 3 === 2) workouts.push({ ...base, sport: "bike", type: "bike", title: "GA1 Rad", km: 0, description: "GA1 bei 65 % HFmax, 120 bpm, Zone 4." });
       else workouts.push({ ...base, sport: "strength", type: "strength", title: "Kraft 70 % HFmax", km: 0, description: "Puls bei 140 bpm." });
-    } else if (d === 1) {
+    } else if (d === 1 && wn % 2 === 1) {
       workouts.push({ ...base, type: "interval", title: "Intervalle", km: 15, description: "2 km + 6×(3 min/90 s) + 2 km im GA2-Bereich, Zone 4–5." });
-    } else if (d === 2) {
+    } else if (d === 2 && wn % 2 === 0) {
+      // Gerade Wochen wie W4–W7 im Live-Plan: Mi Intervall direkt vor dem Do-Tempo
+      workouts.push({ ...base, type: "interval", title: "Rennspezifische Intervalle", km: 10, description: "WU 2 km + 5×800 m + AB 1,5 km." });
+    } else if (d === 1 || d === 2) {
       workouts.push({ ...base, type: "easy", title: "GA1-Dauerlauf", km: Math.max(5, km), description: "Locker bei 60–70 % HFmax, GA1." });
     } else if (d === 3) {
       workouts.push({ ...base, type: "tempo", title: "Tempodauerlauf", km: 11, description: "Tempo-Block." });
@@ -103,13 +140,14 @@ function chaosReply(params, combo, variant) {
   let match;
   while ((match = weekRe.exec(userMessage))) {
     weeks.push({ id: `w${match[1]}`, label: `Woche ${match[1]}`, startIso: match[2], totalKm: 0 });
-    workouts.push(...chaosWorkoutsForWeek(Number(match[1]), match[2], combo.raceYmd));
+    const forWeek = variant === "three-runs" ? threeRunWorkoutsForWeek : chaosWorkoutsForWeek;
+    workouts.push(...forWeek(Number(match[1]), match[2], combo.raceYmd));
   }
   return { content: [{ type: "text", text: JSON.stringify({ weeks, workouts }) }], usage: {} };
 }
 
 /**
- * variant: "default" | "no-taper" — Chaos-Antworten;
+ * variant: "default" | "no-taper" | "three-runs" — Chaos-Antworten;
  *          "fallback" — jeder Phasen-Aufruf schlägt fehl (nur der Struktur-Aufruf klappt) → deterministischer Fallback;
  *          "fallback-partial" — nur der erste Phasen-Aufruf schlägt fehl, die übrigen liefern Chaos.
  */
@@ -123,7 +161,7 @@ async function claudeRun(combo, variant, mockCreate) {
         throw new Error("Claude phase failed (test)");
       }
     }
-    return chaosReply(params, combo, variant === "no-taper" ? "no-taper" : "default");
+    return chaosReply(params, combo, variant === "no-taper" || variant === "three-runs" ? variant : "default");
   });
   return generateFullPlanByPhases({ messages: { create: mockCreate } }, combo.profile);
 }

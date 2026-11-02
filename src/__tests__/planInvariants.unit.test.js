@@ -119,6 +119,164 @@ describe("enforcePlanInvariants", () => {
     expect(stub.some((w) => w.sessionType === "long")).toBe(false);
   });
 
+  it("I8: Mi Intervall + Do Tempo wird auseinandergezogen, nie neben eine harte Einheit oder vor den Long Run", () => {
+    // Woche wie W4–W7 im Live-Plan: Mo locker, Di frei, Mi Intervall, Do Tempo, Fr frei, Sa locker, So Long Run
+    const week = (from) =>
+      ["easy", "rest", "interval", "tempo", "rest", "easy", "long"].map((t, d) => mk(addDays(from, d), t, t === "rest" ? 0 : 9));
+    const race = "2026-11-24"; // Di
+    const input = [...week(START), ...week("2026-11-09"), ...week("2026-11-16"), mk("2026-11-23", "easy", 5), mk(race, "race", 10)];
+    const out = enforcePlanInvariants(input, baseCtx(race, { weeklyKmTargets: [40, 42, 30, 5] }));
+    const isHardOrRace = (w) => ["interval", "tempo", "race"].includes(w?.sessionType);
+    out.forEach((w, i) => {
+      if (i > 0) expect(isHardOrRace(w) && isHardOrRace(out[i - 1])).toBe(false);
+      if (["interval", "tempo"].includes(w.sessionType)) expect(["long", "race"]).not.toContain(out[i + 1]?.sessionType);
+    });
+    // Woche 1: beide harten Einheiten bleiben erhalten (verschoben statt gestrichen)
+    expect(out.slice(0, 7).filter((w) => ["interval", "tempo"].includes(w.sessionType))).toHaveLength(2);
+    expect(checkPlanInvariants(out, { ...baseCtx(race), totalWeeks: 4, taperWeeks: 1, weekDays: [7, 7, 7, 2] }).filter((p) => p.startsWith("I8"))).toEqual([]);
+  });
+
+  it("I8: Wunsch-Ruhetage (restDows) werden nie für die verschobene Einheit belegt", () => {
+    const week = ["easy", "rest", "interval", "tempo", "rest", "easy", "long"].map((t, d) => mk(addDays(START, d), t, t === "rest" ? 0 : 9));
+    const race = "2026-11-15";
+    const next = chaosWeeks("2026-11-09", race);
+    const out = enforcePlanInvariants([...week, ...next], baseCtx(race, { restDows: [2, 5], weeklyKmTargets: [40, 30] }));
+    expect(out[1].sessionType).toBe("rest"); // Di
+    expect(out[4].sessionType).toBe("rest"); // Fr
+    expect(["interval", "tempo"].includes(out[2].sessionType) && ["interval", "tempo"].includes(out[3].sessionType)).toBe(false);
+  });
+
+  it("I8: ohne freien Platz in der Woche wird die zweite harte Einheit zu einem lockeren Lauf", () => {
+    const week = ["interval", "tempo", "interval", "tempo", "interval", "rest", "long"].map((t, d) => mk(addDays(START, d), t, t === "rest" ? 0 : 9));
+    const race = "2026-11-15";
+    const out = enforcePlanInvariants([...week, ...chaosWeeks("2026-11-09", race)], baseCtx(race, { restDows: [6], weeklyKmTargets: [45, 30] }));
+    const first = out.slice(0, 7);
+    first.forEach((w, i) => {
+      if (i > 0) expect(["interval", "tempo"].includes(w.sessionType) && ["interval", "tempo"].includes(first[i - 1].sessionType)).toBe(false);
+    });
+    expect(first.filter((w) => w.sessionType === "easy").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("I9/I10: Long Run ≥ längster lockerer Lauf und 20–30 % der Woche (war: 7,7 km bei 50 km)", () => {
+    // Woche 1 wie im Live-Plan: vier lockere Läufe, Long Run am Samstag, kein Intervall
+    const w1 = ["easy", "easy", "rest", "easy", "easy", "long", "rest"].map((t, d) => mk(addDays(START, d), t, t === "rest" ? 0 : 12));
+    const race = "2026-11-22";
+    const ctx = baseCtx(race, { weeklyKmTargets: [50, 51, 30], peakLongRunKm: 12 });
+    const out = enforcePlanInvariants([...w1, ...chaosWeeks("2026-11-09", race)], ctx);
+    const first = out.slice(0, 7);
+    const total = first.reduce((s, w) => s + w.km, 0);
+    const long = first.find((w) => w.sessionType === "long");
+    expect(total).toBeCloseTo(50, 0);
+    expect(long.km / total).toBeGreaterThanOrEqual(0.195);
+    expect(long.km / total).toBeLessThanOrEqual(0.305);
+    for (const w of first.filter((x) => x.sessionType === "easy")) expect(w.km).toBeLessThanOrEqual(long.km);
+    const problems = checkPlanInvariants(out, { ...ctx, totalWeeks: 3, taperWeeks: 1, weekDays: [7, 7, 7] });
+    expect(problems.filter((p) => /^I(9|10):/.test(p))).toEqual([]);
+  });
+
+  it("I9 vor Wochenumfang, I2 vor I10-Untergrenze: Long Run nach der Spitze bleibt kürzer, lockere Läufe nie darüber", () => {
+    // Spitze So 15.11. (14 Tage vor dem Rennen) in einer 25-km-Woche → höchstens 7,5 km. Die Woche danach soll 50 km
+    // tragen (fünf lockere Läufe + Long Run): ohne I9-Kappung lägen die lockeren Läufe bei 8,5 km über dem Long Run.
+    const week = (from) => ["rest", "easy", "easy", "easy", "easy", "easy", "long"].map((t, d) => mk(addDays(from, d), t, t === "rest" ? 0 : 9));
+    const race = "2026-11-29";
+    const ctx = baseCtx(race, { weeklyKmTargets: [20, 25, 50, 15], peakLongRunKm: 7 });
+    const out = enforcePlanInvariants([...week(START), ...week("2026-11-09"), ...week("2026-11-16"), ...week("2026-11-23")], ctx);
+    const longOf = (from) => out.find((w) => w.sessionType === "long" && w.dateIso.slice(0, 10) >= from && w.dateIso.slice(0, 10) <= addDays(from, 6));
+    const peak = longOf("2026-11-09");
+    const after = longOf("2026-11-16");
+    expect(after.km).toBeLessThan(peak.km);
+    for (const w of out.filter((x) => x.dateIso.slice(0, 10) >= "2026-11-16" && x.dateIso.slice(0, 10) <= "2026-11-22" && x.sessionType === "easy")) {
+      expect(w.km).toBeLessThanOrEqual(after.km);
+    }
+    const problems = checkPlanInvariants(out, { ...ctx, totalWeeks: 4, taperWeeks: 1, weekDays: [7, 7, 7, 7] });
+    expect(problems.filter((p) => /^I(2|9|10):/.test(p))).toEqual([]);
+  });
+
+  it("I10-Obergrenze in Wochen mit drei Läufen ist 50 %: Long Run ≥ lockerer Lauf, Wochenziel erreicht", () => {
+    const week = (from) => ["rest", "easy", "rest", "easy", "rest", "rest", "long"].map((t, d) => mk(addDays(from, d), t, t === "rest" ? 0 : 9));
+    const race = "2026-11-29";
+    const ctx = baseCtx(race, { weeklyKmTargets: [30, 31, 32, 15], peakLongRunKm: 8 });
+    const out = enforcePlanInvariants([...week(START), ...week("2026-11-09"), ...week("2026-11-16"), ...week("2026-11-23")], ctx);
+    const first = out.slice(0, 7);
+    const long = first.find((w) => w.sessionType === "long");
+    for (const w of first.filter((x) => x.sessionType === "easy")) expect(w.km).toBeLessThanOrEqual(long.km);
+    expect(first.reduce((s, w) => s + w.km, 0)).toBeCloseTo(30, 0);
+    const problems = checkPlanInvariants(out, { ...ctx, totalWeeks: 4, taperWeeks: 1, weekDays: [7, 7, 7, 7] });
+    expect(problems.filter((p) => /^I(1|2|9|10):/.test(p))).toEqual([]);
+  });
+
+  it("7c: Entlastung ≤ 90 % der Vorwoche, volle Taper-Woche ≤ 90 % der Spitze, auch wenn das Wochenziel höher liegt", () => {
+    // Jede Woche: Di Intervall, Do Tempo, Fr locker, So Long Run. Ziele so, dass Entlastung (W2) und erste
+    // Taper-Woche (W5) ohne 7c auf Höhe der Spitze lägen.
+    const pattern = ["rest", "interval", "rest", "tempo", "easy", "rest", "long"];
+    const race = "2026-12-13"; // So, Woche 6
+    const input = [];
+    for (let w = 0; w < 6; w += 1) {
+      pattern.forEach((t, d) => {
+        const ymd = addDays(START, w * 7 + d);
+        // erste Taper-Woche ohne lockeren Lauf: den Überschuss kann nur das Kürzen des Long Runs abbauen
+        const type = w === 4 && t === "easy" ? "rest" : t;
+        if (ymd <= race) input.push(mk(ymd, type, type === "rest" ? 0 : 10));
+      });
+    }
+    const ctx = baseCtx(race, {
+      weeklyKmTargets: [42, 42, 43, 44, 44, 20],
+      isDeload: [false, true, false, false, false, false],
+      weekPhaseSchedule: ["base", "base", "build", "build", "taper", "taper"].map((phase) => ({ phase })),
+    });
+    const out = enforcePlanInvariants(input, ctx);
+    const weekKm = (w) =>
+      out
+        .filter((x) => x.dateIso.slice(0, 10) >= addDays(START, w * 7) && x.dateIso.slice(0, 10) <= addDays(START, w * 7 + 6))
+        .reduce((s, x) => s + (x.sport !== "rest" && x.sessionType !== "race" ? x.km : 0), 0);
+    const peak = Math.max(weekKm(0), weekKm(2), weekKm(3));
+    expect(weekKm(1)).toBeLessThanOrEqual(0.9 * weekKm(0) + 0.05);
+    expect(weekKm(4)).toBeLessThanOrEqual(0.9 * peak + 0.05);
+    const problems = checkPlanInvariants(out, { ...ctx, totalWeeks: 6, taperWeeks: 2, weekDays: [7, 7, 7, 7, 7, 7] });
+    expect(problems.filter((p) => /^I(1|2|9|10):/.test(p))).toEqual([]);
+  });
+
+  it("checkPlanInvariants meldet flache Pläne: Entlastung, Taper, Umfang und Long Run ohne Verlauf", () => {
+    // Fünf identische Wochen (3× 10 km locker + 10 km Long Run), Woche 3 als Entlastung, Woche 5–6 Taper
+    const flat = [];
+    for (let w = 0; w < 5; w += 1) {
+      ["easy", "rest", "easy", "rest", "easy", "rest", "long"].forEach((t, d) => flat.push(mk(addDays(START, w * 7 + d), t, t === "rest" ? 0 : 10)));
+    }
+    flat.push(mk("2026-12-13", "race", 10));
+    const problems = checkPlanInvariants(flat, {
+      ...baseCtx("2026-12-13"),
+      isDeload: [false, false, true, false, false, false],
+      totalWeeks: 6,
+      taperWeeks: 2,
+      weekDays: [7, 7, 7, 7, 7, 7],
+    });
+    expect(problems.some((p) => /^I1: Entlastung in Woche 3/.test(p))).toBe(true);
+    expect(problems.some((p) => /^I1: Taper-Woche 5 .* kaum unter der Spitze/.test(p))).toBe(true);
+    expect(problems.some((p) => /^I1: Umfang steigt nicht/.test(p))).toBe(true);
+    expect(problems.some((p) => /^I2: Long Run wächst nicht/.test(p))).toBe(true);
+  });
+
+  it("checkPlanInvariants meldet I8, I9 und I10", () => {
+    const week = [
+      mk("2026-11-02", "easy", 14),
+      mk("2026-11-03", "interval", 8),
+      mk("2026-11-04", "tempo", 8),
+      mk("2026-11-05", "easy", 8),
+      mk("2026-11-06", "rest", 0),
+      mk("2026-11-07", "easy", 8),
+      mk("2026-11-08", "long", 6),
+    ];
+    const problems = checkPlanInvariants([...week, mk("2026-11-15", "race", 10)], {
+      ...baseCtx("2026-11-15"),
+      totalWeeks: 2,
+      taperWeeks: 1,
+      weekDays: [7, 7],
+    });
+    expect(problems.some((p) => p.startsWith("I8:"))).toBe(true);
+    expect(problems.some((p) => p.startsWith("I9:"))).toBe(true);
+    expect(problems.some((p) => p.startsWith("I10:"))).toBe(true);
+  });
+
   it("ist stabil: ein zweiter Durchlauf ändert die Struktur nicht", () => {
     const ctx = baseCtx("2026-11-29");
     const once = enforcePlanInvariants(chaosWeeks(START, "2026-11-29"), ctx);

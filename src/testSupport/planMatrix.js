@@ -9,8 +9,11 @@ const DISTANCES = [
 ];
 const WEEK_COUNTS = [6, 8, 12, 16, 20];
 const GOALS = ["finish", "time"];
-// 0 = Sonntag (volle Rennwoche), 2 = Dienstag (kurze Rennwoche, wie im Audit-Plan)
-const RACE_DOWS = [0, 2];
+// Renntag an jedem Wochentag (0 = Sonntag … 6 = Samstag); 2 = Dienstag wie im Audit- und im Live-Plan
+const RACE_DOWS = [0, 1, 2, 3, 4, 5, 6];
+// Teilwochen am Planstart nur mit So/Di-Rennen (volle bzw. kurze Rennwoche), sonst wird die Matrix zu groß
+const PARTIAL_RACE_DOWS = [0, 2];
+const DOW_LABEL = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
 const RACE_WEEK_MONDAY = Date.UTC(2026, 10, 30); // Mo 30.11.2026
 const DAY_MS = 86400000;
@@ -31,7 +34,7 @@ function buildCombo(distance, weeks, goal, raceDow, startOffset = 0) {
   // startOffset > 0: Planstart mitten in der ersten Woche (Mo + offset), die erste Woche ist eine Teilwoche
   const startMs = RACE_WEEK_MONDAY - (weeks - 1) * 7 * DAY_MS + startOffset * DAY_MS;
   return {
-    id: `${distance.key}-${weeks}w-${goal}-${raceDow === 0 ? "So" : "Di"}${startOffset ? `-Start+${startOffset}` : ""}`,
+    id: `${distance.key}-${weeks}w-${goal}-${DOW_LABEL[raceDow]}${startOffset ? `-Start+${startOffset}` : ""}`,
     distance,
     weeks,
     goal,
@@ -68,7 +71,7 @@ const PARTIAL_COMBOS = [];
 for (const distance of DISTANCES) {
   for (const weeks of [8, 12]) {
     for (const startOffset of [1, 2, 3, 4, 5, 6]) {
-      for (const raceDow of RACE_DOWS) {
+      for (const raceDow of PARTIAL_RACE_DOWS) {
         PARTIAL_COMBOS.push(buildCombo(distance, weeks, "finish", raceDow, startOffset));
       }
     }
