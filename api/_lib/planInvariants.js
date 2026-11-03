@@ -53,6 +53,8 @@ const LONG_RUN_START_FRACTION = 0.65;
 const LONG_RUN_DELOAD_FACTOR = 0.8;
 const LONG_RUN_AFTER_PEAK_FRACTIONS = [0.7, 0.5];
 const LONG_RUN_TOLERANCE_KM = 0.15;
+/** Lockerer Lauf höchstens 60 % des Long Runs (freigegeben von Anton am 2026-11-03). */
+const EASY_TO_LONG_MAX = 0.6;
 
 /** 33 % nur in Peak-Wochen ab 120 km, sonst 30 % (wie planWorkoutUtils.applyLongRunCapPerWeek). */
 function longRunShare(ctx, weekNumber, weekKm) {
@@ -69,6 +71,38 @@ function longRunCap(ctx, weekNumber, weekKm, runCount) {
   const share = longRunShare(ctx, weekNumber, weekKm);
   if (runCount === 1) return 1;
   return runCount > 0 && runCount <= 3 ? Math.max(share, THREE_RUN_LONG_SHARE) : share;
+}
+
+/**
+ * Folgepunkt (f): wie viele km eine volle Woche mit `runDays` Läufen höchstens trägt — ein Long Run bis `longMaxKm`
+ * und bis zur Anteilsgrenze (30 %, bei höchstens drei Läufen 50 %), `hardDays` harte Einheiten bis zu ihrer
+ * Obergrenze (und wie in Schritt 6 höchstens 1,15 × Long Run), die übrigen lockeren Läufe bis 60 % des Long Runs.
+ * Gibt die größte Woche zurück, die diese Läufe vollständig tragen. Reichen die Anteile schon im Kleinen nicht
+ * (z. B. zwei Läufe: 50 % + 30 %), ist es das, was die Läufe mit dem längsten erlaubten Long Run tragen.
+ */
+function weekCapacityKm({ runDays, hardDays, longMaxKm, raceKm }) {
+  const n = Math.max(1, Math.round(runDays));
+  const h = Math.max(0, Math.min(Math.round(hardDays), n - 1));
+  const easyCount = n - 1 - h;
+  const share = n === 1 ? 1 : n <= 3 ? Math.max(LONG_RUN_SHARE, THREE_RUN_LONG_SHARE) : LONG_RUN_SHARE;
+  const hb = hardBounds(raceKm);
+  const hardMax = [hb.maxInterval, hb.maxTempo, hb.maxInterval].slice(0, h);
+  const carry = (week) => {
+    const long = Math.min(share * week, longMaxKm);
+    return long + hardMax.reduce((sum, m) => sum + Math.min(m, HARD_WEIGHT * long), 0) + easyCount * EASY_TO_LONG_MAX * long;
+  };
+  if (!(longMaxKm > 0)) return 0;
+  if (carry(1) < 1) return round1(carry(longMaxKm / share));
+  let lo = 1;
+  let hi = 1000;
+  if (carry(hi) >= hi) return hi;
+  for (let k = 0; k < 50; k += 1) {
+    const mid = (lo + hi) / 2;
+    if (carry(mid) >= mid) lo = mid;
+    else hi = mid;
+  }
+  // Die Suche nähert sich der Grenze von unten: 54,39999… soll 54,4 ergeben
+  return Math.floor(lo * 10 + 1e-6) / 10;
 }
 
 // ── Datums-Helfer (YYYY-MM-DD, UTC-basiert, ohne Zeitzonen-Effekte) ───────────────────────────
@@ -443,7 +477,9 @@ function enforcePlanInvariants(input, ctx) {
         const runCount = idxs.filter((i) => isRunSession(days[i])).length;
         const share = longRunCap(ctx, wi + 1, total, runCount);
         // ±1e-9: z. B. (1/3)/(2/3)·22 ergibt 10,999…, ohne Toleranz würde Math.floor auf 10,9 kürzen
-        const maxLong = share >= 1 ? Infinity : Math.floor((share / (1 - share)) * others * 10 + 1e-9) / 10;
+        const shareMax = share >= 1 ? Infinity : Math.floor((share / (1 - share)) * others * 10 + 1e-9) / 10;
+        const absMax = ctx.longRunMaxKm?.[wi] > 0 ? ctx.longRunMaxKm[wi] : Infinity;
+        const maxLong = Math.min(shareMax, absMax);
         const minLong = fullWeek ? Math.ceil((LONG_RUN_MIN_SHARE / (1 - LONG_RUN_MIN_SHARE)) * others * 10 - 1e-9) / 10 : 0;
         const before = days[longIdx].km;
         const raised = Math.min(minLong, maxLong, Math.max(before, raiseLimit));
@@ -716,6 +752,9 @@ function planLongRuns(days, weeks, ctx, ultra, last, approachIdx) {
     let ceil = Infinity;
     if (ultra) ceil = ctx.peakLongRunKm > 0 ? ctx.peakLongRunKm : Infinity;
     else if (target > 0) ceil = longRunCap(ctx, wn, target, runCount) * target;
+    // Folgepunkt (f): Long Run nie länger als für diese Woche vorgesehen, auch wenn wenige Läufe das Ziel tragen müssten
+    const absMax = ctx.longRunMaxKm?.[wn - 1];
+    if (absMax > 0) ceil = Math.min(ceil, absMax);
     let floor = 0;
     if (target > 0) {
       const fit = minLongForVolume(days, idxs, Math.max(0, target - raceKmInWeek), target, ctx, approachIdx, last);
@@ -1008,6 +1047,8 @@ module.exports = {
   easyMinKm,
   hardBounds,
   longRunMinDaysBeforeRace,
+  weekCapacityKm,
+  EASY_TO_LONG_MAX,
   dayOf,
   addDays,
   diffDays,

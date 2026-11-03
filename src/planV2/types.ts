@@ -32,9 +32,23 @@ export type WeekV2 = {
   };
 };
 
+/** Hinweis der Planerzeugung: die Spitze wurde nicht erreicht (10-%-Grenze oder zu wenige Lauftage). */
+export type PlanVolumeNoteV2 = {
+  code: "peak-not-reached";
+  reason: "growth" | "run-days";
+  targetPeakKm: number;
+  reachedPeakKm: number;
+};
+
+export type TrainingPlanMetaV2 = {
+  volumeNote?: PlanVolumeNoteV2;
+};
+
 export type TrainingPlanV2 = {
   version: 2;
   workouts: WorkoutV2[];
   weeks: WeekV2[];
+  /** Optional, nur von der Planerzeugung gesetzt (für spätere Anzeige). */
+  meta?: TrainingPlanMetaV2;
 };
 

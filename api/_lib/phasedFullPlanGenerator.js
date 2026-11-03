@@ -15,6 +15,7 @@ const {
   defaultStructureForWeeks,
   formatDeDate,
   isoDateOf,
+  withPlanMeta,
 } = require("./deterministicPlanGenerator");
 const {
   normalizeWorkouts,
@@ -128,7 +129,7 @@ function buildPhaseUserMessage(profile, phaseSpec, context) {
   const goalText = isTimeGoal
     ? `Zeitziel: ${profile.raceTargetTime}`
     : "Ziel: Finisher — Fokus auf Ausdauer";
-  const { weeklyTarget, volumeRef, volumeGapWarning, effectivePeakKm, weeklyKmTargets } = context;
+  const { weeklyTarget, volumeRef, volumeGapWarning, reachedPeakKm, weeklyKmTargets } = context;
 
   const weekLines = context.phaseWeekNumbers
     .map((wn) => {
@@ -161,11 +162,10 @@ ATHLET:
 - Renndatum: ${profile.raceDate}${raceWeekdayLabel(profile.raceDate)}
 
 FACHLICHE VOLUMEN-REFERENZ (verbindlich für die Peak-Woche):
-- Empfohlenes Peak-Wochenvolumen für dieses Zielzeit-Niveau: ${volumeRef.peakKm[0]}-${effectivePeakKm} km
-- Empfohlenes Basis-Wochenvolumen: ${volumeRef.baseKm[0]}-${volumeRef.baseKm[1]} km
+- Peak-Wochenvolumen dieses Plans: ${reachedPeakKm} km (Zielzeit-Referenz, begrenzt durch die Umfangsangabe und höchstens 10 % Anstieg pro Woche)
 - Längster Lauf (KRITISCH, harte Obergrenze): max. ${volumeRef.peakLongRunKm} km ODER 30% des jeweiligen Wochenvolumens, je nachdem was niedriger ist — gilt für JEDE Woche, nicht nur Peak.
 - Trainingstage/Woche: ~${volumeRef.sessionsPerWeek}
-${volumeGapWarning ? "- HINWEIS: Zielzeit erfordert langfristig mehr Basisvolumen als aktuell vorhanden. Dieser Plan bringt den Athleten näher ans Ziel, erreicht es aber realistisch nicht in einem Zyklus. Peak-Woche daher konservativ auf " + effectivePeakKm + " km begrenzt statt volle Referenz." : ""}
+${volumeGapWarning ? "- HINWEIS: Zielzeit erfordert langfristig mehr Basisvolumen als aktuell vorhanden. Dieser Plan bringt den Athleten näher ans Ziel, erreicht es aber realistisch nicht in einem Zyklus. Peak-Woche daher konservativ auf " + reachedPeakKm + " km begrenzt statt volle Referenz." : ""}
 
 Diese Referenz ist die primäre Zielgröße für die Peak-Woche. weeklyKmRange beschreibt nur das aktuelle Niveau für die Progression über die Wochen.
 
@@ -318,8 +318,11 @@ async function generateFullPlanByPhases(client, profile) {
     weeklyTarget,
     volumeGapWarning,
     effectivePeakKm,
+    reachedPeakKm,
     weeklyKmTargets,
     isDeload: weekIsDeload,
+    longRunMaxKm,
+    volumeNote,
   } = buildVolumeContext({
     startDay,
     raceDay,
@@ -329,12 +332,13 @@ async function generateFullPlanByPhases(client, profile) {
     raceGoal: profile.raceGoal,
     weeklyKmRange: profile.weeklyKmRange,
     longRunDow: rules.longRunDay ?? 0,
+    rules,
   });
   // Taper-Länge ist eine Code-Regel (Distanz, Planlänge, Länge der Rennwoche), nicht Claudes Phasenaufteilung.
   const orderedPhases = phaseSpecsForSchedule(structure.phases, weekPhaseSchedule, totalWeeks);
 
   process.stdout.write(
-    `[phased-plan] weeklyKmTargets ${JSON.stringify({ weeklyTarget, effectivePeakKm, taperWeeks, weeklyKmTargets })}\n`,
+    `[phased-plan] weeklyKmTargets ${JSON.stringify({ weeklyTarget, effectivePeakKm, reachedPeakKm, taperWeeks, weeklyKmTargets })}\n`,
   );
 
   process.stdout.write(
@@ -424,7 +428,7 @@ async function generateFullPlanByPhases(client, profile) {
         weeklyTarget,
         volumeRef,
         volumeGapWarning,
-        effectivePeakKm,
+        reachedPeakKm,
         weeklyKmTargets,
       };
 
@@ -552,6 +556,7 @@ async function generateFullPlanByPhases(client, profile) {
     isDeload: weekIsDeload,
     weekPhaseSchedule,
     peakLongRunKm: volumeRef.peakLongRunKm,
+    longRunMaxKm,
     longRunDow: rules.longRunDay ?? 0,
     restDows: Array.isArray(rules.restDays) ? rules.restDays : [],
   });
@@ -585,7 +590,7 @@ async function generateFullPlanByPhases(client, profile) {
     });
   });
 
-  const plan = rebuildPlanFromWorkouts(enforcedWorkouts, metaByWeekStart, weekKeyOverrides);
+  const plan = withPlanMeta(rebuildPlanFromWorkouts(enforcedWorkouts, metaByWeekStart, weekKeyOverrides), { volumeNote });
   const totalDurationMs = Date.now() - planStartTs;
   process.stdout.write(
     `[phased-plan] END ${JSON.stringify({
