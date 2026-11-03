@@ -103,8 +103,11 @@ function commonChecks(ctx, { peakMaxKm, minGap }) {
     });
   });
 
-  it(`AK 5: Rennwoche ≤ 40 % der Spitze, höchstens eine harte Einheit ≤ 8 km, frühestens Renntag −${minGap}`, () => {
-    const raceWeek = weeks[weeks.length - 1];
+  it(`AK 5: Rennwoche (Renntag −6 bis −1) ≤ 40 % der Spitze, höchstens eine harte Einheit ≤ 8 km, frühestens Renntag −${minGap}`, () => {
+    const raceWeek = sorted.filter((w) => {
+      const gap = (Date.parse(`${raceYmd}T00:00:00Z`) - Date.parse(`${ymd(w)}T00:00:00Z`)) / DAY_MS;
+      return gap >= 1 && gap <= 6;
+    });
     const peak = Math.max(...weeks.slice(0, peakWeek).map(runKm));
     expect(runKm(raceWeek)).toBeLessThanOrEqual(0.4 * peak + 0.05);
     const hard = raceWeek.filter(isHard);
@@ -127,10 +130,12 @@ function commonChecks(ctx, { peakMaxKm, minGap }) {
   it("AK 7: Titel lockerer Läufe aus Rolle/km, wenn der Code die km um mehr als 30 % ändert", () => {
     // Zuordnung über die ID: Tagesvertauschungen (Schritt 4/4b) verschieben das Datum, nicht die ID
     const sources = new Map(ctx.fixture.workouts.map((w) => [w.id, w]));
-    const generated = ["Lockerer Dauerlauf", "Kurzer lockerer Lauf", "Lockerer Lauf vor dem Rennen", "Regenerationslauf"];
+    // Entlastungswochen ausgenommen: dort heißt jeder lockere Lauf "Regenerationslauf" (renderSession)
+    const generated = ["Lockerer Dauerlauf", "Kurzer lockerer Lauf", "Lockerer Lauf vor dem Rennen"];
     let changed = 0;
     for (const w of sorted.filter((x) => x.sessionType === "easy")) {
       const src = sources.get(w.id);
+      if (volume.isDeload[weeks.findIndex((list) => list.includes(w))]) continue;
       if (!src || src.sessionType !== "easy" || !(src.km > 0) || Math.abs(w.km - src.km) / src.km <= 0.3) continue;
       changed += 1;
       expect(generated).toContain(w.title);

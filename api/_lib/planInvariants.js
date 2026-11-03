@@ -325,6 +325,8 @@ function longRunMinDaysBeforeRace(distKey) {
 
 /** Rennwoche: höchstens eine harte Einheit, so kurz und frühestens so viele Tage vor dem Rennen (Anton, 2026-11-03). */
 const RACE_WEEK_HARD_MAX_KM = 8;
+/** Rennwoche für AK 5: Renntag −6 bis Renntag. */
+const RACE_WINDOW_DAYS = 7;
 function raceWeekHardMinGap(distKey) {
   if (distKey === 42.2 || distKey === "ultra") return 4;
   if (distKey === 21.1 || distKey === 15) return 3;
@@ -375,21 +377,18 @@ function minLongForVolume(days, idxs, volume, target, ctx, approachIdx, last) {
 }
 
 /**
- * Fehlt einer Woche der Long Run (Claude hat ihn z. B. als lockeren Lauf auf den Samstag gelegt), wird ein lockerer
- * Lauf umgelabelt: einer, dessen Titel ihn als langen Lauf ausweist, sonst der längste (Quell-km, 10 % Toleranz);
- * bei Gleichstand der, der im Wochenraster am nächsten am Long-Run-Tag liegt. Anfahrtstage scheiden aus.
+ * Fehlt einer Woche der Long Run (Claude hat ihn z. B. als lockeren Lauf auf den Samstag gelegt), wird der längste
+ * lockere Lauf umgelabelt (km der Quelle); gibt es keinen, der längste Lauf überhaupt (AK 3). Bei gleicher Länge der,
+ * der im Wochenraster am nächsten am Long-Run-Tag liegt. Anfahrtstage scheiden aus.
  */
-const LONG_TITLE = /\blang(?:e[rn]?)?\b|\blong\s*run\b/i;
 function pickLongRunCandidate(days, idxs, approachIdx, longRunDow) {
-  const easy = idxs.filter((i) => days[i].sessionType === "easy" && !approachIdx.has(i));
-  if (easy.length === 0) return null;
-  const titled = easy.filter((i) => LONG_TITLE.test(String(days[i].title ?? "")));
-  const pool = titled.length > 0 ? titled : easy;
+  const open = idxs.filter((i) => !approachIdx.has(i));
+  const easy = open.filter((i) => days[i].sessionType === "easy");
+  const pool = easy.length > 0 ? easy : open.filter((i) => isHard(days[i]));
+  if (pool.length === 0) return null;
   const kmOf = (i) => (Number.isFinite(days[i]._srcKm) ? days[i]._srcKm : days[i].km) || 0;
-  const maxKm = Math.max(...pool.map(kmOf));
-  const near = pool.filter((i) => kmOf(i) >= 0.9 * maxKm);
   const distance = (i) => Math.abs(weekPos(dowOf(dayOf(days[i]))) - weekPos(longRunDow));
-  return near.reduce((a, b) => (distance(b) < distance(a) || (distance(b) === distance(a) && kmOf(b) > kmOf(a)) ? b : a));
+  return pool.reduce((a, b) => (kmOf(b) > kmOf(a) || (kmOf(b) === kmOf(a) && distance(b) < distance(a)) ? b : a));
 }
 
 /** I9: Obergrenze eines lockeren Laufs bei einem Long Run von `longKm` (auf 0,1 km abgerundet). */
@@ -516,7 +515,17 @@ function enforcePlanInvariants(input, ctx) {
   const approachIdx = new Set([last - 1, last - 2].filter((i) => i >= 0));
   const weeks = groupByWeek(days, startYmd);
   const raceWeek = weeks.length;
-  const raceWeekIdx = new Set(weeks[raceWeek - 1] ?? []);
+  // "Rennwoche" für AK 5 = die 7 Tage bis zum Rennen (Renntag −6 … Renntag), nicht nur die Kalenderwoche: bei einem
+  // Rennen am Montag oder Dienstag lägen die Tage davor sonst in der Vorwoche und ohne Grenze. Tage der Spitzenwoche
+  // bleiben ausgenommen (Rennen Do–Sa mit nur einer Taper-Woche), sonst fiele die Spitze unter die Woche davor (I1).
+  const taperWeekOf = new Map();
+  weeks.forEach((idxs, wi) => {
+    const taper = wi === weeks.length - 1 || !ctx.weekPhaseSchedule || ctx.weekPhaseSchedule[wi]?.phase === "taper";
+    idxs.forEach((i) => taperWeekOf.set(i, taper));
+  });
+  const raceWeekIdx = new Set(
+    Array.from({ length: Math.min(RACE_WINDOW_DAYS, last + 1) }, (_, k) => last - k).filter((i) => taperWeekOf.get(i)),
+  );
   const hardMinGap = raceWeekHardMinGap(ctx.distKey);
 
   // 2b — Rennwoche: höchstens eine harte Einheit, frühestens `hardMinGap` Tage vor dem Rennen; die übrigen locker
@@ -527,18 +536,17 @@ function enforcePlanInvariants(input, ctx) {
     if (i !== keepHard) days[i] = asEasy(days[i]);
   }
 
-  // 3 — genau ein Long Run pro Woche (außer in der Rennwoche)
+  // 3 — genau ein Long Run pro Woche (außer in der Rennwoche). In den 7 Tagen bis zum Rennen liegt keiner; eine
+  // Woche braucht ihn nur, wenn mindestens 5 ihrer Tage davor liegen (Stub-Woche am Start, Woche vor einem Rennen
+  // am Montag bis Donnerstag).
   weeks.forEach((idxs, wi) => {
     const wn = wi + 1;
-    const longs = idxs.filter((i) => days[i].sessionType === "long");
-    if (wn === raceWeek) {
-      longs.forEach((i) => {
-        days[i] = asEasy(days[i]);
-      });
-      return;
+    for (const i of idxs) {
+      if (raceWeekIdx.has(i) && days[i].sessionType === "long") days[i] = asEasy(days[i]);
     }
-    if (idxs.length < 5) {
-      // Stub-Woche (Planstart mitten in der Woche): zu kurz für einen Long Run
+    const open = idxs.filter((i) => !raceWeekIdx.has(i));
+    const longs = open.filter((i) => days[i].sessionType === "long");
+    if (wn === raceWeek || open.length < 5) {
       longs.forEach((i) => {
         days[i] = asEasy(days[i]);
       });
@@ -548,7 +556,7 @@ function enforcePlanInvariants(input, ctx) {
         if (i !== keep) days[i] = asEasy(days[i]);
       });
     } else if (longs.length === 0) {
-      const pick = pickLongRunCandidate(days, idxs, approachIdx, longRunDow);
+      const pick = pickLongRunCandidate(days, open, approachIdx, longRunDow);
       if (pick != null) days[pick] = asLong(days[pick]);
     }
   });
@@ -564,7 +572,7 @@ function enforcePlanInvariants(input, ctx) {
 
   // 5a — Wochenziele an die tatsächlichen Läufe koppeln
   const weekTargets = effectiveWeekTargets(days, weeks, ctx, last);
-  const tctx = { ...ctx, weeklyKmTargets: weekTargets };
+  const tctx = { ...ctx, weeklyKmTargets: weekTargets, raceWindow: raceWeekIdx };
 
   // 5 — Long-Run-Ziele je Woche
   const { targets: longTargets, maxKm: longMaxKm, order: longOrder } = planLongRuns(days, weeks, tctx, ultra, last, approachIdx);
@@ -629,7 +637,7 @@ function enforcePlanInvariants(input, ctx) {
     weeks.forEach((idxs, wi) => {
       const longIdx = idxs.find((i) => days[i].sessionType === "long");
       if (longIdx == null) return;
-      const fullWeek = idxs.length >= 7 && !idxs.includes(last);
+      const fullWeek = idxs.length >= 7 && !idxs.some((i) => raceWeekIdx.has(i));
       const raiseLimit = longMaxKm.get(longIdx) ?? Infinity;
       for (let round = 0; round < 30; round += 1) {
         const total = idxs.reduce((s, i) => s + (isRunSession(days[i]) || days[i].sessionType === "race" ? days[i].km : 0), 0);
@@ -778,11 +786,11 @@ function enforcePlanInvariants(input, ctx) {
   // 7c kürzt Long Runs in Taper-Wochen; danach gilt der I2-Verlauf wieder (nur Kürzen, Taper sinkt dabei höchstens)
   keepLongRunShape();
 
-  // 7g — Rennwoche ohne Rennen höchstens 40 % der tatsächlichen Spitze (AK 5): lockere Läufe bis zur Mindestlänge
-  // kürzen, dann die harte Einheit bis zu ihrer Mindestlänge, dann lockere Läufe streichen (kürzeste zuerst,
-  // Anfahrtstage zuletzt; Renntag −1/−2 dürfen laut I3 frei sein)
+  // 7g — Rennwoche (die 7 Tage bis zum Rennen) ohne Rennen höchstens 40 % der tatsächlichen Spitze (AK 5): lockere
+  // Läufe bis zur Mindestlänge kürzen, dann die harte Einheit bis zu ihrer Mindestlänge, dann lockere Läufe streichen
+  // (kürzeste zuerst, Anfahrtstage zuletzt; Renntag −1/−2 dürfen laut I3 frei sein)
   {
-    const raceWeek = weeks[weeks.length - 1] ?? [];
+    const raceWeek = [...raceWeekIdx].sort((a, b) => a - b);
     const others = weeks
       .slice(0, -1)
       .filter((_, wi) => ctx.weekPhaseSchedule?.[wi]?.phase !== "taper")
@@ -902,7 +910,9 @@ function swapDays(days, a, b) {
 function fixHardBeforeLong(days, last, guard) {
   const weekOf = new Map();
   (guard?.weeks ?? []).forEach((idxs, wi) => idxs.forEach((i) => weekOf.set(i, wi)));
-  const tooCloseToRace = (j) => guard?.raceWeekIdx?.has(j) && last - j < guard.hardMinGap;
+  // nie näher als `hardMinGap` ans Rennen und nie von außen in die Rennwoche (dort höchstens eine harte Einheit)
+  const tooCloseToRace = (j, from) =>
+    guard?.raceWeekIdx?.has(j) && (last - j < guard.hardMinGap || !guard.raceWeekIdx.has(from));
   const conflicts = (i) =>
     isHard(days[i]) && days[i + 1] && (days[i + 1].sessionType === "long" || days[i + 1].sessionType === "race");
   const hardNeighbour = (i) => (isHard(days[i - 1]) ? true : isHard(days[i + 1]));
@@ -915,7 +925,7 @@ function fixHardBeforeLong(days, last, guard) {
     for (const delta of order) {
       const j = i + delta;
       if (j < 0 || j > last - 3) continue;
-      if (weekOf.get(j) !== weekOf.get(i) || tooCloseToRace(j)) continue;
+      if (weekOf.get(j) !== weekOf.get(i) || tooCloseToRace(j, i)) continue;
       if (days[j].sessionType !== "easy") continue;
       swap(i, j);
       const ok = !conflicts(j) && !conflicts(i) && !hardNeighbour(j) && !(j > 0 && conflicts(j - 1));
@@ -948,7 +958,7 @@ function fixConsecutiveHard(days, last, weeks, approachIdx, restDows, guard) {
     let bestScore = Infinity;
     for (const j of weekOf.get(mover) ?? []) {
       if (j === mover || j === last || approachIdx.has(j)) continue;
-      if (guard?.raceWeekIdx?.has(j) && last - j < guard.hardMinGap) continue;
+      if (guard?.raceWeekIdx?.has(j) && (last - j < guard.hardMinGap || !guard.raceWeekIdx.has(mover))) continue;
       const type = days[j].sessionType;
       if (type !== "easy" && type !== "rest") continue;
       if (type === "rest" && restDows.has(dowOf(dayOf(days[j])))) continue;
@@ -1004,7 +1014,7 @@ function planLongRuns(days, weeks, ctx, ultra, last, approachIdx) {
     let floor = 0;
     if (target > 0) {
       const fit = minLongForVolume(days, idxs, Math.max(0, target - raceKmInWeek), target, ctx, approachIdx, last);
-      const minShare = !ultra && fullWeek && !idxs.includes(last) ? LONG_RUN_MIN_SHARE * target : 0;
+      const minShare = !ultra && fullWeek && !idxs.includes(last) && !idxs.some((k) => ctx.raceWindow?.has(k)) ? LONG_RUN_MIN_SHARE * target : 0;
       floor = Math.min(ceil, Math.max(fit, minShare));
     }
     longs.push({ i, ymd: dayOf(w), wn, floor, ceil, fullWeek, deload: ctx.isDeload?.[wn - 1] === true });
@@ -1139,7 +1149,11 @@ function checkPlanInvariants(workouts, ctx) {
   });
   const totalWeeks = ctx.totalWeeks ?? weekKm.length;
   const peakWeek = totalWeeks - (ctx.taperWeeks ?? 1);
-  const isShareBandWeek = (wn) => wn !== totalWeeks && (ctx.weekDays?.[wn - 1] ?? 7) >= 7;
+  // Taper-Wochen, die in die 7 Tage bis zum Rennen reichen, zählen wie die Rennwoche (keine Anteilsregeln)
+  const isTaperWeek = (wn) => wn === totalWeeks || !ctx.weekPhaseSchedule || ctx.weekPhaseSchedule[wn - 1]?.phase === "taper";
+  const raceWindowStart = addDays(ctx.raceYmd, -(RACE_WINDOW_DAYS - 1));
+  const touchesRaceWindow = (wn) => isTaperWeek(wn) && addDays(startMonday, wn * 7 - 1) >= raceWindowStart;
+  const isShareBandWeek = (wn) => wn !== totalWeeks && !touchesRaceWindow(wn) && (ctx.weekDays?.[wn - 1] ?? 7) >= 7;
 
   // I1 — Umfang steigt bis zur Spitze (Entlastung ausgenommen), danach Taper fallend
   let previous = null;
@@ -1212,7 +1226,7 @@ function checkPlanInvariants(workouts, ctx) {
     if (!ultra) {
       longs.forEach((w) => {
         const wn = weekIndexOf(dayOf(w), startMonday);
-        if (isShareBandWeek(wn)) return;
+        if (isShareBandWeek(wn) || touchesRaceWindow(wn)) return;
         const total = (weekKm[wn - 1] ?? 0) + (wn === totalWeeks ? ctx.raceKm : 0);
         if ((weekRunCount[wn - 1] ?? 0) < 2 || total <= 0) return;
         const share = longRunCap(ctx, wn, total, weekRunCount[wn - 1], weekMixOf(wn));
@@ -1255,24 +1269,30 @@ function checkPlanInvariants(workouts, ctx) {
     if (full && !ctx.isDeload?.[w - 1]) level = km;
   }
 
-  // I12 — genau ein Long Run in jeder Woche mit mindestens 5 Plantagen außer der Rennwoche
+  // I12 — genau ein Long Run in jeder Woche mit mindestens 5 Plantagen vor den 7 Tagen bis zum Rennen; dort keiner
   const weekDayCount = [];
   days.forEach((w) => {
     const wn = weekIndexOf(dayOf(w), startMonday);
-    weekDayCount[wn - 1] = (weekDayCount[wn - 1] ?? 0) + 1;
+    const inWindow = diffDays(ctx.raceYmd, dayOf(w)) < RACE_WINDOW_DAYS && isTaperWeek(wn);
+    if (!inWindow) weekDayCount[wn - 1] = (weekDayCount[wn - 1] ?? 0) + 1;
+    else if (w.sessionType === "long") problems.push(`I12: Long Run am ${dayOf(w)} in den 7 Tagen vor dem Rennen`);
   });
   for (let w = 1; w < totalWeeks; w += 1) {
     const count = weekLongs[w - 1]?.length ?? 0;
     if ((weekDayCount[w - 1] ?? 0) >= 5 && count !== 1) problems.push(`I12: Woche ${w} hat ${count} Long Runs`);
   }
 
-  // I13 — Rennwoche: ohne Rennen ≤ 40 % der Spitze; höchstens eine harte Einheit, ≤ 8 km, frühestens Renntag −N
-  const raceWeekKm = weekKm[totalWeeks - 1] ?? 0;
+  // I13 — Rennwoche (Renntag −6 bis −1): ≤ 40 % der Spitze; höchstens eine harte Einheit, ≤ 8 km, frühestens Renntag −N
+  const inRaceWindow = (w) => {
+    const gap = diffDays(ctx.raceYmd, dayOf(w));
+    return gap >= 1 && gap < RACE_WINDOW_DAYS && isTaperWeek(weekIndexOf(dayOf(w), startMonday));
+  };
+  const raceWeekKm = days.filter((w) => inRaceWindow(w) && w.sport !== "rest").reduce((sum, w) => sum + w.km, 0);
   if (peakBuildKm > 0 && raceWeekKm > RACE_WEEK_MAX_SHARE * peakBuildKm + 0.3) {
     problems.push(`I13: Rennwoche ohne Rennen ${round1(raceWeekKm)} km (Spitze ${round1(peakBuildKm)} km)`);
   }
   const minGap = raceWeekHardMinGap(ctx.distKey);
-  const raceWeekHard = days.filter((w) => isHard(w) && weekIndexOf(dayOf(w), startMonday) === totalWeeks);
+  const raceWeekHard = days.filter((w) => isHard(w) && inRaceWindow(w));
   if (raceWeekHard.length > 1) problems.push(`I13: ${raceWeekHard.length} harte Einheiten in der Rennwoche`);
   for (const w of raceWeekHard) {
     if (w.km > RACE_WEEK_HARD_MAX_KM + 0.05) problems.push(`I13: harte Einheit am ${dayOf(w)} mit ${w.km} km in der Rennwoche`);

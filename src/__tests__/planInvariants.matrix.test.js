@@ -41,6 +41,12 @@ const weekKm = (week) =>
   week.workouts.reduce((s, w) => s + (w.sport !== "rest" && w.sessionType !== "race" ? w.km : 0), 0);
 const RUN_TYPES = ["easy", "long", "interval", "tempo"];
 /**
+ * "Rennwoche" für AK 5: die 7 Tage bis zum Rennen (Renntag −6 … Renntag), soweit sie in Taper-Wochen liegen (die
+ * Spitzenwoche bleibt ausgenommen, wenn sie bei nur einer Taper-Woche noch hineinreicht).
+ */
+const inRaceWindow = (w, week, combo) => daysBetween(combo.raceYmd, ymdOf(w)) <= 6 && week.meta?.phase === "taper";
+const touchesRaceWindow = (week, combo) => week.workouts.some((w) => inRaceWindow(w, week, combo));
+/**
  * Obergrenze des Long-Run-Anteils: 30 % (33 % in Peak-Wochen ab 120 km), bei ≤ 3 Läufen 50 %. Vorrang I9: mit
  * lockeren Läufen ≤ 60 % und harten ≤ 115 % des Long Runs muss der Long Run mindestens 1 / (1 + 0,6·e + 1,15·h)
  * der Woche tragen — so hoch steigt die Grenze, wenn das darüber liegt (wenige, lockere Läufe).
@@ -183,9 +189,11 @@ describe("I2 Long Run wächst bis 2–3 Wochen vor dem Rennen", () => {
       expect(w.km).toBeLessThanOrEqual(after + 0.15);
       after = w.km;
     }
-    // Anteil am Wochenvolumen (Rennen zählt mit), Wochen mit mindestens zwei Läufen
+    // Anteil am Wochenvolumen (Rennen zählt mit), Wochen mit mindestens zwei Läufen; Wochen, die in die 7 Tage bis
+    // zum Rennen reichen, zählen wie die Rennwoche (dort keine Anteilsregel)
     for (const w of longs) {
       const week = weekOf(w);
+      if (touchesRaceWindow(week, combo)) continue;
       const total = week.workouts.reduce((s, x) => s + (x.sport !== "rest" ? x.km : 0), 0);
       const runs = week.workouts.filter((x) => ["easy", "long", "interval", "tempo"].includes(x.sessionType)).length;
       if (runs < 2) continue;
@@ -344,23 +352,29 @@ describe("AK 2 volle Aufbauwochen ≤ 1,1 × max(Vorwoche, Niveau vor Entlastung
   });
 });
 
-describe("AK 3 genau ein Long Run in jeder Woche mit ≥ 5 Plantagen außer der Rennwoche", () => {
+describe("AK 3 genau ein Long Run je Woche mit ≥ 5 Tagen vor den 7 Tagen bis zum Rennen, dort keiner", () => {
   it.each(cases)("%s", (_n, source, combo) => {
     const plan = planOf(source, combo);
-    plan.weeks.slice(0, -1).forEach((week) => {
-      if (week.workouts.length < 5) return;
-      expect(week.workouts.filter((w) => w.sessionType === "long")).toHaveLength(1);
+    plan.weeks.forEach((week, i) => {
+      const open = week.workouts.filter((w) => !inRaceWindow(w, week, combo));
+      const longs = week.workouts.filter((w) => w.sessionType === "long");
+      if (open.length >= 5 && i < plan.weeks.length - 1) expect(longs).toHaveLength(1);
+      for (const w of longs) expect(inRaceWindow(w, week, combo)).toBe(false);
     });
   });
 });
 
-describe("AK 5 Rennwoche: ≤ 40 % der Spitze, höchstens eine harte Einheit ≤ 8 km, nicht zu nah am Rennen", () => {
+describe("AK 5 Rennwoche (Renntag −6 bis −1): ≤ 40 % der Spitze, höchstens eine harte Einheit ≤ 8 km, nicht zu nah", () => {
   it.each(cases)("%s", (_n, source, combo) => {
     const plan = planOf(source, combo);
-    const raceWeek = plan.weeks[plan.weeks.length - 1];
+    // die 7 Tage bis zum Rennen, auch wenn sie in die Vorwoche reichen (Rennen Mo/Di)
+    const window = plan.weeks.flatMap((week) =>
+      week.workouts.filter((w) => inRaceWindow(w, week, combo) && daysBetween(combo.raceYmd, ymdOf(w)) >= 1),
+    );
     const peak = Math.max(...plan.weeks.filter((w) => w.meta?.phase !== "taper").map(weekKm));
-    expect(weekKm(raceWeek)).toBeLessThanOrEqual(0.4 * peak + 0.3);
-    const hard = raceWeek.workouts.filter(isHard);
+    const windowKm = window.reduce((s, w) => s + (w.sport !== "rest" ? w.km : 0), 0);
+    expect(windowKm).toBeLessThanOrEqual(0.4 * peak + 0.3);
+    const hard = window.filter(isHard);
     expect(hard.length).toBeLessThanOrEqual(1);
     const minGap = combo.distance.km > 30 ? 4 : combo.distance.km > 12 ? 3 : 2;
     for (const w of hard) {
@@ -387,18 +401,17 @@ describe("I10 Long Run 20–30 % des Wochenumfangs (volle Wochen, Rennwoche ausg
       const later = longs.filter((x) => x !== long && (x === peak || (ymdOf(x) > ymdOf(long) && ymdOf(x) < ymdOf(peak) && inChain(x))));
       const i2Bound = afterPeak ? (previous?.km ?? peakKm) - 0.1 : Math.min(...later.map((x) => x.km));
       if (afterPeak) previous = long;
-      if (week === plan.weeks[plan.weeks.length - 1] || week.workouts.length < 7) continue;
+      if (week === plan.weeks[plan.weeks.length - 1] || week.workouts.length < 7 || touchesRaceWindow(week, combo)) continue;
       const total = weekKm(week);
       const runs = week.workouts.filter((x) => RUN_TYPES.includes(x.sessionType)).length;
       if (runs < 2) continue;
       expect(long.km).toBeGreaterThanOrEqual(Math.min(0.2 * total, i2Bound) - 0.005 * total);
       expect(long.km / total).toBeLessThanOrEqual(longRunCapOf(week, total) + 0.005);
     }
-    // Ohne Long Run bleibt nur eine volle Woche, deren Sonntag (Long-Run-Tag) in der Anfahrt liegt (Renntag −2/−1)
-    const approach = new Set([1, 2].map((k) => new Date(Date.parse(`${combo.raceYmd}T00:00:00Z`) - k * DAY_MS).toISOString().slice(0, 10)));
+    // Ohne Long Run bleibt nur eine Woche mit weniger als 5 Tagen außerhalb der Rennwoche (AK 5)
     for (const week of plan.weeks.slice(0, -1)) {
-      if (week.workouts.length < 7 || week.workouts.some((x) => x.sessionType === "long")) continue;
-      expect(week.workouts.some((x) => approach.has(ymdOf(x)) && new Date(`${ymdOf(x)}T00:00:00Z`).getUTCDay() === 0)).toBe(true);
+      if (week.workouts.some((x) => x.sessionType === "long")) continue;
+      expect(week.workouts.filter((x) => !inRaceWindow(x, week, combo)).length).toBeLessThan(5);
     }
   });
 });

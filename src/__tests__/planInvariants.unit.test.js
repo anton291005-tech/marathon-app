@@ -407,6 +407,50 @@ describe("Volumen-Grenzen in enforcePlanInvariants", () => {
   });
 });
 
+describe("AK 3/5: Rennen am Montag, Woche ohne lockeren Lauf", () => {
+  const ymd = (w) => w.dateIso.slice(0, 10);
+  const isHard = (w) => w.sessionType === "interval" || w.sessionType === "tempo";
+
+  it("Marathon am Montag: keine harte Einheit an Renntag −3 in der Vorwoche, höchstens eine ≤ 8 km ab −4", () => {
+    const race = "2026-12-28"; // Montag
+    const input = [];
+    for (let d = START; d <= race; d = addDays(d, 1)) {
+      const dow = dowOf(d);
+      const type = { 1: "easy", 2: "interval", 3: "easy", 4: "easy", 5: "tempo", 6: "easy", 0: "long" }[dow];
+      input.push(mk(d, type, type === "long" ? 24 : 12));
+    }
+    const ctx = baseCtx(race, { raceKm: 42.195, distKey: 42.2, weeklyKmTargets: [60, 62, 64, 66, 68, 70, 72, 50, 43] });
+    const out = enforcePlanInvariants(input, ctx);
+    const window = out.filter((w) => {
+      const gap = (Date.parse(`${race}T00:00:00Z`) - Date.parse(`${ymd(w)}T00:00:00Z`)) / 86400000;
+      return gap >= 1 && gap <= 6;
+    });
+    const hard = window.filter(isHard);
+    expect(hard.length).toBeLessThanOrEqual(1);
+    for (const w of hard) {
+      expect(w.km).toBeLessThanOrEqual(8);
+      expect((Date.parse(`${race}T00:00:00Z`) - Date.parse(`${ymd(w)}T00:00:00Z`)) / 86400000).toBeGreaterThanOrEqual(4);
+    }
+    // Fr 25.12. = Renntag −3 (war: Tempo)
+    expect(isHard(out.find((w) => ymd(w) === "2026-12-25"))).toBe(false);
+  });
+
+  it("Woche ohne lockeren Lauf: der längste Lauf wird Long Run", () => {
+    const race = "2026-11-22";
+    const input = [];
+    for (let d = START; d <= race; d = addDays(d, 1)) {
+      const dow = dowOf(d);
+      // Woche 1: nur harte Einheiten und Ruhetage, kein Long Run
+      if (d < "2026-11-09") input.push(mk(d, dow === 2 ? "interval" : dow === 4 ? "tempo" : "rest", dow === 4 ? 14 : 10));
+      else input.push(mk(d, dow === 0 ? "long" : "easy", dow === 0 ? 16 : 8));
+    }
+    const out = enforcePlanInvariants(input, baseCtx(race));
+    const week1 = out.filter((w) => ymd(w) < "2026-11-09");
+    expect(week1.filter((w) => w.sessionType === "long")).toHaveLength(1);
+    expect(ymd(week1.find((w) => w.sessionType === "long"))).toBe("2026-11-05"); // Do-Tempo, 14 km = längster Lauf
+  });
+});
+
 describe("weeks[].totalKm", () => {
   const { rebuildPlanFromWorkouts } = require("../../api/_lib/planWorkoutUtils");
   it("= tatsächliche Summe der Einheiten inkl. Rennen, auf 0,1 km gerundet", () => {
