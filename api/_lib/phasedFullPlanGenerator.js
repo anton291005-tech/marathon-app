@@ -3,10 +3,13 @@
 const { generatePlanStructureWithClaude } = require("./claudePlanGenerator");
 const {
   normalizeTrainingPhase,
-  parseWeeklyKmTarget,
   parseOnboardingRaceDate,
   buildWeekPhaseSchedule,
   computeWeekStartDates,
+  computeWeekDayCounts,
+  buildVolumeContext,
+  weekLabelFor,
+  RECOVERY_WEEK_FOCUS,
   generateMarathonPlanV2ToRace,
   getWeekTotalKmFromPlan,
   defaultStructureForWeeks,
@@ -21,17 +24,29 @@ const {
   scalePhaseWorkoutsForContinuity,
   groupWorkoutsByWeekStart,
   sumWeekKm,
-  applyLongRunCapPerWeek,
-  clampPostRaceSessionsToRest,
 } = require("./planWorkoutUtils");
-const { getRecommendedVolume } = require("./raceVolumeReference");
-const { computeWeeklyVolumeTargets } = require("./weeklyVolumeProgression");
+const { enforcePlanInvariants, checkPlanInvariants } = require("./planInvariants");
 
 const PHASE_ORDER = ["base", "build", "peak", "taper"];
 const TOKENS_PER_WEEK = 1100;
 const BASE_OVERHEAD = 600;
 const MAX_TOKENS_CAP = 8192;
 const PHASE_CALL_TIMEOUT_MS = 90000;
+
+function raceTitleFor(profile) {
+  const km = profile.raceDistanceKm ?? 0;
+  if (km >= 42) return "Marathon";
+  if (km >= 21) return "Halbmarathon";
+  return `${Number.isInteger(km) ? km : String(km).replace(".", ",")} km`;
+}
+
+const WEEKDAYS_DE = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+
+/** " (Dienstag)" für das Renndatum "01.12.2026"; leer, wenn das Datum nicht lesbar ist. */
+function raceWeekdayLabel(raceDate) {
+  const day = parseOnboardingRaceDate(raceDate);
+  return day ? ` (${WEEKDAYS_DE[day.getDay()]})` : "";
+}
 
 function calculateMaxTokensForPhase(weekCount) {
   const calculated = BASE_OVERHEAD + weekCount * TOKENS_PER_WEEK;
@@ -72,7 +87,7 @@ SCHEMA (exakt einhalten):
     {
       "id": "w5-mo", "weekId": "w5", "day": "Mo", "date": "28. Jun",
       "type": "easy", "title": "Lockerer Dauerlauf", "km": 8,
-      "description": "GA1-Bereich, Herzfrequenz niedrig halten.", "phase": "${phaseUpper}"
+      "description": "Lockerer Dauerlauf in Zone 2.", "phase": "${phaseUpper}"
     }
   ]
 }
@@ -86,6 +101,8 @@ WICHTIG — NUR DIESE PHASE:
 - startIso: ISO-Datum des Montags der jeweiligen Woche
 - type: easy | tempo | interval | long | race | rest | bike | strength
 - Renntag nur in Taper-Phase am Renndatum: type "race", km = Renndistanz
+- Der Plan endet am Renntag: keine Einheiten danach, die zwei Tage davor nur locker oder frei
+- Keine harte Einheit (interval, tempo) am Tag vor einem Long Run oder vor dem Rennen
 - Ruhetage: type "rest", km: 0
 
 VOLUMEN (KRITISCH):
@@ -95,8 +112,9 @@ VOLUMEN (KRITISCH):
 
 EINHEITEN-ROTATION:
 - Intervalle, Tempo, Long Runs und Easy Runs variieren — keine repetitiven Wochen
-- Beschreibungen konkret mit Pace/Struktur
-- Titel ohne Wochennummern, beschreibend und abwechslungsreich`;
+- Titel ohne Wochennummern und ohne Zahlen, beschreibend und abwechslungsreich
+- Intensität nur als Zone 1–5 benennen. Keine GA1/GA2-Begriffe, keine Prozent- oder bpm-Angaben: Bausteine
+  und Pulsbereiche setzt die App selbst aus dem Einheitentyp, die Kilometer passt sie ans Wochenziel an`;
 }
 
 function buildPhaseUserMessage(profile, phaseSpec, context) {
@@ -140,7 +158,7 @@ ATHLET:
 - Aktuelles Niveau: ${profile.weeklyKmRange} km/Woche (Ziel-Mittelwert ~${weeklyTarget} km/Woche)
 - ${goalText}
 - Planstart: ${profile.planStartDate}
-- Renndatum: ${profile.raceDate}
+- Renndatum: ${profile.raceDate}${raceWeekdayLabel(profile.raceDate)}
 
 FACHLICHE VOLUMEN-REFERENZ (verbindlich für die Peak-Woche):
 - Empfohlenes Peak-Wochenvolumen für dieses Zielzeit-Niveau: ${volumeRef.peakKm[0]}-${effectivePeakKm} km
@@ -228,22 +246,21 @@ function getPhaseWeekNumbers(weekPhaseSchedule, phaseName) {
   return weeks;
 }
 
-function orderPhases(structurePhases) {
-  const byName = new Map();
-  for (const phase of structurePhases ?? []) {
-    byName.set(normalizeTrainingPhase(phase.name), phase);
-  }
-  const ordered = [];
+/**
+ * Phasen-Spezifikationen (Name/Label/Fokus) für alle Phasen, die im Wochenplan vorkommen. Claudes Angaben
+ * gewinnen, fehlende Phasen (z. B. durch den festen Taper) kommen aus der Standardstruktur.
+ */
+function phaseSpecsForSchedule(structurePhases, weekPhaseSchedule, totalWeeks) {
+  const defaults = defaultStructureForWeeks(totalWeeks).phases;
+  const present = new Set(weekPhaseSchedule.map((entry) => entry.phase));
+  const specs = [];
   for (const name of PHASE_ORDER) {
-    if (byName.has(name)) ordered.push(byName.get(name));
+    if (!present.has(name)) continue;
+    const fromClaude = (structurePhases ?? []).find((p) => normalizeTrainingPhase(p.name) === name);
+    const fallback = defaults.find((p) => normalizeTrainingPhase(p.name) === name);
+    specs.push(fromClaude ?? fallback ?? { name, label: name, focus: "" });
   }
-  for (const phase of structurePhases ?? []) {
-    const name = normalizeTrainingPhase(phase.name);
-    if (!PHASE_ORDER.includes(name) && !ordered.includes(phase)) {
-      ordered.push(phase);
-    }
-  }
-  return ordered;
+  return specs;
 }
 
 async function callClaudeForPhase(client, profile, phaseSpec, context, maxTokens) {
@@ -294,31 +311,30 @@ async function generateFullPlanByPhases(client, profile) {
   }
 
   const rules = structure.rules ?? defaultStructureForWeeks(totalWeeks).rules;
-  const volumeRef = getRecommendedVolume(profile.raceDistanceKm, profile.raceTargetTime, profile.raceGoal);
-  const weekPhaseSchedule = buildWeekPhaseSchedule(totalWeeks, structure.phases);
-  const orderedPhases = orderPhases(structure.phases);
-
-  const weekNumberByStartIso = new Map(
-    Object.entries(weekStarts ?? {}).map(([wn, startIso]) => [startIso, Number(wn)]),
-  );
-  const getPhaseForWeekStart = (weekStartIso) => {
-    const wn = weekNumberByStartIso.get(weekStartIso);
-    return wn ? weekPhaseSchedule[wn - 1]?.phase : undefined;
-  };
-
-  const weeklyTarget = parseWeeklyKmTarget(profile.weeklyKmRange);
-  const volumeGapWarning = weeklyTarget < volumeRef.baseKm[0] * 0.6;
-  const effectivePeakKm = volumeGapWarning
-    ? Math.round(Math.min(volumeRef.peakKm[1], weeklyTarget * 1.6))
-    : volumeRef.peakKm[1];
-  const weeklyKmTargets = computeWeeklyVolumeTargets({
-    totalWeeks,
-    phaseSchedule: weekPhaseSchedule,
-    startWeeklyKm: weeklyTarget,
-    peakTargetKm: effectivePeakKm,
+  const {
+    volumeRef,
+    taperWeeks,
+    weekPhaseSchedule,
+    weeklyTarget,
+    volumeGapWarning,
+    effectivePeakKm,
+    weeklyKmTargets,
+    isDeload: weekIsDeload,
+  } = buildVolumeContext({
+    startDay,
+    raceDay,
+    structurePhases: structure.phases,
+    raceDistanceKm: profile.raceDistanceKm,
+    raceTargetTime: profile.raceTargetTime,
+    raceGoal: profile.raceGoal,
+    weeklyKmRange: profile.weeklyKmRange,
+    longRunDow: rules.longRunDay ?? 0,
   });
+  // Taper-Länge ist eine Code-Regel (Distanz, Planlänge, Länge der Rennwoche), nicht Claudes Phasenaufteilung.
+  const orderedPhases = phaseSpecsForSchedule(structure.phases, weekPhaseSchedule, totalWeeks);
+
   process.stdout.write(
-    `[phased-plan] weeklyKmTargets ${JSON.stringify({ weeklyTarget, effectivePeakKm, weeklyKmTargets })}\n`,
+    `[phased-plan] weeklyKmTargets ${JSON.stringify({ weeklyTarget, effectivePeakKm, taperWeeks, weeklyKmTargets })}\n`,
   );
 
   process.stdout.write(
@@ -337,6 +353,7 @@ async function generateFullPlanByPhases(client, profile) {
         undefined,
         rules,
         structure.phases,
+        profile.raceTargetTime,
       );
     }
     return deterministicFallbackPlan;
@@ -427,13 +444,8 @@ async function generateFullPlanByPhases(client, profile) {
         if (rawChunkWorkouts.length === 0) {
           throw new Error("no valid workouts after parse");
         }
-        // Ultra distances are exempt: raceVolumeReference.js's peakLongRunKm for ultra
-        // assumes a much higher long-run share of weekly volume than the 30%/33% rule.
-        const longRunCappedWorkouts =
-          volumeRef.distKey === "ultra"
-            ? rawChunkWorkouts
-            : applyLongRunCapPerWeek(rawChunkWorkouts, getPhaseForWeekStart);
-        const chunkWorkouts = clampPostRaceSessionsToRest(longRunCappedWorkouts, raceDayIso);
+        // Long-Run-Anteil, Anfahrt, Vortage und Rennende erzwingt enforcePlanInvariants über den ganzen Plan.
+        const chunkWorkouts = rawChunkWorkouts;
         phaseWorkouts.push(...chunkWorkouts);
 
         const chunkWeeks = groupWorkoutsByWeekStart(chunkWorkouts);
@@ -530,6 +542,35 @@ async function generateFullPlanByPhases(client, profile) {
     throw new Error("No workouts generated for any phase");
   }
 
+  const enforcedWorkouts = enforcePlanInvariants(allWorkouts, {
+    startYmd: isoDateOf(startDay),
+    raceYmd: raceDayIso,
+    raceKm: profile.raceDistanceKm,
+    raceTitle: raceTitleFor(profile),
+    distKey: volumeRef.distKey,
+    weeklyKmTargets,
+    isDeload: weekIsDeload,
+    weekPhaseSchedule,
+    peakLongRunKm: volumeRef.peakLongRunKm,
+    longRunDow: rules.longRunDay ?? 0,
+    restDows: Array.isArray(rules.restDays) ? rules.restDays : [],
+  });
+  const invariantViolations = checkPlanInvariants(enforcedWorkouts, {
+    startYmd: isoDateOf(startDay),
+    raceYmd: raceDayIso,
+    raceKm: profile.raceDistanceKm,
+    distKey: volumeRef.distKey,
+    isDeload: weekIsDeload,
+    weekDays: computeWeekDayCounts(startDay, raceDay),
+    weekPhaseSchedule,
+    totalWeeks,
+    taperWeeks,
+  });
+  // Nur Anzahl und Codes loggen, keine Inhalte.
+  process.stdout.write(
+    `[invariant-check] ${JSON.stringify({ violations: invariantViolations.length, codes: [...new Set(invariantViolations.map((v) => v.split(":")[0]))] })}\n`,
+  );
+
   const metaByWeekStart = new Map();
   weekPhaseSchedule.forEach((entry, idx) => {
     const weekNumber = idx + 1;
@@ -538,12 +579,13 @@ async function generateFullPlanByPhases(client, profile) {
     metaByWeekStart.set(startIso, {
       wn: weekNumber,
       phase: entry.phase,
-      label: entry.label,
-      focus: entry.focus,
+      label: weekLabelFor(weekNumber, entry.phase),
+      focus: weekIsDeload[idx] === true ? RECOVERY_WEEK_FOCUS : entry.focus,
+      isRecoveryWeek: weekIsDeload[idx] === true,
     });
   });
 
-  const plan = rebuildPlanFromWorkouts(allWorkouts, metaByWeekStart, weekKeyOverrides);
+  const plan = rebuildPlanFromWorkouts(enforcedWorkouts, metaByWeekStart, weekKeyOverrides);
   const totalDurationMs = Date.now() - planStartTs;
   process.stdout.write(
     `[phased-plan] END ${JSON.stringify({

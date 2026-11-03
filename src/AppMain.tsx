@@ -231,7 +231,7 @@ import {
   mergeWithLogsOutsidePlanScope,
   scopeSessionLogsToPlan,
 } from "./sessionLogs/scopeSessionLogsToPlan";
-import { trainingPhaseColor, type TrainingPhase } from "./planV2/trainingPhase";
+import { trainingPhaseColor, trainingPhaseLabelDe, type TrainingPhase } from "./planV2/trainingPhase";
 import {
   getStoredHealthRunCanonicalType,
   loadHealthRunsFromStorage,
@@ -336,10 +336,10 @@ const PI = {
   SPEC:  { label:"Wettkampfspez.",     emoji:"🎯", col:"#f59e0b", bg:"rgba(245,158,11,0.12)" },
   TAPER: { label:"Taper",             emoji:"⚡", col:"#a855f7", bg:"rgba(168,85,247,0.12)" },
   // Canonical 4-phase keys from trainingPhase.ts — used by newly generated plans
-  base:  { label:"Base",              emoji:"🌱", col:trainingPhaseColor("base"),  bg:"rgba(16,185,129,0.12)" },
-  build: { label:"Build",             emoji:"🔥", col:trainingPhaseColor("build"), bg:"rgba(59,130,246,0.12)" },
-  peak:  { label:"Peak",              emoji:"🎯", col:trainingPhaseColor("peak"),  bg:"rgba(239,68,68,0.12)" },
-  taper: { label:"Taper",             emoji:"⚡", col:trainingPhaseColor("taper"), bg:"rgba(168,85,247,0.12)" },
+  base:  { label:trainingPhaseLabelDe("base"),              emoji:"🌱", col:trainingPhaseColor("base"),  bg:"rgba(16,185,129,0.12)" },
+  build: { label:trainingPhaseLabelDe("build"),             emoji:"🔥", col:trainingPhaseColor("build"), bg:"rgba(59,130,246,0.12)" },
+  peak:  { label:trainingPhaseLabelDe("peak"),              emoji:"🎯", col:trainingPhaseColor("peak"),  bg:"rgba(239,68,68,0.12)" },
+  taper: { label:trainingPhaseLabelDe("taper"),             emoji:"⚡", col:trainingPhaseColor("taper"), bg:"rgba(168,85,247,0.12)" },
 };
 const DEFAULT_VIEW = "home";
 const TI = {

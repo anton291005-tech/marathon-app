@@ -1,0 +1,650 @@
+{
+ "_comment": "Onboarding-Plan aus dem Live-Test 2026-11-01 (erzeugt vom alten main-Stand auf Vercel), nur Einheiten. Ohne Nutzer-ID, Planname und Pulswerte.",
+ "profile": {
+  "raceDistanceKm": 10,
+  "raceGoal": "finish",
+  "weeklyKmRange": "40–60 km",
+  "planStartYmd": "2026-11-02",
+  "raceYmd": "2026-12-22"
+ },
+ "phases": [
+  {
+   "name": "base",
+   "weeks": 3,
+   "label": "Aerober Grundlagenblock"
+  },
+  {
+   "name": "build",
+   "weeks": 3,
+   "label": "Entwicklungsphase"
+  },
+  {
+   "name": "peak",
+   "weeks": 1,
+   "label": "Spezifische Vorbereitung"
+  },
+  {
+   "name": "taper",
+   "weeks": 1,
+   "label": "Tapering"
+  }
+ ],
+ "workouts": [
+  {
+   "id": "w1-mo",
+   "dateIso": "2026-11-02T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 8.2,
+   "title": "Lockerer Einstiegslauf",
+   "desc": "GA1-Bereich, Puls … bpm, entspanntes Tempo ~5:30/km",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w1-di",
+   "dateIso": "2026-11-03T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 7.1,
+   "title": "Kurzer Stabilisierungslauf",
+   "desc": "GA1, Puls … bpm, ~5:30/km, kurz halten",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w1-mi",
+   "dateIso": "2026-11-04T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Aktive Erholung oder völlige Ruhe",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w1-do",
+   "dateIso": "2026-11-05T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 12.2,
+   "title": "Tempo-Grundlagen-Mix",
+   "desc": "Warm-up 2 km easy, 6 km Tempo (GA2, ~5:00/km), Cool-down 4 km easy",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w1-fr",
+   "dateIso": "2026-11-06T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 6.1,
+   "title": "Regenerationslauf",
+   "desc": "GA1, sehr locker, Puls … bpm, ~5:45/km",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w1-sa",
+   "dateIso": "2026-11-07T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "km": 14.4,
+   "title": "Langer Ausdauerlauf",
+   "desc": "GA1-Bereich, Puls … bpm, konstantes Tempo ~5:20/km, Fokus auf Ausdauer",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w1-so",
+   "dateIso": "2026-11-08T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Vollständige Erholung",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-mo",
+   "dateIso": "2026-11-09T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 8.1,
+   "title": "Easyrun mit Steigerung",
+   "desc": "GA1, Puls … bpm, Schlusskilometer progressiv, ~5:25/km",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-di",
+   "dateIso": "2026-11-10T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 7,
+   "title": "Lockerer Erhaltungslauf",
+   "desc": "GA1, entspannt, Puls … bpm, ~5:35/km",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-mi",
+   "dateIso": "2026-11-11T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Aktive Erholung optional",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-do",
+   "dateIso": "2026-11-12T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "km": 12.1,
+   "title": "Intervall-Schwelle-Training",
+   "desc": "Warm-up 2 km easy, 4×2 min Intervall (GA3, ~4:45/km) mit 90 sec Erholung, Cool-down 3 km easy",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-fr",
+   "dateIso": "2026-11-13T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 5,
+   "title": "Regenerationslauf",
+   "desc": "GA1, sehr leicht, Puls … bpm, ~5:50/km",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-sa",
+   "dateIso": "2026-11-14T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "km": 13.8,
+   "title": "Progressiver Langstreckenlauf",
+   "desc": "Start GA1 (~5:30/km), Mittelphase stabil GA1-GA2, Schluss progressiv ~5:15/km",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-so",
+   "dateIso": "2026-11-15T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Vollständige Regeneration",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w3-mo",
+   "dateIso": "2026-11-16T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 7.4,
+   "title": "Leichter Aufbaulauf",
+   "desc": "GA1, Puls … bpm, entspanntes Tempo ~5:40/km",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w3-di",
+   "dateIso": "2026-11-17T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 6.3,
+   "title": "Kurzer Erhaltungslauf",
+   "desc": "GA1, locker, Puls … bpm, ~5:45/km",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w3-mi",
+   "dateIso": "2026-11-18T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Regeneration vor Tempoeinheit",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w3-do",
+   "dateIso": "2026-11-19T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "km": 11.5,
+   "title": "Tempo-Ausdauer-Block",
+   "desc": "Warm-up 2 km easy, 7 km Tempo (GA2, ~5:05/km), Cool-down 2 km easy",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w3-fr",
+   "dateIso": "2026-11-20T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 4.2,
+   "title": "Leichter Regenerationslauf",
+   "desc": "GA1, sehr locker, Puls … bpm, ~6:00/km",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w3-sa",
+   "dateIso": "2026-11-21T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "km": 12.6,
+   "title": "Stabiler Langstreckenlauf",
+   "desc": "GA1-Bereich durchgehend, Puls … bpm, konstantes Tempo ~5:25/km, Fokus auf Rhythmus",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w3-so",
+   "dateIso": "2026-11-22T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Völlige Erholung",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w4-mo",
+   "dateIso": "2026-11-23T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 6,
+   "title": "Lockerer Einstieg",
+   "desc": "GA1-Bereich, entspannte Pace, Fokus auf Erholung nach Base-Phase.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w4-di",
+   "dateIso": "2026-11-24T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Regeneration.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w4-mi",
+   "dateIso": "2026-11-25T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "km": 8,
+   "title": "Erste Intervalle",
+   "desc": "Aufwärmen 1,5 km easy, 4×(600m im 10km-Ziel-Tempo / 90s Trott), Auslaufen 1,5 km easy.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w4-do",
+   "dateIso": "2026-11-26T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "km": 8,
+   "title": "Tempo-Steigerung",
+   "desc": "Aufwärmen 1,5 km, 4 km im GA2-Bereich (Zielrennen-Pace ~4:50/km), Auslaufen 2,5 km easy.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w4-fr",
+   "dateIso": "2026-11-27T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Erholung vor dem Wochenende.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w4-sa",
+   "dateIso": "2026-11-28T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 4,
+   "title": "Regenerative Leichte Strecke",
+   "desc": "Lockerer GA1-Lauf, niedriges Tempo, förderliche Durchblutung.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w4-so",
+   "dateIso": "2026-11-29T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "km": 10,
+   "title": "Langer Lauf",
+   "desc": "Langsamer Dauerlauf (ca. 5:10-5:20/km), im GA1-Bereich durchgehend aerob.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w5-mo",
+   "dateIso": "2026-11-30T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 7,
+   "title": "Lockerer Auftakt",
+   "desc": "GA1-Bereich, Fokus auf Erholung nach Long Run.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w5-di",
+   "dateIso": "2026-12-01T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Regeneration und Muskelaufbau.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w5-mi",
+   "dateIso": "2026-12-02T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "km": 9,
+   "title": "Wiederholungs-Intervalle",
+   "desc": "Aufwärmen 1,5 km easy, 5×(800m im 10km-Ziel-Tempo / 100s Trott), Auslaufen 1,5 km easy.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w5-do",
+   "dateIso": "2026-12-03T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "km": 10,
+   "title": "Zielrennen-Pace Training",
+   "desc": "Aufwärmen 1,5 km, 6 km im GA2/Zielrennen-Tempo (ca. 4:50/km), Auslaufen 2,5 km easy.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w5-fr",
+   "dateIso": "2026-12-04T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Aktive Erholung.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w5-sa",
+   "dateIso": "2026-12-05T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 5,
+   "title": "Leichte Erholungsstrecke",
+   "desc": "GA1, lockeres Tempo, 5-5:30/km.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w5-so",
+   "dateIso": "2026-12-06T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "km": 12,
+   "title": "Progressiver Langer Lauf",
+   "desc": "Start langsam (5:15/km), zweite Hälfte leicht progressiv bis GA2-Grenze (4:55/km), gesamt aerob nachhaltig.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w6-mo",
+   "dateIso": "2026-12-07T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 6.4,
+   "title": "Lockerer Regenerationstag",
+   "desc": "GA1-Lauf, 5:15-5:30/km, leicht und stressfrei.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w6-di",
+   "dateIso": "2026-12-08T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Erholung vor der Woche.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w6-mi",
+   "dateIso": "2026-12-09T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "km": 8.5,
+   "title": "Sharpening-Intervalle",
+   "desc": "Aufwärmen 1,5 km easy, 6×(500m im 10km-Renntempo / 75s Trott), Auslaufen 1,5 km easy.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w6-do",
+   "dateIso": "2026-12-10T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "km": 9.6,
+   "title": "Finale Zielrennen-Simulation",
+   "desc": "Aufwärmen 1,5 km, 5,5 km im Zielrennen-Tempo (ca. 4:50/km), Auslaufen 2 km easy.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w6-fr",
+   "dateIso": "2026-12-11T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Erholung und mentale Vorbereitung.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w6-sa",
+   "dateIso": "2026-12-12T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 4.2,
+   "title": "Kurze lockere Strecke",
+   "desc": "GA1-Lauf, Dehnen und Mobilität fokussieren.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w6-so",
+   "dateIso": "2026-12-13T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "km": 12.3,
+   "title": "Finaler langer Ausdauerlauf",
+   "desc": "Durchgehend GA1 (5:20/km), stabile Pace, Fokus auf aerobe Kapazität und mentale Ausdauer vor Peak-Woche.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w7-mo",
+   "dateIso": "2026-12-14T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 7,
+   "title": "Lockerer Aufwärmlauf",
+   "desc": "GA1-Bereich, 5:30–6:00 min/km, locker auslaufen.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w7-di",
+   "dateIso": "2026-12-15T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Aktive Erholung möglich (Spaziergang, Dehnen).",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w7-mi",
+   "dateIso": "2026-12-16T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "km": 10,
+   "title": "Rennspezifische Intervalle",
+   "desc": "WU 2 km (6:00 min/km) + 5×800 m im 10-km-Renntempo (ca. 4:50 min/km) mit 90 s Jogging-Pause + AB 1,5 km (6:00 min/km).",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w7-do",
+   "dateIso": "2026-12-17T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "km": 9,
+   "title": "Tempolauf 10-km-Bereich",
+   "desc": "WU 2 km (6:00 min/km) + 5 km im 10-km-Renntempo (ca. 4:50 min/km) + AB 2 km (6:00 min/km). Konzentration auf stabile Pace.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w7-fr",
+   "dateIso": "2026-12-18T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 6,
+   "title": "Recovery Run",
+   "desc": "GA1-Bereich, 5:45–6:15 min/km, leicht und entspannt.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w7-sa",
+   "dateIso": "2026-12-19T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Vollständige Erholung vor Renntag.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w7-so",
+   "dateIso": "2026-12-20T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "race",
+   "km": 10,
+   "title": "10-km-Rennen",
+   "desc": "Rennstart. Zielrennen mit vollem Einsatz. Vor dem Rennen: leichtes Aufwärmen (ca. 10 min locker + kurze Strides).",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w8-mo",
+   "dateIso": "2026-12-21T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 6,
+   "title": "Lockerer Auslauflauf",
+   "desc": "GA1-Bereich, entspanntes Tempo, Puls niedrig halten. Regeneration nach der intensiven Trainingsphase.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w8-di",
+   "dateIso": "2026-12-22T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "race",
+   "km": 10,
+   "title": "10-km-Rennen",
+   "desc": "Renntag — 10 km Wettkampf. Ziel: Finisher im besten Zustand.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w8-mi",
+   "dateIso": "2026-12-23T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Vollständige Erholung nach dem Rennen.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w8-do",
+   "dateIso": "2026-12-24T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 5,
+   "title": "Locker joggen",
+   "desc": "Sehr leichter Lauf zur Aktivierung. GA1-Tempo, genießen.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w8-fr",
+   "dateIso": "2026-12-25T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Erholung nach dem Rennen.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w8-sa",
+   "dateIso": "2026-12-26T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "km": 0,
+   "title": "Ruhetag",
+   "desc": "Erholungstag für optimale Regeneration.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w8-so",
+   "dateIso": "2026-12-27T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "km": 0,
+   "title": "Ausschleichtauf",
+   "desc": "Optionaler sehr leichter Trab oder Spaziergang (Beweglichkeit). Kann auch als Ruhetag genommen werden.",
+   "pace": null,
+   "structured": null
+  }
+ ]
+}

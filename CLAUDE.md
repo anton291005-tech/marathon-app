@@ -76,7 +76,7 @@ Test-Device: iPhone 13 (nie Simulator für device-kritische Fixes)
 - Strava-Integration: Backend komplett, On-Device-Test auf iPhone 13 noch offen
 
 ### Erledigt (nicht mehr offen)
-- Long-Run-Cap 30%/33% ist als harter Code-Clamp umgesetzt, nicht mehr nur Prompt-Regel
+- Long-Run-Cap 30%/33% ist als harter Code-Clamp umgesetzt, nicht mehr nur Prompt-Regel (Ausnahme seit 2026-11-02: bei ≤ 3 Läufen pro Woche bis 50 %, siehe `longRunCap` in `api/_lib/planInvariants.js`)
 - Privacy Policy Link ist im App-Store-Review-Flow eingebunden
 
 ### Post-TestFlight (jetzt NICHT anfassen, nur zur Info)

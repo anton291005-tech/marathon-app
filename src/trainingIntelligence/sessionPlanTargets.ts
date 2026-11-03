@@ -9,6 +9,10 @@ import type { StoredHealthRun } from "../healthRuns";
 import { storedHealthRunDistanceKmNumeric } from "../healthRuns";
 import { parsePlannedPaceMinPerKm } from "./evaluateRun";
 import { normalizeAppleHealthRun } from "./normalizeAppleHealthRun";
+import { HR_ZONE_PCT_BANDS, getHrRangeForZone, plannedHrRangeForSessionType, zoneLabelForSessionType } from "./hrZones";
+
+// Eine Puls-Quelle: Zonen, %HFmax-Bänder und bpm-Berechnung liegen in hrZones.ts.
+export { getHrRangeForZone, plannedHrRangeForSessionType };
 
 const RUNNING_TYPES = new Set(["easy", "long", "interval", "tempo", "race"]);
 
@@ -138,39 +142,8 @@ function isRecoveryWeek(week?: PlanWeek): boolean {
 
 /** %HRmax band [low, high] for deviation mid = average */
 function hrPctBandForSessionType(type: string, week?: PlanWeek): { lo: number; hi: number } | null {
-  if (type === "easy" && isRecoveryWeek(week)) {
-    return { lo: 0.5, hi: 0.6 };
-  }
-  switch (type) {
-    case "easy":
-    case "long":
-      return { lo: 0.6, hi: 0.75 };
-    case "interval":
-    case "race":
-      return { lo: 0.8, hi: 0.95 };
-    case "tempo":
-      return { lo: 0.76, hi: 0.88 };
-    case "bike":
-      return { lo: 0.55, hi: 0.72 };
-    default:
-      return null;
-  }
-}
-
-/** BPM band for post-workout scoring (matches interval backfill semantics). */
-export function plannedHrRangeForSessionType(
-  sessionType: string,
-  maxHrBpm?: number | null,
-): { min: number; max: number } | null {
-  const mh = typeof maxHrBpm === "number" && Number.isFinite(maxHrBpm) && maxHrBpm > 80 ? maxHrBpm : null;
-  if (!mh) return null;
-  const t = String(sessionType || "").toLowerCase();
-  if (t === "easy" || t === "long") return { min: Math.round(mh * 0.65), max: Math.round(mh * 0.78) };
-  if (t === "tempo") return { min: Math.round(mh * 0.82), max: Math.round(mh * 0.9) };
-  if (t === "interval") return { min: Math.round(mh * 0.88), max: Math.round(mh * 0.95) };
-  if (t === "race") return { min: Math.round(mh * 0.9), max: Math.round(mh * 0.97) };
-  if (t === "bike") return { min: Math.round(mh * 0.6), max: Math.round(mh * 0.78) };
-  return null;
+  const zone = zoneLabelForSessionType(type, type === "easy" && isRecoveryWeek(week));
+  return zone ? HR_ZONE_PCT_BANDS[zone] : null;
 }
 
 /** Post-workout card: planned HR band + zone label from session type and optional HFmax. */
@@ -195,48 +168,7 @@ export function hrZoneMidBpm(session: PlanSession, maxHr: number, week?: PlanWee
 /** Kurzform für eingeklappte Trainingsziele (z. B. „Zone 2“). */
 export function getSessionHrZoneShort(session: PlanSession, week?: PlanWeek): string | null {
   if (session.type === "rest" || session.type === "strength") return null;
-  if (session.type === "easy" && isRecoveryWeek(week)) return "Zone 1";
-  switch (session.type) {
-    case "easy":
-    case "long":
-    case "bike":
-      return "Zone 2";
-    case "interval":
-    case "race":
-      return "Zone 4–5";
-    case "tempo":
-      return "Zone 3–4";
-    default:
-      return null;
-  }
-}
-
-/** %HFmax-Bänder je Zonen-Label — einzige Quelle der Wahrheit, von getSessionTargetLines() und getHrRangeForZone() geteilt. */
-const HR_ZONE_PCT_BANDS: Record<string, { lo: number; hi: number }> = {
-  "Zone 1": { lo: 0.5, hi: 0.6 },
-  "Zone 2": { lo: 0.6, hi: 0.75 },
-  "Zone 3–4": { lo: 0.76, hi: 0.88 },
-  "Zone 4–5": { lo: 0.8, hi: 0.95 },
-};
-
-/**
- * Konkrete BPM-Range für ein Zonen-Label (z. B. „Zone 2“) + `maxHeartRateBpm`.
- * Liefert `null`, wenn die Zone unbekannt ist oder `maxHeartRateBpm` fehlt/ungültig ist
- * (kein Fake-Wert — die Zone wird dann ohne BPM-Range angezeigt).
- */
-export function getHrRangeForZone(
-  zoneLabel: string | null | undefined,
-  maxHeartRateBpm?: number | null,
-): { min: number; max: number } | null {
-  if (!zoneLabel) return null;
-  const band = HR_ZONE_PCT_BANDS[zoneLabel];
-  if (!band) return null;
-  const mh =
-    typeof maxHeartRateBpm === "number" && Number.isFinite(maxHeartRateBpm) && maxHeartRateBpm > 0
-      ? maxHeartRateBpm
-      : null;
-  if (!mh) return null;
-  return { min: Math.round(band.lo * mh), max: Math.round(band.hi * mh) };
+  return zoneLabelForSessionType(session.type, session.type === "easy" && isRecoveryWeek(week));
 }
 
 /**
@@ -284,49 +216,25 @@ export function getSessionTargetLines(
     typeof maxHrBpm === "number" && Number.isFinite(maxHrBpm) && maxHrBpm > 0 ? maxHrBpm : undefined;
   const easyRecovery = session.type === "easy" && isRecoveryWeek(week);
 
-  /** Rendert „Zone X (min–max bpm, lo–hi% HFmax)“ aus der geteilten Band-Tabelle — identisch zur bisherigen fest codierten Formatierung. */
-  const zoneBandLabel = (zoneLabel: string, fallbackWhenNoMh: string): string => {
+  /** Rendert „Zone X (min–max bpm, lo–hi% HFmax)“ — bpm und Prozentbänder kommen ausschließlich aus hrZones.ts. */
+  const zoneBandLabel = (zoneLabel: keyof typeof HR_ZONE_PCT_BANDS): string => {
     const band = HR_ZONE_PCT_BANDS[zoneLabel];
-    if (!band) return fallbackWhenNoMh;
     const loPct = Math.round(band.lo * 100);
     const hiPct = Math.round(band.hi * 100);
     const range = getHrRangeForZone(zoneLabel, mh);
     return range
       ? `Herzfrequenzbereich: ${zoneLabel} (${range.min}–${range.max} bpm, ${loPct}–${hiPct}% HFmax)`
-      : fallbackWhenNoMh;
+      : `Herzfrequenzbereich: ${zoneLabel} (${loPct}–${hiPct}% HFmax)`;
   };
 
   let pulseLabel = "";
-  switch (session.type) {
-    case "easy":
-      if (easyRecovery) {
-        pulseLabel = zoneBandLabel("Zone 1", "Herzfrequenzbereich: Zone 1 · sehr niedrige Intensität");
-      } else {
-        pulseLabel = zoneBandLabel("Zone 2", "Herzfrequenzbereich: Zone 2 (60–75% HFmax)");
-      }
-      break;
-    case "long":
-      pulseLabel = zoneBandLabel("Zone 2", "Herzfrequenzbereich: Zone 2 (60–75% HFmax)");
-      break;
-    case "interval":
-      pulseLabel = zoneBandLabel("Zone 4–5", "Herzfrequenzbereich: Zone 4–5 (80–95% HFmax)");
-      break;
-    case "tempo":
-      pulseLabel = zoneBandLabel("Zone 3–4", "Herzfrequenzbereich: Zone 3–4 (76–88% HFmax)");
-      break;
-    case "race":
-      pulseLabel = zoneBandLabel("Zone 4–5", "Herzfrequenzbereich: Zone 4–5 (Rennen, 80–95% HFmax)");
-      break;
-    case "strength":
-      pulseLabel = "Herzfrequenzbereich: moderat / nicht primär relevant";
-      break;
-    case "bike":
-      pulseLabel = mh
-        ? `Herzfrequenzbereich: leicht–moderat (${Math.round(0.55 * mh)}–${Math.round(0.72 * mh)} bpm, 55–72% HFmax)`
-        : "Herzfrequenzbereich: leicht–moderat (55–72% HFmax)";
-      break;
-    default:
-      pulseLabel = "Herzfrequenzbereich: nach Intensität der Einheit";
+  const zone = zoneLabelForSessionType(session.type, easyRecovery);
+  if (zone) {
+    pulseLabel = zoneBandLabel(zone);
+  } else if (session.type === "strength") {
+    pulseLabel = "Herzfrequenzbereich: moderat / nicht primär relevant";
+  } else {
+    pulseLabel = "Herzfrequenzbereich: nach Intensität der Einheit";
   }
 
   const pr = parsePlannedPaceRangeMinPerKm(session.pace);

@@ -64,9 +64,23 @@ check("166 km/week peak week: long run clamped to 33%, week total unchanged", ()
   const totalAfter = sumKm(after);
   assert.strictEqual(totalAfter, weekTotalKm, "week total must stay exactly unchanged");
 
-  // Excess redistributed proportionally onto the other runs (largest gets the most).
-  assert.strictEqual(after.find((w) => w.id === "easy-30").km, 31.4);
-  assert.strictEqual(after.find((w) => w.id === "easy-22").km, 23.1);
+  // Excess goes proportionally onto the easy runs only (largest gets the most) ...
+  assert.strictEqual(after.find((w) => w.id === "easy-30").km, 32.2);
+  assert.strictEqual(after.find((w) => w.id === "easy-22").km, 23.6);
+  assert.strictEqual(after.find((w) => w.id === "easy-20").km, 21.4);
+  // ... never onto interval/tempo: their km belong to a structure the description names.
+  assert.strictEqual(after.find((w) => w.id === "tempo-18").km, 18);
+  assert.strictEqual(after.find((w) => w.id === "interval-16").km, 16);
+});
+
+check("excess without easy runs is dropped from the week, never added to interval/tempo", () => {
+  const before = [run("long", 30), run("interval", 10), run("tempo", 10), run("rest", 0, "rest")];
+  const weekTotalKm = sumKm(before); // 50
+  const after = clampLongRunToWeekPercent(before, weekTotalKm, LONG_RUN_CAP_STANDARD);
+  assert.strictEqual(after.find((w) => w.sessionType === "long").km, 15, "30% of 50km = 15km");
+  assert.strictEqual(after.find((w) => w.sessionType === "interval").km, 10);
+  assert.strictEqual(after.find((w) => w.sessionType === "tempo").km, 10);
+  assert.ok(sumKm(after) < weekTotalKm, "excess is removed from the week");
 });
 
 // ── Test 2: standard (non-peak / < 120km) week uses 30%, not 33% ───────────────────────

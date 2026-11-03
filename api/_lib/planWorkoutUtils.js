@@ -286,12 +286,12 @@ function scalePhaseWorkoutsForContinuity(phaseWorkouts, previousPhaseSummary, de
 
 /**
  * Hard clamp: if the long run of a week exceeds `maxPercent` of `weekTotalKm`, cuts it
- * down to the cap and redistributes the excess proportionally onto the week's other run
- * workouts (not rest/bike/strength/race), so the week total stays exactly unchanged.
+ * down to the cap and redistributes the excess proportionally onto the week's easy runs
+ * (never onto interval/tempo/race/rest/bike/strength), so the week total stays exactly unchanged.
  *
- * If there are no other run workouts to absorb the excess (e.g. a taper week with only
- * the long run and rest days), the long run is still clamped and the week total drops —
- * there is nothing else it could be redistributed onto.
+ * If there are no easy runs to absorb the excess (e.g. a taper week with only the long run,
+ * an interval session and rest days), the long run is still clamped and the week total drops —
+ * the excess is removed from the week rather than pushed onto a structured session.
  *
  * @param {Array<{sessionType?: string, sport?: string, km: number}>} workouts - one week's workouts
  * @param {number} weekTotalKm - this week's total km (sumWeekKm(workouts))
@@ -310,8 +310,10 @@ function clampLongRunToWeekPercent(workouts, weekTotalKm, maxPercent) {
   if (longRun.km <= capKm) return workouts;
 
   const excessKm = Math.round((longRun.km - capKm) * 10) / 10;
+  // Nur lockere Läufe nehmen den Überschuss auf. Intervall/Tempo/Schwelle bleiben unberührt: ihre km
+  // gehören zu einer Struktur (Aufwärmen, Wiederholungen, Auslaufen) und ihre Beschreibung nennt sie.
   const otherRuns = workouts.filter(
-    (w) => w !== longRun && w.sport === "run" && w.sessionType !== "race" && w.km > 0,
+    (w) => w !== longRun && w.sport === "run" && w.sessionType === "easy" && w.km > 0,
   );
   const otherRunsTotalKm = otherRuns.reduce((sum, w) => sum + w.km, 0);
 
