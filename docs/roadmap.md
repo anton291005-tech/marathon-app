@@ -208,6 +208,19 @@ Harte Invarianten für Onboarding-Pläne sind als Code umgesetzt (`api/_lib/plan
 - **(e) Planerzeugung lokal testbar machen (Folge-Branch):** Der Live-Test vom 2026-11-01 lief gegen Vercel Production (`main`), nicht gegen den Branch: `getPlanApiBaseUrl` (`src/lib/ai/claudePlanService.ts`) fällt ohne `REACT_APP_AI_API_BASE` auf `https://marathon-app-alpha.vercel.app` zurück, und `server/index.js` hat keine Route `/api/onboarding/generate-plan*`. Vorgehen: Web relativ über `getApiBaseUrl()`, Express-Routen auf die Vercel-Handler, CLAUDE.md „Live-Test-Setup“ korrigieren. Bis dahin Branch-Tests über `REACT_APP_AI_API_BASE=<Preview-URL>`.
 - **(f) Wochenziel nach Lauftagen:** `computeVolumePlan` (`api/_lib/weeklyVolumeProgression.js`) kennt die Zahl der Lauftage nicht. Bei 3 Läufen pro Woche (z. B. Marathon-Finisher, Ruhetage Mo/Mi/Do/Fr, 60–80 km) müssen drei Läufe 69 km tragen; mit I9 und der 50-%-Grenze beginnt der Long Run dann schon bei 27 km. Vorgehen: Ziel je Woche auf das begrenzen, was die Lauftage tragen, bevor der Verlauf (3:1, Taper) berechnet wird.
 
+## Plan-Volumen-Grenzen (`fix/plan-volume-guards`) — Stand 2026-11-03
+Anlass: Live-Test auf Production (`main` b0101f7), Pläne a0b9b6c1 (Marathon 2:50, 16 Wo., 60–80 km: Spitze 150 km, W6–W10 ohne Long Run, lockere Läufe bis 31 km, +52 % nach Entlastung, Rennwoche Mo 19,6 km Tempo) und cd555706 (HM 1:35, 12 Wo., 40–60 km: Spitze 85 km, +51 %/+45 % nach Entlastung). Ursachen: Spitze aus der Zielzeit-Referenz ohne Bezug zur Umfangsangabe; Schritt 3 sucht einen fehlenden Long Run nur auf `longRunDay`; ohne Long Run keine Grenze für lockere Läufe (0,45 × Wochenziel); Rückkehr nach Entlastung auf den gestiegenen Trend; `fixHardBeforeLong` verschiebt über Wochengrenzen; Matrix nur mit moderaten Zielzeiten und immer korrekt gelabeltem Sonntags-Long-Run.
+
+**Akzeptanzkriterien (freigegeben von Anton am 2026-11-03, bindend):**
+1. **Spitze** ≤ Obergrenze der Umfangsangabe × 1,2 („80+“ zählt als 90 → höchstens 108 km), mindestens Start × 1,10. Die 10-%-Grenze hat Vorrang: wird die Spitze nicht erreicht, steht ein Hinweis im Plan-Metadatum (`plan.meta.volumeNote`, für spätere Anzeige).
+2. **Wochenanstieg** ≤ 10 %: `Ziel[w] ≤ 1,1 × max(Ziel[w−1], Niveau vor Entlastung)`; gilt für die Ziele und für die tatsächlichen km der vollen Aufbauwochen.
+3. **Genau ein Long Run** in jeder Woche mit mindestens 5 Plantagen außer der Rennwoche; fehlt er, wird der längste lockere Lauf umgelabelt.
+4. **Lockerer Lauf ≤ 60 %** des Long Runs derselben Woche (Rennwoche und Wochen ohne Long Run: des letzten Long Runs davor).
+5. **Rennwoche:** ohne Rennen ≤ 40 % der tatsächlichen Spitze. Höchstens eine harte Einheit, ≤ 8 km inkl. WU/CD, nicht näher am Rennen als Renntag −4 (Marathon), −3 (HM), −2 (10 km/5 km); sonst nur locker oder frei. I3 bleibt bestehen (Renntag −2/−1 locker oder frei), für 10 km/5 km ist die harte Einheit damit frühestens an Renntag −3 möglich. Harte Einheiten werden nur innerhalb ihrer Woche verschoben.
+6. **Folgepunkt (f):** Wochenziel und Einzellauf-Längen hängen an der Zahl der Lauftage (`rules`: Ruhetage, Rad/Schwimmen/Kraft, `maxTrainingDaysPerWeek`), bevor Verlauf, Entlastung und Taper berechnet werden. Tragen die Läufe einer Woche ihr Ziel nicht, bleibt die Woche darunter.
+7. **Text und Summen:** Titel lockerer Läufe werden aus Rolle und km neu erzeugt, wenn der Code die km um mehr als 30 % ändert. `weeks[].totalKm` = tatsächliche Summe der Einheiten (Rennwoche inkl. Rennen), auf 0,1 km gerundet.
+8. **Tests:** Matrix um ehrgeizige Zielzeiten (Umfangsangabe unter der Referenz) und eine Chaos-Variante „Long Run als easy am Samstag, Sonntag frei“ erweitert, mit Assertions für 1–5; beide Live-Pläne (ohne `user_id`/`id`) als Regressions-Fixtures mit 0 Verstößen nach `enforcePlanInvariants`.
+
 ## Out of Scope bis TestFlight
 UI/UX-Redesign, Triathlon-Erweiterung, Android, Apple-Watch-Companion — nicht anfassen, auch nicht "nebenbei".
 
