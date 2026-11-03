@@ -1,8 +1,8 @@
-# MyRace – Plan-Spec v0.1 (Entwurf)
+# MyRace – Plan-Spec v0.3 (Entwurf)
 
 > Zweck: Single Source of Truth für den deterministischen Plan-Kern. Jede Regel ist eine Zahl und damit ein Test.
 > Herkunft jeder Zahl ist markiert: **[L]** Literatur · **[P]** Praxis-Konsens (Daniels/Pfitzinger/Hansons-Pläne) · **[E]** eigene Setzung → muss ins Spoho-Review.
-> Status: Entwurf v0.2, 3.11.2026. Abgeglichen mit der Zusammenfassung von `docs/plan-architecture-inventory.md` (963f99e), noch nicht mit den Einzelzahlen im Code (siehe §15).
+> Status: Entwurf v0.3, 3.11.2026. Abgeglichen mit `docs/plan-architecture-inventory.md` (963f99e) und `docs/plan-spec-gap.md` (c12c630). Wo Code und Spec abweichen, gilt die Spec; Ausnahmen sind in §16 begründet.
 >
 > **Was der Umbau tatsächlich ersetzt:** Der Code rechnet Volumen, Taper, Peak, km-Verteilung, Long Runs, Bausteine, Texte und Zonen bereits selbst. Claude entscheidet heute nur die **Wochenform** (welcher Tag welcher Typ, Anzahl Läufe/harte Einheiten) und übersetzt Freitext. Neu zu bauen sind daher: deterministische Wochenschablonen (§6), Einheiten-Limits als Prüfung statt Reparatur (§7, §12) und eine Pace-Berechnung (§3), die es heute nicht gibt.
 
@@ -21,7 +21,7 @@
 |---|---|
 | Woche | Mo–So, Woche 1 = erste volle oder angebrochene Woche ab Planstart |
 | Wochen-km | Summe aller Einheiten inkl. Ein-/Auslaufen, ohne Strides |
-| Harte Einheit | I, T, R, Rennen, LR ≥ 90 min, jede Einheit mit ≥ 5 km bei M-Pace oder schneller |
+| Harte Einheit | I, T, R, Rennen, LR ≥ 90 min, jede Einheit mit ≥ 5 km bei M-Pace oder schneller. **Eine gemeinsame Definition** (`isHardSession`) für Kern, `validateMicroStructure` und `validateSwap`. |
 | Qualitäts-km | nur die Belastungsanteile bei M/T/I/R-Pace (ohne Ein-/Auslaufen, ohne Trabpausen) |
 | Peak | höchster Wochenumfang des Plans |
 
@@ -38,6 +38,16 @@
 | `longestRecentRunKm` | nein | 0–45 (letzte 4 Wochen) | 30 % von `currentWeeklyKm`, min. 5 |
 | `recentRace` | nein | Distanz + Zeit + Datum | siehe §3 |
 | `goalTime` | nein | – | kein Zielpace-Training, nur Formpace |
+
+**Onboarding-Scope (laut Gap neu):** Heute fragt der Wizard nur eine Umfangs-Spanne ab; Lauftage, verfügbare Tage, Wochen-km, längster Lauf und Rennergebnis fehlen, im Profil steht nur eine Marathon-Bestzeit ohne Datum. Neu abzufragen:
+
+1. Lauftage pro Woche (3–6) – Pflicht
+2. Verfügbare Tage + Long-Run-Tag – Pflicht (Default: alle Tage, LR So)
+3. Aktuelle Wochen-km als Zahl (statt Spanne) – Pflicht
+4. Letzter Wettkampf oder geschätzte 5k/10k-Zeit (Distanz, Zeit, Datum) – optional, sonst Einsteiger-Modus
+5. Längster Lauf der letzten 4 Wochen – optional, Fallback siehe Tabelle
+
+Bestehende Profile ohne diese Felder: beim nächsten Planerstellen nachfragen, nicht raten.
 | `freeText` | nein | – | → Claude-Regeln (§10) |
 
 ## 3. Form und Pace
@@ -90,6 +100,8 @@ Liegt `currentWeeklyKm` unter `minStart`: Plan startet trotzdem bei `currentWeek
 
 `peakKm = min( tableMax, max(tableMin, startKm), startKm × 1.5 )` und zusätzlich erreichbar unter den Steigerungsregeln (§5.3). [E]
 
+Abweichung zum Code: Heute bestimmen Zielzeit und Umfangs-Spanne × 1,2 den Peak. Die Spec nimmt Lauftage und tatsächliche Wochen-km, weil die Zielzeit nichts über die Belastbarkeit aussagt. Die Zielzeit darf den Peak nur **innerhalb** der Tabellenspanne verschieben (schnelleres Ziel → oberer Teil der Spanne), nie darüber hinaus.
+
 Peak-Tabelle (km/Woche) [E, orientiert an Stufen in Daniels/Pfitzinger/Hansons]:
 
 | Distanz | 3 Tage | 4 Tage | 5 Tage | 6 Tage |
@@ -103,7 +115,7 @@ Peak-Tabelle (km/Woche) [E, orientiert an Stufen in Daniels/Pfitzinger/Hansons]:
 
 - Zielwert: Woche zu Woche ≤ +10 % oder ≤ +4 km (das Größere). [P]
 - **Harte Grenze:** `km(w) ≤ 1.30 × km(w−2)` – keine Steigerung > 30 % über zwei Wochen. [L: Nielsen et al. 2014, JOSPT – Assoziation bei Laufanfängern]
-- Entlastungswoche: jede 4. Woche in Basis/Aufbau/Spezifisch (3:1), −20 bis −25 % zur Vorwoche. Nach Entlastung wird wieder auf das Niveau vor der Entlastung gesprungen, nicht darüber. [P]
+- Entlastungswoche: jede 4. Woche in Basis/Aufbau/Spezifisch (3:1), −20 bis −30 % zur Vorwoche (Code heute −28 %, liegt im Bereich). Nach Entlastung wird höchstens auf das Niveau vor der Entlastung gesprungen, nicht darüber – der Code erlaubt heute +10 % darüber, das wird geändert. [P]
 - Kennzeichnung: `isRecoveryWeek = true` **und** `focus` enthält „Entlastung" (die App erkennt Entlastungswochen heute nur am Text). Die App soll auf das Flag umgestellt werden; bis dahin liefert der Kern beides.
 - Peak wird in der Spezifisch-Phase erreicht, frühestens 4 Wochen vor dem Rennen. [P]
 
@@ -112,7 +124,7 @@ Peak-Tabelle (km/Woche) [E, orientiert an Stufen in Daniels/Pfitzinger/Hansons]:
 - Volumen: insgesamt −41 bis −60 % gegenüber Peak über die Taper-Phase, progressiv. [L: Bosquet 2007]
   - M/HM Taper-Woche 1 (T−2): 65–75 % Peak
   - Rennwoche ohne Rennen: 35–50 % Peak
-  - 5k/10k Rennwoche ohne Rennen: 50–60 % Peak
+  - 5k/10k Rennwoche ohne Rennen: 40–60 % Peak (Code heute 40 %, liegt im Bereich)
 - **Intensität bleibt:** pro Taper-Woche genau 1 verkürzte Qualitätseinheit im Renntempo/T. [L: Bosquet 2007]
 - **Frequenz bleibt:** Lauftage ≥ `runDaysPerWeek − 1`. [L: Bosquet 2007]
 
@@ -189,7 +201,7 @@ Einsteiger-Modus: in Basis nur Strides, keine I/R im ganzen Plan.
 
 - RACE am `raceDate`, Distanz exakt.
 - Letzte Q-Einheit ≥ 4 Tage vor M, ≥ 3 Tage vor HM/10k/5k.
-- Letzte 2 Tage vor dem Rennen: nur REC/E ≤ 30 min oder Ruhe, optional Strides.
+- Letzte 2 Tage vor dem Rennen: nur REC/E ≤ 30 min oder Ruhe, optional Strides. (Code heute bis 6 bzw. 10 km vor dem Marathon – wird auf die Zeitgrenze umgestellt; 30 min ≈ 6–7 km bei schnellen Läufern, 4–5 km bei langsamen.)
 - Kein LR in der Rennwoche.
 - Plan endet am Renntag (Erholungswoche danach: nicht im MVP).
 
@@ -235,7 +247,7 @@ type PlanRules = {
 | I3 | `km(w) ≤ 1.30 × km(w−2)` für alle w ≥ 3 |
 | I4 | `km(w) ≤ max(1.10 × km(w−1), km(w−1) + 4)` außer erste Woche nach Entlastung (dann ≤ Niveau vor Entlastung) |
 | I5 | Peak ≤ Tabellen-Max (§5.2) und ≤ `startKm × 1.5` |
-| I6 | Keine zwei harten Einheiten an aufeinanderfolgenden Tagen |
+| I6 | Keine zwei harten Einheiten an aufeinanderfolgenden Tagen – **auch über die Wochengrenze** (So → Mo) |
 | I7 | Q-Einheiten pro Woche ≤ Max nach Lauftagen |
 | I8 | Qualitäts-km ≤ 25 % der Wochen-km |
 | I9 | LR-Anteil, LR-Zeit, LR-Steigerung nach §7.1 |
@@ -298,10 +310,26 @@ Volumenreferenz, Volumenverlauf, `buildVolumeContext`, Long-Run-Planung, km-Vert
 - Woche 1 bei Start mitten in der Woche verliert beim Normalisieren `focus` und `dates` → Invariante I21: jede Woche hat `focus` und `dates`, auch eine angebrochene Woche 1.
 - Schwimm-Einheiten werden beim Normalisieren zu `easy` → Normalisierung darf unbekannte/Nicht-Lauf-Typen nie zu Lauf-Typen umdeuten (betrifft vor allem den Coach/Patches, nicht den Lauf-Kern selbst).
 
-### 15.5 Noch offen
-- **Ausgabeformat:** Welches Modell konsumiert die App – `TrainingPlanV2`, `AiPlanWeek` oder beides? Capacity Engine und `PlanPatch` hängen an `AiPlanWeek`.
-- **Inputs:** Existieren `currentWeeklyKm`, `longestRecentRunKm`, `recentRace` im Onboarding/Profil? Wenn nicht → Onboarding-Änderung gehört zum Scope (nötig für §3).
-- **Validatoren:** Was aus `validateMicroStructure.ts` / `validateSwap.ts` wird zu Invarianten-Tests, was entfällt?
+### 15.5 Geklärt durch `plan-spec-gap.md`
+- **Ausgabeformat:** Der Kern liefert nur `TrainingPlanV2` (gespeicherter Plan). `AiPlanWeek` wird bei jeder Anzeige daraus abgeleitet und nimmt die Patches auf. Neue Felder (Paces, Segmente, `isRecoveryWeek`, neue Typen) müssen in `toPlanWeeks` und `planToAi` durchgereicht werden – gehört zum Scope, sonst kommen sie nie in der UI an.
+- **Inputs:** fehlen alle → Onboarding-Änderung (§2) gehört zum Scope.
+- **Validatoren:** bleiben Warnungen bei Nutzeränderungen, blockieren nie. Harte Einheiten/Abstände → I6, Taper-Intensität → I13. Ermüdungs-Achse, Peak-Kompression und „Long Run in die Basis“ entfallen im Kern. Beide Validatoren nutzen danach `isHardSession` aus dem Kern und prüfen über die Wochengrenze.
+
+## 16. Gap-Zusammenfassung (Code → Spec)
+
+| Bereich | Code heute | Spec | Aufwand |
+|---|---|---|---|
+| Peak | Zielzeit + Spanne × 1,2 | Lauftage + Start × 1,5, Tabelle | mittel |
+| Steigerung | +10 % | +10 % oder +4 km; hart ≤ 30 %/2 Wo | klein |
+| Entlastung | −28 %, danach +10 % über altes Niveau | −20–30 %, danach max. altes Niveau | klein |
+| Taper | Anteile der Spitze | übernehmen, Bereiche angepasst | – |
+| **Long Run** | 30 % der Wochen-km bei 4–6 Tagen, keine Zeit-/Steigerungsgrenze → M 4:00 nur 14,2 km | §7.1: Anteil nach Lauftagen, 150/180 min, ±2–3 km/Wo | **groß** |
+| **Wochenschablonen** | Claude; Standardregeln erzeugen 6 Tage trotz `maxTrainingDaysPerWeek: 5` | §6 deterministisch | **groß** |
+| **Einheiten** | locker, lang, Intervall, Tempo; Tempo bis 24 km | §7 Bibliothek mit Limits | **groß** |
+| Paces | keine | §3 VDOT | **groß** |
+| Rennwoche | bis 6/10 km in den letzten 2 Tagen | ≤ 30 min | klein |
+| Onboarding | Umfangs-Spanne, M-Bestzeit ohne Datum | §2 fünf Fragen | mittel |
+| Durchreichen | `toPlanWeeks`/`planToAi` kennen neue Felder nicht | durchreichen | mittel |
 
 ## Quellen
 
