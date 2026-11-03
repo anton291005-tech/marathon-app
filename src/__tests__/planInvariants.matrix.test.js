@@ -6,6 +6,8 @@
 //   fallback      — jeder Phasen-Aufruf schlägt fehl → deterministischer Fallback im Claude-Pfad
 //   fallback-partial — nur der erste Phasen-Aufruf schlägt fehl (Chunk-Fallback gemischt mit Chaos)
 //   chaos-3runs   — Mock-Claude mit drei Läufen pro Woche (Long Run + Intervall + locker / + 2× locker), vier Ruhetage
+//   chaos-long-easy — Mock-Claude wie Live-Plan a0b9b6c1: langer Lauf als easy am Samstag, Sonntag frei
+// COMBOS enthält zusätzlich ehrgeizige Zielzeiten (Marathon 2:50/60–80, HM 1:35/40–60, Marathon 2:40/80+).
 // Zusätzlich PARTIAL_COMBOS: Planstart mitten in der ersten Woche (Teilwoche), 8 und 12 Wochen, Start Di…So, Rennen So/Di.
 // Geprüft wird am fertigen Plan (plan.workouts / plan.weeks), unabhängig von checkPlanInvariants.
 // Invarianten: I1 Umfang (inkl. kein flacher Plan) · I2 Long-Run-Verlauf · I3 Rennende · I4 Vortag · I5 Bausteine · I6 Zonen · I7 Phasenname
@@ -26,8 +28,8 @@ const {
   computeStructuredWorkoutDistance,
 } = require("../sessionDistance");
 
-const SOURCES = ["deterministic", "chaos", "chaos-notaper", "fallback", "fallback-partial", "chaos-3runs"];
-const VARIANT = { chaos: "default", "chaos-notaper": "no-taper", "chaos-3runs": "three-runs" };
+const SOURCES = ["deterministic", "chaos", "chaos-notaper", "fallback", "fallback-partial", "chaos-3runs", "chaos-long-easy"];
+const VARIANT = { chaos: "default", "chaos-notaper": "no-taper", "chaos-3runs": "three-runs", "chaos-long-easy": "long-easy" };
 const ALL_COMBOS = [...COMBOS, ...PARTIAL_COMBOS];
 const plans = new Map();
 
@@ -38,11 +40,24 @@ const isHard = (w) => w.sessionType === "interval" || w.sessionType === "tempo";
 const weekKm = (week) =>
   week.workouts.reduce((s, w) => s + (w.sport !== "rest" && w.sessionType !== "race" ? w.km : 0), 0);
 const RUN_TYPES = ["easy", "long", "interval", "tempo"];
-/** Obergrenze des Long-Run-Anteils: 30 % (33 % in Peak-Wochen ab 120 km), bei ≤ 3 Läufen 50 %. */
+/**
+ * "Rennwoche" für AK 5: die 7 Tage bis zum Rennen (Renntag −6 … Renntag), soweit sie in Taper-Wochen liegen (die
+ * Spitzenwoche bleibt ausgenommen, wenn sie bei nur einer Taper-Woche noch hineinreicht).
+ */
+const inRaceWindow = (w, week, combo) => daysBetween(combo.raceYmd, ymdOf(w)) <= 6 && week.meta?.phase === "taper";
+const touchesRaceWindow = (week, combo) => week.workouts.some((w) => inRaceWindow(w, week, combo));
+/**
+ * Obergrenze des Long-Run-Anteils: 30 % (33 % in Peak-Wochen ab 120 km), bei ≤ 3 Läufen 50 %. Vorrang I9: mit
+ * lockeren Läufen ≤ 60 % und harten ≤ 115 % des Long Runs muss der Long Run mindestens 1 / (1 + 0,6·e + 1,15·h)
+ * der Woche tragen — so hoch steigt die Grenze, wenn das darüber liegt (wenige, lockere Läufe).
+ */
 const longRunCapOf = (week, total) => {
   const runs = week.workouts.filter((x) => RUN_TYPES.includes(x.sessionType) && x.sport !== "rest").length;
+  const easy = week.workouts.filter((x) => x.sessionType === "easy" && x.sport !== "rest").length;
+  const hard = week.workouts.filter((x) => x.sessionType === "interval" || x.sessionType === "tempo").length;
   const share = week.meta?.phase === "peak" && total >= 120 ? 0.33 : 0.3;
-  return runs === 1 ? 1 : runs <= 3 ? Math.max(share, 0.5) : share;
+  const base = runs <= 3 ? Math.max(share, 0.5) : share;
+  return runs === 1 ? 1 : Math.max(base, easy + hard > 0 ? 1 / (1 + 0.6 * easy + 1.15 * hard) : 0);
 };
 
 beforeAll(async () => {
@@ -174,9 +189,11 @@ describe("I2 Long Run wächst bis 2–3 Wochen vor dem Rennen", () => {
       expect(w.km).toBeLessThanOrEqual(after + 0.15);
       after = w.km;
     }
-    // Anteil am Wochenvolumen (Rennen zählt mit), Wochen mit mindestens zwei Läufen
+    // Anteil am Wochenvolumen (Rennen zählt mit), Wochen mit mindestens zwei Läufen; Wochen, die in die 7 Tage bis
+    // zum Rennen reichen, zählen wie die Rennwoche (dort keine Anteilsregel)
     for (const w of longs) {
       const week = weekOf(w);
+      if (touchesRaceWindow(week, combo)) continue;
       const total = week.workouts.reduce((s, x) => s + (x.sport !== "rest" ? x.km : 0), 0);
       const runs = week.workouts.filter((x) => ["easy", "long", "interval", "tempo"].includes(x.sessionType)).length;
       if (runs < 2) continue;
@@ -287,13 +304,82 @@ describe("I8 keine zwei harten Einheiten (Intervall, Tempo, Rennen) an aufeinand
   });
 });
 
-describe("I9 Long Run ≥ längster lockerer Lauf derselben Woche", () => {
+describe("I9 lockerer Lauf ≤ 60 % des Long Runs (ohne Long Run in der Woche: des letzten davor)", () => {
   it.each(cases)("%s", (_n, source, combo) => {
     const plan = planOf(source, combo);
+    let lastLong = 0;
     for (const week of plan.weeks) {
       const long = week.workouts.find((w) => w.sessionType === "long");
-      if (!long) continue;
-      for (const w of week.workouts.filter((x) => x.sessionType === "easy")) expect(w.km).toBeLessThanOrEqual(long.km + 0.05);
+      const ref = long ? long.km : lastLong;
+      if (ref > 0) {
+        for (const w of week.workouts.filter((x) => x.sessionType === "easy")) expect(w.km).toBeLessThanOrEqual(0.6 * ref + 0.05);
+      }
+      if (long) lastLong = long.km;
+    }
+  });
+});
+
+// ── fix/plan-volume-guards: Akzeptanzkriterien 1–5 (docs/roadmap.md) ──────────────────────────────────────
+const RANGE_MAX = { "0–20 km": 20, "20–40 km": 40, "40–60 km": 60, "60–80 km": 80, "80+ km": 90 };
+const RANGE_MID = { "0–20 km": 15, "20–40 km": 30, "40–60 km": 50, "60–80 km": 70, "80+ km": 90 };
+
+describe("AK 1 Spitze ≤ Obergrenze der Umfangsangabe × 1,2 (mindestens Start × 1,10)", () => {
+  it.each(cases)("%s", (_n, source, combo) => {
+    const plan = planOf(source, combo);
+    const range = combo.profile.weeklyKmRange;
+    const cap = Math.max(Math.floor(RANGE_MAX[range] * 1.2), Math.round(RANGE_MID[range] * 1.1));
+    expect(Math.max(...plan.weeks.map(weekKm))).toBeLessThanOrEqual(cap + 0.05);
+    if (plan.meta?.volumeNote) {
+      expect(plan.meta.volumeNote.reachedPeakKm).toBeLessThan(plan.meta.volumeNote.targetPeakKm);
+      expect(["growth", "run-days"]).toContain(plan.meta.volumeNote.reason);
+    }
+  });
+});
+
+describe("AK 2 volle Aufbauwochen ≤ 1,1 × max(Vorwoche, Niveau vor Entlastung)", () => {
+  it.each(cases)("%s", (_n, source, combo) => {
+    const plan = planOf(source, combo);
+    let level = null;
+    plan.weeks.forEach((week, i) => {
+      if (week.meta?.phase === "taper") return;
+      const prev = plan.weeks[i - 1];
+      const full = week.workouts.length >= 7;
+      if (full && prev && prev.workouts.length >= 7) {
+        expect(weekKm(week)).toBeLessThanOrEqual(1.1 * Math.max(weekKm(prev), level ?? 0) + 0.3);
+      }
+      if (full && !week.meta?.isRecoveryWeek) level = weekKm(week);
+    });
+  });
+});
+
+describe("AK 3 genau ein Long Run je Woche mit ≥ 5 Tagen vor den 7 Tagen bis zum Rennen, dort keiner", () => {
+  it.each(cases)("%s", (_n, source, combo) => {
+    const plan = planOf(source, combo);
+    plan.weeks.forEach((week, i) => {
+      const open = week.workouts.filter((w) => !inRaceWindow(w, week, combo));
+      const longs = week.workouts.filter((w) => w.sessionType === "long");
+      if (open.length >= 5 && i < plan.weeks.length - 1) expect(longs).toHaveLength(1);
+      for (const w of longs) expect(inRaceWindow(w, week, combo)).toBe(false);
+    });
+  });
+});
+
+describe("AK 5 Rennwoche (Renntag −6 bis −1): ≤ 40 % der Spitze, höchstens eine harte Einheit ≤ 8 km, nicht zu nah", () => {
+  it.each(cases)("%s", (_n, source, combo) => {
+    const plan = planOf(source, combo);
+    // die 7 Tage bis zum Rennen, auch wenn sie in die Vorwoche reichen (Rennen Mo/Di)
+    const window = plan.weeks.flatMap((week) =>
+      week.workouts.filter((w) => inRaceWindow(w, week, combo) && daysBetween(combo.raceYmd, ymdOf(w)) >= 1),
+    );
+    const peak = Math.max(...plan.weeks.filter((w) => w.meta?.phase !== "taper").map(weekKm));
+    const windowKm = window.reduce((s, w) => s + (w.sport !== "rest" ? w.km : 0), 0);
+    expect(windowKm).toBeLessThanOrEqual(0.4 * peak + 0.3);
+    const hard = window.filter(isHard);
+    expect(hard.length).toBeLessThanOrEqual(1);
+    const minGap = combo.distance.km > 30 ? 4 : combo.distance.km > 12 ? 3 : 2;
+    for (const w of hard) {
+      expect(w.km).toBeLessThanOrEqual(8);
+      expect(daysBetween(combo.raceYmd, ymdOf(w))).toBeGreaterThanOrEqual(minGap);
     }
   });
 });
@@ -315,18 +401,17 @@ describe("I10 Long Run 20–30 % des Wochenumfangs (volle Wochen, Rennwoche ausg
       const later = longs.filter((x) => x !== long && (x === peak || (ymdOf(x) > ymdOf(long) && ymdOf(x) < ymdOf(peak) && inChain(x))));
       const i2Bound = afterPeak ? (previous?.km ?? peakKm) - 0.1 : Math.min(...later.map((x) => x.km));
       if (afterPeak) previous = long;
-      if (week === plan.weeks[plan.weeks.length - 1] || week.workouts.length < 7) continue;
+      if (week === plan.weeks[plan.weeks.length - 1] || week.workouts.length < 7 || touchesRaceWindow(week, combo)) continue;
       const total = weekKm(week);
       const runs = week.workouts.filter((x) => RUN_TYPES.includes(x.sessionType)).length;
       if (runs < 2) continue;
       expect(long.km).toBeGreaterThanOrEqual(Math.min(0.2 * total, i2Bound) - 0.005 * total);
       expect(long.km / total).toBeLessThanOrEqual(longRunCapOf(week, total) + 0.005);
     }
-    // Ohne Long Run bleibt nur eine volle Woche, deren Sonntag (Long-Run-Tag) in der Anfahrt liegt (Renntag −2/−1)
-    const approach = new Set([1, 2].map((k) => new Date(Date.parse(`${combo.raceYmd}T00:00:00Z`) - k * DAY_MS).toISOString().slice(0, 10)));
+    // Ohne Long Run bleibt nur eine Woche mit weniger als 5 Tagen außerhalb der Rennwoche (AK 5)
     for (const week of plan.weeks.slice(0, -1)) {
-      if (week.workouts.length < 7 || week.workouts.some((x) => x.sessionType === "long")) continue;
-      expect(week.workouts.some((x) => approach.has(ymdOf(x)) && new Date(`${ymdOf(x)}T00:00:00Z`).getUTCDay() === 0)).toBe(true);
+      if (week.workouts.some((x) => x.sessionType === "long")) continue;
+      expect(week.workouts.filter((x) => !inRaceWindow(x, week, combo)).length).toBeLessThan(5);
     }
   });
 });

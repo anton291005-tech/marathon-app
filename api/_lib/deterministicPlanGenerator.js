@@ -11,6 +11,7 @@ const {
 const {
   enforcePlanInvariants,
   longRunMinDaysBeforeRace,
+  weekCapacityKm,
   mondayOf: ymdMondayOf,
   addDays: ymdAddDays,
   diffDays: ymdDiffDays,
@@ -94,6 +95,44 @@ function parseWeeklyKmTarget(range) {
   if (range.includes("60–80")) return 70;
   if (range.includes("80+")) return 90;
   return 50;
+}
+
+/** Obergrenze der Umfangsangabe (km/Woche); "80+" zählt als 90 (freigegeben von Anton am 2026-11-03). */
+function parseWeeklyKmRangeMax(range) {
+  if (!range) return 60;
+  if (range.includes("0–20")) return 20;
+  if (range.includes("20–40")) return 40;
+  if (range.includes("40–60")) return 60;
+  if (range.includes("60–80")) return 80;
+  if (range.includes("80+")) return 90;
+  return 60;
+}
+
+const DOWS = [0, 1, 2, 3, 4, 5, 6];
+/** Längster erlaubter Long Run: Spitze mindestens 15 % über dem Start, damit Umfang und Long Run wachsen können. */
+const LONG_RUN_MIN_GROWTH_FOR_CAPACITY = 1.15;
+const asDowList = (value) => (Array.isArray(value) ? value.filter((d) => DOWS.includes(d)) : []);
+
+/**
+ * Lauftage und harte Einheiten pro Woche aus den Strukturregeln (Folgepunkt f): Ruhetage und Rad/Schwimmen/Kraft
+ * sind keine Lauftage, `maxTrainingDaysPerWeek` begrenzt die Trainingstage. Ohne Regeln: Montag frei, zwei harte
+ * Einheiten.
+ */
+function runDaysFromRules(rules) {
+  const rest = new Set(asDowList(rules?.restDays ?? [1]));
+  const support = new Set(
+    [...asDowList(rules?.bikeDays), ...asDowList(rules?.swimDays), ...asDowList(rules?.strengthDays)].filter((d) => !rest.has(d)),
+  );
+  const maxTraining = Number.isFinite(rules?.maxTrainingDaysPerWeek) && rules.maxTrainingDaysPerWeek > 0 ? rules.maxTrainingDaysPerWeek : 7;
+  const trainingDays = Math.min(7 - rest.size, maxTraining);
+  const runDays = Math.max(1, trainingDays - support.size);
+  const longDay = rules?.longRunDay ?? 0;
+  const hardSet = new Set(
+    (rules ? [rules.intervalDay, rules.tempoDay] : [2, 4]).filter(
+      (d) => DOWS.includes(d) && d !== longDay && !rest.has(d) && !support.has(d),
+    ),
+  );
+  return { runDays, hardDays: Math.min(hardSet.size, Math.max(0, runDays - 2)) };
 }
 
 function getRaceConfig(distanceKm, goal = "time") {
@@ -644,6 +683,7 @@ function buildVolumeContext({
   raceGoal,
   weeklyKmRange,
   longRunDow = 0,
+  rules,
 }) {
   const { totalWeeks } = computeWeekStartDates(startDay, raceDay);
   const weekDays = computeWeekDayCounts(startDay, raceDay);
@@ -656,10 +696,12 @@ function buildVolumeContext({
   const phases = structurePhases?.length ? structurePhases : defaultStructureForWeeks(totalWeeks).phases;
   const weekPhaseSchedule = applyTaperToSchedule(buildWeekPhaseSchedule(totalWeeks, phases), taperWeeks);
   const weeklyTarget = parseWeeklyKmTarget(weeklyKmRange);
+  const rangeMaxKm = parseWeeklyKmRangeMax(weeklyKmRange);
   const volumeGapWarning = weeklyTarget < volumeRef.baseKm[0] * 0.6;
   const effectivePeakKm = resolvePeakKm({
     referencePeakKm: volumeGapWarning ? Math.min(volumeRef.peakKm[1], weeklyTarget * 1.6) : volumeRef.peakKm[1],
     startWeeklyKm: weeklyTarget,
+    rangeMaxKm,
   });
   // Die Woche mit dem längsten Lauf (letzter Long Run mindestens 14/21 Tage vor dem Rennen) bleibt ohne Entlastung.
   const startYmd = isoDateOf(startDay);
@@ -671,7 +713,25 @@ function buildVolumeContext({
     const longDate = ymdAddDays(firstMonday, (w - 1) * 7 + ((longRunDow + 6) % 7));
     if (longDate >= startYmd && ymdDiffDays(raceYmd, longDate) >= minDays) peakLongWeek = w;
   }
-  const { targets: weeklyKmTargets, isDeload } = computeVolumePlan({
+
+  // Folgepunkt (f): längster erlaubter Long Run je Woche und was die Lauftage damit tragen. Der Long Run wächst
+  // linear bis zur Spitze (Referenz bzw. 22 % der Spitzenwoche) in der Woche des längsten Laufs und bleibt danach
+  // dort. Er beginnt bei 65 % der Spitze, mindestens bei 30 % des aktuellen Umfangs, aber höchstens bei Spitze / 1,15
+  // — sonst wäre die Kapazität jede Woche gleich und der Plan flach (I1/I2).
+  const { runDays, hardDays } = runDaysFromRules(rules);
+  const ultra = volumeRef.distKey === "ultra";
+  const peakLongKm = ultra ? volumeRef.peakLongRunKm : Math.max(volumeRef.peakLongRunKm, 0.22 * effectivePeakKm);
+  const startLongKm = Math.min(Math.max(0.65 * peakLongKm, 0.3 * weeklyTarget), peakLongKm / LONG_RUN_MIN_GROWTH_FOR_CAPACITY);
+  const lastBuildWeek = peakLongWeek ?? Math.max(1, totalWeeks - taperWeeks);
+  const longRunMaxKm = Array.from({ length: totalWeeks }, (_, i) => {
+    const t = lastBuildWeek <= 1 ? 1 : Math.min(1, i / (lastBuildWeek - 1));
+    return Math.round((startLongKm + (peakLongKm - startLongKm) * t) * 10) / 10;
+  });
+  const weekCapacity = longRunMaxKm.map((longMaxKm) =>
+    weekCapacityKm({ runDays, hardDays, longMaxKm, raceKm: raceDistanceKm ?? 0 }),
+  );
+
+  const volumePlan = computeVolumePlan({
     totalWeeks,
     phaseSchedule: weekPhaseSchedule,
     startWeeklyKm: weeklyTarget,
@@ -679,7 +739,18 @@ function buildVolumeContext({
     weekDays,
     raceKm: raceDistanceKm ?? 0,
     protectedWeeks: peakLongWeek != null ? [peakLongWeek] : [],
+    weekCapacityKm: weekCapacity,
   });
+  const { targets: weeklyKmTargets, isDeload } = volumePlan;
+  // Hinweis fürs Plan-Metadatum: die 10-%-Grenze bzw. die Lauftage gehen vor der Spitze.
+  const volumeNote = volumePlan.peakReached
+    ? null
+    : {
+        code: "peak-not-reached",
+        reason: volumePlan.peakLimit,
+        targetPeakKm: effectivePeakKm,
+        reachedPeakKm: volumePlan.reachedPeakKm,
+      };
   return {
     totalWeeks,
     weekDays,
@@ -687,10 +758,17 @@ function buildVolumeContext({
     taperWeeks,
     weekPhaseSchedule,
     weeklyTarget,
+    rangeMaxKm,
     volumeGapWarning,
     effectivePeakKm,
+    reachedPeakKm: volumePlan.reachedPeakKm,
     weeklyKmTargets,
     isDeload,
+    runDays,
+    hardDays,
+    longRunMaxKm,
+    weekCapacityKm: weekCapacity,
+    volumeNote,
   };
 }
 
@@ -767,6 +845,7 @@ function generateMarathonPlanV2ToRace(
     raceGoal: goal ?? "time",
     weeklyKmRange,
     longRunDow: aiRules?.longRunDay ?? 0,
+    rules: aiRules,
   });
   const weekPhaseSchedule = totalWeeks > 0 ? volumeContext.weekPhaseSchedule : null;
 
@@ -841,6 +920,7 @@ function generateMarathonPlanV2ToRace(
     isDeload: volumeContext.isDeload,
     weekPhaseSchedule: volumeContext.weekPhaseSchedule,
     peakLongRunKm: volumeContext.volumeRef.peakLongRunKm,
+    longRunMaxKm: volumeContext.longRunMaxKm,
     longRunDow: aiRules?.longRunDay ?? 0,
     restDows: Array.isArray(aiRules?.restDays)
       ? aiRules.restDays
@@ -849,7 +929,12 @@ function generateMarathonPlanV2ToRace(
         : raceConfig.restDaysPattern,
   });
 
-  return rebuildPlanFromWorkouts(enforcedWorkouts, metaByWeekStart, weekKeyOverrides);
+  return withPlanMeta(rebuildPlanFromWorkouts(enforcedWorkouts, metaByWeekStart, weekKeyOverrides), volumeContext);
+}
+
+/** Plan-Metadatum: Hinweis, wenn die Spitze wegen der 10-%-Grenze oder der Lauftage nicht erreicht wird. */
+function withPlanMeta(plan, volumeContext) {
+  return volumeContext.volumeNote ? { ...plan, meta: { volumeNote: volumeContext.volumeNote } } : plan;
 }
 
 function extractWorkoutsForPhase(fullPlan, weekPhaseSchedule, phaseName) {
@@ -911,6 +996,9 @@ module.exports = {
   RECOVERY_WEEK_FOCUS,
   PHASE_LABEL_DE,
   parseWeeklyKmTarget,
+  parseWeeklyKmRangeMax,
+  runDaysFromRules,
+  withPlanMeta,
   parseOnboardingRaceDate,
   buildWeekPhaseSchedule,
   computeWeekStartDates,

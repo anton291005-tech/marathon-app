@@ -127,6 +127,29 @@ function chaosWorkoutsForWeek(wn, startIso, raceIso) {
   return workouts;
 }
 
+/**
+ * Wie Claude im Live-Plan a0b9b6c1 (W6–W10): der lange Lauf liegt als "easy" ("Langer Lauf Ausbau") am Samstag,
+ * Sonntag und Donnerstag frei, Freitags-Tempo direkt davor, lockere Läufe mit irreführendem Titel.
+ */
+function longEasyWorkoutsForWeek(wn, startIso, raceIso) {
+  const start = Date.parse(`${startIso}T00:00:00Z`);
+  const monday = start - ((new Date(start).getUTCDay() + 6) % 7) * DAY_MS;
+  const workouts = [];
+  for (let d = 0; d < 7; d += 1) {
+    const ms = monday + d * DAY_MS;
+    if (ms < start) continue;
+    const ymd = new Date(ms).toISOString().slice(0, 10);
+    const base = { id: `w${wn}-${DAY_NAMES[d].toLowerCase()}`, weekId: `w${wn}`, day: DAY_NAMES[d], date: ymd, dateIso: `${ymd}T12:00:00.000Z`, phase: "BUILD" };
+    if (ymd === raceIso) workouts.push({ ...base, type: "race", title: "Renntag", km: 10, description: "Rennen." });
+    else if (d === 1) workouts.push({ ...base, type: "interval", title: "Intervalle", km: 12, description: "5 × 2 km." });
+    else if (d === 3 || d === 6) workouts.push({ ...base, type: "rest", title: "Ruhetag", km: 0, description: "Frei." });
+    else if (d === 4) workouts.push({ ...base, type: "tempo", title: "Tempolauf Grundlage", km: 14, description: "Tempo." });
+    else if (d === 5) workouts.push({ ...base, type: "easy", title: "Langer Lauf Ausbau", km: 24, description: "Langer lockerer Lauf." });
+    else workouts.push({ ...base, type: "easy", title: d === 2 ? "Regenerationslauf" : "Lockerer Einstiegslauf", km: 9, description: "Locker." });
+  }
+  return workouts;
+}
+
 /** Antwort der Mock-Claude-API: Struktur-Aufruf oder Phasen-Aufruf (anhand des System-Prompts erkannt). */
 function chaosReply(params, combo, variant) {
   const system = String(params.system ?? "");
@@ -140,14 +163,15 @@ function chaosReply(params, combo, variant) {
   let match;
   while ((match = weekRe.exec(userMessage))) {
     weeks.push({ id: `w${match[1]}`, label: `Woche ${match[1]}`, startIso: match[2], totalKm: 0 });
-    const forWeek = variant === "three-runs" ? threeRunWorkoutsForWeek : chaosWorkoutsForWeek;
+    const forWeek =
+      variant === "three-runs" ? threeRunWorkoutsForWeek : variant === "long-easy" ? longEasyWorkoutsForWeek : chaosWorkoutsForWeek;
     workouts.push(...forWeek(Number(match[1]), match[2], combo.raceYmd));
   }
   return { content: [{ type: "text", text: JSON.stringify({ weeks, workouts }) }], usage: {} };
 }
 
 /**
- * variant: "default" | "no-taper" | "three-runs" — Chaos-Antworten;
+ * variant: "default" | "no-taper" | "three-runs" | "long-easy" — Chaos-Antworten;
  *          "fallback" — jeder Phasen-Aufruf schlägt fehl (nur der Struktur-Aufruf klappt) → deterministischer Fallback;
  *          "fallback-partial" — nur der erste Phasen-Aufruf schlägt fehl, die übrigen liefern Chaos.
  */
@@ -161,7 +185,7 @@ async function claudeRun(combo, variant, mockCreate) {
         throw new Error("Claude phase failed (test)");
       }
     }
-    return chaosReply(params, combo, variant === "no-taper" || variant === "three-runs" ? variant : "default");
+    return chaosReply(params, combo, ["no-taper", "three-runs", "long-easy"].includes(variant) ? variant : "default");
   });
   return generateFullPlanByPhases({ messages: { create: mockCreate } }, combo.profile);
 }

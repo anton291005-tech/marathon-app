@@ -237,6 +237,8 @@ describe("Live-Plan d18e1bd8 (Rennen Di 22.12.2026) durch enforcePlanInvariants"
     isDeload: volume.isDeload,
     weekPhaseSchedule: volume.weekPhaseSchedule,
     peakLongRunKm: volume.volumeRef.peakLongRunKm,
+    // wie in beiden Generatoren: Long-Run-Obergrenze je Woche (Folgepunkt f)
+    longRunMaxKm: volume.longRunMaxKm,
     longRunDow: 0,
   };
   const checkCtx = {

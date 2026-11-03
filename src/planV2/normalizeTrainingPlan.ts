@@ -4,7 +4,7 @@ import { rebuildPlanFromWorkouts } from "../core/deriveWeeksFromWorkouts";
 import { getAppNow } from "../core/time/timeSystem";
 import { mapSessionType } from "../lib/ai/mapSessionType";
 import { resolveLegacyYearAnchor, resolveLegacyYears } from "./legacyYearAnchor";
-import type { Intensity, TrainingPlanV2, WeekV2, WorkoutSport, WorkoutV2 } from "./types";
+import type { Intensity, TrainingPlanMetaV2, TrainingPlanV2, WeekV2, WorkoutSport, WorkoutV2 } from "./types";
 import { normalizeTrainingPhase, trainingPhaseLabelDe } from "./trainingPhase";
 
 const VALID_SPORTS = new Set<WorkoutSport>(["run", "bike", "rest", "strength", "swim"]);
@@ -519,6 +519,25 @@ function attachNormalizedMeta(
   };
 }
 
+const isFiniteKm = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
+
+/** Plan-Metadatum der Planerzeugung: nur bekannte, gültige Felder; sonst kein `meta`. */
+export function normalizePlanMeta(raw: unknown): TrainingPlanMetaV2 | undefined {
+  if (!isRecord(raw) || !isRecord(raw.meta) || !isRecord(raw.meta.volumeNote)) return undefined;
+  const note = raw.meta.volumeNote;
+  if (note.code !== "peak-not-reached") return undefined;
+  if (note.reason !== "growth" && note.reason !== "run-days") return undefined;
+  if (!isFiniteKm(note.targetPeakKm) || !isFiniteKm(note.reachedPeakKm)) return undefined;
+  return {
+    volumeNote: {
+      code: "peak-not-reached",
+      reason: note.reason,
+      targetPeakKm: note.targetPeakKm,
+      reachedPeakKm: note.reachedPeakKm,
+    },
+  };
+}
+
 export const EMPTY_TRAINING_PLAN_V2: TrainingPlanV2 = {
   version: 2,
   workouts: [],
@@ -554,7 +573,8 @@ export function normalizeTrainingPlan(
     return { ...EMPTY_TRAINING_PLAN_V2 };
   }
 
-  return plan;
+  const meta = normalizePlanMeta(raw);
+  return meta ? { ...plan, meta } : plan;
 }
 
 /** Returns null when normalization yields an empty plan (caller may keep a fallback). */
