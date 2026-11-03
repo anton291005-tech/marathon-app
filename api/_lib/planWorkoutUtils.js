@@ -201,6 +201,8 @@ function deriveWeeksFromWorkouts(workouts, metaByWeekStart, weekKeyOverrides) {
   );
   for (const week of weeks) {
     week.workouts.sort((a, b) => a.dateIso.localeCompare(b.dateIso));
+    // Tatsächliche Summe aller Einheiten (Rennwoche inkl. Rennen), ohne Float-Rauschen wie 96.00000000000001
+    week.totalKm = Math.round(week.totalKm * 10) / 10;
   }
   return weeks;
 }

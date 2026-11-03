@@ -38,11 +38,18 @@ const isHard = (w) => w.sessionType === "interval" || w.sessionType === "tempo";
 const weekKm = (week) =>
   week.workouts.reduce((s, w) => s + (w.sport !== "rest" && w.sessionType !== "race" ? w.km : 0), 0);
 const RUN_TYPES = ["easy", "long", "interval", "tempo"];
-/** Obergrenze des Long-Run-Anteils: 30 % (33 % in Peak-Wochen ab 120 km), bei ≤ 3 Läufen 50 %. */
+/**
+ * Obergrenze des Long-Run-Anteils: 30 % (33 % in Peak-Wochen ab 120 km), bei ≤ 3 Läufen 50 %. Vorrang I9: mit
+ * lockeren Läufen ≤ 60 % und harten ≤ 115 % des Long Runs muss der Long Run mindestens 1 / (1 + 0,6·e + 1,15·h)
+ * der Woche tragen — so hoch steigt die Grenze, wenn das darüber liegt (wenige, lockere Läufe).
+ */
 const longRunCapOf = (week, total) => {
   const runs = week.workouts.filter((x) => RUN_TYPES.includes(x.sessionType) && x.sport !== "rest").length;
+  const easy = week.workouts.filter((x) => x.sessionType === "easy" && x.sport !== "rest").length;
+  const hard = week.workouts.filter((x) => x.sessionType === "interval" || x.sessionType === "tempo").length;
   const share = week.meta?.phase === "peak" && total >= 120 ? 0.33 : 0.3;
-  return runs === 1 ? 1 : runs <= 3 ? Math.max(share, 0.5) : share;
+  const base = runs <= 3 ? Math.max(share, 0.5) : share;
+  return runs === 1 ? 1 : Math.max(base, easy + hard > 0 ? 1 / (1 + 0.6 * easy + 1.15 * hard) : 0);
 };
 
 beforeAll(async () => {

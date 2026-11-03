@@ -304,3 +304,121 @@ describe("distribute", () => {
     expect(out).toEqual([3, 3]);
   });
 });
+
+// ── fix/plan-volume-guards ───────────────────────────────────────────────────────────────────────────────
+describe("Volumen-Grenzen in enforcePlanInvariants", () => {
+  const { planningCheckCtx } = (() => {
+    const planningCheckCtx = (ctx, weeks) => ({
+      startYmd: ctx.startYmd,
+      raceYmd: ctx.raceYmd,
+      raceKm: ctx.raceKm,
+      distKey: ctx.distKey,
+      isDeload: ctx.isDeload,
+      weekDays: new Array(weeks).fill(7),
+      totalWeeks: weeks,
+      taperWeeks: 1,
+    });
+    return { planningCheckCtx };
+  })();
+  const ymd = (w) => w.dateIso.slice(0, 10);
+  const weekOf = (w) => Math.floor((Date.parse(`${ymd(w)}T00:00:00Z`) - Date.parse(`${START}T00:00:00Z`)) / (7 * 86400000)) + 1;
+  const isHard = (w) => w.sessionType === "interval" || w.sessionType === "tempo";
+
+  /** Wie Claude in a0b9b6c1 W6–W10: der lange Lauf liegt als "easy" am Samstag, Sonntag frei. */
+  function longAsEasyWeeks(fromYmd, toYmd) {
+    const out = [];
+    for (let d = fromYmd; d <= toYmd; d = addDays(d, 1)) {
+      const dow = dowOf(d);
+      if (dow === 0 || dow === 4) out.push(mk(d, "rest", 0));
+      else if (dow === 6) out.push({ ...mk(d, "easy", 20), title: "Langer Lauf Ausbau" });
+      else if (dow === 2) out.push(mk(d, "interval", 12));
+      else if (dow === 5) out.push(mk(d, "tempo", 12));
+      else out.push({ ...mk(d, "easy", 8), title: "Regenerationslauf" });
+    }
+    return out;
+  }
+
+  it("genau ein Long Run pro Woche: der als easy gelabelte lange Samstagslauf wird Long Run", () => {
+    const race = "2026-12-27"; // So, 8 Wochen
+    const ctx = baseCtx(race, { raceKm: 42.195, distKey: 42.2, weeklyKmTargets: [60, 62, 64, 66, 68, 70, 50, 70] });
+    const out = enforcePlanInvariants(longAsEasyWeeks(START, race), ctx);
+    for (let wn = 1; wn < 8; wn += 1) {
+      const longs = out.filter((w) => weekOf(w) === wn && w.sessionType === "long");
+      expect(longs).toHaveLength(1);
+      expect(dowOf(ymd(longs[0]))).toBe(6);
+    }
+    expect(checkPlanInvariants(out, planningCheckCtx(ctx, 8)).filter((p) => p.startsWith("I12"))).toEqual([]);
+  });
+
+  it("lockere Läufe ≤ 60 % des Long Runs, auch in Wochen ohne Long Run (Rennwoche)", () => {
+    const race = "2026-12-27";
+    const ctx = baseCtx(race, { raceKm: 42.195, distKey: 42.2, weeklyKmTargets: [60, 62, 64, 66, 68, 70, 50, 70] });
+    const out = enforcePlanInvariants(longAsEasyWeeks(START, race), ctx);
+    let lastLong = 0;
+    for (let wn = 1; wn <= 8; wn += 1) {
+      const list = out.filter((w) => weekOf(w) === wn);
+      const long = list.find((w) => w.sessionType === "long");
+      const cap = 0.6 * (long ? long.km : lastLong);
+      for (const w of list.filter((x) => x.sessionType === "easy")) expect(w.km).toBeLessThanOrEqual(cap + 0.05);
+      if (long) lastLong = long.km;
+    }
+  });
+
+  it("Rennwoche Marathon: höchstens eine harte Einheit, ≤ 8 km, nicht näher als Renntag −4; nicht aus der Vorwoche verschoben", () => {
+    const race = "2026-12-27"; // So
+    const input = longAsEasyWeeks(START, race).map((w) => {
+      // Vorwoche: Freitags-Tempo direkt vor einem Samstags-Long-Run (wie a0b9b6c1 W15), Rennwoche: Di + Do hart
+      if (ymd(w) === "2026-12-18") return mk("2026-12-18", "tempo", 18);
+      if (ymd(w) === "2026-12-22") return mk("2026-12-22", "tempo", 18);
+      if (ymd(w) === "2026-12-24") return mk("2026-12-24", "interval", 12);
+      return w;
+    });
+    const ctx = baseCtx(race, { raceKm: 42.195, distKey: 42.2, weeklyKmTargets: [60, 62, 64, 66, 68, 70, 50, 70] });
+    const out = enforcePlanInvariants(input, ctx);
+    const raceWeekHard = out.filter((w) => weekOf(w) === 8 && isHard(w));
+    expect(raceWeekHard.length).toBeLessThanOrEqual(1);
+    for (const w of raceWeekHard) {
+      expect(w.km).toBeLessThanOrEqual(8);
+      expect((Date.parse(`${race}T00:00:00Z`) - Date.parse(`${ymd(w)}T00:00:00Z`)) / 86400000).toBeGreaterThanOrEqual(4);
+    }
+    // die harte Einheit vom Fr 18.12. bleibt in ihrer Woche (war: auf den Montag der Rennwoche geschoben)
+    expect(out.find((w) => ymd(w) === "2026-12-21").sessionType).not.toMatch(/interval|tempo/);
+    expect(checkPlanInvariants(out, planningCheckCtx(ctx, 8)).filter((p) => p.startsWith("I13"))).toEqual([]);
+  });
+
+  it("Rennwoche ohne Rennen ≤ 40 % der tatsächlichen Spitze", () => {
+    const race = "2026-12-27";
+    const ctx = baseCtx(race, { raceKm: 42.195, distKey: 42.2, weeklyKmTargets: [60, 62, 64, 66, 68, 70, 50, 106] });
+    const out = enforcePlanInvariants(longAsEasyWeeks(START, race), ctx);
+    const km = (wn) => out.filter((w) => weekOf(w) === wn && w.sport !== "rest" && w.sessionType !== "race").reduce((s, w) => s + w.km, 0);
+    const peak = Math.max(...[1, 2, 3, 4, 5, 6].map(km));
+    expect(km(8)).toBeLessThanOrEqual(0.4 * peak + 0.05);
+  });
+
+  it("Titel lockerer Läufe: neu aus Rolle und km, wenn der Code die km um mehr als 30 % ändert", () => {
+    const race = "2026-12-27";
+    const ctx = baseCtx(race, { raceKm: 42.195, distKey: 42.2, weeklyKmTargets: [60, 62, 64, 66, 68, 70, 50, 70] });
+    const out = enforcePlanInvariants(longAsEasyWeeks(START, race), ctx);
+    // Quelle: 8 km "Regenerationslauf"; wo der Code mehr als 30 % ändert, darf der Titel nicht bleiben
+    const kept = out.filter((x) => x.sessionType === "easy" && x.title === "Regenerationslauf");
+    for (const w of kept) expect(Math.abs(w.km - 8) / 8).toBeLessThanOrEqual(0.3);
+    expect(out.some((x) => x.sessionType === "easy" && x.title !== "Regenerationslauf")).toBe(true);
+    for (const w of out) expect(w).not.toHaveProperty("_srcKm");
+  });
+});
+
+describe("weeks[].totalKm", () => {
+  const { rebuildPlanFromWorkouts } = require("../../api/_lib/planWorkoutUtils");
+  it("= tatsächliche Summe der Einheiten inkl. Rennen, auf 0,1 km gerundet", () => {
+    const plan = rebuildPlanFromWorkouts([
+      { ...mk("2026-11-02", "easy", 19.8) },
+      { ...mk("2026-11-03", "interval", 14.7) },
+      { ...mk("2026-11-04", "easy", 19.7) },
+      { ...mk("2026-11-06", "tempo", 22.1) },
+      { ...mk("2026-11-07", "easy", 19.7) },
+      { ...mk("2026-11-08", "race", 42.2) },
+    ]);
+    expect(plan.weeks[0].totalKm).toBe(138.2);
+    expect(String(plan.weeks[0].totalKm)).not.toMatch(/0000|9999/);
+  });
+});
