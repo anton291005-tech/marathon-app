@@ -221,6 +221,13 @@ Anlass: Live-Test auf Production (`main` b0101f7), Pläne a0b9b6c1 (Marathon 2:5
 7. **Text und Summen:** Titel lockerer Läufe werden aus Rolle und km neu erzeugt, wenn der Code die km um mehr als 30 % ändert. `weeks[].totalKm` = tatsächliche Summe der Einheiten (Rennwoche inkl. Rennen), auf 0,1 km gerundet.
 8. **Tests:** Matrix um ehrgeizige Zielzeiten (Umfangsangabe unter der Referenz) und eine Chaos-Variante „Long Run als easy am Samstag, Sonntag frei“ erweitert, mit Assertions für 1–5; beide Live-Pläne (ohne `user_id`/`id`) als Regressions-Fixtures mit 0 Verstößen nach `enforcePlanInvariants`.
 
+**Umsetzung (Branch gepusht, Merge nach `main` und Device-Test auf dem iPhone 13 stehen aus):** `weeklyVolumeProgression.js` (Spitze, +10 %, Rennwoche, Hinweis), `deterministicPlanGenerator.js` (`parseWeeklyKmRangeMax`, `runDaysFromRules`, Long-Run-Obergrenze und Kapazität je Woche in `buildVolumeContext`), `planInvariants.js` (Schritte 2b, 3, 5a, 7e–7g, I9/I11/I12/I13), `normalizeTrainingPlan.ts` (`plan.meta.volumeNote` geprüft durchgereicht). Live-Pläne als Fixtures: `livePlanMarathon-2027-02-28.json`, `livePlanHalf-2027-01-31.json`.
+
+**Vorrangregeln aus der Umsetzung (nicht ausdrücklich freigegeben, bitte bestätigen):**
+- **I9 vor der I10-Obergrenze:** In Wochen mit wenigen, vor allem lockeren Läufen schließen sich „lockerer Lauf ≤ 60 %“ und „Long Run ≤ 30 %/50 %“ aus (zwei Läufe: L ≤ 50 % verlangt den lockeren Lauf ≥ L). Die Obergrenze steigt dort auf `1 / (1 + 0,6 × lockere + 1,15 × harte)`; bei 2 harten + 3 lockeren Läufen sind das 20 %, es bleibt also bei 30 %.
+- **Flacher Aufbau:** Tragen die tatsächlichen Läufe jede Aufbauwoche nur gleich viel, beginnt die Kette bei höchstens 93 % ihrer letzten Woche (sonst Verstoß gegen I1/I2 „kein flacher Plan“). Der Plan startet dann unter dem angegebenen Umfang.
+- **Schritt 5a:** Das Wochenziel wird zusätzlich an Claudes tatsächliche Wochenform gekoppelt (Zahl der lockeren und harten Läufe), nicht nur an die Strukturregeln.
+
 ## Out of Scope bis TestFlight
 UI/UX-Redesign, Triathlon-Erweiterung, Android, Apple-Watch-Companion — nicht anfassen, auch nicht "nebenbei".
 
