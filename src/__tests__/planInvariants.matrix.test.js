@@ -6,6 +6,8 @@
 //   fallback      — jeder Phasen-Aufruf schlägt fehl → deterministischer Fallback im Claude-Pfad
 //   fallback-partial — nur der erste Phasen-Aufruf schlägt fehl (Chunk-Fallback gemischt mit Chaos)
 //   chaos-3runs   — Mock-Claude mit drei Läufen pro Woche (Long Run + Intervall + locker / + 2× locker), vier Ruhetage
+//   chaos-long-easy — Mock-Claude wie Live-Plan a0b9b6c1: langer Lauf als easy am Samstag, Sonntag frei
+// COMBOS enthält zusätzlich ehrgeizige Zielzeiten (Marathon 2:50/60–80, HM 1:35/40–60, Marathon 2:40/80+).
 // Zusätzlich PARTIAL_COMBOS: Planstart mitten in der ersten Woche (Teilwoche), 8 und 12 Wochen, Start Di…So, Rennen So/Di.
 // Geprüft wird am fertigen Plan (plan.workouts / plan.weeks), unabhängig von checkPlanInvariants.
 // Invarianten: I1 Umfang (inkl. kein flacher Plan) · I2 Long-Run-Verlauf · I3 Rennende · I4 Vortag · I5 Bausteine · I6 Zonen · I7 Phasenname
@@ -26,8 +28,8 @@ const {
   computeStructuredWorkoutDistance,
 } = require("../sessionDistance");
 
-const SOURCES = ["deterministic", "chaos", "chaos-notaper", "fallback", "fallback-partial", "chaos-3runs"];
-const VARIANT = { chaos: "default", "chaos-notaper": "no-taper", "chaos-3runs": "three-runs" };
+const SOURCES = ["deterministic", "chaos", "chaos-notaper", "fallback", "fallback-partial", "chaos-3runs", "chaos-long-easy"];
+const VARIANT = { chaos: "default", "chaos-notaper": "no-taper", "chaos-3runs": "three-runs", "chaos-long-easy": "long-easy" };
 const ALL_COMBOS = [...COMBOS, ...PARTIAL_COMBOS];
 const plans = new Map();
 
@@ -294,13 +296,76 @@ describe("I8 keine zwei harten Einheiten (Intervall, Tempo, Rennen) an aufeinand
   });
 });
 
-describe("I9 Long Run ≥ längster lockerer Lauf derselben Woche", () => {
+describe("I9 lockerer Lauf ≤ 60 % des Long Runs (ohne Long Run in der Woche: des letzten davor)", () => {
   it.each(cases)("%s", (_n, source, combo) => {
     const plan = planOf(source, combo);
+    let lastLong = 0;
     for (const week of plan.weeks) {
       const long = week.workouts.find((w) => w.sessionType === "long");
-      if (!long) continue;
-      for (const w of week.workouts.filter((x) => x.sessionType === "easy")) expect(w.km).toBeLessThanOrEqual(long.km + 0.05);
+      const ref = long ? long.km : lastLong;
+      if (ref > 0) {
+        for (const w of week.workouts.filter((x) => x.sessionType === "easy")) expect(w.km).toBeLessThanOrEqual(0.6 * ref + 0.05);
+      }
+      if (long) lastLong = long.km;
+    }
+  });
+});
+
+// ── fix/plan-volume-guards: Akzeptanzkriterien 1–5 (docs/roadmap.md) ──────────────────────────────────────
+const RANGE_MAX = { "0–20 km": 20, "20–40 km": 40, "40–60 km": 60, "60–80 km": 80, "80+ km": 90 };
+const RANGE_MID = { "0–20 km": 15, "20–40 km": 30, "40–60 km": 50, "60–80 km": 70, "80+ km": 90 };
+
+describe("AK 1 Spitze ≤ Obergrenze der Umfangsangabe × 1,2 (mindestens Start × 1,10)", () => {
+  it.each(cases)("%s", (_n, source, combo) => {
+    const plan = planOf(source, combo);
+    const range = combo.profile.weeklyKmRange;
+    const cap = Math.max(Math.floor(RANGE_MAX[range] * 1.2), Math.round(RANGE_MID[range] * 1.1));
+    expect(Math.max(...plan.weeks.map(weekKm))).toBeLessThanOrEqual(cap + 0.05);
+    if (plan.meta?.volumeNote) {
+      expect(plan.meta.volumeNote.reachedPeakKm).toBeLessThan(plan.meta.volumeNote.targetPeakKm);
+      expect(["growth", "run-days"]).toContain(plan.meta.volumeNote.reason);
+    }
+  });
+});
+
+describe("AK 2 volle Aufbauwochen ≤ 1,1 × max(Vorwoche, Niveau vor Entlastung)", () => {
+  it.each(cases)("%s", (_n, source, combo) => {
+    const plan = planOf(source, combo);
+    let level = null;
+    plan.weeks.forEach((week, i) => {
+      if (week.meta?.phase === "taper") return;
+      const prev = plan.weeks[i - 1];
+      const full = week.workouts.length >= 7;
+      if (full && prev && prev.workouts.length >= 7) {
+        expect(weekKm(week)).toBeLessThanOrEqual(1.1 * Math.max(weekKm(prev), level ?? 0) + 0.3);
+      }
+      if (full && !week.meta?.isRecoveryWeek) level = weekKm(week);
+    });
+  });
+});
+
+describe("AK 3 genau ein Long Run in jeder Woche mit ≥ 5 Plantagen außer der Rennwoche", () => {
+  it.each(cases)("%s", (_n, source, combo) => {
+    const plan = planOf(source, combo);
+    plan.weeks.slice(0, -1).forEach((week) => {
+      if (week.workouts.length < 5) return;
+      expect(week.workouts.filter((w) => w.sessionType === "long")).toHaveLength(1);
+    });
+  });
+});
+
+describe("AK 5 Rennwoche: ≤ 40 % der Spitze, höchstens eine harte Einheit ≤ 8 km, nicht zu nah am Rennen", () => {
+  it.each(cases)("%s", (_n, source, combo) => {
+    const plan = planOf(source, combo);
+    const raceWeek = plan.weeks[plan.weeks.length - 1];
+    const peak = Math.max(...plan.weeks.filter((w) => w.meta?.phase !== "taper").map(weekKm));
+    expect(weekKm(raceWeek)).toBeLessThanOrEqual(0.4 * peak + 0.3);
+    const hard = raceWeek.workouts.filter(isHard);
+    expect(hard.length).toBeLessThanOrEqual(1);
+    const minGap = combo.distance.km > 30 ? 4 : combo.distance.km > 12 ? 3 : 2;
+    for (const w of hard) {
+      expect(w.km).toBeLessThanOrEqual(8);
+      expect(daysBetween(combo.raceYmd, ymdOf(w))).toBeGreaterThanOrEqual(minGap);
     }
   });
 });

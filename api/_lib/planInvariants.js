@@ -29,6 +29,8 @@ const {
   renderSession,
   kmFromDesc,
   isValidStructure,
+  buildStructure,
+  structureKm,
   cleanPace,
   zoneForSession,
   fmtKm,
@@ -56,6 +58,8 @@ const LONG_RUN_TOLERANCE_KM = 0.15;
 /** Wochenanstieg und Rennwoche (Spiegel von weeklyVolumeProgression.js, dort für die Ziele). */
 const MAX_WEEKLY_GROWTH = 1.1;
 const RACE_WEEK_MAX_SHARE = 0.4;
+/** Anstieg der Aufbaukette mindestens 7 %, wenn die Läufe alle Wochen gleich begrenzen (über I1 ≥ 3 %, I2 ≥ 5 %). */
+const FLAT_RAMP = 0.07;
 /** Ändert der Code die km eines lockeren Laufs um mehr als 30 %, passt Claudes Titel nicht mehr. */
 const EASY_TITLE_KM_CHANGE = 0.3;
 /** Lockerer Lauf höchstens 60 % des Long Runs (freigegeben von Anton am 2026-11-03). */
@@ -122,9 +126,15 @@ function weekCapacityKm({ runDays, hardDays, longMaxKm, raceKm }) {
   return Math.floor(lo * 10 + 1e-6) / 10;
 }
 
-/** km, die diese Läufe bei einem Wochenziel `weekKm` höchstens tragen (≤ weekKm). */
+/**
+ * Größte Woche bis `weekKm`, die diese Läufe vollständig tragen. Reichen die Anteile schon im Kleinen nicht (zwei
+ * Läufe), das, was sie bei diesem Ziel tragen — die Woche bleibt dann ohnehin darunter.
+ */
 function weekCarryKm(params, weekKm) {
-  return Math.min(weekKm, carryFn(params)(weekKm));
+  const carry = carryFn(params);
+  if (carry(weekKm) >= weekKm) return weekKm;
+  if (carry(1) < 1) return carry(weekKm);
+  return Math.min(weekKm, weekCapacityKm(params));
 }
 
 function carryFn({ runDays, hardDays, longMaxKm, raceKm }) {
@@ -134,7 +144,9 @@ function carryFn({ runDays, hardDays, longMaxKm, raceKm }) {
   const base = n === 1 ? 1 : n <= 3 ? Math.max(LONG_RUN_SHARE, THREE_RUN_LONG_SHARE) : LONG_RUN_SHARE;
   const share = n === 1 ? 1 : Math.max(base, mixShareFloor({ easy: easyCount, hard: h }));
   const hb = hardBounds(raceKm);
-  const hardMax = [hb.maxInterval, hb.maxTempo, hb.maxInterval].slice(0, h);
+  // Obergrenze nach dem Formen (Bausteine runden: Intervall 16 km → 14,7 km)
+  const shaped = (type, km) => structureKm(buildStructure(type, km, raceKm));
+  const hardMax = [shaped("interval", hb.maxInterval), shaped("tempo", hb.maxTempo), shaped("interval", hb.maxInterval)].slice(0, h);
   const longCap = longMaxKm > 0 ? longMaxKm : Infinity;
   const carry = (week) => {
     const long = Math.min(share * week, longCap);
@@ -174,6 +186,15 @@ function effectiveWeekTargets(days, weeks, ctx, last) {
     .filter((wi) => ctx.weekPhaseSchedule[wi]?.phase !== "taper" && weeks[wi].length >= 7 && out[wi] > 0);
   const chain = build.filter((wi) => !ctx.isDeload?.[wi]);
   for (let k = chain.length - 2; k >= 0; k -= 1) out[chain[k]] = Math.min(out[chain[k]], out[chain[k + 1]]);
+  // Begrenzen die Läufe alle Aufbauwochen auf dasselbe Niveau, wäre der Plan flach (I1/I2): dann beginnt die Kette
+  // bei höchstens 93 % ihrer letzten Woche und steigt linear dorthin.
+  if (chain.length >= 3) {
+    const top = out[chain[chain.length - 1]];
+    chain.forEach((wi, k) => {
+      const ramp = top * (1 - FLAT_RAMP * (1 - k / (chain.length - 1)));
+      out[wi] = Math.min(out[wi], Math.floor(ramp * 10 + 1e-6) / 10);
+    });
+  }
   let level = null;
   for (const wi of build) {
     if (wi > 0 && weeks[wi - 1].length >= 7 && out[wi - 1] > 0) {

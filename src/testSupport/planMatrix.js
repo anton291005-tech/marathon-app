@@ -7,6 +7,12 @@ const DISTANCES = [
   { key: "hm", km: 21.0975, label: "Halbmarathon", weekly: "40–60 km", time: "1:50:00" },
   { key: "m", km: 42.195, label: "Marathon", weekly: "60–80 km", time: "3:45:00" },
 ];
+// Ehrgeizige Zielzeiten: Umfangsangabe liegt unter der Zielzeit-Referenz (Live-Pläne a0b9b6c1, cd555706), "80+"
+const AMBITIOUS = [
+  { key: "m-fast", km: 42.195, label: "Marathon", weekly: "60–80 km", time: "2:50:00" },
+  { key: "hm-fast", km: 21.0975, label: "Halbmarathon", weekly: "40–60 km", time: "1:35:00" },
+  { key: "m-80plus", km: 42.195, label: "Marathon", weekly: "80+ km", time: "2:40:00" },
+];
 const WEEK_COUNTS = [6, 8, 12, 16, 20];
 const GOALS = ["finish", "time"];
 // Renntag an jedem Wochentag (0 = Sonntag … 6 = Samstag); 2 = Dienstag wie im Audit- und im Live-Plan
@@ -66,6 +72,14 @@ for (const distance of DISTANCES) {
   }
 }
 
+for (const distance of AMBITIOUS) {
+  for (const weeks of WEEK_COUNTS) {
+    for (const raceDow of RACE_DOWS) {
+      COMBOS.push(buildCombo(distance, weeks, "time", raceDow));
+    }
+  }
+}
+
 // Teilwoche am Planstart: Start Di…So der ersten Woche
 const PARTIAL_COMBOS = [];
 for (const distance of DISTANCES) {
@@ -78,4 +92,4 @@ for (const distance of DISTANCES) {
   }
 }
 
-module.exports = { DISTANCES, WEEK_COUNTS, GOALS, RACE_DOWS, COMBOS, PARTIAL_COMBOS, buildCombo, ymdOf, deDate, DAY_MS };
+module.exports = { DISTANCES, AMBITIOUS, WEEK_COUNTS, GOALS, RACE_DOWS, COMBOS, PARTIAL_COMBOS, buildCombo, ymdOf, deDate, DAY_MS };

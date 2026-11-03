@@ -267,8 +267,8 @@ describe("Volumen-Grenzen über buildVolumeContext", () => {
   });
 
   it("Kapazität einer Woche: Long Run bis zur Grenze, harte Einheiten bis zur Obergrenze, lockere ≤ 60 %", () => {
-    // 3 Läufe (Long Run 50 %, Intervall ≤ 16, locker ≤ 0,6 × 24): 24 + 16 + 14,4
-    expect(weekCapacityKm({ runDays: 3, hardDays: 1, longMaxKm: 24, raceKm: 42.195 })).toBeCloseTo(54.4, 1);
+    // 3 Läufe (Long Run 50 %, Intervall ≤ 16 km → geformt 14,7 km, locker ≤ 0,6 × 24): 24 + 14,7 + 14,4
+    expect(weekCapacityKm({ runDays: 3, hardDays: 1, longMaxKm: 24, raceKm: 42.195 })).toBeCloseTo(53.1, 1);
     // 2 Läufe tragen nie die volle Woche (50 % + 30 %): was der längste Long Run trägt
     expect(weekCapacityKm({ runDays: 2, hardDays: 0, longMaxKm: 20, raceKm: 10 })).toBeCloseTo(32, 1);
     expect(weekCapacityKm({ runDays: 6, hardDays: 2, longMaxKm: 32, raceKm: 42.195 })).toBeGreaterThan(100);
