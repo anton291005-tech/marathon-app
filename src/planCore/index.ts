@@ -1,7 +1,7 @@
 /**
  * Öffentliche Schnittstelle des deterministischen Plan-Kerns.
- * Gerüst (Schritt 1): Typen, Config und Datums-Helfer. `buildPlan`, `checkCorePlan` usw. kommen mit den
- * Folgeschritten (docs/plan-core-plan.md). `random.ts` ist absichtlich nicht exportiert (nur Tests).
+ * Stand: Typen, Config, Datums-Helfer, Phasen (`planPhases`) und Wochenumfang (`planVolume`). `buildPlan`,
+ * `checkCorePlan` usw. kommen mit den Folgeschritten (docs/plan-core-plan.md). `random.ts` ist absichtlich nicht exportiert (nur Tests).
  */
 
 export * from "./types";
@@ -18,3 +18,7 @@ export {
   weekIndexOf,
   weekdayOf,
 } from "./dates";
+export { planPhases, isPlanCoreError, planCoreError } from "./phases";
+export type { PhasePlan, PhaseWeek, PhaseInputs, PlanCoreError, PlanCoreErrorCode } from "./phases";
+export { planVolume } from "./volume";
+export type { PlanVolume, PlanVolumeNote, PlanVolumeWeek, VolumeInputs, VolumeOptions } from "./volume";

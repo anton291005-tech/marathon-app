@@ -8,7 +8,8 @@
  * Die Invarianten (§12) lesen dieselben Einträge: I3/I4 `volume.growth`, I5 `volume.peak*`, I7 `placement.maxQ`,
  * I8 `intensity.qualityShareHard`, I9 `longRun.*`, I12 `library.*`, I13 `taper.*`, I15 `raceWeek.*`.
  * Jede Stelle der Spec hat genau einen Eintrag. Nennt die Spec eine Zahl an zwei Stellen (150 km Startumfang,
- * 29 km/110 min bei M und LR+M, −20–30 % Entlastung), stehen beide Einträge bewusst da; config.test.ts hält sie gleich.
+ * 29 km/110 min bei M und LR+M), stehen beide Einträge bewusst da; config.test.ts hält sie gleich.
+ * Wochen-Entlastung (§5.3, fest −20 %) und Long-Run-Entlastung (§7.1, −20 bis −30 %) sind getrennte Einträge; der erste liegt im Bereich des zweiten.
  *
  * Regeln für Änderungen: Wert ändern → `CONFIG_VERSION` erhöhen → Snapshot bewusst aktualisieren.
  * Der Kern wird mit `target: es5` geprüft: keine Iteration über Set/Map, keine Spreads darüber.
@@ -67,7 +68,7 @@ function deepFreeze<T>(node: T): T {
 }
 
 /** Erhöhen bei jeder Änderung eines Werts; steht später in `plan.meta.core.configVersion`. */
-export const CONFIG_VERSION = "0.3.0";
+export const CONFIG_VERSION = "0.4.0";
 
 export const CONFIG = deepFreeze({
   /** §0 Scope MVP */
@@ -146,14 +147,23 @@ export const CONFIG = deepFreeze({
     /** Jede Phase hat mindestens so viele Wochen, sobald genug Restwochen da sind. */
     minWeeksPerPhase: E(1, "§4"),
     minRestWeeksForAllPhases: E(6, "§4"),
+    /** Hat die Rennwoche weniger Tage, kommt eine Taper-Woche dazu (Rennen am Montag hätte sonst nur eine). */
+    shortRaceWeekDays: E(4, "§4"),
   },
 
   /** §5.1–§5.3 Wochenumfang */
   volume: {
     startKmMax: E(150, "§5.1"),
     minStartKm: E<ByDistance<number>>({ "5k": 10, "10k": 15, hm: 20, m: 25 }, "§5.1"),
+    /** Woche 1 hat mindestens so viele km (Schutz vor 0 km: 1,3 × 0 bleibt 0). Mindestumfang je Lauftag folgt in Schritt 6. */
+    weekOneMinKm: E(5, "§5.1"),
     /** Peak höchstens Start × Faktor. */
     peakStartFactor: E(1.5, "§5.2"),
+    /**
+     * Lage des Peaks im Korridor [Untergrenze, Obergrenze] (0 = unten, 1 = oben), wenn der Aufrufer keine angibt.
+     * Review-Punkt: Schritt 7 leitet sie aus der VDOT-Lücke zwischen Ziel und Form ab (schnelleres Ziel → höher).
+     */
+    peakPosition: E(0.75, "§5.2"),
     /** Peak-Tabelle (km/Woche) nach Distanz und Lauftagen. */
     peakKm: E<ByDistance<ByRunDays<Range>>>(
       {
@@ -174,8 +184,8 @@ export const CONFIG = deepFreeze({
     recovery: {
       /** Jede n-te Woche in Basis/Aufbau/Spezifisch (3:1). */
       everyNWeeks: P(4, "§5.3"),
-      /** Abschlag zur Vorwoche. */
-      reduction: P(range(0.2, 0.3), "§5.3"),
+      /** Fester Abschlag zur Vorwoche; −20 % ist verträglich mit I3 (danach ist wieder das alte Niveau erreichbar). */
+      reduction: P(0.2, "§5.3"),
       /** Wort, an dem die App heute Entlastungswochen im `focus` erkennt. */
       focusKeyword: E("Entlastung", "§5.3"),
     },
@@ -187,12 +197,14 @@ export const CONFIG = deepFreeze({
   taper: {
     /** Insgesamt gegenüber dem Peak. */
     totalReduction: L(range(0.41, 0.6), "§5.4"),
-    /** M/HM: erste Taper-Woche (T−2) in Anteilen des Peaks. */
+    /** M/HM: erste Taper-Woche (T−2) in Anteilen des Peaks; 5k/10k nutzen bei einer Zusatz-Taper-Woche die Untergrenze. */
     firstWeekShare: E(range(0.65, 0.75), "§5.4"),
     /** M/HM: Rennwoche ohne Rennen. */
     raceWeekShare: E(range(0.35, 0.5), "§5.4"),
     /** 5k/10k: Rennwoche ohne Rennen. */
     raceWeekShareShort: E(range(0.4, 0.6), "§5.4"),
+    /** Tage vor dem Rennen einer vollen Rennwoche (Rennen am Sonntag); bei weniger Tagen wird der Anteil ohne Rennen anteilig kleiner. */
+    fullRaceWeekDaysBefore: E(6, "§5.4"),
     qualitySessionsPerWeek: L(1, "§5.4"),
     /** Lauftage im Taper mindestens `runDaysPerWeek` minus so viele. */
     minRunDaysBelowRunDays: L(1, "§5.4"),

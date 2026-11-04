@@ -1,6 +1,6 @@
 # Umbauplan: deterministischer Plan-Kern
 
-Stand: 2026-11-04 (v2), Basis `main` @ `c1f4711`. Grundlage: `docs/plan-spec.md` (v0.3), `docs/plan-architecture-inventory.md`, `docs/plan-spec-gap.md`.
+Stand: 2026-11-04 (v2), Basis `main` @ `c1f4711`. Grundlage: `docs/plan-spec.md` (v0.4), `docs/plan-architecture-inventory.md`, `docs/plan-spec-gap.md`.
 Reiner Plan, keine Code-Änderung. Zeilenangaben beziehen sich auf `main` @ `c1f4711`.
 
 ## Änderungen v2 (2026-11-04, nach Review)
@@ -161,12 +161,18 @@ Gerüst, Config, Typen, Build, keine Logik. Nicht verdrahtet.
 
 - **Dateien:**
   - `src/planCore/phases.ts`: Taper M/HM 2, 5k/10k 1; Rest 35/35/30 rückwärts; harte Untergrenze → Fehler; über Max → freie Wochen
-  - `src/planCore/volume.ts`: Start-Clamp `minStart`; Peak-Tabelle nach Lauftagen, Zielzeit nur innerhalb der Spanne, ≤ Start × 1,5; +10 % **oder** +4 km; ≤ 1,30 × w−2; Entlastung 3:1 je Block −20–30 %, danach ≤ altes Niveau; Taper-Anteile nach §5.4
+  - `src/planCore/volume.ts`: Start-Clamp `minStart`; Peak-Tabelle nach Lauftagen, Zielzeit nur innerhalb der Spanne, ≤ Start × 1,5; +10 % **oder** +4 km; ≤ 1,30 × w−2; Entlastung 3:1 je Block fest −20 % (v0.4), danach ≤ altes Niveau; Taper-Anteile nach §5.4
   - Vorlage: `api/_lib/weeklyVolumeProgression.js:24-207` (smoothstep-Verlauf, Teilwochen) und `api/_lib/deterministicPlanGenerator.js:637-799` (Wochenraster, Tage je Woche)
 - **Tests:** `src/planCore/__tests__/volume.test.ts`
   - I3, I4, I5 und der Volumen-Teil von I13 als Unit-Tests
   - Property-Test: 2 000 Eingaben (4 Distanzen × 3–6 Tage × alle zulässigen Planlängen × Start 0–150 km × Wochentag des Planstarts)
 - **Abnahme:** P1–P6 liegen bei Peak in den Bereichen aus §13. Nicht verdrahtet.
+- **Umgesetzt (2026-11-04), Branch `feat/plan-core-volume`** (Spec auf v0.4, `CONFIG_VERSION` 0.4.0):
+  - Entscheidungen (freigegeben): P1 in §13 auf Peak 13–15 km, LR-Peak 7–8 km (I5 bleibt); Wochen-Entlastung fest −20 %; `peakPosition` als Option von `planVolume`, Standard 0,75 (Herkunft E, Review-Punkt 9; Schritt 7 leitet sie aus der VDOT-Lücke ab); I3/I4/Peak gelten nur bis zur Peak-Woche (Taper- und Rennwochen ausgenommen), Rennwochen-Volumen „ohne Rennen“, das Rennen zählt separat; Zusatz-Taper-Woche bei Rennwoche < 4 Tage (`phases.shortRaceWeekDays`).
+  - Annahmen (bestätigt): Teilwochen als Vollwochen-Äquivalent (`fullWeekKm`), Kalenderwochen, Verlauf vor Woche 1 = Woche 1, Woche 1 = min(Ist, Obergrenze), kein Abschlag bei „unter Empfehlung“, Peak-Woche = letzte Nicht-Taper-Woche, Taper 70 % / 42,5 %, 5k/10k 50 %.
+  - Kleine Abweichungen, die beim Bauen nötig wurden (bitte bestätigen): (1) Neuer Config-Eintrag `volume.weekOneMinKm` = 5 (E): ohne ihn bleibt ein Plan bei 0 km für immer bei 0 (I3). (2) Bei Umfängen unter etwa 10 km ist die Entlastung nicht tiefer, als I3 für die übernächste Woche zulässt (sonst gäbe es danach einen Rückgang). (3) `peak-not-reached` erscheint erst, wenn die Untergrenze des Korridors verfehlt wird, nicht schon beim weichen Ziel (Position 0,75). Der Abstand Ziel minus erreichter Peak ohne Hinweis ist meist 1–2 km (P3: 61 statt 62, weil die Entlastung in Woche 8 Woche 10 über I3 begrenzt), kann aber bei kurzen Plänen bis etwa 9 km (5k, 6 Tage, 45 km, 4 Wochen: 53 statt 62) und bei Position 1 bis etwa 18 km betragen (M, 6 Tage, 70 km, 8 Wochen: 87 statt 105). Offen für dich: Hinweis lieber schon ab einem Abstand zum Ziel (z. B. > 5 km)? (4) Rennwochen-Anteil bei weniger als 7 Tagen: Tage vor dem Rennen / 6 (`taper.fullRaceWeekDaysBefore`). Folge: Bei 5k/10k mit Rennen Mo–Sa liegt die Taper-Reduktion außerhalb von −41 bis −60 % (z. B. Donnerstag-Rennen: Rennwoche nur 25 % des Peaks ohne Rennen); I13 wird deshalb nur für Rennwochen mit 7 Tagen geprüft. (5) Verlaufsform: Die Kurve von Woche 1 zur Peak-Woche nimmt die erste von vier Formen (smoothstep, linear, schneller Anstieg, so schnell wie erlaubt), die den Peak erreicht; das steht nicht in der Spec. (2) präzisiert: Die Entlastung weicht von −20 % nur durch Rundung (z. B. 12 → 10) und durch die I3-Untergrenze `ceil(Vorwoche / 1,3)` ab, die in der Praxis nur bei 8 → 7 km greift.
+  - Messwerte: Peaks P1–P6 = 15 / 30 / 61 / 50 / 96 / 43 km (Bereiche aus §13 gehalten). Property-Test mit 2 000 Eingaben und Seed 20261104 grün; zusätzlich einmalig 25 Seeds × 2 000 Eingaben ohne I3-Verstoß.
+  - Nicht Teil dieses Schritts: Mindestumfang je Lauftage-Zahl (siehe Folgepunkt bei Schritt 6).
 
 ### 3 · `fix/plan-contract-passthrough` — **MVP**, S (1 Tag), unabhängig, früh mergen
 
@@ -226,6 +232,7 @@ Die App nimmt an, was der Kern liefern wird. Gleichzeitig wird der Nebenbefund z
   - Property-Test wie in Schritt 2
   - Parser-Rundlauf: `parseStructuredWorkoutSpecFromDesc(desc)` ergibt die Bausteine
 - **Abnahme:** P4 hat LR-Peak 26–28 km, P5 hat T ≤ 10 km und LR-Peak 30–34 km. Kein Tempo > 10 % der Woche.
+- **Folgepunkt aus Schritt 2:** `volume.minWeekKmPerRunDay` (Herkunft E, Review-Punkt). Schritt 2 kennt keine Pace und keine Einheiten-Minuten und setzt nur `weekOneMinKm` = 5 km als Schutz vor 0 km. Bei sehr kleinem Ist-Umfang (etwa unter 3 km je Lauftag) passen die Mindestdauern aus §7 (E ≥ 25 min, REC ≥ 20 min) nicht in die Woche. Hier festlegen: Mindest-Wochen-km = Lauftage × Mindest-km je Lauftag; `planVolume` hebt Woche 1 darauf an oder `distribute.ts` meldet einen Fehler.
 
 ### 7 · `feat/plan-core-assemble` — **MVP**, M (2–3 Tage), nach 3 und 6
 
@@ -359,7 +366,7 @@ Alten Pfad löschen, wenn der Schalter stabil auf `on` steht.
 | # | Branch | MVP | Aufwand | hängt ab von | ändert Production? |
 |---|---|---|---|---|---|
 | 1 | `feat/plan-core-skeleton` | ja | M (1 T, inkl. Vercel-Test) | – | nein |
-| 2 | `feat/plan-core-volume` | ja | M (2–3 T) | 1 | nein |
+| 2 | `feat/plan-core-volume` | ja | M (2–3 T) | 1 | nein (umgesetzt, nicht gemergt) |
 | 3 | `fix/plan-contract-passthrough` | ja | S (1–1,5 T, inkl. Zonen nach `kind`) | – | ja, Woche-1-Fix |
 | 4 | `feat/plan-core-pace` | ja | M (2 T) | 1 | nein |
 | 5 | `feat/plan-core-week-templates` | ja | M–L (3 T) | 2 | nein |
