@@ -4,12 +4,17 @@
  * keine Prozent- oder bpm-Angaben im Plantext. Eine Zonensprache: Zone 1–5.
  */
 
-export type HrZoneLabel = "Zone 1" | "Zone 2" | "Zone 3–4" | "Zone 4–5";
+import type { CoreKind } from "../planCore";
+
+export type HrZoneLabel = "Zone 1" | "Zone 2" | "Zone 3" | "Zone 4" | "Zone 3–4" | "Zone 4–5";
 
 /** %HFmax-Bänder je Zonen-Label. */
 export const HR_ZONE_PCT_BANDS: Record<HrZoneLabel, { lo: number; hi: number }> = {
   "Zone 1": { lo: 0.5, hi: 0.6 },
   "Zone 2": { lo: 0.6, hi: 0.75 },
+  // Vorläufig (Spoho-Review-Punkt): "Zone 3–4" geteilt. Daniels setzt M/T eher bei ~80–90 % bzw. 88–92 % HFmax an.
+  "Zone 3": { lo: 0.76, hi: 0.82 },
+  "Zone 4": { lo: 0.82, hi: 0.88 },
   "Zone 3–4": { lo: 0.76, hi: 0.88 },
   "Zone 4–5": { lo: 0.8, hi: 0.95 },
 };
@@ -35,6 +40,54 @@ export function zoneLabelForSessionType(
       return "Zone 4–5";
     default:
       return null;
+  }
+}
+
+/** App-Typ, auf den der Plan-Kern eine Art abbildet (docs/plan-core-plan.md, Abbildungstabelle). */
+const SESSION_TYPE_OF_KIND: Record<CoreKind, string> = {
+  REC: "easy",
+  E: "easy",
+  MLR: "easy",
+  LR: "long",
+  "LR+M": "long",
+  M: "tempo",
+  T: "tempo",
+  I: "interval",
+  R: "interval",
+  RACE: "race",
+  REST: "rest",
+};
+
+/**
+ * Zone je Einheit. Ohne `kind` (Altpläne) exakt wie `zoneLabelForSessionType`. Mit `kind` (Plan-Kern) bestimmt die Art
+ * die Zone: REC Z1, E/MLR/LR/LR+M Z2, M Z3, T Z4, I/R Z4–5. E bleibt in Entlastungswochen wie bisher in Z1.
+ * RACE, REST und unbekannte Arten fallen auf die Zone des Typs zurück. Passt `kind` nicht zum Typ (z. B. nach einem
+ * Patch, der nur `type` ändert), gilt der Typ.
+ */
+export function zoneLabelForSession(
+  sessionType: string | null | undefined,
+  kind: CoreKind | null | undefined,
+  recoveryWeek = false,
+): HrZoneLabel | null {
+  const effectiveKind = kind && SESSION_TYPE_OF_KIND[kind] === String(sessionType ?? "").toLowerCase() ? kind : undefined;
+  switch (effectiveKind) {
+    case "REC":
+      return "Zone 1";
+    case "E":
+      return recoveryWeek ? "Zone 1" : "Zone 2";
+    case "MLR":
+    case "LR":
+    case "LR+M":
+      return "Zone 2";
+    case "M":
+      return "Zone 3";
+    case "T":
+      return "Zone 4";
+    case "I":
+    case "R":
+      return "Zone 4–5";
+    default:
+      return zoneLabelForSessionType(sessionType, recoveryWeek);
   }
 }
 
@@ -65,8 +118,9 @@ export function getHrRangeForZone(
 export function plannedHrRangeForSessionType(
   sessionType: string,
   maxHrBpm?: number | null,
+  kind?: CoreKind | null,
 ): { min: number; max: number } | null {
-  return getHrRangeForZone(zoneLabelForSessionType(sessionType), validMaxHr(maxHrBpm, 80));
+  return getHrRangeForZone(zoneLabelForSession(sessionType, kind), validMaxHr(maxHrBpm, 80));
 }
 
 /** Anzeige der geplanten Pulsvorgabe: bpm-Spanne aus der Max-HF des Nutzers, sonst nur die Zone. */

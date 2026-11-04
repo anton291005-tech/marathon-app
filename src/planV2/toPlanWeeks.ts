@@ -34,6 +34,7 @@ function toPlanSession(workout: WorkoutV2): PlanSession | null {
     desc: workout.desc ?? null,
     pace: workout.pace ?? null,
     structured: workout.structured ?? null,
+    ...(workout.kind ? { kind: workout.kind } : {}),
   };
 }
 

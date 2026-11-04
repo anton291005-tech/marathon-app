@@ -1,4 +1,5 @@
 import type { StoredHealthRun } from "../../healthRuns";
+import type { CoreKind } from "../../planCore";
 import type { TrainingPlanV2 } from "../../planV2/types";
 import type { RecoveryDomainState } from "../../recovery/recoveryDomainState";
 import type { RecoverySummary } from "./recoverySummary";
@@ -48,6 +49,8 @@ export type AiPlanSession = {
   km: number;
   desc?: string | null;
   pace?: string | null;
+  /** Einheiten-Art des Plan-Kerns (`WorkoutV2.kind`); fehlt bei Altplänen. */
+  kind?: CoreKind;
 };
 
 export type AiPlanWeek = {

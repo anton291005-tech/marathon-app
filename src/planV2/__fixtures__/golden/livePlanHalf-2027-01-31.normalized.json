@@ -1,0 +1,2327 @@
+{
+ "version": 2,
+ "workouts": [
+  {
+   "id": "w1-mo",
+   "dateIso": "2026-11-09T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Lockerer Einstieg",
+   "km": 9.5,
+   "desc": "Lockerer Dauerlauf über 9,5 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w1-di",
+   "dateIso": "2026-11-10T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder vollständige Ruhe.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w1-mi",
+   "dateIso": "2026-11-11T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Flüssiger Dauerlauf",
+   "km": 9.4,
+   "desc": "Lockerer Dauerlauf über 9,4 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w1-do",
+   "dateIso": "2026-11-12T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "intensity": "high",
+   "title": "5 × 1 km Intervalle",
+   "km": 9.7,
+   "desc": "2 km WU · 5 × 1 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+   "pace": null,
+   "structured": {
+    "warmupKm": 2,
+    "intervals": [
+     {
+      "reps": 5,
+      "distanceKm": 1
+     }
+    ],
+    "cooldownKm": 1.5,
+    "recoveryJogKm": 1.2
+   }
+  },
+  {
+   "id": "w1-fr",
+   "dateIso": "2026-11-13T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Entspannter Lauf",
+   "km": 9.4,
+   "desc": "Lockerer Dauerlauf über 9,4 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w1-sa",
+   "dateIso": "2026-11-14T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "intensity": "medium",
+   "title": "Klassischer Langstreckenlauf",
+   "km": 12,
+   "desc": "Langer, ruhiger Lauf über 12 km in Zone 2.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w1-so",
+   "dateIso": "2026-11-15T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder vollständige Ruhe.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-mo",
+   "dateIso": "2026-11-16T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Sanfter Auftakt",
+   "km": 9.2,
+   "desc": "Lockerer Dauerlauf über 9,2 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-di",
+   "dateIso": "2026-11-17T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder vollständige Ruhe.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-mi",
+   "dateIso": "2026-11-18T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "intensity": "high",
+   "title": "Zügiger Tempolauf",
+   "km": 10.6,
+   "desc": "2 km WU · 7.1 km Tempo · 1.5 km CD. Zone 3–4.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-do",
+   "dateIso": "2026-11-19T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Erholtischer Lauf",
+   "km": 9.2,
+   "desc": "Lockerer Dauerlauf über 9,2 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-fr",
+   "dateIso": "2026-11-20T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Leichter Lauf",
+   "km": 9.2,
+   "desc": "Lockerer Dauerlauf über 9,2 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-sa",
+   "dateIso": "2026-11-21T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "intensity": "medium",
+   "title": "Progressiver Langstreckenlauf",
+   "km": 12.8,
+   "desc": "Langer, ruhiger Lauf über 12,8 km in Zone 2.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w2-so",
+   "dateIso": "2026-11-22T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder vollständige Ruhe.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w3-mo",
+   "dateIso": "2026-11-23T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Fokussierter Grundlagenlauf",
+   "km": 9.8,
+   "desc": "Lockerer Dauerlauf über 9,8 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w3-di",
+   "dateIso": "2026-11-24T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder vollständige Ruhe.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w3-mi",
+   "dateIso": "2026-11-25T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "intensity": "high",
+   "title": "4 × 1,6 km Intervalle",
+   "km": 10.8,
+   "desc": "2 km WU · 4 × 1.6 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+   "pace": null,
+   "structured": {
+    "warmupKm": 2,
+    "intervals": [
+     {
+      "reps": 4,
+      "distanceKm": 1.6
+     }
+    ],
+    "cooldownKm": 1.5,
+    "recoveryJogKm": 0.9
+   }
+  },
+  {
+   "id": "w3-do",
+   "dateIso": "2026-11-26T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Entspannter Erhololauf",
+   "km": 9.9,
+   "desc": "Lockerer Dauerlauf über 9,9 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w4-mo",
+   "dateIso": "2026-11-27T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Lockerer Dauerlauf",
+   "km": 9.9,
+   "desc": "Lockerer Dauerlauf über 9,9 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w3-sa",
+   "dateIso": "2026-11-28T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "intensity": "medium",
+   "title": "Ausdauer-Meilenstein",
+   "km": 13.6,
+   "desc": "Langer, ruhiger Lauf über 13,6 km in Zone 2.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w3-so",
+   "dateIso": "2026-11-29T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder vollständige Ruhe.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w3-fr",
+   "dateIso": "2026-11-30T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "intensity": "high",
+   "title": "Stabiler Tempolauf",
+   "km": 8.4,
+   "desc": "1.5 km WU · 5.9 km Tempo · 1 km CD. Zone 3–4.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w4-di",
+   "dateIso": "2026-12-01T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder kompletter Ruhetag.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w4-mi",
+   "dateIso": "2026-12-02T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "intensity": "high",
+   "title": "4 × 1 km Intervalle",
+   "km": 7.4,
+   "desc": "1.5 km WU · 4 × 1 km (90 s Pause) · 1 km CD. Zone 4–5.",
+   "pace": null,
+   "structured": {
+    "warmupKm": 1.5,
+    "intervals": [
+     {
+      "reps": 4,
+      "distanceKm": 1
+     }
+    ],
+    "cooldownKm": 1,
+    "recoveryJogKm": 0.9
+   }
+  },
+  {
+   "id": "w4-do",
+   "dateIso": "2026-12-03T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Regenerationslauf",
+   "km": 7.8,
+   "desc": "Lockerer Dauerlauf über 7,8 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w4-fr",
+   "dateIso": "2026-12-04T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder kompletter Ruhetag.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w5-mo",
+   "dateIso": "2026-12-05T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Regenerationslauf",
+   "km": 7.8,
+   "desc": "Lockerer Dauerlauf über 7,8 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w4-so",
+   "dateIso": "2026-12-06T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "intensity": "medium",
+   "title": "Langer Lauf",
+   "km": 11.6,
+   "desc": "Langer, ruhiger Lauf über 11,6 km in Zone 2.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w4-sa",
+   "dateIso": "2026-12-07T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "intensity": "high",
+   "title": "Tempolauf",
+   "km": 13.3,
+   "desc": "2 km WU · 9.8 km Tempo · 1.5 km CD. Zone 3–4.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w5-di",
+   "dateIso": "2026-12-08T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder kompletter Ruhetag.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w5-mi",
+   "dateIso": "2026-12-09T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "intensity": "high",
+   "title": "4 × 2 km Intervalle",
+   "km": 12.4,
+   "desc": "2 km WU · 4 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+   "pace": null,
+   "structured": {
+    "warmupKm": 2,
+    "intervals": [
+     {
+      "reps": 4,
+      "distanceKm": 2
+     }
+    ],
+    "cooldownKm": 1.5,
+    "recoveryJogKm": 0.9
+   }
+  },
+  {
+   "id": "w5-do",
+   "dateIso": "2026-12-10T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Regenerationslauf",
+   "km": 12,
+   "desc": "Lockerer Dauerlauf über 12 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w5-fr",
+   "dateIso": "2026-12-11T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder kompletter Ruhetag.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w6-mo",
+   "dateIso": "2026-12-12T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Lockerer Dauerlauf",
+   "km": 12.1,
+   "desc": "Lockerer Dauerlauf über 12,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w5-so",
+   "dateIso": "2026-12-13T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "intensity": "medium",
+   "title": "Langer Lauf",
+   "km": 15.2,
+   "desc": "Langer, ruhiger Lauf über 15,2 km in Zone 2.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w5-sa",
+   "dateIso": "2026-12-14T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "intensity": "high",
+   "title": "Schwellenlauf",
+   "km": 14.5,
+   "desc": "2 km WU · 11 km Tempo · 1.5 km CD. Zone 3–4.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w6-di",
+   "dateIso": "2026-12-15T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder kompletter Ruhetag.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w6-mi",
+   "dateIso": "2026-12-16T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "intensity": "high",
+   "title": "4 × 2 km Intervalle",
+   "km": 12.4,
+   "desc": "2 km WU · 4 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+   "pace": null,
+   "structured": {
+    "warmupKm": 2,
+    "intervals": [
+     {
+      "reps": 4,
+      "distanceKm": 2
+     }
+    ],
+    "cooldownKm": 1.5,
+    "recoveryJogKm": 0.9
+   }
+  },
+  {
+   "id": "w6-do",
+   "dateIso": "2026-12-17T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Regenerationslauf",
+   "km": 13.5,
+   "desc": "Lockerer Dauerlauf über 13,5 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w6-fr",
+   "dateIso": "2026-12-18T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder kompletter Ruhetag.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w7-mo",
+   "dateIso": "2026-12-19T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Lockerer Dauerlauf",
+   "km": 13.5,
+   "desc": "Lockerer Dauerlauf über 13,5 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w6-so",
+   "dateIso": "2026-12-20T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "intensity": "medium",
+   "title": "Langer Lauf",
+   "km": 16.1,
+   "desc": "Langer, ruhiger Lauf über 16,1 km in Zone 2.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w6-sa",
+   "dateIso": "2026-12-21T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "intensity": "high",
+   "title": "Tempolauf mit Steigerung",
+   "km": 16.5,
+   "desc": "2 km WU · 13 km Tempo · 1.5 km CD. Zone 3–4.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w7-di",
+   "dateIso": "2026-12-22T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder kompletter Ruhetag.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w7-mi",
+   "dateIso": "2026-12-23T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "intensity": "high",
+   "title": "4 × 2 km Intervalle",
+   "km": 12.4,
+   "desc": "2 km WU · 4 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+   "pace": null,
+   "structured": {
+    "warmupKm": 2,
+    "intervals": [
+     {
+      "reps": 4,
+      "distanceKm": 2
+     }
+    ],
+    "cooldownKm": 1.5,
+    "recoveryJogKm": 0.9
+   }
+  },
+  {
+   "id": "w7-do",
+   "dateIso": "2026-12-24T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Regenerationslauf",
+   "km": 15.1,
+   "desc": "Lockerer Dauerlauf über 15,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w7-fr",
+   "dateIso": "2026-12-25T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung oder kompletter Ruhetag.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w8-mo",
+   "dateIso": "2026-12-26T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Lockerer Auftakt",
+   "km": 15.1,
+   "desc": "Lockerer Dauerlauf über 15,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w7-so",
+   "dateIso": "2026-12-27T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "intensity": "medium",
+   "title": "Langer Lauf Peak",
+   "km": 16.9,
+   "desc": "Langer, ruhiger Lauf über 16,9 km in Zone 2.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w7-sa",
+   "dateIso": "2026-12-28T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "intensity": "high",
+   "title": "Schwellenlauf Peak",
+   "km": 9.1,
+   "desc": "2 km WU · 5.6 km Tempo · 1.5 km CD. Zone 3–4.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w8-di",
+   "dateIso": "2026-12-29T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Regeneration oder komplette Ruhe.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w8-mi",
+   "dateIso": "2026-12-30T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "intensity": "high",
+   "title": "4 × 1 km Intervalle",
+   "km": 8.4,
+   "desc": "2 km WU · 4 × 1 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+   "pace": null,
+   "structured": {
+    "warmupKm": 2,
+    "intervals": [
+     {
+      "reps": 4,
+      "distanceKm": 1
+     }
+    ],
+    "cooldownKm": 1.5,
+    "recoveryJogKm": 0.9
+   }
+  },
+  {
+   "id": "w8-do",
+   "dateIso": "2026-12-31T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Regenerationslauf",
+   "km": 8.5,
+   "desc": "Lockerer Dauerlauf über 8,5 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w8-fr",
+   "dateIso": "2027-01-01T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "intensity": "high",
+   "title": "Tempo-Steiger",
+   "km": 9.3,
+   "desc": "2 km WU · 5.8 km Tempo · 1.5 km CD. Zone 3–4.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w8-sa",
+   "dateIso": "2027-01-02T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Regenerationslauf",
+   "km": 8.6,
+   "desc": "Lockerer Dauerlauf über 8,6 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w8-so",
+   "dateIso": "2027-01-03T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "intensity": "medium",
+   "title": "Längerer Ausdauerlauf",
+   "km": 14.1,
+   "desc": "Langer, ruhiger Lauf über 14,1 km in Zone 2.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w9-mo",
+   "dateIso": "2027-01-04T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Lockeres Auspowern",
+   "km": 13,
+   "desc": "Lockerer Dauerlauf über 13 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w9-di",
+   "dateIso": "2027-01-05T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Regeneration oder komplette Ruhe.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w9-mi",
+   "dateIso": "2027-01-06T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "intensity": "high",
+   "title": "4 × 2 km Intervalle",
+   "km": 12.4,
+   "desc": "2 km WU · 4 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+   "pace": null,
+   "structured": {
+    "warmupKm": 2,
+    "intervals": [
+     {
+      "reps": 4,
+      "distanceKm": 2
+     }
+    ],
+    "cooldownKm": 1.5,
+    "recoveryJogKm": 0.9
+   }
+  },
+  {
+   "id": "w9-do",
+   "dateIso": "2027-01-07T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Regenerationslauf",
+   "km": 12.9,
+   "desc": "Lockerer Dauerlauf über 12,9 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w9-fr",
+   "dateIso": "2027-01-08T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "intensity": "high",
+   "title": "Tempo-Progression",
+   "km": 14.3,
+   "desc": "2 km WU · 10.8 km Tempo · 1.5 km CD. Zone 3–4.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w9-sa",
+   "dateIso": "2027-01-09T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Lockerer Stabilisierungslauf",
+   "km": 12.9,
+   "desc": "Lockerer Dauerlauf über 12,9 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w9-so",
+   "dateIso": "2027-01-10T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "intensity": "medium",
+   "title": "Langer Ausdauerlauf",
+   "km": 18.5,
+   "desc": "Langer, ruhiger Lauf über 18,5 km in Zone 2.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w10-mo",
+   "dateIso": "2027-01-11T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Leichtes Auslaufen",
+   "km": 13.6,
+   "desc": "Lockerer Dauerlauf über 13,6 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w10-di",
+   "dateIso": "2027-01-12T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Regeneration oder komplette Ruhe.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w10-mi",
+   "dateIso": "2027-01-13T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "intensity": "high",
+   "title": "4 × 2 km Intervalle",
+   "km": 12.4,
+   "desc": "2 km WU · 4 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+   "pace": null,
+   "structured": {
+    "warmupKm": 2,
+    "intervals": [
+     {
+      "reps": 4,
+      "distanceKm": 2
+     }
+    ],
+    "cooldownKm": 1.5,
+    "recoveryJogKm": 0.9
+   }
+  },
+  {
+   "id": "w10-do",
+   "dateIso": "2027-01-14T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Regenerationslauf",
+   "km": 13.5,
+   "desc": "Lockerer Dauerlauf über 13,5 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w10-fr",
+   "dateIso": "2027-01-15T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "intensity": "high",
+   "title": "Tempo-Finale",
+   "km": 15,
+   "desc": "2 km WU · 11.5 km Tempo · 1.5 km CD. Zone 3–4.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w10-sa",
+   "dateIso": "2027-01-16T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Lockerer Ausgleichslauf",
+   "km": 13.5,
+   "desc": "Lockerer Dauerlauf über 13,5 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w10-so",
+   "dateIso": "2027-01-17T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "intensity": "medium",
+   "title": "Langer Ausdauerlauf Peak",
+   "km": 17,
+   "desc": "Langer, ruhiger Lauf über 17 km in Zone 2.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w11-mo",
+   "dateIso": "2027-01-18T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Lockerer Dauerlauf",
+   "km": 9.8,
+   "desc": "Lockerer Dauerlauf über 9,8 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w11-di",
+   "dateIso": "2027-01-19T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung und Regeneration.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w11-mi",
+   "dateIso": "2027-01-20T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "tempo",
+   "intensity": "high",
+   "title": "Tempo-Lauf mit Ausklang",
+   "km": 11,
+   "desc": "2 km WU · 7.5 km Tempo · 1.5 km CD. Zone 3–4.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w11-do",
+   "dateIso": "2027-01-21T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Genussvoller Lauf",
+   "km": 9.8,
+   "desc": "Lockerer Dauerlauf über 9,8 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w11-fr",
+   "dateIso": "2027-01-22T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "interval",
+   "intensity": "high",
+   "title": "4 × 1,6 km Intervalle",
+   "km": 10.8,
+   "desc": "2 km WU · 4 × 1.6 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+   "pace": null,
+   "structured": {
+    "warmupKm": 2,
+    "intervals": [
+     {
+      "reps": 4,
+      "distanceKm": 1.6
+     }
+    ],
+    "cooldownKm": 1.5,
+    "recoveryJogKm": 0.9
+   }
+  },
+  {
+   "id": "w11-sa",
+   "dateIso": "2027-01-23T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Regenerativer Lauf",
+   "km": 9.8,
+   "desc": "Lockerer Dauerlauf über 9,8 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w11-so",
+   "dateIso": "2027-01-24T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "long",
+   "intensity": "medium",
+   "title": "Langer Lauf in Renntempo",
+   "km": 12.8,
+   "desc": "Langer, ruhiger Lauf über 12,8 km in Zone 2.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w12-mo",
+   "dateIso": "2027-01-25T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Lockerer Wiederaufbau",
+   "km": 10.3,
+   "desc": "Lockerer Dauerlauf über 10,3 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w12-di",
+   "dateIso": "2027-01-26T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung und Regeneration.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w12-mi",
+   "dateIso": "2027-01-27T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Leichter Erhaltungslauf",
+   "km": 10.3,
+   "desc": "Lockerer Dauerlauf über 10,3 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w12-do",
+   "dateIso": "2027-01-28T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Abschlusslauf vor Rennen",
+   "km": 10.3,
+   "desc": "Lockerer Dauerlauf über 10,3 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w12-fr",
+   "dateIso": "2027-01-29T12:00:00.000Z",
+   "sport": "rest",
+   "sessionType": "rest",
+   "title": "Ruhetag",
+   "km": 0,
+   "desc": "Aktive Erholung vor dem Rennen.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w12-sa",
+   "dateIso": "2027-01-30T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "easy",
+   "intensity": "low",
+   "title": "Renntag-Vorbereitung",
+   "km": 6,
+   "desc": "Lockerer Dauerlauf über 6 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+   "pace": null,
+   "structured": null
+  },
+  {
+   "id": "w12-so",
+   "dateIso": "2027-01-31T12:00:00.000Z",
+   "sport": "run",
+   "sessionType": "race",
+   "intensity": "high",
+   "title": "Halbmarathon",
+   "km": 21.1,
+   "desc": "Renntag: 21,1 km. Starte kontrolliert und teile das Rennen ein. Im ersten Drittel eher verhalten.",
+   "pace": null,
+   "structured": null
+  }
+ ],
+ "weeks": [
+  {
+   "startIso": "2026-11-09",
+   "workouts": [
+    {
+     "id": "w1-mo",
+     "dateIso": "2026-11-09T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Lockerer Einstieg",
+     "km": 9.5,
+     "desc": "Lockerer Dauerlauf über 9,5 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w1-di",
+     "dateIso": "2026-11-10T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder vollständige Ruhe.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w1-mi",
+     "dateIso": "2026-11-11T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Flüssiger Dauerlauf",
+     "km": 9.4,
+     "desc": "Lockerer Dauerlauf über 9,4 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w1-do",
+     "dateIso": "2026-11-12T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "interval",
+     "intensity": "high",
+     "title": "5 × 1 km Intervalle",
+     "km": 9.7,
+     "desc": "2 km WU · 5 × 1 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+     "pace": null,
+     "structured": {
+      "warmupKm": 2,
+      "intervals": [
+       {
+        "reps": 5,
+        "distanceKm": 1
+       }
+      ],
+      "cooldownKm": 1.5,
+      "recoveryJogKm": 1.2
+     }
+    },
+    {
+     "id": "w1-fr",
+     "dateIso": "2026-11-13T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Entspannter Lauf",
+     "km": 9.4,
+     "desc": "Lockerer Dauerlauf über 9,4 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w1-sa",
+     "dateIso": "2026-11-14T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "long",
+     "intensity": "medium",
+     "title": "Klassischer Langstreckenlauf",
+     "km": 12,
+     "desc": "Langer, ruhiger Lauf über 12 km in Zone 2.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w1-so",
+     "dateIso": "2026-11-15T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder vollständige Ruhe.",
+     "pace": null,
+     "structured": null
+    }
+   ],
+   "totalKm": 50,
+   "meta": {
+    "wn": 1,
+    "phase": "base",
+    "label": "Woche 1 · Grundlage",
+    "dates": ""
+   }
+  },
+  {
+   "startIso": "2026-11-16",
+   "workouts": [
+    {
+     "id": "w2-mo",
+     "dateIso": "2026-11-16T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Sanfter Auftakt",
+     "km": 9.2,
+     "desc": "Lockerer Dauerlauf über 9,2 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w2-di",
+     "dateIso": "2026-11-17T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder vollständige Ruhe.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w2-mi",
+     "dateIso": "2026-11-18T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "tempo",
+     "intensity": "high",
+     "title": "Zügiger Tempolauf",
+     "km": 10.6,
+     "desc": "2 km WU · 7.1 km Tempo · 1.5 km CD. Zone 3–4.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w2-do",
+     "dateIso": "2026-11-19T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Erholtischer Lauf",
+     "km": 9.2,
+     "desc": "Lockerer Dauerlauf über 9,2 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w2-fr",
+     "dateIso": "2026-11-20T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Leichter Lauf",
+     "km": 9.2,
+     "desc": "Lockerer Dauerlauf über 9,2 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w2-sa",
+     "dateIso": "2026-11-21T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "long",
+     "intensity": "medium",
+     "title": "Progressiver Langstreckenlauf",
+     "km": 12.8,
+     "desc": "Langer, ruhiger Lauf über 12,8 km in Zone 2.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w2-so",
+     "dateIso": "2026-11-22T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder vollständige Ruhe.",
+     "pace": null,
+     "structured": null
+    }
+   ],
+   "totalKm": 51,
+   "meta": {
+    "wn": 2,
+    "phase": "base",
+    "label": "Woche 2 · Grundlage",
+    "dates": ""
+   }
+  },
+  {
+   "startIso": "2026-11-23",
+   "workouts": [
+    {
+     "id": "w3-mo",
+     "dateIso": "2026-11-23T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Fokussierter Grundlagenlauf",
+     "km": 9.8,
+     "desc": "Lockerer Dauerlauf über 9,8 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w3-di",
+     "dateIso": "2026-11-24T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder vollständige Ruhe.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w3-mi",
+     "dateIso": "2026-11-25T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "interval",
+     "intensity": "high",
+     "title": "4 × 1,6 km Intervalle",
+     "km": 10.8,
+     "desc": "2 km WU · 4 × 1.6 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+     "pace": null,
+     "structured": {
+      "warmupKm": 2,
+      "intervals": [
+       {
+        "reps": 4,
+        "distanceKm": 1.6
+       }
+      ],
+      "cooldownKm": 1.5,
+      "recoveryJogKm": 0.9
+     }
+    },
+    {
+     "id": "w3-do",
+     "dateIso": "2026-11-26T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Entspannter Erhololauf",
+     "km": 9.9,
+     "desc": "Lockerer Dauerlauf über 9,9 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w4-mo",
+     "dateIso": "2026-11-27T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Lockerer Dauerlauf",
+     "km": 9.9,
+     "desc": "Lockerer Dauerlauf über 9,9 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w3-sa",
+     "dateIso": "2026-11-28T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "long",
+     "intensity": "medium",
+     "title": "Ausdauer-Meilenstein",
+     "km": 13.6,
+     "desc": "Langer, ruhiger Lauf über 13,6 km in Zone 2.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w3-so",
+     "dateIso": "2026-11-29T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder vollständige Ruhe.",
+     "pace": null,
+     "structured": null
+    }
+   ],
+   "totalKm": 54,
+   "meta": {
+    "wn": 3,
+    "phase": "base",
+    "label": "Woche 3 · Grundlage",
+    "dates": ""
+   }
+  },
+  {
+   "startIso": "2026-11-30",
+   "workouts": [
+    {
+     "id": "w3-fr",
+     "dateIso": "2026-11-30T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "tempo",
+     "intensity": "high",
+     "title": "Stabiler Tempolauf",
+     "km": 8.4,
+     "desc": "1.5 km WU · 5.9 km Tempo · 1 km CD. Zone 3–4.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w4-di",
+     "dateIso": "2026-12-01T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder kompletter Ruhetag.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w4-mi",
+     "dateIso": "2026-12-02T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "interval",
+     "intensity": "high",
+     "title": "4 × 1 km Intervalle",
+     "km": 7.4,
+     "desc": "1.5 km WU · 4 × 1 km (90 s Pause) · 1 km CD. Zone 4–5.",
+     "pace": null,
+     "structured": {
+      "warmupKm": 1.5,
+      "intervals": [
+       {
+        "reps": 4,
+        "distanceKm": 1
+       }
+      ],
+      "cooldownKm": 1,
+      "recoveryJogKm": 0.9
+     }
+    },
+    {
+     "id": "w4-do",
+     "dateIso": "2026-12-03T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Regenerationslauf",
+     "km": 7.8,
+     "desc": "Lockerer Dauerlauf über 7,8 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w4-fr",
+     "dateIso": "2026-12-04T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder kompletter Ruhetag.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w5-mo",
+     "dateIso": "2026-12-05T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Regenerationslauf",
+     "km": 7.8,
+     "desc": "Lockerer Dauerlauf über 7,8 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w4-so",
+     "dateIso": "2026-12-06T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "long",
+     "intensity": "medium",
+     "title": "Langer Lauf",
+     "km": 11.6,
+     "desc": "Langer, ruhiger Lauf über 11,6 km in Zone 2.",
+     "pace": null,
+     "structured": null
+    }
+   ],
+   "totalKm": 43,
+   "meta": {
+    "wn": 4,
+    "phase": "base",
+    "label": "Woche 4 · Grundlage",
+    "dates": ""
+   }
+  },
+  {
+   "startIso": "2026-12-07",
+   "workouts": [
+    {
+     "id": "w4-sa",
+     "dateIso": "2026-12-07T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "tempo",
+     "intensity": "high",
+     "title": "Tempolauf",
+     "km": 13.3,
+     "desc": "2 km WU · 9.8 km Tempo · 1.5 km CD. Zone 3–4.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w5-di",
+     "dateIso": "2026-12-08T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder kompletter Ruhetag.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w5-mi",
+     "dateIso": "2026-12-09T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "interval",
+     "intensity": "high",
+     "title": "4 × 2 km Intervalle",
+     "km": 12.4,
+     "desc": "2 km WU · 4 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+     "pace": null,
+     "structured": {
+      "warmupKm": 2,
+      "intervals": [
+       {
+        "reps": 4,
+        "distanceKm": 2
+       }
+      ],
+      "cooldownKm": 1.5,
+      "recoveryJogKm": 0.9
+     }
+    },
+    {
+     "id": "w5-do",
+     "dateIso": "2026-12-10T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Regenerationslauf",
+     "km": 12,
+     "desc": "Lockerer Dauerlauf über 12 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w5-fr",
+     "dateIso": "2026-12-11T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder kompletter Ruhetag.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w6-mo",
+     "dateIso": "2026-12-12T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Lockerer Dauerlauf",
+     "km": 12.1,
+     "desc": "Lockerer Dauerlauf über 12,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w5-so",
+     "dateIso": "2026-12-13T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "long",
+     "intensity": "medium",
+     "title": "Langer Lauf",
+     "km": 15.2,
+     "desc": "Langer, ruhiger Lauf über 15,2 km in Zone 2.",
+     "pace": null,
+     "structured": null
+    }
+   ],
+   "totalKm": 65,
+   "meta": {
+    "wn": 5,
+    "phase": "base",
+    "label": "Woche 5 · Grundlage",
+    "dates": ""
+   }
+  },
+  {
+   "startIso": "2026-12-14",
+   "workouts": [
+    {
+     "id": "w5-sa",
+     "dateIso": "2026-12-14T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "tempo",
+     "intensity": "high",
+     "title": "Schwellenlauf",
+     "km": 14.5,
+     "desc": "2 km WU · 11 km Tempo · 1.5 km CD. Zone 3–4.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w6-di",
+     "dateIso": "2026-12-15T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder kompletter Ruhetag.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w6-mi",
+     "dateIso": "2026-12-16T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "interval",
+     "intensity": "high",
+     "title": "4 × 2 km Intervalle",
+     "km": 12.4,
+     "desc": "2 km WU · 4 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+     "pace": null,
+     "structured": {
+      "warmupKm": 2,
+      "intervals": [
+       {
+        "reps": 4,
+        "distanceKm": 2
+       }
+      ],
+      "cooldownKm": 1.5,
+      "recoveryJogKm": 0.9
+     }
+    },
+    {
+     "id": "w6-do",
+     "dateIso": "2026-12-17T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Regenerationslauf",
+     "km": 13.5,
+     "desc": "Lockerer Dauerlauf über 13,5 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w6-fr",
+     "dateIso": "2026-12-18T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder kompletter Ruhetag.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w7-mo",
+     "dateIso": "2026-12-19T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Lockerer Dauerlauf",
+     "km": 13.5,
+     "desc": "Lockerer Dauerlauf über 13,5 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w6-so",
+     "dateIso": "2026-12-20T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "long",
+     "intensity": "medium",
+     "title": "Langer Lauf",
+     "km": 16.1,
+     "desc": "Langer, ruhiger Lauf über 16,1 km in Zone 2.",
+     "pace": null,
+     "structured": null
+    }
+   ],
+   "totalKm": 70,
+   "meta": {
+    "wn": 6,
+    "phase": "base",
+    "label": "Woche 6 · Grundlage",
+    "dates": ""
+   }
+  },
+  {
+   "startIso": "2026-12-21",
+   "workouts": [
+    {
+     "id": "w6-sa",
+     "dateIso": "2026-12-21T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "tempo",
+     "intensity": "high",
+     "title": "Tempolauf mit Steigerung",
+     "km": 16.5,
+     "desc": "2 km WU · 13 km Tempo · 1.5 km CD. Zone 3–4.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w7-di",
+     "dateIso": "2026-12-22T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder kompletter Ruhetag.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w7-mi",
+     "dateIso": "2026-12-23T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "interval",
+     "intensity": "high",
+     "title": "4 × 2 km Intervalle",
+     "km": 12.4,
+     "desc": "2 km WU · 4 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+     "pace": null,
+     "structured": {
+      "warmupKm": 2,
+      "intervals": [
+       {
+        "reps": 4,
+        "distanceKm": 2
+       }
+      ],
+      "cooldownKm": 1.5,
+      "recoveryJogKm": 0.9
+     }
+    },
+    {
+     "id": "w7-do",
+     "dateIso": "2026-12-24T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Regenerationslauf",
+     "km": 15.1,
+     "desc": "Lockerer Dauerlauf über 15,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w7-fr",
+     "dateIso": "2026-12-25T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung oder kompletter Ruhetag.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w8-mo",
+     "dateIso": "2026-12-26T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Lockerer Auftakt",
+     "km": 15.1,
+     "desc": "Lockerer Dauerlauf über 15,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w7-so",
+     "dateIso": "2026-12-27T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "long",
+     "intensity": "medium",
+     "title": "Langer Lauf Peak",
+     "km": 16.9,
+     "desc": "Langer, ruhiger Lauf über 16,9 km in Zone 2.",
+     "pace": null,
+     "structured": null
+    }
+   ],
+   "totalKm": 76,
+   "meta": {
+    "wn": 7,
+    "phase": "base",
+    "label": "Woche 7 · Grundlage",
+    "dates": ""
+   }
+  },
+  {
+   "startIso": "2026-12-28",
+   "workouts": [
+    {
+     "id": "w7-sa",
+     "dateIso": "2026-12-28T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "tempo",
+     "intensity": "high",
+     "title": "Schwellenlauf Peak",
+     "km": 9.1,
+     "desc": "2 km WU · 5.6 km Tempo · 1.5 km CD. Zone 3–4.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w8-di",
+     "dateIso": "2026-12-29T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Regeneration oder komplette Ruhe.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w8-mi",
+     "dateIso": "2026-12-30T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "interval",
+     "intensity": "high",
+     "title": "4 × 1 km Intervalle",
+     "km": 8.4,
+     "desc": "2 km WU · 4 × 1 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+     "pace": null,
+     "structured": {
+      "warmupKm": 2,
+      "intervals": [
+       {
+        "reps": 4,
+        "distanceKm": 1
+       }
+      ],
+      "cooldownKm": 1.5,
+      "recoveryJogKm": 0.9
+     }
+    },
+    {
+     "id": "w8-do",
+     "dateIso": "2026-12-31T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Regenerationslauf",
+     "km": 8.5,
+     "desc": "Lockerer Dauerlauf über 8,5 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w8-fr",
+     "dateIso": "2027-01-01T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "tempo",
+     "intensity": "high",
+     "title": "Tempo-Steiger",
+     "km": 9.3,
+     "desc": "2 km WU · 5.8 km Tempo · 1.5 km CD. Zone 3–4.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w8-sa",
+     "dateIso": "2027-01-02T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Regenerationslauf",
+     "km": 8.6,
+     "desc": "Lockerer Dauerlauf über 8,6 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w8-so",
+     "dateIso": "2027-01-03T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "long",
+     "intensity": "medium",
+     "title": "Längerer Ausdauerlauf",
+     "km": 14.1,
+     "desc": "Langer, ruhiger Lauf über 14,1 km in Zone 2.",
+     "pace": null,
+     "structured": null
+    }
+   ],
+   "totalKm": 58,
+   "meta": {
+    "wn": 8,
+    "phase": "base",
+    "label": "Woche 8 · Grundlage",
+    "dates": ""
+   }
+  },
+  {
+   "startIso": "2027-01-04",
+   "workouts": [
+    {
+     "id": "w9-mo",
+     "dateIso": "2027-01-04T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Lockeres Auspowern",
+     "km": 13,
+     "desc": "Lockerer Dauerlauf über 13 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w9-di",
+     "dateIso": "2027-01-05T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Regeneration oder komplette Ruhe.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w9-mi",
+     "dateIso": "2027-01-06T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "interval",
+     "intensity": "high",
+     "title": "4 × 2 km Intervalle",
+     "km": 12.4,
+     "desc": "2 km WU · 4 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+     "pace": null,
+     "structured": {
+      "warmupKm": 2,
+      "intervals": [
+       {
+        "reps": 4,
+        "distanceKm": 2
+       }
+      ],
+      "cooldownKm": 1.5,
+      "recoveryJogKm": 0.9
+     }
+    },
+    {
+     "id": "w9-do",
+     "dateIso": "2027-01-07T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Regenerationslauf",
+     "km": 12.9,
+     "desc": "Lockerer Dauerlauf über 12,9 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w9-fr",
+     "dateIso": "2027-01-08T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "tempo",
+     "intensity": "high",
+     "title": "Tempo-Progression",
+     "km": 14.3,
+     "desc": "2 km WU · 10.8 km Tempo · 1.5 km CD. Zone 3–4.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w9-sa",
+     "dateIso": "2027-01-09T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Lockerer Stabilisierungslauf",
+     "km": 12.9,
+     "desc": "Lockerer Dauerlauf über 12,9 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w9-so",
+     "dateIso": "2027-01-10T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "long",
+     "intensity": "medium",
+     "title": "Langer Ausdauerlauf",
+     "km": 18.5,
+     "desc": "Langer, ruhiger Lauf über 18,5 km in Zone 2.",
+     "pace": null,
+     "structured": null
+    }
+   ],
+   "totalKm": 84,
+   "meta": {
+    "wn": 9,
+    "phase": "base",
+    "label": "Woche 9 · Grundlage",
+    "dates": ""
+   }
+  },
+  {
+   "startIso": "2027-01-11",
+   "workouts": [
+    {
+     "id": "w10-mo",
+     "dateIso": "2027-01-11T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Leichtes Auslaufen",
+     "km": 13.6,
+     "desc": "Lockerer Dauerlauf über 13,6 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w10-di",
+     "dateIso": "2027-01-12T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Regeneration oder komplette Ruhe.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w10-mi",
+     "dateIso": "2027-01-13T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "interval",
+     "intensity": "high",
+     "title": "4 × 2 km Intervalle",
+     "km": 12.4,
+     "desc": "2 km WU · 4 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+     "pace": null,
+     "structured": {
+      "warmupKm": 2,
+      "intervals": [
+       {
+        "reps": 4,
+        "distanceKm": 2
+       }
+      ],
+      "cooldownKm": 1.5,
+      "recoveryJogKm": 0.9
+     }
+    },
+    {
+     "id": "w10-do",
+     "dateIso": "2027-01-14T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Regenerationslauf",
+     "km": 13.5,
+     "desc": "Lockerer Dauerlauf über 13,5 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w10-fr",
+     "dateIso": "2027-01-15T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "tempo",
+     "intensity": "high",
+     "title": "Tempo-Finale",
+     "km": 15,
+     "desc": "2 km WU · 11.5 km Tempo · 1.5 km CD. Zone 3–4.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w10-sa",
+     "dateIso": "2027-01-16T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Lockerer Ausgleichslauf",
+     "km": 13.5,
+     "desc": "Lockerer Dauerlauf über 13,5 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w10-so",
+     "dateIso": "2027-01-17T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "long",
+     "intensity": "medium",
+     "title": "Langer Ausdauerlauf Peak",
+     "km": 17,
+     "desc": "Langer, ruhiger Lauf über 17 km in Zone 2.",
+     "pace": null,
+     "structured": null
+    }
+   ],
+   "totalKm": 85,
+   "meta": {
+    "wn": 10,
+    "phase": "base",
+    "label": "Woche 10 · Grundlage",
+    "dates": ""
+   }
+  },
+  {
+   "startIso": "2027-01-18",
+   "workouts": [
+    {
+     "id": "w11-mo",
+     "dateIso": "2027-01-18T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Lockerer Dauerlauf",
+     "km": 9.8,
+     "desc": "Lockerer Dauerlauf über 9,8 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w11-di",
+     "dateIso": "2027-01-19T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung und Regeneration.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w11-mi",
+     "dateIso": "2027-01-20T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "tempo",
+     "intensity": "high",
+     "title": "Tempo-Lauf mit Ausklang",
+     "km": 11,
+     "desc": "2 km WU · 7.5 km Tempo · 1.5 km CD. Zone 3–4.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w11-do",
+     "dateIso": "2027-01-21T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Genussvoller Lauf",
+     "km": 9.8,
+     "desc": "Lockerer Dauerlauf über 9,8 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w11-fr",
+     "dateIso": "2027-01-22T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "interval",
+     "intensity": "high",
+     "title": "4 × 1,6 km Intervalle",
+     "km": 10.8,
+     "desc": "2 km WU · 4 × 1.6 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+     "pace": null,
+     "structured": {
+      "warmupKm": 2,
+      "intervals": [
+       {
+        "reps": 4,
+        "distanceKm": 1.6
+       }
+      ],
+      "cooldownKm": 1.5,
+      "recoveryJogKm": 0.9
+     }
+    },
+    {
+     "id": "w11-sa",
+     "dateIso": "2027-01-23T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Regenerativer Lauf",
+     "km": 9.8,
+     "desc": "Lockerer Dauerlauf über 9,8 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w11-so",
+     "dateIso": "2027-01-24T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "long",
+     "intensity": "medium",
+     "title": "Langer Lauf in Renntempo",
+     "km": 12.8,
+     "desc": "Langer, ruhiger Lauf über 12,8 km in Zone 2.",
+     "pace": null,
+     "structured": null
+    }
+   ],
+   "totalKm": 64,
+   "meta": {
+    "wn": 11,
+    "phase": "base",
+    "label": "Woche 11 · Grundlage",
+    "dates": ""
+   }
+  },
+  {
+   "startIso": "2027-01-25",
+   "workouts": [
+    {
+     "id": "w12-mo",
+     "dateIso": "2027-01-25T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Lockerer Wiederaufbau",
+     "km": 10.3,
+     "desc": "Lockerer Dauerlauf über 10,3 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w12-di",
+     "dateIso": "2027-01-26T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung und Regeneration.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w12-mi",
+     "dateIso": "2027-01-27T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Leichter Erhaltungslauf",
+     "km": 10.3,
+     "desc": "Lockerer Dauerlauf über 10,3 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w12-do",
+     "dateIso": "2027-01-28T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Abschlusslauf vor Rennen",
+     "km": 10.3,
+     "desc": "Lockerer Dauerlauf über 10,3 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w12-fr",
+     "dateIso": "2027-01-29T12:00:00.000Z",
+     "sport": "rest",
+     "sessionType": "rest",
+     "title": "Ruhetag",
+     "km": 0,
+     "desc": "Aktive Erholung vor dem Rennen.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w12-sa",
+     "dateIso": "2027-01-30T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "easy",
+     "intensity": "low",
+     "title": "Renntag-Vorbereitung",
+     "km": 6,
+     "desc": "Lockerer Dauerlauf über 6 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+     "pace": null,
+     "structured": null
+    },
+    {
+     "id": "w12-so",
+     "dateIso": "2027-01-31T12:00:00.000Z",
+     "sport": "run",
+     "sessionType": "race",
+     "intensity": "high",
+     "title": "Halbmarathon",
+     "km": 21.1,
+     "desc": "Renntag: 21,1 km. Starte kontrolliert und teile das Rennen ein. Im ersten Drittel eher verhalten.",
+     "pace": null,
+     "structured": null
+    }
+   ],
+   "totalKm": 58.00000000000001,
+   "meta": {
+    "wn": 12,
+    "phase": "base",
+    "label": "Woche 12 · Grundlage",
+    "dates": ""
+   }
+  }
+ ]
+}

@@ -1,0 +1,1378 @@
+[
+ {
+  "wn": 1,
+  "phase": "base",
+  "label": "Woche 1 · Grundlage",
+  "dates": "",
+  "km": 70,
+  "s": [
+   {
+    "id": "w1-mo",
+    "day": "Mo",
+    "date": "9. Nov",
+    "dateIso": "2026-11-09",
+    "type": "easy",
+    "title": "Lockerer Einstiegslauf",
+    "km": 9.4,
+    "desc": "Lockerer Dauerlauf über 9,4 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w1-di",
+    "day": "Di",
+    "date": "10. Nov",
+    "dateIso": "2026-11-10",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder völlige Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w1-mi",
+    "day": "Mi",
+    "date": "11. Nov",
+    "dateIso": "2026-11-11",
+    "type": "easy",
+    "title": "Tempo-Einheit Grundlagen",
+    "km": 9.6,
+    "desc": "Lockerer Dauerlauf über 9,6 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w1-do",
+    "day": "Do",
+    "date": "12. Nov",
+    "dateIso": "2026-11-12",
+    "type": "easy",
+    "title": "Locker regenerativ",
+    "km": 9.6,
+    "desc": "Lockerer Dauerlauf über 9,6 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w1-fr",
+    "day": "Fr",
+    "date": "13. Nov",
+    "dateIso": "2026-11-13",
+    "type": "interval",
+    "title": "4 × 1,6 km Intervalle",
+    "km": 10.8,
+    "desc": "2 km WU · 4 × 1.6 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w1-sa",
+    "day": "Sa",
+    "date": "14. Nov",
+    "dateIso": "2026-11-14",
+    "type": "easy",
+    "title": "Ruhiger Vorlauftag",
+    "km": 9.6,
+    "desc": "Lockerer Dauerlauf über 9,6 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w1-so",
+    "day": "So",
+    "date": "15. Nov",
+    "dateIso": "2026-11-15",
+    "type": "long",
+    "title": "Langer Lauf Ausbau",
+    "km": 21,
+    "desc": "Langer, ruhiger Lauf über 21 km in Zone 2.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 2,
+  "phase": "base",
+  "label": "Woche 2 · Grundlage",
+  "dates": "",
+  "km": 71,
+  "s": [
+   {
+    "id": "w2-mo",
+    "day": "Mo",
+    "date": "16. Nov",
+    "dateIso": "2026-11-16",
+    "type": "easy",
+    "title": "Leichte Erholung",
+    "km": 9.8,
+    "desc": "Lockerer Dauerlauf über 9,8 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w2-di",
+    "day": "Di",
+    "date": "17. Nov",
+    "dateIso": "2026-11-17",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder völlige Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w2-mi",
+    "day": "Mi",
+    "date": "18. Nov",
+    "dateIso": "2026-11-18",
+    "type": "interval",
+    "title": "5 × 1 km Intervalle",
+    "km": 9.7,
+    "desc": "2 km WU · 5 × 1 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w2-do",
+    "day": "Do",
+    "date": "19. Nov",
+    "dateIso": "2026-11-19",
+    "type": "easy",
+    "title": "Regenerativer Lauf",
+    "km": 9.7,
+    "desc": "Lockerer Dauerlauf über 9,7 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w2-fr",
+    "day": "Fr",
+    "date": "20. Nov",
+    "dateIso": "2026-11-20",
+    "type": "tempo",
+    "title": "Tempolauf Grundlagen",
+    "km": 10.8,
+    "desc": "2 km WU · 7.3 km Tempo · 1.5 km CD. Zone 3–4.",
+    "pace": null
+   },
+   {
+    "id": "w2-sa",
+    "day": "Sa",
+    "date": "21. Nov",
+    "dateIso": "2026-11-21",
+    "type": "easy",
+    "title": "Ruhiger Vorlauftag",
+    "km": 9.7,
+    "desc": "Lockerer Dauerlauf über 9,7 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w2-so",
+    "day": "So",
+    "date": "22. Nov",
+    "dateIso": "2026-11-22",
+    "type": "long",
+    "title": "Langer Lauf Progression",
+    "km": 21.3,
+    "desc": "Langer, ruhiger Lauf über 21,3 km in Zone 2.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 3,
+  "phase": "base",
+  "label": "Woche 3 · Grundlage",
+  "dates": "",
+  "km": 75,
+  "s": [
+   {
+    "id": "w3-mo",
+    "day": "Mo",
+    "date": "23. Nov",
+    "dateIso": "2026-11-23",
+    "type": "easy",
+    "title": "Lockerer Start",
+    "km": 10.1,
+    "desc": "Lockerer Dauerlauf über 10,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w3-di",
+    "day": "Di",
+    "date": "24. Nov",
+    "dateIso": "2026-11-24",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder völlige Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w3-mi",
+    "day": "Mi",
+    "date": "25. Nov",
+    "dateIso": "2026-11-25",
+    "type": "tempo",
+    "title": "Tempolauf Steigerung",
+    "km": 11.4,
+    "desc": "2 km WU · 7.9 km Tempo · 1.5 km CD. Zone 3–4.",
+    "pace": null
+   },
+   {
+    "id": "w3-do",
+    "day": "Do",
+    "date": "26. Nov",
+    "dateIso": "2026-11-26",
+    "type": "easy",
+    "title": "Regenerativer Lauf",
+    "km": 10.1,
+    "desc": "Lockerer Dauerlauf über 10,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w3-fr",
+    "day": "Fr",
+    "date": "27. Nov",
+    "dateIso": "2026-11-27",
+    "type": "interval",
+    "title": "4 × 1,6 km Intervalle",
+    "km": 10.8,
+    "desc": "2 km WU · 4 × 1.6 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w3-sa",
+    "day": "Sa",
+    "date": "28. Nov",
+    "dateIso": "2026-11-28",
+    "type": "easy",
+    "title": "Ruhiger Vorlauftag",
+    "km": 10.1,
+    "desc": "Lockerer Dauerlauf über 10,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w3-so",
+    "day": "So",
+    "date": "29. Nov",
+    "dateIso": "2026-11-29",
+    "type": "long",
+    "title": "Langer Lauf Erwerbung",
+    "km": 22.5,
+    "desc": "Langer, ruhiger Lauf über 22,5 km in Zone 2.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 4,
+  "phase": "base",
+  "label": "Woche 4 · Grundlage",
+  "dates": "",
+  "km": 58,
+  "s": [
+   {
+    "id": "w4-mo",
+    "day": "Mo",
+    "date": "30. Nov",
+    "dateIso": "2026-11-30",
+    "type": "easy",
+    "title": "Regenerationslauf",
+    "km": 8.2,
+    "desc": "Lockerer Dauerlauf über 8,2 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w4-di",
+    "day": "Di",
+    "date": "1. Dez",
+    "dateIso": "2026-12-01",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder völlige Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w4-mi",
+    "day": "Mi",
+    "date": "2. Dez",
+    "dateIso": "2026-12-02",
+    "type": "easy",
+    "title": "Regenerationslauf",
+    "km": 8.1,
+    "desc": "Lockerer Dauerlauf über 8,1 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w4-do",
+    "day": "Do",
+    "date": "3. Dez",
+    "dateIso": "2026-12-03",
+    "type": "easy",
+    "title": "Regenerationslauf",
+    "km": 8.1,
+    "desc": "Lockerer Dauerlauf über 8,1 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w4-fr",
+    "day": "Fr",
+    "date": "4. Dez",
+    "dateIso": "2026-12-04",
+    "type": "easy",
+    "title": "Regenerationslauf",
+    "km": 8.1,
+    "desc": "Lockerer Dauerlauf über 8,1 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w4-sa",
+    "day": "Sa",
+    "date": "5. Dez",
+    "dateIso": "2026-12-05",
+    "type": "easy",
+    "title": "Regenerationslauf",
+    "km": 8.1,
+    "desc": "Lockerer Dauerlauf über 8,1 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w4-so",
+    "day": "So",
+    "date": "6. Dez",
+    "dateIso": "2026-12-06",
+    "type": "long",
+    "title": "Langer Lauf Regeneration",
+    "km": 17.4,
+    "desc": "Langer, ruhiger Lauf über 17,4 km in Zone 2.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 5,
+  "phase": "base",
+  "label": "Woche 5 · Grundlage",
+  "dates": "",
+  "km": 88,
+  "s": [
+   {
+    "id": "w5-mo",
+    "day": "Mo",
+    "date": "7. Dez",
+    "dateIso": "2026-12-07",
+    "type": "easy",
+    "title": "Lockerer Neustart",
+    "km": 12,
+    "desc": "Lockerer Dauerlauf über 12 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w5-di",
+    "day": "Di",
+    "date": "8. Dez",
+    "dateIso": "2026-12-08",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder völlige Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w5-mi",
+    "day": "Mi",
+    "date": "9. Dez",
+    "dateIso": "2026-12-09",
+    "type": "interval",
+    "title": "4 × 2 km Intervalle",
+    "km": 12.4,
+    "desc": "2 km WU · 4 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w5-do",
+    "day": "Do",
+    "date": "10. Dez",
+    "dateIso": "2026-12-10",
+    "type": "easy",
+    "title": "Regenerativer Lauf",
+    "km": 11.9,
+    "desc": "Lockerer Dauerlauf über 11,9 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w5-fr",
+    "day": "Fr",
+    "date": "11. Dez",
+    "dateIso": "2026-12-11",
+    "type": "tempo",
+    "title": "Tempolauf Ausbau",
+    "km": 13.4,
+    "desc": "2 km WU · 9.9 km Tempo · 1.5 km CD. Zone 3–4.",
+    "pace": null
+   },
+   {
+    "id": "w5-sa",
+    "day": "Sa",
+    "date": "12. Dez",
+    "dateIso": "2026-12-12",
+    "type": "easy",
+    "title": "Ruhiger Vorlauftag",
+    "km": 11.9,
+    "desc": "Lockerer Dauerlauf über 11,9 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w5-so",
+    "day": "So",
+    "date": "13. Dez",
+    "dateIso": "2026-12-13",
+    "type": "long",
+    "title": "Langer Lauf Peak",
+    "km": 26.4,
+    "desc": "Langer, ruhiger Lauf über 26,4 km in Zone 2.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 6,
+  "phase": "base",
+  "label": "Woche 6 · Grundlage",
+  "dates": "",
+  "km": 96,
+  "s": [
+   {
+    "id": "w6-mo",
+    "day": "Mo",
+    "date": "14. Dez",
+    "dateIso": "2026-12-14",
+    "type": "easy",
+    "title": "Lockerer Einstiegslauf",
+    "km": 19.8,
+    "desc": "Lockerer Dauerlauf über 19,8 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w6-di",
+    "day": "Di",
+    "date": "15. Dez",
+    "dateIso": "2026-12-15",
+    "type": "interval",
+    "title": "5 × 2 km Intervalle",
+    "km": 14.7,
+    "desc": "2 km WU · 5 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w6-mi",
+    "day": "Mi",
+    "date": "16. Dez",
+    "dateIso": "2026-12-16",
+    "type": "easy",
+    "title": "Regenerationslauf",
+    "km": 19.7,
+    "desc": "Lockerer Dauerlauf über 19,7 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w6-do",
+    "day": "Do",
+    "date": "17. Dez",
+    "dateIso": "2026-12-17",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder komplette Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w6-fr",
+    "day": "Fr",
+    "date": "18. Dez",
+    "dateIso": "2026-12-18",
+    "type": "tempo",
+    "title": "Tempolauf Grundlage",
+    "km": 22.1,
+    "desc": "2 km WU · 18.6 km Tempo · 1.5 km CD. Zone 3–4.",
+    "pace": null
+   },
+   {
+    "id": "w6-sa",
+    "day": "Sa",
+    "date": "19. Dez",
+    "dateIso": "2026-12-19",
+    "type": "easy",
+    "title": "Langer Lauf Ausbau",
+    "km": 19.7,
+    "desc": "Lockerer Dauerlauf über 19,7 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w6-so",
+    "day": "So",
+    "date": "20. Dez",
+    "dateIso": "2026-12-20",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder komplette Ruhe.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 7,
+  "phase": "base",
+  "label": "Woche 7 · Grundlage",
+  "dates": "",
+  "km": 105,
+  "s": [
+   {
+    "id": "w7-mo",
+    "day": "Mo",
+    "date": "21. Dez",
+    "dateIso": "2026-12-21",
+    "type": "easy",
+    "title": "Lockerer Aufwärmlauf",
+    "km": 22.2,
+    "desc": "Lockerer Dauerlauf über 22,2 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w7-di",
+    "day": "Di",
+    "date": "22. Dez",
+    "dateIso": "2026-12-22",
+    "type": "interval",
+    "title": "5 × 2 km Intervalle",
+    "km": 14.7,
+    "desc": "2 km WU · 5 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w7-mi",
+    "day": "Mi",
+    "date": "23. Dez",
+    "dateIso": "2026-12-23",
+    "type": "easy",
+    "title": "Regenerationslauf kurz",
+    "km": 22.1,
+    "desc": "Lockerer Dauerlauf über 22,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w7-do",
+    "day": "Do",
+    "date": "24. Dez",
+    "dateIso": "2026-12-24",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder komplette Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w7-fr",
+    "day": "Fr",
+    "date": "25. Dez",
+    "dateIso": "2026-12-25",
+    "type": "tempo",
+    "title": "Tempolauf Steigerung",
+    "km": 23.9,
+    "desc": "2 km WU · 20.4 km Tempo · 1.5 km CD. Zone 3–4.",
+    "pace": null
+   },
+   {
+    "id": "w7-sa",
+    "day": "Sa",
+    "date": "26. Dez",
+    "dateIso": "2026-12-26",
+    "type": "easy",
+    "title": "Langer Lauf Progression",
+    "km": 22.1,
+    "desc": "Lockerer Dauerlauf über 22,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w7-so",
+    "day": "So",
+    "date": "27. Dez",
+    "dateIso": "2026-12-27",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder komplette Ruhe.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 8,
+  "phase": "base",
+  "label": "Woche 8 · Grundlage",
+  "dates": "",
+  "km": 83,
+  "s": [
+   {
+    "id": "w8-mo",
+    "day": "Mo",
+    "date": "28. Dez",
+    "dateIso": "2026-12-28",
+    "type": "easy",
+    "title": "Regenerationslauf",
+    "km": 16.6,
+    "desc": "Lockerer Dauerlauf über 16,6 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w8-di",
+    "day": "Di",
+    "date": "29. Dez",
+    "dateIso": "2026-12-29",
+    "type": "interval",
+    "title": "5 × 2 km Intervalle",
+    "km": 14.7,
+    "desc": "2 km WU · 5 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w8-mi",
+    "day": "Mi",
+    "date": "30. Dez",
+    "dateIso": "2026-12-30",
+    "type": "easy",
+    "title": "Regenerationslauf",
+    "km": 16.5,
+    "desc": "Lockerer Dauerlauf über 16,5 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w8-do",
+    "day": "Do",
+    "date": "31. Dez",
+    "dateIso": "2026-12-31",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder komplette Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w8-fr",
+    "day": "Fr",
+    "date": "1. Jan",
+    "dateIso": "2027-01-01",
+    "type": "tempo",
+    "title": "Tempolauf Kontrolle",
+    "km": 18.7,
+    "desc": "2 km WU · 15.2 km Tempo · 1.5 km CD. Zone 3–4.",
+    "pace": null
+   },
+   {
+    "id": "w8-sa",
+    "day": "Sa",
+    "date": "2. Jan",
+    "dateIso": "2027-01-02",
+    "type": "easy",
+    "title": "Regenerationslauf",
+    "km": 16.5,
+    "desc": "Lockerer Dauerlauf über 16,5 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w8-so",
+    "day": "So",
+    "date": "3. Jan",
+    "dateIso": "2027-01-03",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder komplette Ruhe.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 9,
+  "phase": "base",
+  "label": "Woche 9 · Grundlage",
+  "dates": "",
+  "km": 124,
+  "s": [
+   {
+    "id": "w9-mo",
+    "day": "Mo",
+    "date": "4. Jan",
+    "dateIso": "2027-01-04",
+    "type": "easy",
+    "title": "Lockerer Lauf Aufbau",
+    "km": 28.5,
+    "desc": "Lockerer Dauerlauf über 28,5 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w9-di",
+    "day": "Di",
+    "date": "5. Jan",
+    "dateIso": "2027-01-05",
+    "type": "interval",
+    "title": "5 × 2 km Intervalle",
+    "km": 14.7,
+    "desc": "2 km WU · 5 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w9-mi",
+    "day": "Mi",
+    "date": "6. Jan",
+    "dateIso": "2027-01-06",
+    "type": "easy",
+    "title": "Regenerationslauf Leicht",
+    "km": 28.4,
+    "desc": "Lockerer Dauerlauf über 28,4 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w9-do",
+    "day": "Do",
+    "date": "7. Jan",
+    "dateIso": "2027-01-07",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder komplette Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w9-fr",
+    "day": "Fr",
+    "date": "8. Jan",
+    "dateIso": "2027-01-08",
+    "type": "tempo",
+    "title": "Tempolauf Peak",
+    "km": 24,
+    "desc": "2 km WU · 20.5 km Tempo · 1.5 km CD. Zone 3–4.",
+    "pace": null
+   },
+   {
+    "id": "w9-sa",
+    "day": "Sa",
+    "date": "9. Jan",
+    "dateIso": "2027-01-09",
+    "type": "easy",
+    "title": "Langer Lauf Peak Annäherung",
+    "km": 28.4,
+    "desc": "Lockerer Dauerlauf über 28,4 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w9-so",
+    "day": "So",
+    "date": "10. Jan",
+    "dateIso": "2027-01-10",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder komplette Ruhe.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 10,
+  "phase": "base",
+  "label": "Woche 10 · Grundlage",
+  "dates": "",
+  "km": 132,
+  "s": [
+   {
+    "id": "w10-mo",
+    "day": "Mo",
+    "date": "11. Jan",
+    "dateIso": "2027-01-11",
+    "type": "easy",
+    "title": "Lockerer Lauf Vorbereitung",
+    "km": 31.1,
+    "desc": "Lockerer Dauerlauf über 31,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w10-di",
+    "day": "Di",
+    "date": "12. Jan",
+    "dateIso": "2027-01-12",
+    "type": "interval",
+    "title": "5 × 2 km Intervalle",
+    "km": 14.7,
+    "desc": "2 km WU · 5 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w10-mi",
+    "day": "Mi",
+    "date": "13. Jan",
+    "dateIso": "2027-01-13",
+    "type": "easy",
+    "title": "Regenerationslauf Peak",
+    "km": 31.1,
+    "desc": "Lockerer Dauerlauf über 31,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w10-do",
+    "day": "Do",
+    "date": "14. Jan",
+    "dateIso": "2027-01-14",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder komplette Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w10-fr",
+    "day": "Fr",
+    "date": "15. Jan",
+    "dateIso": "2027-01-15",
+    "type": "tempo",
+    "title": "Tempolauf Peak-Finalisation",
+    "km": 24,
+    "desc": "2 km WU · 20.5 km Tempo · 1.5 km CD. Zone 3–4.",
+    "pace": null
+   },
+   {
+    "id": "w10-sa",
+    "day": "Sa",
+    "date": "16. Jan",
+    "dateIso": "2027-01-16",
+    "type": "easy",
+    "title": "Langer Lauf Peak Maximum",
+    "km": 31.1,
+    "desc": "Lockerer Dauerlauf über 31,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w10-so",
+    "day": "So",
+    "date": "17. Jan",
+    "dateIso": "2027-01-17",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder komplette Ruhe.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 11,
+  "phase": "base",
+  "label": "Woche 11 · Grundlage",
+  "dates": "",
+  "km": 139,
+  "s": [
+   {
+    "id": "w11-mo",
+    "day": "Mo",
+    "date": "18. Jan",
+    "dateIso": "2027-01-18",
+    "type": "easy",
+    "title": "Lockerer Dauerlauf",
+    "km": 23.7,
+    "desc": "Lockerer Dauerlauf über 23,7 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w11-di",
+    "day": "Di",
+    "date": "19. Jan",
+    "dateIso": "2027-01-19",
+    "type": "interval",
+    "title": "5 × 2 km Intervalle",
+    "km": 14.7,
+    "desc": "2 km WU · 5 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w11-mi",
+    "day": "Mi",
+    "date": "20. Jan",
+    "dateIso": "2027-01-20",
+    "type": "easy",
+    "title": "Regenerativer Lauf",
+    "km": 23.6,
+    "desc": "Lockerer Dauerlauf über 23,6 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w11-do",
+    "day": "Do",
+    "date": "21. Jan",
+    "dateIso": "2027-01-21",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder völlige Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w11-fr",
+    "day": "Fr",
+    "date": "22. Jan",
+    "dateIso": "2027-01-22",
+    "type": "tempo",
+    "title": "Tempo-Ausdauer",
+    "km": 23.9,
+    "desc": "2 km WU · 20.4 km Tempo · 1.5 km CD. Zone 3–4.",
+    "pace": null
+   },
+   {
+    "id": "w11-sa",
+    "day": "Sa",
+    "date": "23. Jan",
+    "dateIso": "2027-01-23",
+    "type": "easy",
+    "title": "Einfacher Lauf",
+    "km": 23.6,
+    "desc": "Lockerer Dauerlauf über 23,6 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w11-so",
+    "day": "So",
+    "date": "24. Jan",
+    "dateIso": "2027-01-24",
+    "type": "long",
+    "title": "Langer Lauf Marathon-fokussiert",
+    "km": 29.5,
+    "desc": "Langer, ruhiger Lauf über 29,5 km in Zone 2.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 12,
+  "phase": "base",
+  "label": "Woche 12 · Grundlage",
+  "dates": "",
+  "km": 104,
+  "s": [
+   {
+    "id": "w12-mo",
+    "day": "Mo",
+    "date": "25. Jan",
+    "dateIso": "2027-01-25",
+    "type": "easy",
+    "title": "Regenerationslauf",
+    "km": 16.1,
+    "desc": "Lockerer Dauerlauf über 16,1 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w12-di",
+    "day": "Di",
+    "date": "26. Jan",
+    "dateIso": "2027-01-26",
+    "type": "interval",
+    "title": "5 × 2 km Intervalle",
+    "km": 14.7,
+    "desc": "2 km WU · 5 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w12-mi",
+    "day": "Mi",
+    "date": "27. Jan",
+    "dateIso": "2027-01-27",
+    "type": "easy",
+    "title": "Regenerationslauf",
+    "km": 16.1,
+    "desc": "Lockerer Dauerlauf über 16,1 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w12-do",
+    "day": "Do",
+    "date": "28. Jan",
+    "dateIso": "2027-01-28",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder völlige Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w12-fr",
+    "day": "Fr",
+    "date": "29. Jan",
+    "dateIso": "2027-01-29",
+    "type": "easy",
+    "title": "Regenerationslauf",
+    "km": 16.1,
+    "desc": "Lockerer Dauerlauf über 16,1 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w12-sa",
+    "day": "Sa",
+    "date": "30. Jan",
+    "dateIso": "2027-01-30",
+    "type": "easy",
+    "title": "Regenerationslauf",
+    "km": 16.1,
+    "desc": "Lockerer Dauerlauf über 16,1 km in Zone 1. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w12-so",
+    "day": "So",
+    "date": "31. Jan",
+    "dateIso": "2027-01-31",
+    "type": "long",
+    "title": "Mittellanger Lauf",
+    "km": 24.9,
+    "desc": "Langer, ruhiger Lauf über 24,9 km in Zone 2.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 13,
+  "phase": "base",
+  "label": "Woche 13 · Grundlage",
+  "dates": "",
+  "km": 149,
+  "s": [
+   {
+    "id": "w13-mo",
+    "day": "Mo",
+    "date": "1. Feb",
+    "dateIso": "2027-02-01",
+    "type": "easy",
+    "title": "Lockerer Dauerlauf",
+    "km": 25.9,
+    "desc": "Lockerer Dauerlauf über 25,9 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w13-di",
+    "day": "Di",
+    "date": "2. Feb",
+    "dateIso": "2027-02-02",
+    "type": "interval",
+    "title": "5 × 2 km Intervalle",
+    "km": 14.7,
+    "desc": "2 km WU · 5 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w13-mi",
+    "day": "Mi",
+    "date": "3. Feb",
+    "dateIso": "2027-02-03",
+    "type": "easy",
+    "title": "Regenerativer Lauf",
+    "km": 25.8,
+    "desc": "Lockerer Dauerlauf über 25,8 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w13-do",
+    "day": "Do",
+    "date": "4. Feb",
+    "dateIso": "2027-02-04",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder völlige Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w13-fr",
+    "day": "Fr",
+    "date": "5. Feb",
+    "dateIso": "2027-02-05",
+    "type": "tempo",
+    "title": "Tempo-Ausdauer Ausbau",
+    "km": 24,
+    "desc": "2 km WU · 20.5 km Tempo · 1.5 km CD. Zone 3–4.",
+    "pace": null
+   },
+   {
+    "id": "w13-sa",
+    "day": "Sa",
+    "date": "6. Feb",
+    "dateIso": "2027-02-06",
+    "type": "easy",
+    "title": "Einfacher Lauf",
+    "km": 25.8,
+    "desc": "Lockerer Dauerlauf über 25,8 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w13-so",
+    "day": "So",
+    "date": "7. Feb",
+    "dateIso": "2027-02-07",
+    "type": "long",
+    "title": "Langer Lauf mit Marathon-Simulation",
+    "km": 32.8,
+    "desc": "Langer, ruhiger Lauf über 32,8 km in Zone 2.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 14,
+  "phase": "base",
+  "label": "Woche 14 · Grundlage",
+  "dates": "",
+  "km": 150,
+  "s": [
+   {
+    "id": "w14-mo",
+    "day": "Mo",
+    "date": "8. Feb",
+    "dateIso": "2027-02-08",
+    "type": "easy",
+    "title": "Lockerer Dauerlauf",
+    "km": 26.4,
+    "desc": "Lockerer Dauerlauf über 26,4 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w14-di",
+    "day": "Di",
+    "date": "9. Feb",
+    "dateIso": "2027-02-09",
+    "type": "interval",
+    "title": "5 × 2 km Intervalle",
+    "km": 14.7,
+    "desc": "2 km WU · 5 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w14-mi",
+    "day": "Mi",
+    "date": "10. Feb",
+    "dateIso": "2027-02-10",
+    "type": "easy",
+    "title": "Regenerativer Lauf",
+    "km": 26.3,
+    "desc": "Lockerer Dauerlauf über 26,3 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w14-do",
+    "day": "Do",
+    "date": "11. Feb",
+    "dateIso": "2027-02-11",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder völlige Ruhe.",
+    "pace": null
+   },
+   {
+    "id": "w14-fr",
+    "day": "Fr",
+    "date": "12. Feb",
+    "dateIso": "2027-02-12",
+    "type": "easy",
+    "title": "Leichter Lauf",
+    "km": 26.3,
+    "desc": "Lockerer Dauerlauf über 26,3 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w14-sa",
+    "day": "Sa",
+    "date": "13. Feb",
+    "dateIso": "2027-02-13",
+    "type": "easy",
+    "title": "Einfacher Lauf",
+    "km": 26.3,
+    "desc": "Lockerer Dauerlauf über 26,3 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w14-so",
+    "day": "So",
+    "date": "14. Feb",
+    "dateIso": "2027-02-14",
+    "type": "long",
+    "title": "Zielstrecke Marathon-Training",
+    "km": 30,
+    "desc": "Langer, ruhiger Lauf über 30 km in Zone 2.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 15,
+  "phase": "base",
+  "label": "Woche 15 · Grundlage",
+  "dates": "",
+  "km": 111.9,
+  "s": [
+   {
+    "id": "w15-mo",
+    "day": "Mo",
+    "date": "15. Feb",
+    "dateIso": "2027-02-15",
+    "type": "easy",
+    "title": "Lockerer Dauerlauf",
+    "km": 24.3,
+    "desc": "Lockerer Dauerlauf über 24,3 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w15-di",
+    "day": "Di",
+    "date": "16. Feb",
+    "dateIso": "2027-02-16",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder kompletter Ruhetag.",
+    "pace": null
+   },
+   {
+    "id": "w15-mi",
+    "day": "Mi",
+    "date": "17. Feb",
+    "dateIso": "2027-02-17",
+    "type": "interval",
+    "title": "5 × 2 km Intervalle",
+    "km": 14.7,
+    "desc": "2 km WU · 5 × 2 km (90 s Pause) · 1.5 km CD. Zone 4–5.",
+    "pace": null
+   },
+   {
+    "id": "w15-do",
+    "day": "Do",
+    "date": "18. Feb",
+    "dateIso": "2027-02-18",
+    "type": "easy",
+    "title": "Regenerativer Lauf",
+    "km": 24.3,
+    "desc": "Lockerer Dauerlauf über 24,3 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w16-mo",
+    "day": "Fr",
+    "date": "19. Feb",
+    "dateIso": "2027-02-19",
+    "type": "easy",
+    "title": "Lockerer Dauerlauf",
+    "km": 24.3,
+    "desc": "Lockerer Dauerlauf über 24,3 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w15-sa",
+    "day": "Sa",
+    "date": "20. Feb",
+    "dateIso": "2027-02-20",
+    "type": "long",
+    "title": "Langer Trainingslauf",
+    "km": 24.3,
+    "desc": "Langer, ruhiger Lauf über 24,3 km in Zone 2.",
+    "pace": null
+   },
+   {
+    "id": "w15-so",
+    "day": "So",
+    "date": "21. Feb",
+    "dateIso": "2027-02-21",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Kompletter Ruhetag zur Regeneration.",
+    "pace": null
+   }
+  ]
+ },
+ {
+  "wn": 16,
+  "phase": "base",
+  "label": "Woche 16 · Grundlage",
+  "dates": "",
+  "km": 106,
+  "s": [
+   {
+    "id": "w15-fr",
+    "day": "Mo",
+    "date": "22. Feb",
+    "dateIso": "2027-02-22",
+    "type": "tempo",
+    "title": "Tempo-Einheit zum Schärfen",
+    "km": 19.6,
+    "desc": "2 km WU · 16.1 km Tempo · 1.5 km CD. Zone 3–4.",
+    "pace": null
+   },
+   {
+    "id": "w16-di",
+    "day": "Di",
+    "date": "23. Feb",
+    "dateIso": "2027-02-23",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Aktive Erholung oder kompletter Ruhetag.",
+    "pace": null
+   },
+   {
+    "id": "w16-mi",
+    "day": "Mi",
+    "date": "24. Feb",
+    "dateIso": "2027-02-24",
+    "type": "easy",
+    "title": "Kurzer Lockerungslauf",
+    "km": 17.1,
+    "desc": "Lockerer Dauerlauf über 17,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w16-do",
+    "day": "Do",
+    "date": "25. Feb",
+    "dateIso": "2027-02-25",
+    "type": "easy",
+    "title": "Entspannter Aktivierungslauf",
+    "km": 17.1,
+    "desc": "Lockerer Dauerlauf über 17,1 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w16-fr",
+    "day": "Fr",
+    "date": "26. Feb",
+    "dateIso": "2027-02-26",
+    "type": "easy",
+    "title": "Lockerer Dauerlauf",
+    "km": 10,
+    "desc": "Lockerer Dauerlauf über 10 km in Zone 2. Du kannst dich dabei noch gut unterhalten.",
+    "pace": null
+   },
+   {
+    "id": "w16-sa",
+    "day": "Sa",
+    "date": "27. Feb",
+    "dateIso": "2027-02-27",
+    "type": "rest",
+    "title": "Ruhetag",
+    "km": 0,
+    "desc": "Kein Training nach Wettkampf.",
+    "pace": null
+   },
+   {
+    "id": "w16-so",
+    "day": "So",
+    "date": "28. Feb",
+    "dateIso": "2027-02-28",
+    "type": "race",
+    "title": "Marathon",
+    "km": 42.2,
+    "desc": "Renntag: 42,2 km. Starte kontrolliert und teile das Rennen ein. Im ersten Drittel eher verhalten.",
+    "pace": null
+   }
+  ]
+ }
+]

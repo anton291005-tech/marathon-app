@@ -9,7 +9,7 @@ import type { StoredHealthRun } from "../healthRuns";
 import { storedHealthRunDistanceKmNumeric } from "../healthRuns";
 import { parsePlannedPaceMinPerKm } from "./evaluateRun";
 import { normalizeAppleHealthRun } from "./normalizeAppleHealthRun";
-import { HR_ZONE_PCT_BANDS, getHrRangeForZone, plannedHrRangeForSessionType, zoneLabelForSessionType } from "./hrZones";
+import { HR_ZONE_PCT_BANDS, getHrRangeForZone, plannedHrRangeForSessionType, zoneLabelForSession } from "./hrZones";
 
 // Eine Puls-Quelle: Zonen, %HFmax-Bänder und bpm-Berechnung liegen in hrZones.ts.
 export { getHrRangeForZone, plannedHrRangeForSessionType };
@@ -141,26 +141,29 @@ function isRecoveryWeek(week?: PlanWeek): boolean {
 }
 
 /** %HRmax band [low, high] for deviation mid = average */
-function hrPctBandForSessionType(type: string, week?: PlanWeek): { lo: number; hi: number } | null {
-  const zone = zoneLabelForSessionType(type, type === "easy" && isRecoveryWeek(week));
+function hrPctBandForSession(
+  session: Pick<PlanSession, "type" | "kind">,
+  week?: PlanWeek,
+): { lo: number; hi: number } | null {
+  const zone = zoneLabelForSession(session.type, session.kind, session.type === "easy" && isRecoveryWeek(week));
   return zone ? HR_ZONE_PCT_BANDS[zone] : null;
 }
 
 /** Post-workout card: planned HR band + zone label from session type and optional HFmax. */
 export function getPostWorkoutPlannedHr(
-  session: Pick<PlanSession, "type">,
+  session: Pick<PlanSession, "type" | "kind">,
   maxHrBpm?: number | null,
 ): { hrBpm: { min: number; max: number } | null; hrZoneLabel: string | null } {
-  const stub = { type: session.type } as PlanSession;
+  const stub = { type: session.type, kind: session.kind } as PlanSession;
   return {
-    hrBpm: plannedHrRangeForSessionType(session.type, maxHrBpm),
+    hrBpm: plannedHrRangeForSessionType(session.type, maxHrBpm, session.kind),
     hrZoneLabel: getSessionHrZoneShort(stub),
   };
 }
 
 export function hrZoneMidBpm(session: PlanSession, maxHr: number, week?: PlanWeek): number | null {
   if (!Number.isFinite(maxHr) || maxHr <= 0) return null;
-  const band = hrPctBandForSessionType(session.type, week);
+  const band = hrPctBandForSession(session, week);
   if (!band) return null;
   return Math.round(((band.lo + band.hi) / 2) * maxHr);
 }
@@ -168,7 +171,7 @@ export function hrZoneMidBpm(session: PlanSession, maxHr: number, week?: PlanWee
 /** Kurzform für eingeklappte Trainingsziele (z. B. „Zone 2“). */
 export function getSessionHrZoneShort(session: PlanSession, week?: PlanWeek): string | null {
   if (session.type === "rest" || session.type === "strength") return null;
-  return zoneLabelForSessionType(session.type, session.type === "easy" && isRecoveryWeek(week));
+  return zoneLabelForSession(session.type, session.kind, session.type === "easy" && isRecoveryWeek(week));
 }
 
 /**
@@ -228,7 +231,7 @@ export function getSessionTargetLines(
   };
 
   let pulseLabel = "";
-  const zone = zoneLabelForSessionType(session.type, easyRecovery);
+  const zone = zoneLabelForSession(session.type, session.kind, easyRecovery);
   if (zone) {
     pulseLabel = zoneBandLabel(zone);
   } else if (session.type === "strength") {

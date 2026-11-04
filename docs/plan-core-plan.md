@@ -190,6 +190,13 @@ Die App nimmt an, was der Kern liefern wird. Gleichzeitig wird der Nebenbefund z
   - Live-Fixtures (`src/testSupport/fixtures/livePlan*.json`) normalisieren unverändert, abgesehen von der reparierten Woche 1
 - **Abnahme:** Bestehende Pläne werden gleich angezeigt; Woche 1 zeigt bei Start mitten in der Woche Fokus und Datum.
 
+- **Umgesetzt (2026-11-04), Branch `fix/plan-contract-passthrough`:**
+  - **Ursache Woche 1:** Der Server legt eine angebrochene Woche 1 unter dem Startdatum ab (`weekKeyOverrides`, `deterministicPlanGenerator.js:649`), `normalizeTrainingPlan` gruppiert nach Montag und fand die Meta nicht. Verloren gingen `wn`, `phase`, `label`, `focus`, `isRecoveryWeek` (der Server schreibt kein `dates`; das kommt erst mit dem Kern). Freigegeben: alle diese Felder sollen ankommen. Fix: `weekMetaKey` rechnet den Schlüssel auf den Montag um (rein kalendarisch in UTC, zeitzonensicher; zwei Stellen: `ingestWeek` und der `weeks[]`-Zweig).
+  - **Zusätzlich zum Plan (freigegeben):** `kind` an `PlanSession`/`AiPlanSession` plus Durchreichen in `toPlanSession` und `normalizePlanSessionToAi` (Whitelists), sonst erreicht `kind` die Zonen-Funktionen nie. `meta.core`-Prüfung in `src/planV2/normalizePlanCoreMeta.ts`.
+  - **Zonen:** `zoneLabelForSession(type, kind?, recoveryWeek?)` in `hrZones.ts`; ohne `kind` identisch zu `zoneLabelForSessionType` (Test über alle Typen × Entlastung); passt `kind` nicht zum `type` (z. B. nach einem AI-Patch, der nur `type` ändert, `applyPlanPatches` spreizt `{...session, ...changes}`), gilt der Typ. E bleibt in Entlastungswochen Z1. LR+M-Hinweis nur im `desc`, keine UI-Änderung. Neue Labels „Zone 3“ (76–82 %) und „Zone 4“ (82–88 %) teilen das Band „Zone 3–4“.
+  - **Spoho-Review-Punkt:** Die Bänder für Zone 3/Zone 4 sind vorläufig; Daniels setzt M/T eher bei ~80–90 % bzw. 88–92 % HFmax an. Änderung nur in `HR_ZONE_PCT_BANDS` (`hrZones.ts`) plus Test `hrZones.test.ts`.
+  - **Golden-Stand:** `src/planV2/__fixtures__/golden/*` wurde vor der Änderung mit dem alten Code erzeugt; `liveFixtureGolden.test.ts` prüft Normalisierung und Anzeige byte-gleich und je Fixture eine Mid-Week-Variante, bei der sich nur die Meta von Woche 1 ändert.
+
 ### 4 · `feat/plan-core-pace` — **MVP**, M (2 Tage), parallel zu 2
 
 §3 Form und Pace.
@@ -309,6 +316,7 @@ Client-Kopie ersetzen.
   - `src/components/Onboarding.tsx:495-537`: Der „vereinfachte Plan“ ruft `buildPlan` aus `src/planCore` lokal auf, mit leeren Regeln und ohne Netz. Damit entfällt auch der Struktur-Aufruf `fetchClaudePlanStructure`.
   - `src/lib/ai/coachPlanMutations.ts:381-1129`: Generator löschen. Die Patch-Builder (`:1-380`) bleiben. `AiPlanRules`/`PlanPhaseSpec` (`:489-513`) wandern dorthin, wo sie noch gebraucht werden, oder entfallen.
   - Chat-Aktion „Marathon-Plan erzeugen“ entfernen (`src/lib/ai/coachDeterministicResponses.ts:695-716`, `src/lib/ai/aiActionContract.ts:18`, `src/lib/ai/types.ts:24`). Sie übernimmt heute nie einen Plan (Inventar §5). **Freigegeben: entfernen.**
+  - **Aus Schritt 3 (Folgepunkt, vor Schritt 12):** `usePostWorkoutSummary.ts` (`getPostWorkoutPlannedHr`/`plannedHrRangeForSessionType`, Aufrufe um `:386`, `:508`, `:653`, `:774`, `:1101`) und `src/ai/analysis/backfillIntervalWorkoutScores.ts:129` mit `session.kind` versorgen. Die API nimmt `kind` seit Schritt 3 entgegen; ohne dieses Nachziehen zeigt die Auswertung nach dem Training für REC, M und T eine andere Zone als die Karte.
   - **v2:** `src/coachFeedback.ts:30-41`: 28-km-Schwelle nicht mehr fest, sondern aus dem Plan (längster geplanter LR des aktiven Plans; Hinweis nur bei `distance = m`). Sonst widerspricht der Coach jedem HM-/10k-Plan und den Marathon-Plänen mit 3–4 Lauftagen.
 - **Tests:**
   - `coachPlanMutations.generate.test.ts` entfällt

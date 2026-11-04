@@ -308,6 +308,7 @@ Pro Profil zusätzlich: Vergleichsspalte mit einem passenden Literaturplan (Dani
 10. Entlastung fest −20 % statt −20 bis −30 % (§5.3) – Verträglichkeit mit I3 gegen etwas weniger Erholung.
 11. Zusatz-Taper-Woche bei Rennwoche < 4 Tage (§4) und linearer Verlauf des Tapers dabei.
 12. Verlaufsform des Wochenumfangs (§5.3): erste von vier Formen, die den Peak erreicht – früher oder später Aufbau gewünscht?
+13. HFmax-Bänder für M (Zone 3 = 76–82 %) und T (Zone 4 = 82–88 %) in `src/trainingIntelligence/hrZones.ts`: vorläufig aus dem bisherigen Band „Zone 3–4“ geteilt; Daniels setzt M/T eher bei ~80–90 % bzw. 88–92 % HFmax an.
 
 ## 15. Abgleich mit der Bestandsaufnahme
 
