@@ -108,7 +108,7 @@ Der Peak liegt in einem Korridor [Untergrenze, Obergrenze] (ganze km):
 - Untergrenze `floor = min( max(tableMin, startKm), cap )`
 - Zielwert `peak = floor + peakPosition × (cap − floor)`, gerundet. `peakPosition` ∈ [0, 1], Standard **0,75** [E, Review-Punkt]. Der Planer leitet sie später aus der VDOT-Lücke zwischen Ziel und Form ab (schnelleres Ziel → höher).
 
-Der Zielwert ist weich: Er wird zusätzlich durch die Steigerungsregeln (§5.3) begrenzt und kann dadurch darunter liegen (meist 1–2 km, bei kurzen Plänen deutlich mehr). Ein Hinweis (`peak-not-reached`) erscheint erst, wenn nicht einmal die Untergrenze erreicht wird. [E]
+Der Zielwert ist weich: Er wird zusätzlich durch die Steigerungsregeln (§5.3) begrenzt und kann dadurch darunter liegen (meist 1–2 km, bei kurzen Plänen deutlich mehr). Ein Hinweis (`peak-not-reached`) erscheint, sobald der erreichte Peak mehr als 10 % unter dem Zielwert liegt. [E]
 
 Abweichung zum Code: Heute bestimmen Zielzeit und Umfangs-Spanne × 1,2 den Peak. Die Spec nimmt Lauftage und tatsächliche Wochen-km, weil die Zielzeit nichts über die Belastbarkeit aussagt. Die Zielzeit darf den Peak nur **innerhalb** des Korridors verschieben (`peakPosition`), nie darüber hinaus.
 
@@ -129,6 +129,7 @@ Peak-Tabelle (km/Woche) [E, orientiert an Stufen in Daniels/Pfitzinger/Hansons]:
 - Entlastungswoche: jede 4. Woche (Woche 4, 8, 12 …) in Basis/Aufbau/Spezifisch (3:1), **fest −20 %** zur Vorwoche; nie in Woche 1, nie in den letzten zwei Wochen vor dem Taper. Begründung: Bei −25 % oder −30 % lässt I3 (1,3 × Entlastungswoche) zwei Wochen später nur noch 0,975 bzw. 0,91 des alten Niveaus zu; −20 % (1,04) ist verträglich. Bei winzigen Umfängen (< 10 km) nicht tiefer, als I3 zulässt. Nach Entlastung wird höchstens auf das Niveau vor der Entlastung gesprungen, nicht darüber – der Code erlaubt heute +10 % darüber, das wird geändert. [P]
 - Kennzeichnung: `isRecoveryWeek = true` **und** `focus` enthält „Entlastung" (die App erkennt Entlastungswochen heute nur am Text). Die App soll auf das Flag umgestellt werden; bis dahin liefert der Kern beides.
 - Peak wird in der Spezifisch-Phase erreicht, in der letzten Woche vor dem Taper (also höchstens 4 Wochen vor dem Rennen). [P]
+- **Verlaufsform** von Woche 1 zur Peak-Woche [E, Review-Punkt 12]: Der Zielverlauf wird nacheinander mit vier Formen gerechnet: (1) S-Kurve (smoothstep), (2) linear, (3) schneller Anstieg am Anfang (1 − (1 − x)²), (4) so schnell wie die Regeln erlauben. Es gilt die erste Form, deren Verlauf den Zielwert (§5.2) in der Peak-Woche erreicht; erreicht keine ihn, gilt (4). Auf jede Woche wirken danach I3, I4, die Peak-Obergrenze und die Entlastung. Die Form bestimmt nur, wie früh der Aufbau passiert, nie den Peak.
 
 ### 5.4 Taper
 
@@ -306,6 +307,7 @@ Pro Profil zusätzlich: Vergleichsspalte mit einem passenden Literaturplan (Dani
 9. Peak-Position im Korridor (§5.2): Standard 0,75 – reicht das für P3–P6, und wie stark soll ein schnelleres Ziel den Peak anheben?
 10. Entlastung fest −20 % statt −20 bis −30 % (§5.3) – Verträglichkeit mit I3 gegen etwas weniger Erholung.
 11. Zusatz-Taper-Woche bei Rennwoche < 4 Tage (§4) und linearer Verlauf des Tapers dabei.
+12. Verlaufsform des Wochenumfangs (§5.3): erste von vier Formen, die den Peak erreicht – früher oder später Aufbau gewünscht?
 
 ## 15. Abgleich mit der Bestandsaufnahme
 

@@ -211,6 +211,26 @@ describe("planCore volume (§5)", () => {
       expect(violations(inputs, volume)).toEqual([]);
     });
 
+    it("Hinweis nur bei mehr als 10 % unter dem Ziel: 1,6 % (P3) ohne, 7 Wochen P1 (13 statt 15) mit", () => {
+      const p3 = planVolume(inputsFor("hm", 5, 45, 12));
+      expect(p3.peakKm).toBeLessThan(p3.targetPeakKm);
+      expect(p3.notes.filter((note) => note.code === "peak-not-reached")).toEqual([]);
+
+      const p1Short = planVolume(inputsFor("5k", 3, 10, 7));
+      expect(p1Short.targetPeakKm).toBe(15);
+      expect(p1Short.peakKm).toBe(13);
+      expect(p1Short.notes).toContainEqual({ code: "peak-not-reached", reason: "growth", targetPeakKm: 15, reachedPeakKm: 13 });
+    });
+
+    it("Hinweis folgt der Schwelle peakShortfallNote (10 %); der Property-Test prüft das für alle Zufallsfälle", () => {
+      const threshold = CONFIG.volume.peakShortfallNote.value;
+      expect(threshold).toBe(0.1);
+      const inputs = inputsFor("m", 6, 25, 8);
+      const volume = planVolume(inputs, { peakPosition: 1 });
+      const flagged = volume.notes.some((note) => note.code === "peak-not-reached");
+      expect(flagged).toBe(volume.peakKm < volume.targetPeakKm * (1 - threshold) - EPS);
+    });
+
     it("0 km Ist-Umfang: Woche 1 hat mindestens weekOneMinKm, die Kurve wächst", () => {
       const inputs = inputsFor("10k", 3, 0, 10);
       const volume = planVolume(inputs);
@@ -348,7 +368,12 @@ describe("planCore volume (§5)", () => {
         const volume = planVolume(inputs, options);
         const found = violations(inputs, volume);
         if (found.length > 0) failures.push(`${JSON.stringify(inputs)} ${JSON.stringify(options)} → ${found.join(", ")}`);
-        if (volume.notes.some((note) => note.code === "peak-not-reached")) notReached += 1;
+        const flagged = volume.notes.some((note) => note.code === "peak-not-reached");
+        if (flagged) notReached += 1;
+        const farBelowTarget = volume.peakKm < volume.targetPeakKm * (1 - CONFIG.volume.peakShortfallNote.value) - EPS;
+        if (flagged !== farBelowTarget) {
+          failures.push(`Hinweis passt nicht zum Abstand: ${JSON.stringify(inputs)}`);
+        }
         if (JSON.stringify(volume) !== JSON.stringify(planVolume(inputs, options))) failures.push(`nicht deterministisch: ${JSON.stringify(inputs)}`);
       }
 

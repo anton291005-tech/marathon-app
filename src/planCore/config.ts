@@ -164,6 +164,8 @@ export const CONFIG = deepFreeze({
      * Review-Punkt: Schritt 7 leitet sie aus der VDOT-Lücke zwischen Ziel und Form ab (schnelleres Ziel → höher).
      */
     peakPosition: E(0.75, "§5.2"),
+    /** Hinweis `peak-not-reached`, wenn der erreichte Peak mehr als so viel (Anteil) unter dem Ziel der `peakPosition` liegt. */
+    peakShortfallNote: E(0.1, "§5.2"),
     /** Peak-Tabelle (km/Woche) nach Distanz und Lauftagen. */
     peakKm: E<ByDistance<ByRunDays<Range>>>(
       {

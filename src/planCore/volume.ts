@@ -201,9 +201,8 @@ export function planVolume(inputs: VolumeInputs, options: VolumeOptions = {}): P
   });
 
   const notes: PlanVolumeNote[] = [];
-  // Das Ziel innerhalb des Korridors ist weich (Entlastung und I3 kosten ab und zu 1–2 km); gemeldet wird erst,
-  // wenn nicht einmal die Untergrenze des Korridors erreicht wird.
-  if (peakKm < corridor.min) {
+  // Das Ziel ist weich (Entlastung und I3 kosten ab und zu 1–2 km); gemeldet wird erst bei mehr als 10 % darunter.
+  if (peakKm < peakTarget * (1 - CONFIG.volume.peakShortfallNote.value) - EPS) {
     notes.push({ code: "peak-not-reached", reason: "growth", targetPeakKm: peakTarget, reachedPeakKm: peakKm });
   }
   if (phases.belowRecommended) {

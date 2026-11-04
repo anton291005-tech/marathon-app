@@ -906,6 +906,11 @@ Object {
         "spec": "§5.2",
         "value": 0.75,
       },
+      "peakShortfallNote": Object {
+        "source": "E",
+        "spec": "§5.2",
+        "value": 0.1,
+      },
       "peakStartFactor": Object {
         "source": "E",
         "spec": "§5.2",
