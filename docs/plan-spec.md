@@ -290,6 +290,7 @@ Pro Profil zusätzlich: Vergleichsspalte mit einem passenden Literaturplan (Dani
 5. VDOT-Abschlag für alte Rennergebnisse (−1 je 6 Wo).
 6. Peak-Tabelle §5.2 – realistisch für die Zielgruppe?
 7. Taper-Verteilung innerhalb der −41–60 %.
+8. MLR bei 5 Lauftagen: §7 erlaubt „5–6 Tage“, die Schablone in §6 hat MLR nur bei 6. Bis zur Klärung gilt §6 (`planCore/config.ts`, `library.mlr.runDays`).
 
 ## 15. Abgleich mit der Bestandsaufnahme
 

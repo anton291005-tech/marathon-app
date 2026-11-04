@@ -26,7 +26,7 @@ Reiner Plan, keine Code-Änderung. Zeilenangaben beziehen sich auf `main` @ `c1f
 
 Die Vercel-Funktionen sind CommonJS-JS (`api/onboarding/generate-plan-full.js`, `require(...)`). Die `tsconfig.json` ist auf CRA ausgelegt (`module: esnext`, `noEmit`, nur `src`).
 
-**Entscheidung fällt in Schritt 1 per Test** (siehe dort). Zwei Varianten:
+**Entscheidung (Schritt 1, 2026-11-04): Variante A, mit eigener `api/tsconfig.json`.** Variante B wird nicht gebaut; ihre Beschreibung bleibt als Rückfall stehen. Ergebnis des Tests siehe unten. Die zwei Varianten:
 
 **Variante A – Vercel baut TS direkt (bevorzugt, falls der Test besteht):** Eine Funktion `api/onboarding/generate-plan-core.ts` (oder `generate-plan-full` wird zu `.ts`) importiert `../../src/planCore` direkt. Vercel bündelt den Import. Dann entfallen Übersetzungsskript, eingecheckter JS-Code, Drift- und Paritätstest. Offene Punkte, die der Test klären muss: verträgt sich der Vercel-Build mit der CRA-`tsconfig` (`noEmit`, `module: esnext`, `isolatedModules`) – ggf. eigene `api/tsconfig.json`; kann `server/index.js` lokal dieselbe Datei laden (z. B. über `tsx`/`ts-node` nur für den lokalen Server, oder der lokale Server bindet die Route gar nicht ein, solange Schritt 0 aufgeschoben ist).
 
@@ -40,7 +40,29 @@ Warum eingecheckt: Es ist nicht gesichert, ob Vercel Dateien, die erst im Build-
 Verworfen:
 - **Zwei Implementierungen mit Paritätstest:** widerspricht der Vorgabe „ein Modul“.
 
-Variante A wurde in v1 wegen der CRA-`tsconfig` und des lokalen Loaders verworfen. Beides ist lösbar und nicht ausgetestet; deshalb jetzt der Test statt einer Vorabentscheidung. Variante A spart dauerhaft einen Build-Schritt und zwei Tests.
+Variante A wurde in v1 wegen der CRA-`tsconfig` und des lokalen Loaders verworfen. Beides war lösbar und nicht ausgetestet; deshalb der Test in Schritt 1 statt einer Vorabentscheidung.
+
+### Ergebnis des Einbindungstests (Schritt 1, 2026-11-04)
+
+**Aufbau:** Probe-Funktion `api/plan-core-probe.ts` auf einem lokalen Wegwerf-Branch (nie gepusht). Sie importiert die echten Kern-Dateien (`types`, `config`, `dates`, `random`, `index`) und den CommonJS-Helfer `api/_lib/cors.js`. Preview per `vercel deploy` aus einem sauberen Git-Worktree, ohne Push; Deployment Protection blieb an, der Aufruf lief im eingeloggten Browser. Die erwartete Antwort wurde vorher lokal berechnet.
+
+| Lauf | `tsconfig` für `api/` | Ergebnis |
+|---|---|---|
+| 1 | nur die Root-`tsconfig` (`module: esnext`) | Build grün, Funktion gebaut, **Aufruf 500 `FUNCTION_INVOCATION_FAILED`**: „Cannot use import statement outside a module“ in `/var/task/api/plan-core-probe.js` |
+| 2 | `api/tsconfig.json` mit `module: commonjs` | **Aufruf 200, JSON zeichengleich** mit den vorab berechneten Werten (inkl. 3 Werte aus Seed 42, `emptyRulesFrozen`, geladener CJS-Helfer) |
+
+**Befund:** Ohne `api/tsconfig.json` übersetzt Vercel (`@vercel/node`, mit dem lokalen TypeScript 4.9.5) die `.ts`-Funktion mit der Root-`tsconfig`. Deren `module: esnext` lässt die ESM-Syntax (`import`) stehen, die Laufzeit lädt die Datei aber als CommonJS und bricht ab. Die Datei `api/tsconfig.json` mit `module: commonjs` behebt das. Der Fehler fällt nur beim Aufruf auf, nicht im Build.
+
+**Bestehende `.js`-Funktionen bleiben unverändert:**
+- Die Größen der vier `.js`-Funktionen sind in Lauf 1 und Lauf 2 identisch (`account` 225,39 KB, `ai` 606,32 KB, `generate-plan` 459,04 KB, `generate-plan-full` 467,16 KB). `generate-plan-full` antwortet weiter mit 405.
+- Die eingecheckte `api/tsconfig.json` enthält weder `allowJs` noch `checkJs`. (Lauf 2 hatte `allowJs: true`, nur damit die Probe `./_lib/cors` typisiert importieren konnte; diese eine Option fehlt in der eingecheckten Fassung.) `tsc -p api/tsconfig.json --listFilesOnly` erfasst nur die 5 Kern-Dateien, davon 0 `.js`.
+- Die Root-`tsconfig`, `tsc` für `src/` und der CRA-Build ändern sich nicht (dort bleibt `target: es5`, hier `ES2020`).
+
+**Folgen für die weiteren Schritte:**
+- Der Kern wird wegen des CRA-Typchecks (`target: es5`, kein `downlevelIteration`) ohne Iteration und Spread über `Set`/`Map` geschrieben.
+- **Schritt 10:** Der Handler wird eine `.ts`-Datei (z. B. `generate-plan-full.ts`). JS-Helfer aus `api/_lib` bindet er per `require()` ein; das läuft ohne `allowJs` (lokal geprüft). `allowJs` nur nach einem Größenvergleich auf einer Preview wie hier aktivieren. Der `functions`-Eintrag in `vercel.json` muss auf den neuen Dateinamen angepasst werden.
+- Entfallen: Übersetzungsskript, eingecheckter JS-Code, Drift- und Paritätstest. Schritt 0 (lokaler Server) bleibt aufgeschoben; `server/index.js` lädt keine `.ts`-Dateien.
+- Die zwei Probe-Previews bleiben im Vercel-Projekt (nicht Production, hinter Deployment Protection) und können mit `vercel remove` gelöscht werden.
 
 **ESLint:** Neue Override-Regel für `src/planCore/**` mit `no-restricted-imports`, die React, Node-Builtins, `@supabase/*` und relative Pfade aus `src/planCore` heraus verbietet.
 - Dieselbe Regel für dieselben Dateien ersetzt die bestehende Quarantäne-Regel (`package.json` `eslintConfig.overrides[0]`). Deren `**/auxiliary/**`-Muster muss deshalb in die neue Regel mit hinein.
@@ -125,6 +147,13 @@ Gerüst, Config, Typen, Build, keine Logik. Nicht verdrahtet.
   - `src/__tests__/planCorePurity.test.js`: keine Imports außerhalb `src/planCore`, kein `Date.now`/`new Date()`
   - nur Variante B: `src/__tests__/planCoreBuildDrift.test.js`: eingecheckter Stand = frisch übersetzter Stand
 - **Abnahme:** Build und Tests grün, Entscheidung A/B im PR dokumentiert und in diesem Dokument nachgetragen. Production unverändert.
+- **Umgesetzt (2026-11-04), Branch `feat/plan-core-skeleton`:**
+  - Entscheidung **Variante A** (siehe Architekturentscheidung); `api/tsconfig.json` ist die einzige Zusatzdatei.
+  - Zusätzlich zum Plan (freigegeben): `src/planV2/planCoreCompat.ts` (Typ-Prüfung `CorePlan` → `TrainingPlanV2`, nur Typen), `dates.test.ts`, `random.test.ts`. `index.ts` exportiert bewusst keine Stubs für `buildPlan` & Co.
+  - Messwerte: Jest 178 Suites / 61.549 Tests grün (Baseline `main`: 174 / 61.509), `tsc` und ESLint auf `src/planCore` ohne Fehler, Build grün. Die erste Snapshot-Datei des Repos ist `src/planCore/__tests__/__snapshots__/config.test.ts.snap` (unter `CI=true` werden neue Snapshots nicht geschrieben: einmal ohne `CI` erzeugen und einchecken).
+  - ESLint 8.57 kennt `regex` in `no-restricted-imports` nicht; der Override nutzt `group: ["/[a-zA-Z@_]*", "../**"]` (getestet: erlaubt nur `./…`).
+  - Review-Befunde eingearbeitet: Herkunftsmarken, doppelte Spec-Zahlen mit Gleichheitstest, Spec-Widerspruch MLR (§6 vs. §7) als Review-Punkt 8 in `plan-spec.md` §14.
+  - **Für Schritt 3 (Reviewer-Hinweis):** `normalizePlanMeta` (`src/planV2/normalizeTrainingPlan.ts:524ff`) behält in `plan.meta` nur `volumeNote`. `meta.core` (`configVersion`, `inputs`, `rules`) und `workout.kind` gehen sonst bei der Normalisierung verloren; beide gehören dort hinein.
 
 ### 2 · `feat/plan-core-volume` — **MVP**, M (2–3 Tage)
 
@@ -362,7 +391,7 @@ Das Spoho-Review kann nach Schritt 7 anhand von `docs/plan-core-profiles.md` lau
 
 ## Entscheidungen (Stand v2, 2026-11-04)
 
-1. **Einbindung:** offen bis Schritt 1 – Variante A (Vercel baut `api/*.ts` direkt) bei bestandenem Test, sonst Variante B (übersetzt, eingecheckt, Drift-/Paritätstest).
+1. **Einbindung:** entschieden in Schritt 1 (2026-11-04) – **Variante A** (Vercel baut `api/*.ts` direkt, `src/planCore` wird importiert), mit `api/tsconfig.json` (`module: commonjs`, ohne `allowJs`). Ohne diese Datei läuft die Funktion nicht (ESM-Syntax im CJS-Laufzeitpfad). Variante B entfällt.
 2. **Art-Abbildung:** freigegeben – MVP mit `kind` + Abbildung auf die 8 App-Typen (Tabelle oben); Zonen nach `kind` (Schritt 3) und Coach-Feedback-Schwelle (Schritt 11) im MVP; echte neue Typen später.
 3. **Verstoß im Server-Pfad (`on`):** freigegeben – Plan verweigern (500 mit Code, Log ohne Nutzerinhalt), Onboarding zeigt verständliche Meldung und bietet den lokalen vereinfachten Plan an. Kein stiller Rückfall auf den alten Pfad.
 4. **Chat-Aktion „Marathon-Plan erzeugen“:** freigegeben – im MVP entfernen.
