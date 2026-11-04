@@ -365,6 +365,7 @@ Alten Pfad löschen, wenn der Schalter stabil auf `on` steht.
 | `fix/normalize-swim` | `swim` nicht mehr zu `easy` umdeuten (Spec §15.4) | `src/lib/ai/mapSessionType.ts:3-30`, `src/lib/ai/types.ts` (`SessionType`) |
 | `feat/session-kind-types` | Kern-Arten als echte App-Typen statt Abbildung auf 8 Typen | `mapSessionType.ts`, alle `type === …`-Stellen, `src/scheduling/capacityScore.ts:163` |
 | `feat/plan-inputs-from-health` | Wochen-km und längsten Lauf aus `health_workouts` vorschlagen | `supabase/migrations/001_initial_schema.sql:44-60` (Lesepfad), Onboarding |
+| `fix/timezone-tests` | Vorbestehender Zeitzonen-Fehler im Altcode: Unter `TZ=Pacific/Auckland` scheitern `normalizeTrainingPlan`-Golden-Tests und mehrere Altests schon auf `main`-Stand (vom Reviewer in Schritt 3 gemeldet, **nicht verifiziert**). Vermutlich `mondayIsoFromDateIso`/`deriveWeeksFromWorkouts` (lokales `setHours` + `toISOString`). In Schritt 3 bewusst nicht angefasst | `src/planV2/normalizeTrainingPlan.ts` (`mondayIsoFromDateIso`), `src/core/deriveWeeksFromWorkouts.ts:3-13`, Tests mit `TZ=Pacific/Auckland` und `TZ=America/Los_Angeles` prüfen |
 | §9, §11 | Formprüfung, Claude-Texte | laut Spec nicht im MVP |
 
 ---
