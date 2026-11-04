@@ -150,7 +150,8 @@ describe("planCore config", () => {
       expect(CONFIG.volume.startKmMax.value).toBe(CONFIG.inputs.currentWeeklyKm.value.max);
       expect(CONFIG.library.longRunPlusM.maxKm.value).toBe(CONFIG.library.m.maxKm.value);
       expect(CONFIG.library.longRunPlusM.maxMinutes.value).toBe(CONFIG.library.m.maxMinutes.value);
-      expect(CONFIG.longRun.recoveryReduction.value).toEqual(CONFIG.volume.recovery.reduction.value);
+      // Wochen-Entlastung fest −20 % (§5.3); der Long Run darf in der Entlastungswoche −20 bis −30 % kürzer sein (§7.1).
+      expect(CONFIG.volume.recovery.reduction.value).toBe(CONFIG.longRun.recoveryReduction.value.min);
     });
 
     it("Long-Run-Anteil sinkt mit mehr Lauftagen", () => {
