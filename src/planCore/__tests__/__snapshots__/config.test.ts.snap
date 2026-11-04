@@ -21,10 +21,38 @@ Object {
         "spec": "§3",
         "value": 420,
       },
+      "eShare": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": 0.66,
+      },
+      "goalPaceMarginSecPerKm": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": 1,
+      },
       "goalVdotGapMax": Object {
         "source": "E",
         "spec": "§3",
         "value": 2,
+      },
+      "iShare": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": 0.974,
+      },
+      "rOffsetSecPerKm": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": 15,
+      },
+      "raceDistanceKm": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": Object {
+          "max": 42.2,
+          "min": 1.5,
+        },
       },
       "recPaceOffsetSecPerKm": Object {
         "source": "E",
@@ -33,6 +61,11 @@ Object {
           "max": 40,
           "min": 20,
         },
+      },
+      "tShare": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": 0.88,
       },
       "vdotFreeWeeks": Object {
         "source": "E",
@@ -53,6 +86,14 @@ Object {
         "source": "E",
         "spec": "§3",
         "value": 6,
+      },
+      "vdotRange": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": Object {
+          "max": 85,
+          "min": 20,
+        },
       },
       "vo2maxShare": Object {
         "source": "L",
@@ -1031,6 +1072,6 @@ Object {
       },
     },
   },
-  "version": "0.4.0",
+  "version": "0.5.0",
 }
 `;

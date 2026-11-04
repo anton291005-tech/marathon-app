@@ -1,8 +1,8 @@
-# MyRace – Plan-Spec v0.4 (Entwurf)
+# MyRace – Plan-Spec v0.5 (Entwurf)
 
 > Zweck: Single Source of Truth für den deterministischen Plan-Kern. Jede Regel ist eine Zahl und damit ein Test.
 > Herkunft jeder Zahl ist markiert: **[L]** Literatur · **[P]** Praxis-Konsens (Daniels/Pfitzinger/Hansons-Pläne) · **[E]** eigene Setzung → muss ins Spoho-Review.
-> Status: Entwurf v0.4, 4.11.2026 (v0.3: 3.11.2026). Änderungen v0.4 (Schritt 2, Phasen und Wochenumfang): Entlastung fest −20 % (§5.3), Peak-Position im Korridor (§5.2), Geltungsbereich von I3–I5 (§12), Zusatz-Taper-Woche bei kurzer Rennwoche (§4), P1 auf 13–15 km (§13). Abgeglichen mit `docs/plan-architecture-inventory.md` (963f99e) und `docs/plan-spec-gap.md` (c12c630). Wo Code und Spec abweichen, gilt die Spec; Ausnahmen sind in §16 begründet.
+> Status: Entwurf v0.5, 4.11.2026 (v0.3: 3.11.2026). Änderungen v0.5 (Schritt 4, Form und Pace): §14 Punkte 14–15 (VDOT-30-Abweichung des Rechners, Herkunft der Pace-Anteile). Änderungen v0.4 (Schritt 2, Phasen und Wochenumfang): Entlastung fest −20 % (§5.3), Peak-Position im Korridor (§5.2), Geltungsbereich von I3–I5 (§12), Zusatz-Taper-Woche bei kurzer Rennwoche (§4), P1 auf 13–15 km (§13). Abgeglichen mit `docs/plan-architecture-inventory.md` (963f99e) und `docs/plan-spec-gap.md` (c12c630). Wo Code und Spec abweichen, gilt die Spec; Ausnahmen sind in §16 begründet.
 >
 > **Was der Umbau tatsächlich ersetzt:** Der Code rechnet Volumen, Taper, Peak, km-Verteilung, Long Runs, Bausteine, Texte und Zonen bereits selbst. Claude entscheidet heute nur die **Wochenform** (welcher Tag welcher Typ, Anzahl Läufe/harte Einheiten) und übersetzt Freitext. Neu zu bauen sind daher: deterministische Wochenschablonen (§6), Einheiten-Limits als Prüfung statt Reparatur (§7, §12) und eine Pace-Berechnung (§3), die es heute nicht gibt.
 
@@ -309,6 +309,8 @@ Pro Profil zusätzlich: Vergleichsspalte mit einem passenden Literaturplan (Dani
 11. Zusatz-Taper-Woche bei Rennwoche < 4 Tage (§4) und linearer Verlauf des Tapers dabei.
 12. Verlaufsform des Wochenumfangs (§5.3): erste von vier Formen, die den Peak erreicht – früher oder später Aufbau gewünscht?
 13. HFmax-Bänder für M (Zone 3 = 76–82 %) und T (Zone 4 = 82–88 %) in `src/trainingIntelligence/hrZones.ts`: vorläufig aus dem bisherigen Band „Zone 3–4“ geteilt; Daniels setzt M/T eher bei ~80–90 % bzw. 88–92 % HFmax an.
+14. VDOT-30-Zeile im VDOT-Rechner (§3): Der Rechner (vdoto2.com, 4.11.2026) zeigt bei VDOT 30,0 E 7:05–7:46, T 6:09, I 5:28, R 5:13; die Daniels-Gilbert-Gleichungen mit den Anteilen aus `config.ts` ergeben E (Mitte) 8:00, T 6:24, I 5:55, R 5:40. Die Werte entsprechen etwa VDOT 32–33. Der Rechner weicht bei niedrigem VDOT offenbar bewusst von der Formel ab. Der Kern rechnet nach Formel und prüft bei VDOT 30 nur Rennzeiten und M (`__fixtures__/danielsReference.ts`). Fragen: Welche Pace-Werte sollen Läufer im unteren VDOT-Bereich (< 35) bekommen, und gilt die Abweichung auch zwischen 30 und 35?
+15. Anteile der Pace-Arten (§3): E 0,66 (Mitte von 0,62–0,70), T 0,88, I 0,974, R = I − 15 s/km sind aus dem Rechner für VDOT 40–70 abgeleitet (`form.eShare` … `form.rOffsetSecPerKm`), nicht aus der Literatur. Bestätigen oder durch das Buch ersetzen.
 
 ## 15. Abgleich mit der Bestandsaufnahme
 
