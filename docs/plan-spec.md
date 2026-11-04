@@ -38,6 +38,8 @@
 | `longestRecentRunKm` | nein | 0–45 (letzte 4 Wochen) | 30 % von `currentWeeklyKm`, min. 5 |
 | `recentRace` | nein | Distanz + Zeit + Datum | siehe §3 |
 | `goalTime` | nein | – | kein Zielpace-Training, nur Formpace |
+| `startYmd` | ja | heute bis `raceDate` − harte Untergrenze (§4) | heute (Onboarding: `planStartChoice`) |
+| `freeText` | nein | – | MVP: nur gespeichert, Coach liest; später → Claude-Regeln (§10) |
 
 **Onboarding-Scope (laut Gap neu):** Heute fragt der Wizard nur eine Umfangs-Spanne ab; Lauftage, verfügbare Tage, Wochen-km, längster Lauf und Rennergebnis fehlen, im Profil steht nur eine Marathon-Bestzeit ohne Datum. Neu abzufragen:
 
@@ -48,7 +50,6 @@
 5. Längster Lauf der letzten 4 Wochen – optional, Fallback siehe Tabelle
 
 Bestehende Profile ohne diese Felder: beim nächsten Planerstellen nachfragen, nicht raten.
-| `freeText` | nein | – | → Claude-Regeln (§10) |
 
 ## 3. Form und Pace
 
