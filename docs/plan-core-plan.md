@@ -1,7 +1,16 @@
 # Umbauplan: deterministischer Plan-Kern
 
-Stand: 2026-11-03, Basis `main` @ `c1f4711`. Grundlage: `docs/plan-spec.md` (v0.3), `docs/plan-architecture-inventory.md`, `docs/plan-spec-gap.md`.
+Stand: 2026-11-04 (v2), Basis `main` @ `c1f4711`. Grundlage: `docs/plan-spec.md` (v0.3), `docs/plan-architecture-inventory.md`, `docs/plan-spec-gap.md`.
 Reiner Plan, keine Code-Änderung. Zeilenangaben beziehen sich auf `main` @ `c1f4711`.
+
+## Änderungen v2 (2026-11-04, nach Review)
+
+1. **Freigegeben:** Server verweigert den Plan bei Regelverstoß (Codes loggen, im UI verständliche Meldung + lokaler vereinfachter Plan als Angebot). Chat-Aktion „Marathon-Plan erzeugen“ wird entfernt. Standard-E-Pace 7:00/km im Einsteiger-Modus (Herkunft `E`, Spoho-Review-Punkt). Eigener Zufallsgenerator statt `fast-check`. Bestandsnutzer werden nur beim nächsten Erstellen gefragt.
+2. **Schritt 8 (Claude → `PlanRules`) ist nicht mehr MVP.** Freitext wird wie heute gespeichert und nur vom Coach gelesen. Die Planerzeugung läuft im MVP **ohne Claude**: `buildPlan(inputs, EMPTY_RULES, todayYmd)`.
+3. **Shadow-Betrieb 2–3 Tage** statt einer Woche. Schalter `off/shadow/on` bleibt als Rückweg.
+4. **Schritt 0 ist nicht mehr MVP** (Begründung dort).
+5. **Schritt 1 beginnt mit einem Vercel-Test:** Kann `api/*.ts` direkt gebaut werden und `src/planCore` importieren? Beide Varianten sind unten beschrieben, die Entscheidung fällt im Schritt.
+6. **Abbildungstabelle** der Kern-Arten auf die 8 App-Typen mit allen betroffenen Stellen (Datei:Zeile). Daraus zwei neue kleine MVP-Punkte: Zonen nach `kind` (in Schritt 3) und der 28-km-Hinweis im Coach-Feedback (in Schritt 11).
 
 ## Leitplanken
 
@@ -9,7 +18,7 @@ Reiner Plan, keine Code-Änderung. Zeilenangaben beziehen sich auf `main` @ `c1f
 - **Output** `TrainingPlanV2` (`src/planV2/types.ts:47-53`). `AiPlanWeek` bleibt die abgeleitete Anzeige (`src/displayPlan/deriveDisplayPlan.ts:15-21`).
 - **Alle Spec-Zahlen in `src/planCore/config.ts`**, jede mit Herkunft (`L`/`P`/`E`) und Spec-Abschnitt. Das Spoho-Review ändert nur diese Datei (plus die erwarteten Snapshots).
 - **Invarianten I1–I22** als Funktion im Kern (`checkCorePlan`) und als Tests. Dazu Property-Tests über zufällige gültige Eingaben und Snapshot-Tests der Referenzprofile P1–P6.
-- **Claude** übersetzt nur noch Freitext in `PlanRules` (§10). Alles andere rechnet der Code.
+- **Claude** ist im MVP nicht an der Planerzeugung beteiligt. Freitext → `PlanRules` (§10) folgt später (Schritt 8).
 - **Production wird nie schlechter:** Bis zum Umschalten ist der Kern nicht verdrahtet. Danach läuft er hinter einem Schalter (`PLAN_CORE_MODE=off|shadow|on`, Standard `off`). Der heutige Pfad bleibt bis zum Cutover unverändert.
 - **Jeder Schritt:** `CI=true npm test` grün, `CI=false npm run build` grün, eigener Branch von `main`, Merge nur mit Freigabe.
 
@@ -17,7 +26,11 @@ Reiner Plan, keine Code-Änderung. Zeilenangaben beziehen sich auf `main` @ `c1f
 
 Die Vercel-Funktionen sind CommonJS-JS (`api/onboarding/generate-plan-full.js`, `require(...)`). Die `tsconfig.json` ist auf CRA ausgelegt (`module: esnext`, `noEmit`, nur `src`).
 
-**Vorschlag:** Der Kern wird per `typescript.transpileModule` (ist als Abhängigkeit schon da) nach `api/_lib/planCore/*.js` (CommonJS) übersetzt. Das Ergebnis wird **eingecheckt**.
+**Entscheidung fällt in Schritt 1 per Test** (siehe dort). Zwei Varianten:
+
+**Variante A – Vercel baut TS direkt (bevorzugt, falls der Test besteht):** Eine Funktion `api/onboarding/generate-plan-core.ts` (oder `generate-plan-full` wird zu `.ts`) importiert `../../src/planCore` direkt. Vercel bündelt den Import. Dann entfallen Übersetzungsskript, eingecheckter JS-Code, Drift- und Paritätstest. Offene Punkte, die der Test klären muss: verträgt sich der Vercel-Build mit der CRA-`tsconfig` (`noEmit`, `module: esnext`, `isolatedModules`) – ggf. eigene `api/tsconfig.json`; kann `server/index.js` lokal dieselbe Datei laden (z. B. über `tsx`/`ts-node` nur für den lokalen Server, oder der lokale Server bindet die Route gar nicht ein, solange Schritt 0 aufgeschoben ist).
+
+**Variante B – übersetzt und eingecheckt (Rückfall):** Der Kern wird per `typescript.transpileModule` (ist als Abhängigkeit schon da) nach `api/_lib/planCore/*.js` (CommonJS) übersetzt. Das Ergebnis wird **eingecheckt**.
 - Skript `scripts/buildPlanCore.js`, Aufruf `npm run build:plan-core`.
 - Ein Jest-Drift-Test übersetzt jede Kern-Datei erneut und vergleicht mit dem eingecheckten Stand. Weicht er ab, ist der Test rot.
 - Ein Paritätstest lässt P1–P6 und die Property-Fälle durch TS und JS laufen und verlangt identische Pläne.
@@ -25,8 +38,9 @@ Die Vercel-Funktionen sind CommonJS-JS (`api/onboarding/generate-plan-full.js`, 
 Warum eingecheckt: Es ist nicht gesichert, ob Vercel Dateien, die erst im Build-Kommando entstehen, in die Funktionen übernimmt. Mit eingecheckten Dateien gibt es diese Unsicherheit nicht, und `server/index.js` kann sie lokal genauso laden. Bewährtes Muster im Repo: `legacyYearAnchor` mit `legacyYearAnchorParity.test.js`, `planLabelParity.test.js`.
 
 Verworfen:
-- **TS-Funktion direkt auf Vercel (`api/*.ts`):** Die CRA-`tsconfig` passt nicht dazu, und `server/index.js` bräuchte einen eigenen Loader.
 - **Zwei Implementierungen mit Paritätstest:** widerspricht der Vorgabe „ein Modul“.
+
+Variante A wurde in v1 wegen der CRA-`tsconfig` und des lokalen Loaders verworfen. Beides ist lösbar und nicht ausgetestet; deshalb jetzt der Test statt einer Vorabentscheidung. Variante A spart dauerhaft einen Build-Schritt und zwei Tests.
 
 **ESLint:** Neue Override-Regel für `src/planCore/**` mit `no-restricted-imports`, die React, Node-Builtins, `@supabase/*` und relative Pfade aus `src/planCore` heraus verbietet.
 - Dieselbe Regel für dieselben Dateien ersetzt die bestehende Quarantäne-Regel (`package.json` `eslintConfig.overrides[0]`). Deren `**/auxiliary/**`-Muster muss deshalb in die neue Regel mit hinein.
@@ -48,6 +62,23 @@ Die App kennt nur 8 `sessionType` (`src/lib/ai/mapSessionType.ts:3-12`), alles a
 | I, R | `interval` | |
 | RACE | `race` | |
 
+### Was die Abbildung an den Stellen auslöst, die an `type` hängen
+
+Gesucht wurde `type`/`sessionType` `===`/`!==` `"tempo" | "interval" | "easy" | "long"` in `src/` ohne Tests (Stand `c1f4711`). `src/lib/ai/coachPlanMutations.ts` (24 Treffer) fehlt, weil der Generator dort in Schritt 11 gelöscht wird; `src/auxiliary/**` und `src/dailyDecision.ts` sind Quarantäne bzw. ohne Plan-Bezug.
+
+| Bereich | Stelle | Logik heute | Wirkung der Abbildung | MVP-Maßnahme |
+|---|---|---|---|---|
+| Zonen/HF-Ziele | `src/trainingIntelligence/hrZones.ts:25-35`, Aufruf `sessionPlanTargets.ts:145`, `:171`, `:217` | easy = Z2 (Z1 nur in Entlastungswoche), long = Z2, tempo = Z3–4, interval = Z4–5 | **REC** außerhalb von Entlastungswochen falsch als Z2; **M** und **T** beide als Z3–4 (M gehört in Z3, T in Z4) | **Ja, in Schritt 3:** Wenn `kind` gesetzt ist, Zone aus `kind` (REC Z1, E/MLR/LR Z2, M Z3, T Z4, I/R Z4–5, LR+M Z2 + Hinweis), sonst wie heute |
+| Recovery-Last | `src/recovery/trainingDailyLoad.ts:14-15` | interval/tempo/race × 1,38; long × 1,12 | M (bis 29 km) als `tempo` mit 1,38 → Last eher überschätzt; LR+M als `long` mit 1,12 → unterschätzt | Nein. Richtung ist konservativ bzw. vertretbar; Feinjustierung mit `feat/session-kind-types` |
+| Recovery-Planlast | `src/recovery/planTrainingLoad.ts:14` | längster `long`-Lauf | MLR zählt nicht als Long Run – gewollt | Nein |
+| Marathonprognose | `src/marathonPrediction.ts:129-133`, `:181`, `:191-196`, `:432-470` | Gewichte je Typ; tempo/interval als Leistungssignal, long mit Boost | M läuft als `tempo`-Signal (0,48 / 1,5) – passt, M-Pace ist marathonspezifisch; LR+M als `long` bekommt den Long-Run-Boost – passt | Nein, aber nach Cutover einmal mit P4/P5 gegenprüfen |
+| Prognose 2 | `src/marathonForecast.ts:262`, `src/lib/ai/coachRacePrediction.ts:195-199` | nur `long` bzw. tempo/interval vs. long/easy | wie oben, keine Fehlwirkung | Nein |
+| Validatoren | `src/ai/validation/validateMicroStructure.ts:29-30`, `:124`; `validateSwap.ts:40-45`; `validatePhaseSwap.ts:18` | tempo/interval/race = hoch, long = mittel | M und T korrekt hart; **LR+M nur „mittel“**, obwohl laut Spec hart; MLR nie hart (korrekt) | Nein (nur Warnungen bei Nutzeränderungen); mit Schritt 14 über `isHardSession` |
+| Anzeige-Texte/Pace-Fallback | `src/lib/ai/convertWorkout.ts:86-87`, `:132-154`, `:237-239` | Titel „Tempo X km“, Pace-Fallback aus `RUN_PACE_MIN_PER_KM` | M würde ohne eigenen Titel als „Tempo 22 km“ erscheinen; Pace-Fallback greift nur, wenn `pace` fehlt – der Kern setzt es immer | Nein, wenn der Kern Titel/`desc` immer setzt (Schritt 6, `text.ts`) – Prüfung als Teil von I1 |
+| Long-Run-Hervorhebung | `src/App.tsx:358`, `:400-406`, `:422-455`, `:493-497`, `:548`, `:575`, `:621-628`, `:687`, `:1277`; `src/AppMain.tsx:663`, `:760-766`, `:800-804`, `:845`, `:1030-1037`, `:1155`, `:2440` | `long` und `km > 28` / `≥ 28` als „Schlüssellauf“ | LR+M wird korrekt als Long Run erkannt; Pläne mit LR-Peak < 28 km (P4, P6, alle HM) zeigen nie einen „Schlüssellauf“ – nur Hervorhebung, keine Fehlinformation | Nein |
+| **Coach-Feedback** | `src/coachFeedback.ts:30-41`, `:89` | „Deine Long Runs liegen noch unter 28 km – für die Marathonbasis lohnt sich mehr Distanz“, **ohne Distanz- oder Plan-Bezug** | Widerspricht dem Plan: P4/P6 (LR-Peak 24–28) und **jeder HM-/10k-Plan** bekommen den Hinweis | **Ja, in Schritt 11:** Schwelle aus dem Plan (`max LR des Plans` bzw. nur bei `distance = m`), nicht fest 28 km |
+| Wochenanalyse/Rückblick | `src/weeklyAnalysis.ts:151`, `src/prepRecap/buildPrepRecapSnapshot.ts:275`, `src/features/ai/ReplaceWorkoutPreviewCard.tsx` | zählen `long` | unverändert korrekt | Nein |
+
 **Pace** läuft über das bestehende Feld `pace` im Format `m:ss–m:ss`. Die App liest es schon (`src/trainingIntelligence/sessionPlanTargets.ts:115-135`).
 **Bausteine** stehen im `desc` und müssen vom Client-Parser lesbar sein (`src/sessionDistance.ts:153`). Prüfung: Für jede Einheit liegt `getSessionPlannedDistanceKm` innerhalb ±0,1 km am `km`, als Teil von I1.
 
@@ -58,9 +89,11 @@ Die App kennt nur 8 `sessionType` (`src/lib/ai/mapSessionType.ts:3-12`), alles a
 Reihenfolge = Abhängigkeit. Schritte 2–6 lassen sich teilweise parallel bauen (siehe Grafik am Ende).
 **MVP** = vor TestFlight nötig. **später** = kann warten.
 
-### 0 · `chore/plan-api-local` — **MVP**, S (½ Tag)
+### 0 · `chore/plan-api-local` — **später**, S (½ Tag)
 
-Planerzeugung lokal testbar machen (Roadmap-Folgepunkt (e)). Ohne das läuft jeder Live-Test gegen Production.
+> **v2: nicht mehr MVP.** Begründung: Ohne Schritt 8 ruft die Planerzeugung kein Claude mehr auf. Der Kern ist vollständig über Jest testbar (Invarianten, Property, P1–P6), der Client-Pfad (Schritt 11) läuft lokal ohne Netz, und der Server-Pfad (Schritt 10) wird auf einem Vercel-Preview im eingeloggten Chrome geprüft (Deployment Protection bleibt an). Kein späterer MVP-Schritt braucht den lokalen Server zwingend. In Schritt 10 entfällt deshalb auch die Verdrahtung in `server/index.js`. Wieder aufnehmen, sobald Schritt 8 kommt oder lokale Server-Tests häufig werden.
+
+Planerzeugung lokal testbar machen (Roadmap-Folgepunkt (e)).
 
 - **Dateien:**
   - `server/index.js` (ab `:638`): Routen `POST /api/onboarding/generate-plan-full` und `/generate-plan` binden die Vercel-Handler ein (`api/onboarding/generate-plan-full.js`, `generate-plan.js`).
@@ -73,19 +106,25 @@ Planerzeugung lokal testbar machen (Roadmap-Folgepunkt (e)). Ohne das läuft jed
 
 Gerüst, Config, Typen, Build, keine Logik. Nicht verdrahtet.
 
+- **Zuerst – Einbindungs-Test (max. ½ Tag, Ergebnis entscheidet A oder B):**
+  1. Minimal-Modul `src/planCore/index.ts` mit `export const PLAN_CORE_PING = "ok"`.
+  2. Test-Funktion `api/_probe/plan-core-probe.ts`, die es importiert und zurückgibt (ohne Auth, kein Nutzerinhalt, nur Preview).
+  3. Preview-Deploy, Aufruf im eingeloggten Chrome. Gleichzeitig prüfen: `CI=false npm run build` bleibt grün (CRA darf `api/` nicht anfassen), und Jest kann `src/planCore` importieren.
+  4. Besteht → **Variante A**, Probe-Funktion wieder löschen. Scheitert (Build-Fehler, Modul fehlt im Bundle, tsconfig-Konflikt ohne kleine Lösung) → **Variante B**, Fehlerbild im PR notieren.
 - **Dateien (neu):**
   - `src/planCore/index.ts`: öffentliche API (`buildPlan`, `checkCorePlan`, `validatePlanRules`, `isHardSession`)
   - `src/planCore/config.ts`: alle Zahlen aus §0–§8 und §12, je Eintrag `{ value, source: "L"|"P"|"E", spec: "§5.3" }`, dazu `CONFIG_VERSION`
   - `src/planCore/types.ts`: `CoreInputs` (§2), `PlanRules` (§10), `CoreKind`, `CoreWorkout`, `CoreWeek`, `CorePlanMeta`
   - `src/planCore/dates.ts`: reine YMD-/UTC-Helfer. Vorlage: `api/_lib/planInvariants.js:210-221`
   - `src/planCore/random.ts`: deterministischer Zufall mit Seed, nur für Tests
-  - `scripts/buildPlanCore.js`, `package.json`: Skript `build:plan-core`, ESLint-Override (siehe oben)
-  - `api/_lib/planCore/` (generiert, eingecheckt)
+  - `package.json`: ESLint-Override (siehe oben)
+  - nur Variante B: `scripts/buildPlanCore.js`, Skript `build:plan-core`, `api/_lib/planCore/` (generiert, eingecheckt)
+  - nur Variante A: ggf. `api/tsconfig.json`
 - **Tests:**
   - `src/planCore/__tests__/config.test.ts`: jeder Eintrag hat `source` und `spec`, Snapshot der Config
-  - `src/__tests__/planCoreBuildDrift.test.js`: eingecheckter Stand = frisch übersetzter Stand
   - `src/__tests__/planCorePurity.test.js`: keine Imports außerhalb `src/planCore`, kein `Date.now`/`new Date()`
-- **Abnahme:** Build und Tests grün. `require("./api/_lib/planCore")` lädt im Node- und im Vercel-Preview-Deploy (einmal kurz mit einer Test-Funktion prüfen, dann wieder entfernen). Production unverändert.
+  - nur Variante B: `src/__tests__/planCoreBuildDrift.test.js`: eingecheckter Stand = frisch übersetzter Stand
+- **Abnahme:** Build und Tests grün, Entscheidung A/B im PR dokumentiert und in diesem Dokument nachgetragen. Production unverändert.
 
 ### 2 · `feat/plan-core-volume` — **MVP**, M (2–3 Tage)
 
@@ -109,7 +148,8 @@ Die App nimmt an, was der Kern liefern wird. Gleichzeitig wird der Nebenbefund z
   - `src/planV2/normalizeTrainingPlan.ts:185-196`: `kind` durchreichen
   - `normalizeTrainingPlan.ts:525-549` (`normalizePlanMeta`): `meta.core` geprüft durchreichen
   - `normalizeTrainingPlan.ts:444-448`, `:484-496`, `:503-520`: Meta-Zuordnung auch über den Montag der Woche, damit eine angebrochene Woche 1 `focus`/`dates` behält
-- **Tests:** `normalizeTrainingPlan.test.ts`:
+  - **v2:** `src/trainingIntelligence/hrZones.ts:21-35` + Aufrufe `sessionPlanTargets.ts:145`, `:171`, `:217`: optionaler `kind`-Parameter; gesetzt → Zone aus `kind` (REC Z1, E/MLR/LR Z2, M Z3, T Z4, I/R Z4–5), sonst unverändert. Damit stimmen HF-Ziele für REC und M ab dem ersten Kern-Plan (siehe Abbildungstabelle).
+- **Tests:** `normalizeTrainingPlan.test.ts`, `hrZones`-Tests (mit/ohne `kind`):
   - Woche 1 mit Start Mi behält `focus`/`dates`
   - `kind` und `meta.core` bleiben erhalten, unbekannte Felder in `meta.core` fallen weg
   - Live-Fixtures (`src/testSupport/fixtures/livePlan*.json`) normalisieren unverändert, abgesehen von der reparierten Woche 1
@@ -170,12 +210,14 @@ Die App nimmt an, was der Kern liefern wird. Gleichzeitig wird der Nebenbefund z
   - `src/planCore/__tests__/profiles.test.ts`: P1–P6 als Jest-Snapshots **und** als Bereichsprüfungen aus §13 (Snapshot erkennt jede Änderung, Bereichsprüfung prüft die Spec)
   - I20: zweimal `buildPlan` → identisch. I21, I22
   - Vertrag: `normalizeTrainingPlan(plan)` deep-equal `plan`; `validateTrainingPlanV2Integrity` true; `deriveDisplayPlan` ohne Fehler
-  - Parität: TS-Kern = `api/_lib/planCore` für P1–P6 und 200 Property-Fälle
+  - nur Variante B: Parität TS-Kern = `api/_lib/planCore` für P1–P6 und 200 Property-Fälle
 - **Abnahme:** Alle Invarianten grün, P1–P6 in den Bereichen.
   - Zusätzlich `docs/plan-core-profiles.md`: Vergleichstabelle P1–P6 gegen je einen Literaturplan (§13: Peak-km, LR-Max, LR ≥ 30 km, Q/Woche, Taper). Ist Grundlage fürs Spoho-Review.
   - Hinweis: `CI=true` schreibt keine neuen Snapshots. Die Snapshot-Dateien müssen mit eingecheckt werden.
 
-### 8 · `feat/plan-rules-claude` — **MVP**, S–M (1–2 Tage), nach 1
+### 8 · `feat/plan-rules-claude` — **später**, S–M (1–2 Tage), nach 1
+
+> **v2: nicht mehr MVP.** Die fünf neuen Onboarding-Fragen (Schritt 9) decken Lauftage, verfügbare Tage und Long-Run-Tag strukturiert ab – den Hauptteil dessen, was Freitext heute leistet. Freitext wird im MVP nur gespeichert und vom Coach gelesen. `buildPlan` bekommt `EMPTY_RULES`; `PlanRules`-Typ und `validatePlanRules` dürfen in Schritt 1 als Gerüst entstehen, werden aber nicht befüllt. Vorteil: Planerzeugung ohne Claude-Aufruf – kein Timeout, keine Kosten, keine Nebenwirkungen.
 
 §10: Freitext → `PlanRules`.
 
@@ -205,20 +247,21 @@ Die App nimmt an, was der Kern liefern wird. Gleichzeitig wird der Nebenbefund z
   - `apiInputLimits.test.js`: neue Felder, Grenzen, Kürzung
 - **Abnahme:** Wizard auf iPhone 13 (Tastatur, Safe Areas, 390 px). Der Plan entsteht weiter über den heutigen Pfad.
 
-### 10 · `feat/plan-core-server` — **MVP**, M (2 Tage), nach 7, 8, 9
+### 10 · `feat/plan-core-server` — **MVP**, M (1,5 Tage), nach 7 und 9
 
 Kern im Vercel-Handler hinter dem Schalter.
 
 - **Dateien:**
-  - `api/onboarding/generate-plan-full.js:24-45`:
-    - `PLAN_CORE_MODE=on`: `planRulesFromText` → `buildPlan` → `checkCorePlan`. Mit Verstoß gibt es keinen Plan, Antwort 500 mit Codes im Log (Vorschlag, siehe Entscheidungen).
+  - `api/onboarding/generate-plan-full.js:24-45` (bzw. die `.ts`-Funktion bei Variante A):
+    - `PLAN_CORE_MODE=on`: `buildPlan(inputs, EMPTY_RULES, todayYmd)` → `checkCorePlan`. Kein Claude-Aufruf. Mit Verstoß gibt es keinen Plan: Antwort 500 mit maschinenlesbarem Code, Verstoß-Codes im Log (ohne Nutzerinhalt); das Onboarding zeigt eine verständliche Meldung und bietet den lokalen vereinfachten Plan an (freigegeben).
     - `shadow`: Antwort wie heute; der Kern rechnet daneben und loggt nur Verstoß-Codes und Kennzahlen (Peak, LR-Max, Lauftage), keine Inhalte.
     - `off`: wie heute.
     - Fehlen die neuen Eingaben (alter Client), läuft der heutige Pfad.
   - Antwortformat `{ plan }` bleibt. `vercel.json` `maxDuration` erst nach dem Cutover senken.
-  - Gleiche Verdrahtung in `server/index.js` (aus Schritt 0).
+  - Onboarding-UI: Fehlermeldung bei 500 mit Kern-Code + Button „Vereinfachten Plan nutzen“.
+  - Keine Verdrahtung in `server/index.js` (Schritt 0 ist verschoben).
 - **Tests:**
-  - `src/__tests__/generatePlanFullCore.test.js`: die drei Modi, alter Client ohne Felder, Claude-Ausfall, Verstoß → 500
+  - `src/__tests__/generatePlanFullCore.test.js`: die drei Modi, alter Client ohne Felder, Verstoß → 500 mit Code, kein Anthropic-Aufruf im Modus `on`
   - `apiLogsNoUserContent.test.js` für den Shadow-Log
 - **Abnahme:** Auf einem Preview-Deploy mit `on` erzeugt das Onboarding einen Plan, die App zeigt ihn ohne UI-Änderung. Production bleibt auf `off`.
 
@@ -229,17 +272,19 @@ Client-Kopie ersetzen.
 - **Dateien:**
   - `src/components/Onboarding.tsx:495-537`: Der „vereinfachte Plan“ ruft `buildPlan` aus `src/planCore` lokal auf, mit leeren Regeln und ohne Netz. Damit entfällt auch der Struktur-Aufruf `fetchClaudePlanStructure`.
   - `src/lib/ai/coachPlanMutations.ts:381-1129`: Generator löschen. Die Patch-Builder (`:1-380`) bleiben. `AiPlanRules`/`PlanPhaseSpec` (`:489-513`) wandern dorthin, wo sie noch gebraucht werden, oder entfallen.
-  - Chat-Aktion „Marathon-Plan erzeugen“ entfernen (`src/lib/ai/coachDeterministicResponses.ts:695-716`, `src/lib/ai/aiActionContract.ts:18`, `src/lib/ai/types.ts:24`). Sie übernimmt heute nie einen Plan (Inventar §5). Vorschlag für das MVP: entfernen statt anschließen.
+  - Chat-Aktion „Marathon-Plan erzeugen“ entfernen (`src/lib/ai/coachDeterministicResponses.ts:695-716`, `src/lib/ai/aiActionContract.ts:18`, `src/lib/ai/types.ts:24`). Sie übernimmt heute nie einen Plan (Inventar §5). **Freigegeben: entfernen.**
+  - **v2:** `src/coachFeedback.ts:30-41`: 28-km-Schwelle nicht mehr fest, sondern aus dem Plan (längster geplanter LR des aktiven Plans; Hinweis nur bei `distance = m`). Sonst widerspricht der Coach jedem HM-/10k-Plan und den Marathon-Plänen mit 3–4 Lauftagen.
 - **Tests:**
   - `coachPlanMutations.generate.test.ts` entfällt
   - `coachDeterministicResponses.test.ts:106-107` anpassen
+  - `coachFeedback`-Test: HM-Plan mit LR 20 km → kein Hinweis; M-Plan mit LR-Peak 27 km, längster gelaufener LR 27 km → kein Hinweis
   - Onboarding-Test: vereinfachter Plan besteht `checkCorePlan`
 - **Abnahme:** Es gibt genau eine Generator-Implementierung im Client. Der vereinfachte Plan hat 0 Verstöße (heute 49).
 
-### 12 · `chore/plan-core-cutover` — **MVP**, S (½ Tag + Beobachtung), nach 10 und 11
+### 12 · `chore/plan-core-cutover` — **MVP**, S (½ Tag + 2–3 Tage Beobachtung), nach 10 und 11
 
 - **Ablauf:**
-  1. `PLAN_CORE_MODE=shadow` in Production, mindestens eine Woche bzw. 30 Pläne.
+  1. `PLAN_CORE_MODE=shadow` in Production für **2–3 Tage** (v2). Shadow vergleicht nur mit dem alten Pfad, dessen Schwächen bekannt sind; die eigentliche Abnahme sind P1–P6, die Property-Tests und der iPhone-Test. Während Shadow selbst gezielt Pläne erzeugen (alle 6 Profile über das Onboarding), da es noch kaum echte Nutzer gibt.
   2. Auswertung: 0 Verstöße, Kennzahlen plausibel.
   3. iPhone-13-Test mit P1–P6-ähnlichen Eingaben.
   4. `on`.
@@ -280,47 +325,50 @@ Alten Pfad löschen, wenn der Schalter stabil auf `on` steht.
 
 ---
 
-## Übersicht
+## Übersicht (v2)
 
 | # | Branch | MVP | Aufwand | hängt ab von | ändert Production? |
 |---|---|---|---|---|---|
-| 0 | `chore/plan-api-local` | ja | S | – | nein (nur lokaler Server) |
-| 1 | `feat/plan-core-skeleton` | ja | M | – | nein |
-| 2 | `feat/plan-core-volume` | ja | M | 1 | nein |
-| 3 | `fix/plan-contract-passthrough` | ja | S | – | ja, nur Woche-1-Fix |
-| 4 | `feat/plan-core-pace` | ja | M | 1 | nein |
-| 5 | `feat/plan-core-week-templates` | ja | M–L | 2 | nein |
-| 6 | `feat/plan-core-sessions` | ja | L | 4, 5 | nein |
-| 7 | `feat/plan-core-assemble` | ja | M | 3, 6 | nein |
-| 8 | `feat/plan-rules-claude` | ja | S–M | 1 | nein |
-| 9 | `feat/onboarding-plan-inputs` | ja | M–L | 1 | ja, neue Fragen, alter Pfad |
-| 10 | `feat/plan-core-server` | ja | M | 7, 8, 9 | nein (Schalter `off`) |
-| 11 | `feat/plan-core-client` | ja | M | 7, 9 | ja, vereinfachter Plan besser |
-| 12 | `chore/plan-core-cutover` | ja | S | 10, 11 | ja, Umschalten |
+| 1 | `feat/plan-core-skeleton` | ja | M (1 T, inkl. Vercel-Test) | – | nein |
+| 2 | `feat/plan-core-volume` | ja | M (2–3 T) | 1 | nein |
+| 3 | `fix/plan-contract-passthrough` | ja | S (1–1,5 T, inkl. Zonen nach `kind`) | – | ja, Woche-1-Fix |
+| 4 | `feat/plan-core-pace` | ja | M (2 T) | 1 | nein |
+| 5 | `feat/plan-core-week-templates` | ja | M–L (3 T) | 2 | nein |
+| 6 | `feat/plan-core-sessions` | ja | L (4–5 T) | 4, 5 | nein |
+| 7 | `feat/plan-core-assemble` | ja | M (2–3 T) | 3, 6 | nein |
+| 9 | `feat/onboarding-plan-inputs` | ja | M–L (3 T) | 1 | ja, neue Fragen, alter Pfad |
+| 10 | `feat/plan-core-server` | ja | M (1,5 T) | 7, 9 | nein (Schalter `off`) |
+| 11 | `feat/plan-core-client` | ja | M (2–2,5 T, inkl. Coach-Feedback) | 7, 9 | ja, vereinfachter Plan besser |
+| 12 | `chore/plan-core-cutover` | ja | S (½ T + 2–3 T Shadow) | 10, 11 | ja, Umschalten |
+| 0 | `chore/plan-api-local` | später | S | – | nein |
+| 8 | `feat/plan-rules-claude` | später | S–M | 1 | nein |
 | 13 | `chore/remove-legacy-plan-generator` | später | M | 12 | nein |
 | 14 | `refactor/validators-shared-hard` | später | S | 5 | Warnungen |
 | 15 | diverse | später | S–L | – | – |
 
-Grober Gesamtaufwand bis Cutover: **ca. 22–28 Arbeitstage**. Der längste Pfad ist 1 → 2 → 5 → 6 → 7 → 10 → 12.
+**Aufwand bis Cutover (v2):**
+- **Summe der Arbeit:** ca. 21–25 Arbeitstage + 2–3 Tage Shadow (v1: 22–28 inkl. einer Woche Shadow). Die Einsparung durch Schritt 0/8 und die kürzere Shadow-Phase liegt bei etwa 5–7 Tagen; Zonen-Fix und Coach-Feedback kosten etwa 1 Tag zurück.
+- **Kritischer Pfad:** 1 → 2 → 5 → 6 → 7 → 10 → 12 ≈ 15–19 Arbeitstage + Shadow.
+- **Realistisch nur mit Parallelarbeit:** 3, 4 und 9 laufen in eigenen Claude-Code-Sessions/Worktrees neben 2 und 5. Nacheinander abgearbeitet landet der Cutover bei der Summe, nicht beim kritischen Pfad.
 
 ```
-0 ─────────────────────────────────────────────┐
-3 ───────────────────────────────┐             │
-1 ─┬─ 2 ─ 5 ─┐                   │             │
+3 ───────────────────────────────┐
+1 ─┬─ 2 ─ 5 ─┐                   │
    ├─ 4 ─────┴─ 6 ─────────── 7 ─┴─┬─ 10 ─┬─ 12 ─ 13
-   ├─ 8 ───────────────────────────┤      │
    └─ 9 ───────────────────────────┴─ 11 ─┘
 ```
 
 Das Spoho-Review kann nach Schritt 7 anhand von `docs/plan-core-profiles.md` laufen. Änderungen landen nur in `src/planCore/config.ts`. Danach `npm run build:plan-core`, Snapshots bewusst aktualisieren (`-u`) und die Bereichsprüfungen aus §13 anpassen, falls sich Abnahmekriterien ändern.
 
-## Entscheidungen vor dem Start (bitte freigeben)
+## Entscheidungen (Stand v2, 2026-11-04)
 
-1. **Einbindung:** übersetzter, eingecheckter Kern in `api/_lib/planCore/` mit Drift- und Paritätstest (siehe oben).
-2. **Art-Abbildung:** MVP mit `kind` + Abbildung auf die 8 App-Typen; echte neue Typen erst später (`feat/session-kind-types`).
-3. **Verstoß im Server-Pfad (`on`):** Plan verweigern (500, Onboarding zeigt Fehler und bietet den lokalen vereinfachten Plan an) statt still auf den alten Pfad zurückzufallen.
-4. **Chat-Aktion „Marathon-Plan erzeugen“:** im MVP entfernen.
-5. **Property-Tests:** eigener Zufallsgenerator mit Seed (`src/planCore/random.ts`) statt neuer Abhängigkeit (`fast-check`).
-6. **Standard-Pace im Einsteiger-Modus** für die Minuten-Limits (Schritt 4): Wert festlegen, Herkunft `E`, Review-Punkt.
-7. **Shadow-Dauer:** mindestens eine Woche bzw. 30 Pläne vor `on`.
-8. **Bestandsnutzer:** neue Fragen nur beim nächsten Erstellen eines Plans (Spec §2), keine Migration bestehender Pläne (Spec §15.3).
+1. **Einbindung:** offen bis Schritt 1 – Variante A (Vercel baut `api/*.ts` direkt) bei bestandenem Test, sonst Variante B (übersetzt, eingecheckt, Drift-/Paritätstest).
+2. **Art-Abbildung:** freigegeben – MVP mit `kind` + Abbildung auf die 8 App-Typen (Tabelle oben); Zonen nach `kind` (Schritt 3) und Coach-Feedback-Schwelle (Schritt 11) im MVP; echte neue Typen später.
+3. **Verstoß im Server-Pfad (`on`):** freigegeben – Plan verweigern (500 mit Code, Log ohne Nutzerinhalt), Onboarding zeigt verständliche Meldung und bietet den lokalen vereinfachten Plan an. Kein stiller Rückfall auf den alten Pfad.
+4. **Chat-Aktion „Marathon-Plan erzeugen“:** freigegeben – im MVP entfernen.
+5. **Property-Tests:** freigegeben – eigener Zufallsgenerator mit Seed (`src/planCore/random.ts`).
+6. **Standard-Pace im Einsteiger-Modus:** freigegeben – 7:00/km als E-Pace, Herkunft `E`, Spoho-Review-Punkt.
+7. **Shadow-Dauer:** 2–3 Tage, Schalter bleibt als Rückweg.
+8. **Bestandsnutzer:** freigegeben – neue Fragen beim nächsten Erstellen eines Plans, keine Migration.
+9. **Claude in der Planerzeugung:** im MVP keiner. Freitext nur gespeichert/Coach (Schritt 8 später).
+10. **Lokaler API-Server (Schritt 0):** später; Server-Pfad wird auf Vercel-Preview im eingeloggten Chrome getestet.
