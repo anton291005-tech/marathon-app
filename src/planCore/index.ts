@@ -87,3 +87,5 @@ export {
   warmupCooldownFor,
 } from "./sessions";
 export type { CoreSession, EasyKind, QualityBuild, QualityType, Segment, SegmentPace, SessionNoteCode, SessionPaces } from "./sessions";
+export { distributeFillers, minWeekKm } from "./distribute";
+export type { Filler, FillerResult } from "./distribute";

@@ -20,12 +20,20 @@ export type VolumeInputs = Pick<
 export type VolumeOptions = {
   /** Lage des Peaks im Korridor, 0 = Untergrenze, 1 = Obergrenze. Standard: `CONFIG.volume.peakPosition`. */
   peakPosition?: number;
+  /**
+   * Mindest-Wochen-km, damit jeder Lauftag seine Mindestdauer bekommt (`minWeekKm` in distribute.ts, Folgepunkt aus
+   * Schritt 2). Woche 1, Entlastungswochen und der Peak-Korridor werden mindestens darauf angehoben; Taper- und
+   * Rennwochen nicht (dort kürzt oder hebt die Verteilung mit Hinweis). Ohne Angabe wie bisher.
+   */
+  minWeekKm?: number;
 };
 
 export type PlanVolumeNote =
   | { code: "peak-not-reached"; reason: "growth"; targetPeakKm: number; reachedPeakKm: number }
   | { code: "below-recommended"; weeks: number; recommendedMinWeeks: number }
-  | { code: "plan-trimmed"; freeWeeks: number };
+  | { code: "plan-trimmed"; freeWeeks: number }
+  /** Woche 1 oder der Peak-Korridor lagen unter `minWeekKm` und wurden angehoben. */
+  | { code: "min-week-km-raised"; minWeekKm: number };
 
 export type PlanVolumeWeek = PhaseWeek & {
   /** Geplante km der Woche; bei angebrochener Woche anteilig, in der Rennwoche inkl. Renndistanz. */
@@ -96,6 +104,7 @@ function simulate(
   weekOneKm: number,
   peakTarget: number,
   capKm: number,
+  minWeekKm: number,
 ): Curve {
   const { growth, recovery } = CONFIG.volume;
   const full: number[] = [];
@@ -113,6 +122,7 @@ function simulate(
         value = Math.max(
           Math.round(previous * (1 - recovery.reduction.value)),
           Math.ceil(previous / growth.twoWeekFactor.value - EPS),
+          minWeekKm,
         );
       } else {
         const x = peakWeek > 1 ? (week - 1) / (peakWeek - 1) : 1;
@@ -151,21 +161,27 @@ export function planVolume(inputs: VolumeInputs, options: VolumeOptions = {}): P
   const position = options.peakPosition === undefined ? CONFIG.volume.peakPosition.value : options.peakPosition;
   if (!(position >= 0 && position <= 1)) throw planCoreError("invalid-input", "peakPosition");
 
+  const minWeekKm = options.minWeekKm === undefined ? 0 : Math.ceil(options.minWeekKm - EPS);
+  if (!(minWeekKm >= 0 && minWeekKm <= CONFIG.volume.startKmMax.value)) throw planCoreError("invalid-input", "minWeekKm");
+
   const { distance } = inputs;
-  const corridor = peakCorridorFor(inputs);
-  const weekOneKm = Math.max(
+  const plainCorridor = peakCorridorFor(inputs);
+  const corridorMax = Math.max(plainCorridor.max, minWeekKm);
+  const corridor: Range = { min: Math.min(Math.max(plainCorridor.min, minWeekKm), corridorMax), max: corridorMax };
+  const plainWeekOneKm = Math.max(
     CONFIG.volume.weekOneMinKm.value,
-    Math.min(Math.round(inputs.currentWeeklyKm), corridor.max),
+    Math.min(Math.round(inputs.currentWeeklyKm), plainCorridor.max),
   );
+  const weekOneKm = Math.max(plainWeekOneKm, minWeekKm);
   const peakTarget = Math.min(
     corridor.max,
     Math.max(weekOneKm, Math.round(corridor.min + position * (corridor.max - corridor.min))),
   );
 
   const peakWeek = phases.weeks.length - phases.taperWeeks;
-  let curve = simulate(SHAPES[0], peakWeek, weekOneKm, peakTarget, corridor.max);
+  let curve = simulate(SHAPES[0], peakWeek, weekOneKm, peakTarget, corridor.max, minWeekKm);
   for (let index = 1; index < SHAPES.length && curve.full[peakWeek - 1] < peakTarget; index += 1) {
-    curve = simulate(SHAPES[index], peakWeek, weekOneKm, peakTarget, corridor.max);
+    curve = simulate(SHAPES[index], peakWeek, weekOneKm, peakTarget, corridor.max, minWeekKm);
   }
 
   const peakKm = curve.full.reduce((best, value) => Math.max(best, value), 0);
@@ -213,6 +229,7 @@ export function planVolume(inputs: VolumeInputs, options: VolumeOptions = {}): P
     });
   }
   if (phases.freeWeeks > 0) notes.push({ code: "plan-trimmed", freeWeeks: phases.freeWeeks });
+  if (weekOneKm > plainWeekOneKm || corridor.max > plainCorridor.max) notes.push({ code: "min-week-km-raised", minWeekKm });
 
   return {
     weeks,
