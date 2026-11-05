@@ -63,3 +63,5 @@ export {
   peakLongRunRange,
 } from "./longRun";
 export type { LongRunLimit, LongRunLimitArgs, LongRunState, LongRunWeek } from "./longRun";
+export { chooseQuality, isLongRunPlusMWeek } from "./qTypes";
+export type { QualityChoice, QualityContext, QualityNoteCode, QualityPick, QualitySlot } from "./qTypes";
