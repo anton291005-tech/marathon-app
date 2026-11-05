@@ -44,6 +44,7 @@ export function normalizePlanSessionToAi(session: PlanSession): AiPlanSession {
     desc: session?.desc ?? null,
     pace: session?.pace ?? null,
     structured: session?.structured ?? null,
+    ...(session?.kind ? { kind: session.kind } : {}),
   };
   return {
     id: safeSession.id,
@@ -56,6 +57,7 @@ export function normalizePlanSessionToAi(session: PlanSession): AiPlanSession {
     km: getPlannedKmEquiv(safeSession),
     desc: safeSession.desc,
     pace: safeSession.pace,
+    ...(safeSession.kind ? { kind: safeSession.kind } : {}),
   };
 }
 

@@ -3,8 +3,9 @@ import { validateTrainingPlanV2Integrity } from "../ai/validation/validateTraini
 import { rebuildPlanFromWorkouts } from "../core/deriveWeeksFromWorkouts";
 import { getAppNow } from "../core/time/timeSystem";
 import { mapSessionType } from "../lib/ai/mapSessionType";
+import { normalizeCoreKind, normalizePlanCoreMeta } from "./normalizePlanCoreMeta";
 import { resolveLegacyYearAnchor, resolveLegacyYears } from "./legacyYearAnchor";
-import type { Intensity, TrainingPlanMetaV2, TrainingPlanV2, WeekV2, WorkoutSport, WorkoutV2 } from "./types";
+import type { Intensity, PlanVolumeNoteV2, TrainingPlanMetaV2, TrainingPlanV2, WeekV2, WorkoutSport, WorkoutV2 } from "./types";
 import { normalizeTrainingPhase, trainingPhaseLabelDe } from "./trainingPhase";
 
 const VALID_SPORTS = new Set<WorkoutSport>(["run", "bike", "rest", "strength", "swim"]);
@@ -61,6 +62,21 @@ function mondayIsoFromDateIso(dateIso: string): string | null {
   date.setHours(12, 0, 0, 0);
   const offset = (date.getDay() + 6) % 7;
   date.setDate(date.getDate() - offset);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Schlüssel der Wochen-Meta. Der Server legt eine angebrochene Woche 1 unter dem Startdatum ab (z. B. Mi),
+ * `rebuildPlanFromWorkouts` gruppiert aber nach Montag — ohne diese Umrechnung fände Woche 1 ihre Meta nicht.
+ */
+export function weekMetaKey(startIso: string): string {
+  const ymd = /^\d{4}-\d{2}-\d{2}/.exec(startIso)?.[0];
+  if (!ymd) return mondayIsoFromDateIso(startIso) ?? startIso;
+  // Rein kalendarisch in UTC: `mondayIsoFromDateIso` parst ein reines YMD als UTC-Mitternacht und rechnet dann lokal
+  // weiter — westlich von UTC fiele der Schlüssel dadurch auf die Vorwoche.
+  const date = new Date(`${ymd}T12:00:00.000Z`);
+  if (!Number.isFinite(date.getTime())) return startIso;
+  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
   return date.toISOString().slice(0, 10);
 }
 
@@ -182,6 +198,8 @@ function normalizeWorkout(
   const titleRaw = typeof raw.title === "string" ? raw.title.trim() : "";
   const title = titleRaw || defaultTitleForSessionType(sessionType);
 
+  const kind = normalizeCoreKind(raw.kind);
+
   return {
     id,
     dateIso,
@@ -193,6 +211,7 @@ function normalizeWorkout(
     desc: normalizeOptionalString(raw.desc),
     pace: normalizeOptionalString(raw.pace),
     structured: raw.structured ?? null,
+    ...(kind ? { kind } : {}),
   };
 }
 
@@ -441,9 +460,11 @@ function collectWorkoutsAndMeta(
     globalIndex += extracted.workouts.length;
     workouts.push(...extracted.workouts);
 
-    const weekStart =
-      extracted.startIso ??
-      (extracted.workouts[0] ? mondayIsoFromDateIso(extracted.workouts[0].dateIso) : null);
+    const weekStart = extracted.startIso
+      ? weekMetaKey(extracted.startIso)
+      : extracted.workouts[0]
+        ? mondayIsoFromDateIso(extracted.workouts[0].dateIso)
+        : null;
     if (weekStart) {
       metaByWeekStart.set(weekStart, extracted.meta);
     }
@@ -493,7 +514,7 @@ function collectWorkoutsAndMeta(
               const normalizedFirst = normalizeWorkout(first, globalIndex, legacyDates);
               return normalizedFirst ? mondayIsoFromDateIso(normalizedFirst.dateIso) : null;
             })();
-      if (startIso) metaByWeekStart.set(startIso, meta);
+      if (startIso) metaByWeekStart.set(weekMetaKey(startIso), meta);
     });
   }
 
@@ -523,18 +544,23 @@ const isFiniteKm = (value: unknown): value is number => typeof value === "number
 
 /** Plan-Metadatum der Planerzeugung: nur bekannte, gültige Felder; sonst kein `meta`. */
 export function normalizePlanMeta(raw: unknown): TrainingPlanMetaV2 | undefined {
-  if (!isRecord(raw) || !isRecord(raw.meta) || !isRecord(raw.meta.volumeNote)) return undefined;
-  const note = raw.meta.volumeNote;
-  if (note.code !== "peak-not-reached") return undefined;
-  if (note.reason !== "growth" && note.reason !== "run-days") return undefined;
-  if (!isFiniteKm(note.targetPeakKm) || !isFiniteKm(note.reachedPeakKm)) return undefined;
+  if (!isRecord(raw) || !isRecord(raw.meta)) return undefined;
+  const volumeNote = normalizeVolumeNote(raw.meta.volumeNote);
+  const core = normalizePlanCoreMeta(raw.meta.core);
+  if (!volumeNote && !core) return undefined;
+  return { ...(volumeNote ? { volumeNote } : {}), ...(core ? { core } : {}) };
+}
+
+function normalizeVolumeNote(raw: unknown): PlanVolumeNoteV2 | undefined {
+  if (!isRecord(raw)) return undefined;
+  if (raw.code !== "peak-not-reached") return undefined;
+  if (raw.reason !== "growth" && raw.reason !== "run-days") return undefined;
+  if (!isFiniteKm(raw.targetPeakKm) || !isFiniteKm(raw.reachedPeakKm)) return undefined;
   return {
-    volumeNote: {
-      code: "peak-not-reached",
-      reason: note.reason,
-      targetPeakKm: note.targetPeakKm,
-      reachedPeakKm: note.reachedPeakKm,
-    },
+    code: "peak-not-reached",
+    reason: raw.reason,
+    targetPeakKm: raw.targetPeakKm,
+    reachedPeakKm: raw.reachedPeakKm,
   };
 }
 
