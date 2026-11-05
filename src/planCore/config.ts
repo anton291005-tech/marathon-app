@@ -68,7 +68,7 @@ function deepFreeze<T>(node: T): T {
 }
 
 /** Erhöhen bei jeder Änderung eines Werts; steht später in `plan.meta.core.configVersion`. */
-export const CONFIG_VERSION = "0.6.1";
+export const CONFIG_VERSION = "0.6.2";
 
 export const CONFIG = deepFreeze({
   /** §0 Scope MVP */
@@ -420,6 +420,8 @@ export const CONFIG = deepFreeze({
      * bevorzugt an Renntag−2, dann −1 (`lastDaysCount`), nicht am Wochenanfang.
      */
     maxRestDaysBeforeRace: E(2, "§8"),
+    /** Höchstens so viele Ruhetage am Stück in der Rennwoche (weiche Regel, soweit `availableDays` und das Q es zulassen); gilt auch am Wochenanfang. */
+    maxRestDaysInRow: E(2, "§8"),
     /** Bis zu dieser Zahl Lauftage hat die Rennwoche so viele Läufe inkl. Rennen (sonst Lauftage − 1, §5.4); schließt die Lücke bei 3 Tagen. */
     fullRunDaysUpToRunDays: E(3, "§8"),
   },

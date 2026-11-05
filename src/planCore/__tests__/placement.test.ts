@@ -322,9 +322,27 @@ describe("Rennwoche und Sperrfenster", () => {
     const line = (distance: Distance, runDays: RunDays) => compactWeek(raceWeek(distance, 6, { runDays }));
     expect(line("m", 4)).toBe("Mo – · Di – · Mi Q1 · Do – · Fr E · Sa – · So RACE");
     expect(line("m", 3)).toBe("Mo – · Di – · Mi Q1 · Do – · Fr E · Sa – · So RACE");
-    expect(line("10k", 4)).toBe("Mo – · Di – · Mi – · Do Q1 · Fr E · Sa – · So RACE");
-    expect(line("hm", 5)).toBe("Mo – · Di – · Mi – · Do Q1 · Fr E · Sa E · So RACE");
+    // Q1 liegt bei 10k/HM auf Mi (Renntag−4) statt Do, damit am Wochenanfang nicht drei Ruhetage am Stück stehen und E trotzdem an Renntag−2/−1 passt.
+    expect(line("10k", 4)).toBe("Mo – · Di – · Mi Q1 · Do – · Fr E · Sa – · So RACE");
+    expect(line("hm", 5)).toBe("Mo – · Di – · Mi Q1 · Do – · Fr E · Sa E · So RACE");
     expect(line("m", 6)).toBe("Mo E · Di – · Mi Q1 · Do – · Fr E · Sa E · So RACE");
+  });
+
+  it("höchstens 2 Ruhetage am Stück auch am Wochenanfang: Mo/Do/Fr frei, 3 Tage → E rückt auf Mo (sonst Mo–Mi ohne Lauf)", () => {
+    const input = weekInput({
+      mode: "race",
+      phase: "taper",
+      distance: "10k",
+      runDays: 3,
+      availableDays: ["Mo", "Do", "Fr"],
+      longRunDay: "Fr",
+      raceDate: addDays(WEEK_START, 6),
+      lastDayYmd: addDays(WEEK_START, 6),
+      carry: NO_CARRY,
+    });
+    const layout = placeWeek(input);
+    expect(compactWeek(layout)).toBe("Mo E · Di – · Mi – · Do Q1 · Fr – · Sa – · So RACE");
+    expect(checkWeekLayout(layout, contextOf(input))).toEqual([]);
   });
 
   it("bei höchstens 3 Lauftagen hat die Rennwoche alle Läufe (Q1, E, Rennen), ab 4 Lauftagen Lauftage − 1", () => {

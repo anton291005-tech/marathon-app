@@ -76,29 +76,69 @@ export function checkWeekLayout(layout: WeekLayout, ctx: WeekContext): string[] 
     const expected = Math.min(target, 1 + usable);
     if (runDayCount !== expected) out.push(`race-week-run-days:${runDayCount}!=${expected}`);
 
-    // Höchstens 2 Ruhetage direkt vor dem Rennen, wenn ein verfügbarer Tag an Renntag−1/−2 frei wäre; E/REC lieber dort als früher.
+    // Rennwoche, Rangfolge (weiche Regeln, soweit availableDays und das Q es zulassen): 1) höchstens `maxRest` Ruhetage direkt vor
+    // dem Rennen, 2) höchstens `maxInRow` Ruhetage am Stück, 3) verfügbare Tage an Renntag−1/−2 belegen. Geprüft gegen alle
+    // Verteilungen mit gleicher Zahl Läufe, bei denen das Q (falls vorhanden) an einem Tag mit Rennabstand liegt.
     const raceIndex = days.length - 1;
     const lastDays = CONFIG.raceWeek.lastDaysCount.value;
-    const freeBack: number[] = [];
-    for (let back = 1; back <= lastDays; back += 1) {
-      const day = days[raceIndex - back];
-      if (day !== undefined && day.slot === "REST" && ctx.availableDays.indexOf(day.weekday) >= 0) freeBack.push(back);
-    }
-    let restRun = 0;
-    for (let index = raceIndex - 1; index >= 0 && days[index].slot === "REST"; index -= 1) restRun += 1;
-    // Die Lücke ließe sich schließen, wenn einer der Tage Renntag−1 … −(max+1) verfügbar und frei ist.
     const maxRest = CONFIG.raceWeek.maxRestDaysBeforeRace.value;
-    let closable = false;
-    for (let back = 1; back <= maxRest + 1; back += 1) {
-      const day = days[raceIndex - back];
-      if (day !== undefined && day.slot === "REST" && ctx.availableDays.indexOf(day.weekday) >= 0) closable = true;
-    }
-    if (restRun > maxRest && closable) out.push(`race-week-rest-gap:${restRun}`);
-    days.forEach((day, index) => {
-      if ((day.slot === "E" || day.slot === "REC") && raceIndex - index > lastDays && freeBack.length > 0) {
-        out.push(`race-week-filler-too-early:${day.ymd}`);
-      }
+    const maxInRow = CONFIG.raceWeek.maxRestDaysInRow.value;
+    const before = days.slice(0, raceIndex);
+    const usableIdx: number[] = [];
+    before.forEach((day, index) => {
+      if (ctx.availableDays.indexOf(day.weekday) >= 0) usableIdx.push(index);
     });
+    const restStats = (isRun: boolean[]): { before: number; longest: number } => {
+      let tail = 0;
+      for (let index = isRun.length - 1; index >= 0 && !isRun[index]; index -= 1) tail += 1;
+      let streak = 0;
+      let longest = 0;
+      isRun.forEach((runs) => {
+        streak = runs ? 0 : streak + 1;
+        longest = Math.max(longest, streak);
+      });
+      return { before: tail, longest };
+    };
+    const unusedLast = (isRun: boolean[]): number => {
+      let unused = 0;
+      for (let back = 1; back <= lastDays; back += 1) {
+        const index = raceIndex - back;
+        if (index >= 0 && usableIdx.indexOf(index) >= 0 && !isRun[index]) unused += 1;
+      }
+      return unused;
+    };
+    const ownRuns = before.map((day) => day.slot !== "REST");
+    const k = ownRuns.filter((runs) => runs).length;
+    const needQ = layout.qCount > 0;
+    const gapDays = CONFIG.raceWeek.lastQDaysBefore.value[ctx.distance];
+    const qAllowed = (index: number): boolean =>
+      diffDays(ctx.raceDate, days[index].ymd) >= gapDays &&
+      !(index === 0 && days[0].weekday === "Mo" && (ctx.carry.prevHard || ctx.carry.prevMlrAfterHard));
+    const distributions: boolean[][] = [];
+    const pick = (start: number, chosen: number[]): void => {
+      if (chosen.length === k) {
+        if (!needQ || chosen.some(qAllowed)) distributions.push(before.map((_, index) => chosen.indexOf(index) >= 0));
+        return;
+      }
+      for (let at = start; at < usableIdx.length; at += 1) {
+        chosen.push(usableIdx[at]);
+        pick(at + 1, chosen);
+        chosen.pop();
+      }
+    };
+    pick(0, []);
+
+    const own = restStats(ownRuns);
+    if (own.before > maxRest && distributions.some((d) => restStats(d).before <= maxRest)) {
+      out.push(`race-week-rest-gap:${own.before}`);
+    }
+    const compliant = distributions.filter((d) => restStats(d).before <= maxRest && restStats(d).longest <= maxInRow);
+    const ownCompliant = own.before <= maxRest && own.longest <= maxInRow;
+    if (!ownCompliant && compliant.length > 0) out.push(`race-week-rest-streak:${own.longest}/${own.before}`);
+    if (ownCompliant) {
+      const best = compliant.reduce((min, d) => Math.min(min, unusedLast(d)), unusedLast(ownRuns));
+      if (best < unusedLast(ownRuns)) out.push("race-week-filler-too-early");
+    }
   } else if (full) {
     if (runDayCount !== ctx.runDays) out.push(`run-days:${runDayCount}!=${ctx.runDays}`);
   } else if (runDayCount > ctx.runDays) {

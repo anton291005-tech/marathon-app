@@ -10,7 +10,7 @@ Object {
     "W5 build/main: Mo – · Di E · Mi – · Do Q1 · Fr – · Sa – · So LR",
     "W6 peak/main: Mo – · Di E · Mi – · Do Q1 · Fr – · Sa – · So LR",
     "W7 peak/main: Mo – · Di E · Mi – · Do Q1 · Fr – · Sa – · So LR",
-    "W8 taper/race: Mo – · Di – · Mi – · Do Q1 · Fr E · Sa – · So RACE",
+    "W8 taper/race: Mo – · Di – · Mi Q1 · Do – · Fr E · Sa – · So RACE",
   ],
   "P2": Array [
     "W1 base/base: Mo – · Di E · Mi – · Do Q1L · Fr E · Sa – · So LR",
@@ -22,7 +22,7 @@ Object {
     "W7 peak/main: Mo – · Di Q2 · Mi – · Do Q1 · Fr E · Sa – · So LR",
     "W8 peak/main: Mo – · Di Q2 · Mi – · Do Q1 · Fr E · Sa – · So LR",
     "W9 peak/main: Mo – · Di Q2 · Mi – · Do Q1 · Fr E · Sa – · So LR",
-    "W10 taper/race: Mo – · Di – · Mi – · Do Q1 · Fr E · Sa – · So RACE",
+    "W10 taper/race: Mo – · Di – · Mi Q1 · Do – · Fr E · Sa – · So RACE",
   ],
   "P3": Array [
     "W1 base/base: Mo E · Di E · Mi – · Do Q1 · Fr E · Sa – · So LR",
@@ -36,7 +36,7 @@ Object {
     "W9 peak/main: Mo E · Di Q2 · Mi – · Do Q1 · Fr E · Sa – · So LR",
     "W10 peak/main: Mo E · Di Q2 · Mi – · Do Q1 · Fr E · Sa – · So LR",
     "W11 taper/taper: Mo E · Di E · Mi – · Do Q1 · Fr E · Sa – · So LR",
-    "W12 taper/race: Mo – · Di – · Mi – · Do Q1 · Fr E · Sa E · So RACE",
+    "W12 taper/race: Mo – · Di – · Mi Q1 · Do – · Fr E · Sa E · So RACE",
   ],
   "P4": Array [
     "W1 base/base: Mo – · Di E · Mi – · Do Q1L · Fr E · Sa – · So LR",

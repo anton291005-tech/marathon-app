@@ -15,8 +15,9 @@
  *
  * Rangfolge bei mehreren zulässigen Lösungen (kleiner ist besser, danach der Reihe nach):
  * 1. mehr Q-Slots, dann MLR behalten (Reihenfolge der Varianten);
- * 1b. nur Rennwoche: höchstens `maxRestDaysBeforeRace` Ruhetage direkt vor dem Rennen; verfügbare Tage an Renntag−1/−2 belegen,
- *     Renntag−2 vor −1 (statt gleichmäßiger Abstände);
+ * 1b. nur Rennwoche, in dieser Reihenfolge: höchstens `maxRestDaysBeforeRace` Ruhetage direkt vor dem Rennen; höchstens
+ *     `maxRestDaysInRow` Ruhetage am Stück (auch am Wochenanfang); verfügbare Tage an Renntag−1/−2 belegen, Renntag−2 vor −1
+ *     (statt gleichmäßiger Abstände). Alle drei sind weich: Sie gelten, soweit `availableDays` und das Q es zulassen;
  * 2. MLR möglichst nicht direkt neben einem harten Tag;
  * 3. MLR möglichst weit vom Long Run;
  * 4. Q1 nahe Long Run − 3, Q2 nahe Long Run + 2 (Rennwoche: Q1 am spätesten zulässigen Tag);
@@ -260,12 +261,20 @@ function search(spec: SolveSpec): PlacedSlot[] | null {
             (q1 >= 0 ? dist(q1, spec.q1Target) : 0) + (q2 >= 0 ? dist(q2, spec.q2Target) : 0);
           // Rennwoche: höchstens `maxRestDaysBeforeRace` Ruhetage direkt vor dem Rennen, E/REC bevorzugt an Renntag−2, dann −1.
           let raceRestPenalty = 0;
+          let raceStreakPenalty = 0;
           let raceUnused = 0;
           let raceUnusedFar = 0;
           if (spec.raceIdx >= 0) {
             let restRun = 0;
             for (let i = spec.raceIdx - 1; i >= 0 && !run[i]; i -= 1) restRun += 1;
             raceRestPenalty = Math.max(0, restRun - CONFIG.raceWeek.maxRestDaysBeforeRace.value);
+            let streak = 0;
+            let longest = 0;
+            for (let i = 0; i < spec.raceIdx; i += 1) {
+              streak = run[i] ? 0 : streak + 1;
+              longest = Math.max(longest, streak);
+            }
+            raceStreakPenalty = Math.max(0, longest - CONFIG.raceWeek.maxRestDaysInRow.value);
             const lastDays = CONFIG.raceWeek.lastDaysCount.value;
             for (let back = 1; back <= lastDays; back += 1) {
               const i = spec.raceIdx - back;
@@ -277,6 +286,7 @@ function search(spec: SolveSpec): PlacedSlot[] | null {
           }
           const score = [
             raceRestPenalty,
+            raceStreakPenalty,
             raceUnused,
             raceUnusedFar,
             mlr >= 0 ? (before ? 1 : 0) + (after ? 1 : 0) : 0,

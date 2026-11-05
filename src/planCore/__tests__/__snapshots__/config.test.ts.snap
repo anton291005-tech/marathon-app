@@ -766,6 +766,11 @@ Object {
         "spec": "§8",
         "value": 2,
       },
+      "maxRestDaysInRow": Object {
+        "source": "E",
+        "spec": "§8",
+        "value": 2,
+      },
       "noLongRunDaysBefore": Object {
         "source": "E",
         "spec": "§8",
@@ -1092,6 +1097,6 @@ Object {
       },
     },
   },
-  "version": "0.6.1",
+  "version": "0.6.2",
 }
 `;
