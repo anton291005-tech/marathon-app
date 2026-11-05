@@ -1,6 +1,7 @@
 /**
  * Öffentliche Schnittstelle des deterministischen Plan-Kerns.
- * Stand: Typen, Config, Datums-Helfer, Phasen (`planPhases`), Wochenumfang (`planVolume`) und Form/Pace (`buildPaceProfile`). `buildPlan`,
+ * Stand: Typen, Config, Datums-Helfer, Phasen (`planPhases`), Wochenumfang (`planVolume`), Form/Pace (`buildPaceProfile`)
+ * und Wochenformen (`layoutWeeks`, `isHardSession`). `buildPlan`,
  * `checkCorePlan` usw. kommen mit den Folgeschritten (docs/plan-core-plan.md). `random.ts` ist absichtlich nicht exportiert (nur Tests).
  */
 
@@ -42,3 +43,9 @@ export type {
   RecentRaceProblem,
   TrainingPaces,
 } from "./pace";
+export { findHardSpacingViolations, isHardSession, isHardSlot } from "./hard";
+export type { DayHardness, HardSessionInput } from "./hard";
+export { slotsFor, weekModeOf } from "./templates";
+export type { LayoutNote, LayoutNoteCode, PlacedSlot, SlotsArgs, WeekMode } from "./templates";
+export { carryOf, layoutWeeks, NO_CARRY, placeWeek, resolveLongRunDay } from "./placement";
+export type { LayoutCarry, LayoutDay, LayoutInputs, PlaceWeekInput, WeekLayout } from "./placement";

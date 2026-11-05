@@ -556,6 +556,11 @@ Object {
         "spec": "§6",
         "value": 1,
       },
+      "mlrNoSandwich": Object {
+        "source": "E",
+        "spec": "§6",
+        "value": true,
+      },
       "q1DaysBeforeLongRun": Object {
         "source": "E",
         "spec": "§6",
@@ -750,6 +755,11 @@ Object {
           "hm": 3,
           "m": 4,
         },
+      },
+      "noLongRunDaysBefore": Object {
+        "source": "E",
+        "spec": "§8",
+        "value": 6,
       },
     },
     "scope": Object {
@@ -1072,6 +1082,6 @@ Object {
       },
     },
   },
-  "version": "0.5.0",
+  "version": "0.6.0",
 }
 `;

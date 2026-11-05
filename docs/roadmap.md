@@ -235,6 +235,8 @@ Gemeint sind hier die Schritte des Umbauplans, nicht die nummerierten Schritte v
 
 - **Plan-Kern Schritt 6 (`feat/plan-core-sessions`): T- und M-Pace für Einsteiger zeitbasiert.** Im Einsteiger-Modus (keine Rennangabe oder unplausible Angabe) liefert `buildPaceProfile` nur E (420 s/km) und REC; T und M gibt es dort nur als RPE/Gefühl, I und R gar nicht. T- und M-Einheiten der Einsteiger werden deshalb nach **Minuten statt km** dimensioniert (Limits aus Spec §7: T-Dauerlauf-Block höchstens 20 min, M höchstens 110 min). Die km der Einheit folgen daraus über die E-Pace und stehen nicht als Zielpace im `pace`-Feld. Entschieden am 2026-11-05 (Anton); Ursprung: Plan-Kern Schritt 4, Abweichung 5 im „Umgesetzt“-Block von `docs/plan-core-plan.md`. Beim Bau von Schritt 6 klären: wie die Minuten-Dauer in `text.ts` dargestellt wird und wie `kind` T/M ohne Pace auf `tempo` abgebildet bleibt (Abbildungstabelle im Umbauplan).
 
+- **Plan-Kern Schritt 5 (`feat/plan-core-weeks`): Wochenschablonen umgesetzt, nicht gemergt.** Offene Review-Punkte stehen in `docs/plan-spec.md` §14 (16: Q2 in der Entlastungswoche, 17: Long-Run-Sperrfenster und Rennwoche, 18: Hart-Annahme, MLR-Sandwich, Rangfolge). Schritt 6 übernimmt aus dem Layout: Q-Art je Slot (§7.2), Strides, die `LayoutNote`-Codes und die Größen. Details im „Umgesetzt"-Block von `docs/plan-core-plan.md`.
+
 ## Out of Scope bis TestFlight
 UI/UX-Redesign, Triathlon-Erweiterung, Android, Apple-Watch-Companion — nicht anfassen, auch nicht "nebenbei".
 
