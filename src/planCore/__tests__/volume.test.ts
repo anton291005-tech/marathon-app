@@ -35,24 +35,22 @@ function inputsFor(
 
 /**
  * Prüft §5 / I3–I5 / Teil von I13 und die Struktur der Wochenliste mit `checkVolume` (invariants.ts); leer = alles
- * gehalten. Ohne Tragfähigkeit zusätzlich: Entlastung genau nach Formel (−20 % abgerundet, bei winzigen Umfängen die
- * I3-Untergrenze auf 0,1 km).
+ * gehalten. Zusätzlich die genaue Entlastungstiefe des geplanten Werts (`curveKm`, vor Tragfähigkeit und Senken):
+ * −20 % der gelieferten Vorwoche abgerundet, bei winzigen Umfängen die I3-Untergrenze auf 0,1 km, nie über der Vorwoche.
  */
 function violations(inputs: VolumeInputs, volume: PlanVolume): string[] {
   const out = codesOf(unreasoned(checkVolume(volume, inputs)));
   const { growth, recovery } = CONFIG.volume;
   const pre = volume.weeks.filter((week) => week.wn <= volume.peakWeek);
-  if (pre.every((week) => week.curveKm === week.fullWeekKm)) {
-    pre.forEach((week, i) => {
-      if (!week.isRecoveryWeek || i === 0) return;
-      const previous = pre[i - 1].fullWeekKm;
-      const depth = Math.max(
-        Math.floor(previous * (1 - recovery.reduction.value) + EPS),
-        Math.ceil((previous / growth.twoWeekFactor.value) * 10 - EPS) / 10,
-      );
-      if (week.fullWeekKm !== depth) out.push(`Entlastung w${week.wn}`);
-    });
-  }
+  pre.forEach((week, i) => {
+    if (!week.isRecoveryWeek || i === 0) return;
+    const previous = pre[i - 1].fullWeekKm;
+    const depth = Math.min(
+      previous,
+      Math.max(Math.floor(previous * (1 - recovery.reduction.value) + EPS), Math.ceil((previous / growth.twoWeekFactor.value) * 10 - EPS) / 10),
+    );
+    if (week.curveKm !== depth) out.push(`Entlastung w${week.wn}`);
+  });
   return out;
 }
 

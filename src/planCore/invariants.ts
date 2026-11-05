@@ -9,8 +9,12 @@
  * Schwere (freigegeben 2026-11-05): `error` = Sicherheitsgrenze, verletzte Vorgabe des Nutzers oder für die App kaputter
  * Plan (Server verweigert ihn); `warning` = Zielwert, Qualitätsregel, Mittelwert oder begründete Abweichung. Jede
  * error-Grenze auf Zahlen hat eine Toleranz (0,1 km, 0,5 Prozentpunkte, 1 min): Überschreitung innerhalb der Toleranz
- * ist `warning`, darüber `error`. Begründete Abweichungen (ein Hinweis des Kerns erklärt sie, die Bedingung des
- * Hinweises stimmt nachgerechnet) erscheinen als `warning` mit eigener Regel (`reasoned`).
+ * ist `warning`, darüber `error`; ohne Toleranz bleiben Struktur-, Ja/Nein- und Ganzzahl-Regeln (auch Reihenfolge der
+ * Paces, Konsistenz der Zielpace, Gültigkeit eines Hinweises). Begründete Abweichungen (ein Hinweis des Kerns erklärt sie)
+ * erscheinen als `warning` mit eigener Regel (`reasoned`). Wo der Hinweis eine error-Regel aufhebt, wird seine Bedingung
+ * nachgerechnet (E/REC unter der Mindestdauer, Long Run auf 15 min, Mindest-Wochen-km aus Lauftagen × 25 min E, E über
+ * 75 % des Long Runs); Hinweise, die eine Einheit nur weicher machen (Q → E + Strides, MLR → E) oder nur die Abweichung
+ * vom Volumenplan erklären (Wochen-km), genügen als Begründung.
  *
  * I19 (Claude-Text-Schritt, §11) ist im MVP nicht anwendbar, I20 (Determinismus) prüft der Property-Test. Am fertigen
  * `CorePlan` (Schritt 7b) prüft `checkAssembledPlan` I1 (Wochensummen, Workouts = Wochen), I14, I21, I22 und eindeutige
@@ -830,25 +834,35 @@ function sessionsInto(c: Collector, plan: SessionPlan, inputs: CoreInputs): void
       // Anteil am geplanten Verlauf ohne Tragfähigkeit (erster Durchlauf, Vollwochen-Äquivalent; Review-Punkt 29). Einzige
       // Ausnahme (Review-Punkt 34): liegen die Grenzen unter 15 min, ist der Long Run genau 15 min (begründet).
       const shareBase = plan.uncappedVolume.weeks[index].fullWeekKm;
-      const raised = lr.notes.indexOf("long-run-raised-to-minimum") >= 0;
-      if (raised && Math.abs(lr.km - hardMinKm) > EPS) c.flag("I9/raised-not-to-minimum", where, { actual: lr.km, limit: hardMinKm, unit: "km" });
-      if (raised) c.flag("I9/long-run-raised-to-minimum", where);
-      c.under("I9/below-15-min", minutesAt(lr.km, paces.E), library.easyHardMinMinutes.value, where, "min");
-      if (!raised && shareBase > 0) c.over("I9/share", lr.km / shareBase, longRun.maxShareOfWeek.value[runDays], where, "share");
-      c.over("I9/minutes", minutesAt(lr.km, paces.E), longRun.minutesHard.value, where, "min");
-      if (raised) {
-        // Grenzen nicht nachgerechnet: die Untergrenze gilt nur, wenn der Kern sie braucht (Test in planSessions.test).
-      } else if (week.mode === "taper") {
-        c.over("I9/taper", lr.km, CONFIG.taper.longRunShareOfPeak.value * longest, where, "km");
+      const shareLimitKm = shareBase > 0 ? longRun.maxShareOfWeek.value[runDays] * shareBase : Infinity;
+      // Verlaufsgrenze dieser Woche (Prüfwert) und der Wert, den der Kern dafür nimmt (Entlastung: −25 % statt −20 %).
+      let progression: { key: RuleKey; limit: number; used: number } | null = null;
+      if (week.mode === "taper") {
+        const limit = CONFIG.taper.longRunShareOfPeak.value * longest;
+        progression = { key: "I9/taper", limit, used: limit > 0 ? limit : Infinity };
       } else if (week.isRecoveryWeek) {
-        if (lastLr !== null) c.over("I9/recovery", lr.km, (1 - longRun.recoveryReduction.value.min) * lastLr, where, "km");
+        if (lastLr !== null) progression = { key: "I9/recovery", limit: (1 - longRun.recoveryReduction.value.min) * lastLr, used: (1 - longRun.recoveryReductionUsed.value) * lastLr };
       } else if (lastLr === null) {
-        c.over("I9/start", lr.km, r1(longestRecent + longRun.startAboveLongestRecentKm.value), where, "km");
+        const limit = r1(longestRecent + longRun.startAboveLongestRecentKm.value);
+        progression = { key: "I9/start", limit, used: limit };
       } else if (afterRecovery && level !== null) {
-        c.over("I9/after-recovery", lr.km, level, where, "km");
+        progression = { key: "I9/after-recovery", limit: level, used: level };
       } else {
         const step = Math.min(longRun.absoluteMaxStepKm.value, Math.max(longRun.maxStepKm.value, longRun.maxStepShare.value * lastLr));
-        c.over("I9/step", lr.km, lastLr + step, where, "km");
+        progression = { key: "I9/step", limit: lastLr + step, used: lastLr + step };
+      }
+      // Einzige Ausnahme (Review-Punkt 34): Liegen die Grenzen (Anteil, 180 min, Verlauf) unter 15 min, ist der Long Run
+      // genau 15 min lang. Begründet nur, wenn das nachgerechnet stimmt.
+      const raised = lr.notes.indexOf("long-run-raised-to-minimum") >= 0;
+      const strictest = Math.min(shareLimitKm, (longRun.minutesHard.value * 60) / paces.E, progression === null ? Infinity : progression.used);
+      const raisedValid = raised && Math.abs(lr.km - hardMinKm) <= EPS && Math.floor(strictest * 10 + EPS) / 10 < hardMinKm - EPS;
+      if (raised && !raisedValid) c.flag("I9/raised-not-to-minimum", where, { actual: lr.km, limit: hardMinKm, unit: "km" });
+      if (raisedValid) c.flag("I9/long-run-raised-to-minimum", where);
+      c.under("I9/below-15-min", minutesAt(lr.km, paces.E), library.easyHardMinMinutes.value, where, "min");
+      c.over("I9/minutes", minutesAt(lr.km, paces.E), longRun.minutesHard.value, where, "min");
+      if (!raisedValid) {
+        if (shareBase > 0) c.over("I9/share", lr.km / shareBase, longRun.maxShareOfWeek.value[runDays], where, "share");
+        if (progression !== null) c.over(progression.key, lr.km, progression.limit, where, "km");
       }
       if (lr.kind === "LR+M") {
         const block = qualityOf(lr.segments);
@@ -1093,7 +1107,12 @@ export function checkPlan(plan: SessionPlan, inputs: CoreInputs): CheckResult {
       raceDate: inputs.raceDate,
     });
   }
-  volumeInto(c, plan.volume, inputs, { minWeekKm: plan.minWeekKm, taperMean: false });
+  // Mindest-Wochen-km nachgerechnet (Lauftage × E von 25 min, §5.1), nicht aus dem Plan übernommen: sonst könnte ein
+  // falscher Wert den I5-Deckel aushebeln (`I5/min-week-km-raised`).
+  const eMinKm = Math.ceil(((CONFIG.library.e.minutes.value.min * 60) / plan.paces.E) * 10 - EPS) / 10;
+  const minWeekKm = Math.ceil(inputs.runDaysPerWeek * eMinKm - EPS);
+  if (plan.minWeekKm !== minWeekKm) c.flag("VOLUME/structure", {}, { actual: plan.minWeekKm, limit: minWeekKm, unit: "km" });
+  volumeInto(c, plan.volume, inputs, { minWeekKm, taperMean: false });
   shownVolumeInto(c, plan);
   sessionsInto(c, plan, inputs);
   pacesInto(c, plan);

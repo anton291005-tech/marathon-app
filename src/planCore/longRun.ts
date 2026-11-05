@@ -153,7 +153,10 @@ export type LongRunLimit = {
 export function longRunLimitKm(state: LongRunState, args: LongRunLimitArgs): LongRunLimit {
   const limit = longRunLimitWithinCaps(state, args);
   if (limit.km >= args.hardMinKm - EPS) return { ...limit, raisedToMinimum: false };
-  return { km: args.hardMinKm, taperCut: false, raisedToMinimum: true };
+  // Ausnahme (Hinweis) nur, wenn die Grenzen selbst unter der Untergrenze liegen; liegt nur der Wunschwert des Verlaufs
+  // darunter, bleibt der Long Run mit 15 min in seinen Grenzen.
+  const bounds = longRunLimitWithinCaps(state, { ...args, desired: null });
+  return { km: args.hardMinKm, taperCut: false, raisedToMinimum: bounds.km < args.hardMinKm - EPS };
 }
 
 function longRunLimitWithinCaps(state: LongRunState, args: LongRunLimitArgs): { km: number; taperCut: boolean } {

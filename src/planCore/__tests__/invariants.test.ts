@@ -371,7 +371,8 @@ describe("Invarianten-Prüfer (Schritt 7a)", () => {
         // Hinweis entfernen bzw. die begründende Bedingung aufheben
         const broken = clone(plan);
         const wn = hit.wn!;
-        if (r.scope === "min-week") broken.minWeekKm = 0;
+        // Mindest-Wochen-km rechnet der Prüfer aus Lauftagen × 25 min E nach: halb so schnelle E-Pace (doppelte s/km) halbiert sie.
+        if (r.scope === "min-week") broken.paces.E *= 2;
         else if (r.scope === "taper-mean") {
           broken.weeks.forEach((w) => (w.notes = []));
           broken.volume.weeks.forEach((w) => (w.curveKm = w.fullWeekKm));
@@ -476,6 +477,15 @@ describe("Invarianten-Prüfer (Schritt 7a)", () => {
       expect(keys.filter((key) => rules[key].severity === "warning" && rules[key].tolerance !== undefined)).toEqual([]);
       expect(keys.filter((key) => rules[key].reasoned && rules[key].severity !== "warning")).toEqual([]);
     });
+  });
+
+  it("I5-Deckel: ein falsches minWeekKm im Plan hebelt ihn nicht aus (nachgerechnet, Abweichung = VOLUME/structure)", () => {
+    const f = base("P3");
+    f.plan.volume.weeks[9].fullWeekKm = 90;
+    f.plan.minWeekKm = 200;
+    const found = checkPlan(f.plan, f.inputs).violations;
+    expect(found.filter((v) => keyOf(v) === "I5/cap" && v.wn === 10)).toMatchObject([{ severity: "error" }]);
+    expect(found.filter((v) => keyOf(v) === "VOLUME/structure")).toMatchObject([{ severity: "error", actual: 200 }]);
   });
 
   it("Server-Log (toLogEntries): nur Code, Regel, Woche und Schwere, kein Tag, keine Zahlen", () => {
