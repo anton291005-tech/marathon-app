@@ -1,5 +1,5 @@
 import { randomInputs } from "../__fixtures__/randomInputs";
-import { checkSessionPlan, taperMeanOf } from "../__fixtures__/sessionChecks";
+import { checkSessionPlan, checkVolumeGrowth, taperMeanOf } from "../__fixtures__/sessionChecks";
 import { planSessions } from "../planSessions";
 
 const SEED = 20261107;
@@ -13,6 +13,8 @@ describe(`Einheiten über zufällige Pläne (Seed ${SEED}, ${CASES} Fälle)`, ()
       const { inputs, todayYmd } = randomInputs(SEED + index);
       const plan = planSessions(inputs, todayYmd);
       checkSessionPlan(plan, inputs).forEach((code) => problems.push(`seed ${SEED + index}: ${code}`));
+      checkVolumeGrowth(plan, inputs).forEach((code) => problems.push(`seed ${SEED + index}: ${code}`));
+      if (plan.volume.weeks.some((w) => w.curveKm > w.fullWeekKm)) seen["capacity-capped"] = (seen["capacity-capped"] || 0) + 1;
       const taper = taperMeanOf(plan, inputs);
       if (taper !== null) seen[taper.inRange ? "taper-mean-in-range" : "taper-mean-excused"] = (seen[taper.inRange ? "taper-mean-in-range" : "taper-mean-excused"] || 0) + 1;
       plan.weeks.forEach((week) => {
@@ -28,7 +30,7 @@ describe(`Einheiten über zufällige Pläne (Seed ${SEED}, ${CASES} Fälle)`, ()
     expect(seen["taper-mean-in-range"]).toBeGreaterThan(200);
     expect(seen["taper-mean-excused"] || 0).toBeLessThan(CASES * 0.05);
     // Die Fälle decken die Arten und Sonderfälle wirklich ab.
-    ["kind:T", "kind:I", "kind:R", "kind:M", "kind:LR+M", "kind:MLR", "kind:REC", "q-softened-budget", "q-softened-recovery-week", "q-softened-beginner-race-week", "taper-long-run-cut", "m-block-near-long-run", "week-km-reduced"].forEach(
+    ["kind:T", "kind:I", "kind:R", "kind:M", "kind:LR+M", "kind:MLR", "kind:REC", "q-softened-budget", "q-softened-recovery-week", "q-softened-beginner-race-week", "taper-long-run-cut", "m-block-near-long-run", "week-km-reduced", "e-shortened-to-long-run", "e-above-75-percent-long-run", "capacity-capped"].forEach(
       (key) => expect([key, (seen[key] || 0) > 0]).toEqual([key, true]),
     );
   });

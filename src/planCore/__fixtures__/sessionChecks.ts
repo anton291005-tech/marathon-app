@@ -164,7 +164,13 @@ export function checkSessionPlan(plan: SessionPlan, inputs: CoreInputs): string[
             ? library.mlr.minutes.value
             : { min: library.e.minutes.value.min, max: runDays >= 6 ? library.e.minutesMaxSixDays.value : library.e.minutes.value.max };
       // Ausnahme (freigegeben 2026-11-05): E/REC nie länger als der Long Run, auch unter der Mindestdauer (Hinweis).
-      const shortenedToLr = s.notes.indexOf("e-shortened-to-long-run") >= 0 && refLr !== null && s.km <= refLr + EPS;
+      // Gekürzt heißt: genau auf die Länge des Long Runs (auf 0,1 km abgerundet), nicht beliebig kurz.
+      const shortenedToLr =
+        s.notes.indexOf("e-shortened-to-long-run") >= 0 &&
+        refLr !== null &&
+        s.km <= refLr + EPS &&
+        s.km >= Math.floor(refLr * 10 + EPS) / 10 - EPS;
+      if (s.notes.indexOf("e-shortened-to-long-run") >= 0 && !shortenedToLr) out.push(`I2:${s.ymd}:shortened-not-to-LR`);
       if (minutes < lim.min - TOL_MIN && !shortenedToLr) out.push(`I2:${s.ymd}:${s.kind}-too-short`);
       if (minutes > lim.max + TOL_MIN) out.push(`I2:${s.ymd}:${s.kind}-too-long`);
       if (refLr !== null) {
@@ -215,6 +221,10 @@ export function checkSessionPlan(plan: SessionPlan, inputs: CoreInputs): string[
       }
       if ((s.kind === "I" || s.kind === "R") && (w === undefined || w.type !== "reps" || w.reps < (s.kind === "R" ? library.r.minReps.value : library.i.minReps.value))) {
         out.push(`Qmin:${s.ymd}:${s.kind}`);
+      }
+      // 5k-Renntempo (Art I): Wiederholungen voller Länge
+      if (s.kind === "I" && s.racePace && (w === undefined || w.type !== "reps" || w.repKm !== library.racePaceBlocks.reps.value["5k"].repKm)) {
+        out.push(`Qmin:${s.ymd}:race-pace-rep-length`);
       }
       if (s.kind === "R" && library.r.distances.value.indexOf(inputs.distance) < 0) out.push(`I12:${s.ymd}:R-distance`);
       // I15: Abstand der letzten Q-Einheit zum Rennen
@@ -280,6 +290,40 @@ export function taperMeanOf(plan: SessionPlan, inputs: CoreInputs): { mean: numb
       return w.notes.indexOf("week-km-reduced") >= 0 || w.notes.indexOf("week-km-raised") >= 0 || volumeWeek.curveKm > volumeWeek.fullWeekKm;
     }),
   };
+}
+
+/**
+ * Steigerungsregeln auf dem gelieferten Volumen (mit Tragfähigkeit, `planSessions(...).volume`) bis zur Peak-Woche:
+ * I3 (≤ 1,3 × w−2), I4 (≤ max(1,1 × w−1, w−1 + 4), nach Entlastung ≤ Niveau davor), I5 (≤ max(Grenze, `minWeekKm`)),
+ * Entlastung höchstens so groß wie die Vorwoche, nichts über dem geplanten Verlauf (`curveKm`).
+ */
+export function checkVolumeGrowth(plan: SessionPlan, inputs: CoreInputs): string[] {
+  const out: string[] = [];
+  const v = CONFIG.volume;
+  const startKm = Math.min(Math.max(inputs.currentWeeklyKm, v.minStartKm.value[inputs.distance]), v.startKmMax.value);
+  const cap = Math.floor(Math.min(v.peakKm.value[inputs.distance][inputs.runDaysPerWeek].max, startKm * v.peakStartFactor.value) + EPS);
+  const weeks = plan.volume.weeks.filter((w) => w.wn <= plan.volume.peakWeek);
+  let level = weeks[0].fullWeekKm;
+  weeks.forEach((w, i) => {
+    const km = w.fullWeekKm;
+    const prev = i === 0 ? km : weeks[i - 1].fullWeekKm;
+    // Der Verlauf vor Woche 1 zählt als Woche 1 (§5.3), und zwar als geplanter Wert (Angabe des Nutzers), nicht als
+    // gelieferter: eine durch die Tragfähigkeit kleine Woche 1 sagt nichts über die Wochen davor.
+    const prev2 = i < 2 ? weeks[0].curveKm : weeks[i - 2].fullWeekKm;
+    const tag = `W${w.wn}`;
+    if (km > w.curveKm + EPS) out.push(`V:${tag}:above-curve`);
+    if (km > Math.max(cap, plan.minWeekKm) + EPS) out.push(`I5:${tag}`);
+    if (km > v.growth.twoWeekFactor.value * prev2 + EPS) out.push(`I3:${tag}`);
+    if (w.isRecoveryWeek) {
+      if (km > prev + EPS) out.push(`V:${tag}:recovery-above-previous`);
+    } else if (i > 0 && weeks[i - 1].isRecoveryWeek) {
+      if (km > level + EPS) out.push(`I4:${tag}:after-recovery`);
+    } else if (i > 0 && km > Math.max(prev * (1 + v.growth.weeklyShare.value), prev + v.growth.weeklyKm.value) + EPS) {
+      out.push(`I4:${tag}`);
+    }
+    if (!w.isRecoveryWeek) level = km;
+  });
+  return out;
 }
 
 /** Kurzform einer Woche für Snapshots: "Mo E 9.2 · Di T 8.7[3x1.6] · …". */

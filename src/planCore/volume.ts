@@ -141,10 +141,14 @@ function simulate(
       const previous = at(week - 1);
       if (recoveryWeek) {
         // −20 %; bei winzigen Umfängen nicht tiefer, als I3 für die übernächste Woche zulässt (sonst gäbe es danach einen Rückgang).
-        value = Math.max(
-          Math.round(previous * (1 - recovery.reduction.value)),
-          Math.ceil(previous / growth.twoWeekFactor.value - EPS),
-          minWeekKm,
+        // Nie über der Vorwoche: mit Tragfähigkeit kann die gelieferte Vorwoche unter `minWeekKm` liegen.
+        value = Math.min(
+          previous,
+          Math.max(
+            Math.round(previous * (1 - recovery.reduction.value)),
+            Math.ceil(previous / growth.twoWeekFactor.value - EPS),
+            minWeekKm,
+          ),
         );
       } else {
         const x = peakWeek > 1 ? (week - 1) / (peakWeek - 1) : 1;

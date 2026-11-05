@@ -1,4 +1,6 @@
+import { randomInputs } from "../__fixtures__/randomInputs";
 import { checkSessionPlan } from "../__fixtures__/sessionChecks";
+import { easyMinKm } from "../sessions";
 import { PROFILES } from "../__fixtures__/profiles";
 import type { ProfileName } from "../__fixtures__/profiles";
 import { planSessions } from "../planSessions";
@@ -55,6 +57,37 @@ describe("planCore planSessions (Schritt 6)", () => {
       const plan = planOf(profile.name);
       expect(checkSessionPlan(plan, profile.inputs).filter((code) => code.indexOf("I9") === 0)).toEqual([]);
     });
+  });
+
+  /** Erste Einheit mit Hinweis `note` in den Zufallsplänen (Seed ab 20261107), dazu der Long Run, auf den sie sich bezieht. */
+  function firstWith(note: string): { plan: SessionPlan; km: number; refLr: number } {
+    for (let index = 0; index < 500; index += 1) {
+      const { inputs, todayYmd } = randomInputs(20261107 + index);
+      const plan = planSessions(inputs, todayYmd);
+      let last: number | null = null;
+      for (let w = 0; w < plan.weeks.length; w += 1) {
+        const week = plan.weeks[w];
+        const lr = week.sessions.filter((s) => s.kind === "LR" || s.kind === "LR+M")[0];
+        const ref = lr !== undefined ? lr.km : last;
+        const hit = week.sessions.filter((s) => s.notes.indexOf(note as never) >= 0)[0];
+        if (hit !== undefined && ref !== null) return { plan, km: hit.km, refLr: ref };
+        if (lr !== undefined) last = lr.km;
+      }
+    }
+    throw new Error(`kein Fall mit ${note}`);
+  }
+
+  it("E über 75 % des Long Runs nur bis zur E-Mindestdauer und nie länger als der Long Run (e-above-75-percent-long-run)", () => {
+    const { plan, km, refLr } = firstWith("e-above-75-percent-long-run");
+    expect(km).toBeGreaterThan(0.75 * refLr);
+    expect(km).toBeLessThanOrEqual(refLr);
+    expect(km).toBeLessThanOrEqual(Math.max(Math.floor(7.5 * refLr) / 10, easyMinKm("E", plan.paces)));
+  });
+
+  it("Long Run kürzer als die E-Mindestdauer: E/REC genau auf seine Länge gekürzt (e-shortened-to-long-run)", () => {
+    const { plan, km, refLr } = firstWith("e-shortened-to-long-run");
+    expect(refLr).toBeLessThan(easyMinKm("E", plan.paces));
+    expect(km).toBe(Math.floor(refLr * 10 + 1e-9) / 10);
   });
 
   it("ist deterministisch (I20-Anteil)", () => {
