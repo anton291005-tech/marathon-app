@@ -126,6 +126,19 @@ export function checkSessionPlan(plan: SessionPlan, inputs: CoreInputs): string[
     if (layout.hasLongRun !== (lr !== undefined)) out.push(`I10:${tag}:lr-mismatch`);
     if (lr !== undefined) {
       const raised = week.notes.indexOf("long-run-raised-to-min") >= 0;
+      if (raised) {
+        // Ausnahme von I9 (Spec §14 Punkt 31a) nur, wenn der Long Run genau auf dem Minimum liegt, das die übrigen Läufe
+        // verlangen: E ≥ 25 min und E/MLR ≤ 75 %, REC ≤ 100 % des Long Runs.
+        const ceil1 = (km: number): number => Math.ceil(km * 10 - EPS) / 10;
+        const eMin = ceil1((library.e.minutes.value.min * 60) / paces.E);
+        const need = week.sessions.reduce((most, s) => {
+          if (s.kind === "E") return Math.max(most, eMin / library.e.maxShareOfLongRun.value);
+          if (s.kind === "MLR") return Math.max(most, ceil1((library.mlr.minutes.value.min * 60) / paces.E) / library.mlr.maxShareOfLongRun.value);
+          if (s.kind === "REC") return Math.max(most, ceil1((library.rec.minutes.value.min * 60) / paces.REC));
+          return most;
+        }, eMin);
+        if (Math.abs(lr.km - ceil1(need)) > EPS) out.push(`I9:${tag}:raised-not-minimum:${lr.km}/${ceil1(need)}`);
+      }
       // Anteil an den geplanten Wochen-km (planVolume), angebrochene Woche 1 am Vollwochen-Äquivalent (Review-Punkt 29).
       const planned = plan.volume.weeks[index];
       const shareBase = week.sessions.length < 7 ? Math.max(planned.targetKm, planned.fullWeekKm) : planned.targetKm;

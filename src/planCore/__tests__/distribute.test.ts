@@ -1,8 +1,10 @@
 import { distributeFillers, minWeekKm } from "../distribute";
 import type { Filler } from "../distribute";
+import { randomInputs } from "../__fixtures__/randomInputs";
 import { PROFILES } from "../__fixtures__/profiles";
 import type { ProfileName } from "../__fixtures__/profiles";
 import { buildPaceProfile } from "../pace";
+import { CONFIG } from "../config";
 import { createRng } from "../random";
 import { planVolume } from "../volume";
 import { sessionPacesOf } from "../sessions";
@@ -109,6 +111,40 @@ describe("planCore distribute (§6)", () => {
     it("liegt minWeekKm unter dem Ist-Umfang, ändert sich nichts", () => {
       const p3 = PROFILES.filter((p) => p.name === "P3")[0].inputs;
       expect(planVolume(p3, { minWeekKm: 24 })).toEqual(planVolume(p3));
+    });
+
+    it("Property (2 000 Fälle, Mindest-Wochen-km aus den Paces wie in planSessions): I3, I4, I5 mit minWeekKm, Entlastung", () => {
+      const problems: string[] = [];
+      let raised = 0;
+      for (let index = 0; index < 2000; index += 1) {
+        const { inputs, todayYmd } = randomInputs(20261107 + index);
+        const paces = sessionPacesOf(buildPaceProfile(inputs, todayYmd), inputs.distance);
+        const minWeek = minWeekKm(inputs.runDaysPerWeek, paces);
+        const volume = planVolume(inputs, { minWeekKm: minWeek });
+        if (volume.notes.some((note) => note.code === "min-week-km-raised")) raised += 1;
+        const { volume: v } = CONFIG;
+        const startKm = Math.min(Math.max(inputs.currentWeeklyKm, v.minStartKm.value[inputs.distance]), v.startKmMax.value);
+        const cap = Math.floor(Math.min(v.peakKm.value[inputs.distance][inputs.runDaysPerWeek].max, startKm * v.peakStartFactor.value) + 1e-9);
+        const full = volume.weeks.filter((w) => w.wn <= volume.peakWeek).map((w) => w.fullWeekKm);
+        const rec = volume.weeks.filter((w) => w.wn <= volume.peakWeek).map((w) => w.isRecoveryWeek);
+        let level = full[0];
+        full.forEach((km, i) => {
+          const tag = `${index}:W${i + 1}`;
+          if (km < minWeek) problems.push(`${tag}:below-minWeek`);
+          if (km > Math.max(cap, minWeek)) problems.push(`${tag}:I5`);
+          const prev = i === 0 ? full[0] : full[i - 1];
+          const prev2 = i < 2 ? full[0] : full[i - 2];
+          if (km > Math.floor(1.3 * prev2 + 1e-9)) problems.push(`${tag}:I3`);
+          if (rec[i]) {
+            if (!(km < prev || km === minWeek)) problems.push(`${tag}:recovery-not-smaller`);
+          } else if (i > 0 && rec[i - 1]) {
+            if (km > level) problems.push(`${tag}:I4-after-recovery`);
+          } else if (km > Math.floor(Math.max(prev * 1.1, prev + 4) + 1e-9)) problems.push(`${tag}:I4`);
+          if (!rec[i]) level = km;
+        });
+      }
+      expect(problems.slice(0, 10)).toEqual([]);
+      expect(raised).toBeGreaterThan(50);
     });
 
     it("ungültiger Wert wird abgelehnt", () => {

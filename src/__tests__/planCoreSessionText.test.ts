@@ -53,7 +53,7 @@ describe("Plan-Kern: Texte der Einheiten", () => {
 
   it("Rundlauf: geparste Bausteine = Bausteine des Kerns (Dauerlauf, Wiederholungen, Ein-/Auslaufen)", () => {
     const problems: string[] = [];
-    CASES.slice(0, 60).forEach((c) => {
+    CASES.forEach((c) => {
       rendered(c).forEach(({ session, text }) => {
         if (text.sessionType !== "tempo" && text.sessionType !== "interval") return;
         const parsed = parseStructuredWorkoutSpecFromDesc(text.desc);
