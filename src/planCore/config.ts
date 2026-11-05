@@ -68,7 +68,7 @@ function deepFreeze<T>(node: T): T {
 }
 
 /** Erhöhen bei jeder Änderung eines Werts; steht später in `plan.meta.core.configVersion`. */
-export const CONFIG_VERSION = "0.4.0";
+export const CONFIG_VERSION = "0.5.0";
 
 export const CONFIG = deepFreeze({
   /** §0 Scope MVP */
@@ -110,11 +110,27 @@ export const CONFIG = deepFreeze({
     goalVdotGapMax: E(2, "§3"),
     /** E-Pace ohne Form-Angabe (Einsteiger-Modus), Sekunden je km. */
     beginnerEPaceSecPerKm: E(420, "§3"),
-    /** Anteil an VO2max je Pace-Art (Daniels-Tabellen). */
+    /** Anteil an VO2max je Pace-Art (Daniels-Tabellen). Rahmen für die gesetzten Anteile unten; M kommt aus der Rennzeit-Formel. */
     vo2maxShare: L<Record<"E" | "M" | "T" | "I" | "R", Range>>(
       { E: range(0.59, 0.74), M: range(0.75, 0.84), T: range(0.83, 0.88), I: range(0.95, 1.0), R: range(1.05, 1.2) },
       "§3",
     ),
+    /**
+     * Gesetzte Anteile, abgeleitet aus dem VDOT-Rechner (vdoto2.com, 4.11.2026) für VDOT 40–70:
+     * E schnell 0,700 / langsam 0,62 → Mitte 0,66; T 0,877–0,882; I 0,972–0,974; R = I − 15 s/km (alle fünf Stufen exakt).
+     * VDOT 30 liegt im Rechner um ≈ VDOT 32–33 höher und wird nicht als Referenz genutzt (docs/plan-spec.md §14, Punkt 14).
+     */
+    eShare: E(0.66, "§3"),
+    tShare: E(0.88, "§3"),
+    iShare: E(0.974, "§3"),
+    /** R-Pace = I-Pace minus dieser Abstand, Sekunden je km. */
+    rOffsetSecPerKm: E(15, "§3"),
+    /** Zielpace liegt mindestens so weit von E (und beim Marathon von T) entfernt, Sekunden je km. */
+    goalPaceMarginSecPerKm: E(1, "§3"),
+    /** Gültiger VDOT; außerhalb gilt die Rennangabe als unplausibel (Einsteiger-Modus). */
+    vdotRange: E(range(20, 85), "§3"),
+    /** Gültige Distanz eines Rennens in km. */
+    raceDistanceKm: E(range(1.5, 42.2), "§3"),
     /** REC-Pace = E-Pace plus dieser Abstand, Sekunden je km. */
     recPaceOffsetSecPerKm: E(range(20, 40), "§3"),
     /** App-Zone je Pace-Art. */
