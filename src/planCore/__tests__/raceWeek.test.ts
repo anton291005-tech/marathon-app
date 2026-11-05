@@ -25,8 +25,10 @@ describe("planCore raceWeek (§8)", () => {
     expect(isLastDaysBeforeRace("2027-03-11", race)).toBe(false);
     expect(isLastDaysBeforeRace(race, race)).toBe(false);
     // 30 min bei 5:38/km = 5,3 km
-    expect(lastDaysMaxKm("2027-03-12", race, paces)).toBe(5.3);
-    expect(lastDaysMaxKm("2027-03-10", race, paces)).toBe(Number.POSITIVE_INFINITY);
+    expect(lastDaysMaxKm("2027-03-12", race, paces.E)).toBe(5.3);
+    // REC: 30 min bei REC-Pace (6:08/km) = 4,8 km
+    expect(lastDaysMaxKm("2027-03-12", race, paces.REC)).toBe(4.8);
+    expect(lastDaysMaxKm("2027-03-10", race, paces.E)).toBe(Number.POSITIVE_INFINITY);
     expect(stridesBeforeRace("2027-03-13", race)).toBe(true);
     expect(stridesBeforeRace("2027-03-12", race)).toBe(false);
   });

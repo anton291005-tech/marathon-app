@@ -261,6 +261,19 @@ export function qualityLimitKm(
   return floorTenth(limit);
 }
 
+/**
+ * Kleinste Qualitäts-km, die einen Block ergeben: T/M/Renntempo `minBlockMinutes` (Einsteiger über die E-Pace),
+ * I `minReps` × 3 min, R `minReps` × 200 m.
+ */
+export function minQualityKm(choice: QualityType, paces: SessionPaces): number {
+  const { library, intensity } = CONFIG;
+  if (choice.type === "I") return roundTenth(library.i.minReps.value * ceilTenth(kmAt(library.i.repMinutes.value.min, paceOf("I", paces))));
+  if (choice.type === "R") return roundTenth((library.r.minReps.value * library.r.repMeters.value.min) / 1000);
+  const code: SegmentPace = choice.type === "RACE_PACE" ? "RACE" : choice.type;
+  const pace = paces.beginner ? paces.E : paceOf(code, paces);
+  return ceilTenth(kmAt(intensity.minBlockMinutes.value, pace));
+}
+
 export type QualityBuild = {
   kind: CoreKind;
   segments: Segment[];

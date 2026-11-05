@@ -38,10 +38,10 @@ export function isLastDaysBeforeRace(ymd: Ymd, raceDate: Ymd): boolean {
   return before >= 1 && before <= CONFIG.raceWeek.lastDaysCount.value;
 }
 
-/** Höchst-km eines Laufs in den letzten Tagen vor dem Rennen (30 min bei E-Pace); sonst unbegrenzt. */
-export function lastDaysMaxKm(ymd: Ymd, raceDate: Ymd, paces: SessionPaces): number {
+/** Höchst-km eines Laufs in den letzten Tagen vor dem Rennen (30 min bei der Pace des Laufs); sonst unbegrenzt. */
+export function lastDaysMaxKm(ymd: Ymd, raceDate: Ymd, secPerKm: number): number {
   if (!isLastDaysBeforeRace(ymd, raceDate)) return Number.POSITIVE_INFINITY;
-  return floorTenth((CONFIG.raceWeek.lastDaysMaxMinutes.value * 60) / paces.E);
+  return floorTenth((CONFIG.raceWeek.lastDaysMaxMinutes.value * 60) / secPerKm);
 }
 
 /** E am Tag vor dem Rennen bekommt Strides. */

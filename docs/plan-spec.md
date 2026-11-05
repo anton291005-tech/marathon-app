@@ -1,8 +1,8 @@
-# MyRace – Plan-Spec v0.6 (Entwurf)
+# MyRace – Plan-Spec v0.7 (Entwurf)
 
 > Zweck: Single Source of Truth für den deterministischen Plan-Kern. Jede Regel ist eine Zahl und damit ein Test.
 > Herkunft jeder Zahl ist markiert: **[L]** Literatur · **[P]** Praxis-Konsens (Daniels/Pfitzinger/Hansons-Pläne) · **[E]** eigene Setzung → muss ins Spoho-Review.
-> Status: Entwurf v0.6, 5.11.2026 (v0.3: 3.11.2026). Änderungen v0.6 (Schritt 5, Wochenschablonen; nach dem P1–P6-Review ergänzt: Rennwoche ohne Ruhetage-Lücke direkt vor dem Rennen und höchstens 2 Ruhetage am Stück, bei ≤ 3 Lauftagen alle Läufe, §5.4/§6/§8): Hart-Annahme der Platzierung, MLR nie zwischen zwei harten Tagen, Taper- und Rennwochen-Schablone (§6), Sperrfenster für den Long Run vor dem Rennen (§8), Ausnahmen bei I10/I13, Wortlaut I6/I16 (§12), Review-Punkte 16–18 (§14). Änderungen v0.5 (Schritt 4, Form und Pace): §14 Punkte 14–15 (VDOT-30-Abweichung des Rechners, Herkunft der Pace-Anteile). Änderungen v0.4 (Schritt 2, Phasen und Wochenumfang): Entlastung fest −20 % (§5.3), Peak-Position im Korridor (§5.2), Geltungsbereich von I3–I5 (§12), Zusatz-Taper-Woche bei kurzer Rennwoche (§4), P1 auf 13–15 km (§13). Abgeglichen mit `docs/plan-architecture-inventory.md` (963f99e) und `docs/plan-spec-gap.md` (c12c630). Wo Code und Spec abweichen, gilt die Spec; Ausnahmen sind in §16 begründet.
+> Status: Entwurf v0.7, 5.11.2026 (v0.3: 3.11.2026). Änderungen v0.7 (Schritt 6, Einheiten): Rennwoche mit allen Lauftagen (§5.4, §6), Mindest-Wochen-km (§5.1), Q-Budget und Verteilung (§6), Long-Run-Ziel, -Plateau und Taper-Long-Run (§7.1), Q-Typ-Regeln, Renntempo-Arten und Einsteiger nach Minuten (§7.2), Strides am Vortag (§8), Wortlaut I9/I11/I13 (§12), P4/P6 Long-Run-Peak (§13), Review-Punkte 19–29 (§14). Änderungen v0.6 (Schritt 5, Wochenschablonen; nach dem P1–P6-Review ergänzt: Rennwoche ohne Ruhetage-Lücke direkt vor dem Rennen und höchstens 2 Ruhetage am Stück, bei ≤ 3 Lauftagen alle Läufe, §5.4/§6/§8): Hart-Annahme der Platzierung, MLR nie zwischen zwei harten Tagen, Taper- und Rennwochen-Schablone (§6), Sperrfenster für den Long Run vor dem Rennen (§8), Ausnahmen bei I10/I13, Wortlaut I6/I16 (§12), Review-Punkte 16–18 (§14). Änderungen v0.5 (Schritt 4, Form und Pace): §14 Punkte 14–15 (VDOT-30-Abweichung des Rechners, Herkunft der Pace-Anteile). Änderungen v0.4 (Schritt 2, Phasen und Wochenumfang): Entlastung fest −20 % (§5.3), Peak-Position im Korridor (§5.2), Geltungsbereich von I3–I5 (§12), Zusatz-Taper-Woche bei kurzer Rennwoche (§4), P1 auf 13–15 km (§13). Abgeglichen mit `docs/plan-architecture-inventory.md` (963f99e) und `docs/plan-spec-gap.md` (c12c630). Wo Code und Spec abweichen, gilt die Spec; Ausnahmen sind in §16 begründet.
 >
 > **Was der Umbau tatsächlich ersetzt:** Der Code rechnet Volumen, Taper, Peak, km-Verteilung, Long Runs, Bausteine, Texte und Zonen bereits selbst. Claude entscheidet heute nur die **Wochenform** (welcher Tag welcher Typ, Anzahl Läufe/harte Einheiten) und übersetzt Freitext. Neu zu bauen sind daher: deterministische Wochenschablonen (§6), Einheiten-Limits als Prüfung statt Reparatur (§7, §12) und eine Pace-Berechnung (§3), die es heute nicht gibt.
 
@@ -98,7 +98,9 @@ Paces (sec/km) aus VDOT nach Daniels-Tabellen:
 
 ### 5.1 Start
 `startKm = clamp(currentWeeklyKm, minStart[distance], 150)` mit `minStart`: 5k 10 · 10k 15 · HM 20 · M 25. [E]
-Liegt `currentWeeklyKm` unter `minStart`: Plan startet trotzdem bei `currentWeeklyKm`, Peak wird nach §5.2 begrenzt. `startKm` fließt nur in die Peak-Berechnung ein; Woche 1 ist `min(currentWeeklyKm, Peak-Obergrenze)`, mindestens 5 km (Schutz vor 0 km, sonst bliebe 1,3 × 0 = 0; ein Mindestumfang je Lauftag folgt mit den Einheiten, Schritt 6). [E]
+Liegt `currentWeeklyKm` unter `minStart`: Plan startet trotzdem bei `currentWeeklyKm`, Peak wird nach §5.2 begrenzt. `startKm` fließt nur in die Peak-Berechnung ein; Woche 1 ist `min(currentWeeklyKm, Peak-Obergrenze)`, mindestens 5 km (Schutz vor 0 km, sonst bliebe 1,3 × 0 = 0). [E]
+
+**Mindest-Wochen-km** (v0.7, Review-Punkt 29): `(Lauftage − 1) × E-Lauf von 25 min + Long Run, in dem ein E höchstens 75 % ist`, aufgerundet auf ganze km (E-Pace aus §3). Woche 1, Entlastungswochen und der Peak-Korridor werden mindestens darauf angehoben (Hinweis `min-week-km-raised`); Taper- und Rennwochen nicht (dort hebt oder kürzt die Verteilung mit Hinweis). Beispiel P1: 2 × 3,6 + 4,8 = 12 km statt 10. [E]
 
 ### 5.2 Peak
 
@@ -140,7 +142,7 @@ Peak-Tabelle (km/Woche) [E, orientiert an Stufen in Daniels/Pfitzinger/Hansons]:
   - „Ohne Rennen“: Das Rennen zählt zu den Wochen-km der Rennwoche, aber nicht zu diesem Anteil. Gilt für eine volle Rennwoche (Rennen am Sonntag); bei weniger Tagen vor dem Rennen wird der Anteil entsprechend kleiner (Tage vor dem Rennen / 6; bei 5k/10k mit Rennen Mo–Sa liegt die Reduktion dadurch außerhalb von −41 bis −60 %).
   - Bei mehr als der Standard-Anzahl an Taper-Wochen (kurze Rennwoche, §4) sinkt der Anteil linear von der ersten Taper-Woche (70 %; 5k/10k 65 %) zur Rennwoche.
 - **Intensität bleibt:** pro Taper-Woche genau 1 verkürzte Qualitätseinheit im Renntempo/T. [L: Bosquet 2007]
-- **Frequenz bleibt:** Lauftage ≥ `runDaysPerWeek − 1`. [L: Bosquet 2007] Bei höchstens 3 Lauftagen hat auch die Rennwoche alle `runDaysPerWeek` Läufe (inkl. Rennen), damit vor dem Rennen nicht mehrere Tage ohne Lauf entstehen (beim Marathon mit Q bei Renntag−4 wären es sonst drei; die Regel gilt für alle Distanzen, die Untergrenze bleibt eingehalten). [E, Review-Punkt 17]
+- **Frequenz bleibt:** Lauftage ≥ `runDaysPerWeek − 1`. [L: Bosquet 2007] Seit v0.7 hat die Rennwoche alle `runDaysPerWeek` Läufe inklusive Rennen (Untergrenze bleibt eingehalten): Mit nur N − 1 Läufen passte das Rennwochen-Volumen nicht in die 30-min-Grenze der letzten zwei Tage (P3: 16 statt 26 km). Fehlt danach noch Volumen, wird die Woche kleiner (Hinweis `week-km-reduced`). [E, Review-Punkt 28]
 
 ## 6. Wochenschablonen
 
@@ -168,10 +170,13 @@ Die Entlastungswoche (§5.3) hat dieselbe Wochenform wie die Wochen davor und da
 
 **Taper- und Rennwoche** [E, Review-Punkt 17]:
 - Taper-Woche vor der Rennwoche (auch die Zusatzwoche, §4): wie Aufbau/Spezifisch, aber Q2 und MLR werden E. Genau 1 Q, Lauftage wie in der Schablone.
-- Rennwoche (Mo … Renntag): RACE am `raceDate`, kein LR, höchstens 1 Q (spätestens Renntag−3, Marathon Renntag−4, §8), sonst E. Lauftage inklusive Rennen = Lauftage − 1 (§5.4), bei höchstens 3 Lauftagen alle Lauftage, bei weniger verfügbaren Tagen im Fenster entsprechend weniger. Höchstens 2 Ruhetage direkt vor dem Rennen und höchstens 2 Ruhetage am Stück (auch am Wochenanfang), soweit `availableDays` und das Q es zulassen; danach liegen die E-Läufe bevorzugt an Renntag−2, dann −1. Rangfolge: Q-Erhalt, Ruhetage direkt vor dem Rennen, Ruhetage am Stück, E-Bevorzugung, Q-Soll-Tag. Das Q kann dadurch vom spätesten zulässigen Tag früher rücken (10k/HM: Mi statt Do). Gibt es im Fenster keinen zulässigen Q-Tag (Rennen Mo–Mi), hat die Rennwoche kein Q; das Q der Vorwoche zählt.
+- Rennwoche (Mo … Renntag): RACE am `raceDate`, kein LR, höchstens 1 Q (spätestens Renntag−3, Marathon Renntag−4, §8), sonst E. Lauftage inklusive Rennen = alle Lauftage (seit v0.7, §5.4), bei weniger verfügbaren Tagen im Fenster entsprechend weniger. Höchstens 2 Ruhetage direkt vor dem Rennen und höchstens 2 Ruhetage am Stück (auch am Wochenanfang), soweit `availableDays` und das Q es zulassen; danach liegen die E-Läufe bevorzugt an Renntag−2, dann −1. Rangfolge: Q-Erhalt, Ruhetage direkt vor dem Rennen, Ruhetage am Stück, E-Bevorzugung, Q-Soll-Tag. Das Q kann dadurch vom spätesten zulässigen Tag früher rücken (10k/HM: Mi statt Do). Gibt es im Fenster keinen zulässigen Q-Tag (Rennen Mo–Mi), hat die Rennwoche kein Q; das Q der Vorwoche zählt.
 - Rennen am Montag: Die Rennwoche besteht nur aus dem Rennen; der Sonntag davor hat keine harte Einheit.
 
-**Verteilung der Wochen-km:** LR und Q-Einheiten bekommen ihre Größe aus §7, der Rest wird gleichmäßig auf E/REC verteilt, innerhalb deren Limits. Passt der Rest nicht in die Limits → Wochen-km wird reduziert, nie eine Einheit über ihr Limit aufgebläht.
+**Verteilung der Wochen-km** (v0.7, `planSessions.ts`):
+1. **Q-Budget:** Qualitäts-km je Woche höchstens 20 % der Wochen-km, bei 3–4 Lauftagen 15 %, in Taper- und Rennwochen × 0,6 (Review-Punkt 19). Reihenfolge: M-Block eines LR+M, Q1, Q2; folgt noch eine Einheit, bekommt die erste höchstens 70 % des Budgets. Jede Einheit höchstens ihr Limit (§7). Ist das Budget aufgebraucht, wird Q2 zu E + Strides; Q1 bekommt mindestens einen Block von 5 min, soweit Limit und 25 % es zulassen, sonst ebenfalls E + Strides.
+2. **Long Run** nach §7.1; sein Anteil bezieht sich auf die geplanten Wochen-km (§5), in einer angebrochenen Woche 1 auf das Vollwochen-Äquivalent (Review-Punkt 29).
+3. **Rest** gewichtet auf E/REC/MLR (1 : 0,8 : 2, Review-Punkt 22), jede innerhalb ihrer Limits (Dauer; E und MLR ≤ 75 % des Long Runs, in Wochen ohne Long Run des letzten davor; letzte 2 Tage vor dem Rennen ≤ 30 min). Passt der Rest nicht → Wochen-km werden reduziert (Hinweis `week-km-reduced`), nie eine Einheit über ihr Limit aufgebläht; Q-Limits und Q-Budget gelten dann für die kleinere Woche. Reichen die Wochen-km nicht für die Mindestdauern, wird die Woche schrittweise weicher (MLR → E, Q2 → E + Strides, Q1 → E + Strides) und zuletzt größer (Hinweis `week-km-raised`).
 
 **Intensitätsverteilung pro Woche:**
 - Qualitäts-km ≤ 20 % der Wochen-km (Ziel), ≤ 25 % (hart). [L: Seiler 2010, Polarisierung ~80/20; Grenze E]
@@ -204,6 +209,9 @@ Beispiel 2:50-Profil bei 95 km: T ≤ 9,5 km, I ≤ 7,6 km. Die heutigen 19,9-km
 | Steigerung | ≤ +2 km oder ≤ +15 % zur letzten LR (Größeres), max. +3 km | [E] |
 | Startwert | ≤ `longestRecentRunKm` + 2 km | [E] |
 | Peak-Ziel M | 5–6 Tage 30–34 km (2–3 Läufe ≥ 30 km); 3–4 Tage 26–30 km, begrenzt durch 180 min | [P] |
+| Ziel des längsten LR | 30 % des Peak-Wochenumfangs, auf das Peak-Ziel der Distanz begrenzt, danach Anteil und 180 min (P4/P6 liegen deshalb unter dem Peak-Ziel). Verlauf linear vom Startwert; Marathon hält das Ziel 2 normale Wochen (beginnt eine davon nach einer Entlastung, gehört die Woche vor der Entlastung dazu) | [E, Review-Punkt 21] |
+| Entlastungswoche | LR −25 % (Mitte von −20–30 %), danach höchstens das Niveau vor der Entlastung (I9-Ausnahme wie I4) | [E] |
+| Taper | LR in Taper-Wochen (bei HM/M 7 Tage vor dem Rennen) höchstens 60 % des längsten LR | [E, Review-Punkt 20] |
 | Peak-Ziel HM | 16–22 km | [P] |
 | Peak-Ziel 10k | 12–18 km | [P] |
 | Peak-Ziel 5k | 8–14 km | [P] |
@@ -220,12 +228,19 @@ Beispiel 2:50-Profil bei 95 km: T ≤ 9,5 km, I ≤ 7,6 km. Die heutigen 19,9-km
 
 Einsteiger-Modus: in Basis nur Strides, keine I/R im ganzen Plan.
 
+**Regeln der Q-Typ-Wahl** (v0.7, `qTypes.ts`):
+- Basis: Woche 1–2 E + Strides, ab Woche 3 die zweite Art der Zeile (R bzw. T). Q1L (4 Tage) mit halbem Limit.
+- Aufbau/Spezifisch: Q1 = erste, Q2 = zweite Art; mit nur einem Q wechseln die Arten wochenweise (Nicht-Entlastungswochen der Phase). HM Spezifisch: Q1 HM-Pace-Blöcke, Q2 wechselt wochenweise I / T (kein doppelter Schwellenreiz). Marathon Spezifisch: LR+M in jeder 2. Nicht-Entlastungswoche, dann Q1 = T statt M-Lauf.
+- Renntempo-Blöcke zählen als T (HM, 10k) bzw. I (5k) mit deren Limits und Zonen (Review-Punkt 26). M-Block höchstens 10 km, wenn der Long Run höchstens 2 Tage später kommt (Review-Punkt 24).
+- Weicher (nie härter): Q2 in der Entlastungswoche (Review-Punkt 16 bleibt offen) und bei Einsteigern mit 5–6 Tagen wird E + Strides, das Q der Einsteiger-Rennwoche ebenfalls.
+- Einsteiger: T (höchstens 20 min) und M nach Minuten, die km folgen über die E-Pace; kein Pace-Ziel, die Beschreibung nennt die Minuten.
+
 ## 8. Rennwoche
 
 - RACE am `raceDate`, Distanz exakt.
 - Letzte Q-Einheit ≥ 4 Tage vor M, ≥ 3 Tage vor HM/10k/5k.
 - Höchstens 2 Ruhetage direkt vor dem Rennen und höchstens 2 Ruhetage am Stück in der Rennwoche, soweit `availableDays` und das Q es zulassen (weiche Regeln). [E, Review-Punkt 17]
-- Letzte 2 Tage vor dem Rennen: nur REC/E ≤ 30 min oder Ruhe, optional Strides. (Code heute bis 6 bzw. 10 km vor dem Marathon – wird auf die Zeitgrenze umgestellt; 30 min ≈ 6–7 km bei schnellen Läufern, 4–5 km bei langsamen.)
+- Letzte 2 Tage vor dem Rennen: nur REC/E ≤ 30 min oder Ruhe, optional Strides (v0.7: E am Vortag mit 4 × 100 m Strides). (Code heute bis 6 bzw. 10 km vor dem Marathon – wird auf die Zeitgrenze umgestellt; 30 min ≈ 6–7 km bei schnellen Läufern, 4–5 km bei langsamen.)
 - Kein LR in den 7 Tagen bis zum Rennen (Renntag−6 … Renntag), nicht nur in der Kalenderwoche. Fällt der Long-Run-Tag der Vorwoche in dieses Fenster (Rennen Mo–Sa), entfällt der LR dieser Woche; er wird nicht verschoben. [E, Review-Punkt 17]
 - Plan endet am Renntag (Erholungswoche danach: nicht im MVP).
 
@@ -274,11 +289,11 @@ type PlanRules = {
 | I6 | Keine zwei harten Einheiten an aufeinanderfolgenden Tagen – **auch über die Wochengrenze** (So → Mo). In der Platzierung zählen LR, Q und Rennen als hart (§6). Der MLR liegt nie zwischen zwei harten Tagen |
 | I7 | Q-Einheiten pro Woche ≤ Max nach Lauftagen |
 | I8 | Qualitäts-km ≤ 25 % der Wochen-km |
-| I9 | LR-Anteil, LR-Zeit, LR-Steigerung nach §7.1 |
+| I9 | LR-Anteil (an den geplanten Wochen-km, angebrochene Woche 1 am Vollwochen-Äquivalent), LR-Zeit, LR-Steigerung nach §7.1; erste Woche nach Entlastung höchstens das Niveau davor; Taper höchstens 60 % des längsten LR |
 | I10 | HM/M: genau 1 LR pro Woche außer Rennwoche. Ausnahmen: Woche 1, wenn der Long-Run-Tag vor dem Planstart liegt; Wochen, deren Long-Run-Tag in den 7 Tagen vor dem Rennen liegt (§8) |
-| I11 | Kein E/REC/MLR länger als der LR derselben Woche |
+| I11 | Kein E/REC/MLR länger als der LR derselben Woche; in Wochen ohne LR als der letzte LR davor |
 | I12 | T ≤ 10 %, I ≤ min(8 %, 10 km), R ≤ min(5 %, 8 km), M ≤ min(29 km, 110 min) |
-| I13 | Taper-Volumen nach §5.4, genau 1 Qualitätseinheit pro Taper-Woche. Ausnahmen (§6): Rennwoche ohne zulässigen Q-Tag hat keine; lässt sich das Q einer Taper-Woche nicht platzieren (zu wenige nicht benachbarte Tage), entfällt es mit Hinweis |
+| I13 | Taper-Volumen nach §5.4 als Mittel der Taper-Phase (−41 bis −60 %, geprüft bei Rennen am Sonntag und Standard-Taper); Einzelwochen und Abweichungen durch Limits oder Mindestdauern (Hinweis `week-km-reduced`/`-raised` an einer Taper-Woche) sind Warnungen. Genau 1 Qualitätseinheit pro Taper-Woche. Ausnahmen (§6): Rennwoche ohne zulässigen Q-Tag hat keine; lässt sich das Q einer Taper-Woche nicht platzieren (zu wenige nicht benachbarte Tage), entfällt es mit Hinweis; Einsteiger-Rennwoche E + Strides; zu kleine Woche (Hinweis `q-softened-budget`/`-room`) |
 | I14 | Genau ein RACE, am `raceDate`, letzte Einheit des Plans |
 | I15 | Regeln aus §8 (Abstände vor dem Rennen) |
 | I16 | Lauftage ⊆ verfügbare Tage (das Rennen ausgenommen), Anzahl = `runDaysPerWeek`; angebrochene Woche 1: höchstens so viele; Taper- und Rennwoche: mindestens min(`runDaysPerWeek` − 1, verfügbare Tage im Fenster) |
@@ -298,9 +313,9 @@ Zusätzlich: Property-Tests über zufällige gültige Inputs (alle Distanzen × 
 | P1 | 5k Anfänger | 3 Tage, 10 km/Wo, kein Rennen, 8 Wo | Einsteiger-Modus, Peak 13–15 km (I5: ≤ 1,5 × Start), LR-Peak 7–8 km, keine I/R |
 | P2 | 10k Finisher | 4 Tage, 20 km/Wo, 10k-Schätzung 62:00, 10 Wo | Peak 28–35 km, LR-Peak 10–13 km, max. 1 Q in Basis |
 | P3 | HM 1:35 | 5 Tage, 45 km/Wo, 10k 43:30 vor 4 Wo, 12 Wo | Peak 55–65 km, LR-Peak 18–21 km, T-Einheit ≤ 6,5 km |
-| P4 | M 4:00 | 4 Tage, 35 km/Wo, HM 1:55 vor 6 Wo, 16 Wo | Peak 50–55 km, LR-Peak 26–28 km (180-min-Grenze), ≥ 2 LR ≥ 24 km |
+| P4 | M 4:00 | 4 Tage, 35 km/Wo, HM 1:55 vor 6 Wo, 16 Wo | Peak 50–55 km, LR-Peak 24–25 km (50-%-Anteil bei Peak 50; v0.7), ≥ 2 LR ≥ 24 km |
 | P5 | M 2:50 | 6 Tage, 70 km/Wo, HM 1:21 vor 8 Wo, 18 Wo | Peak 95–105 km, LR-Peak 30–34 km, 2–3 LR ≥ 30 km, T ≤ 10 km, nie > 110 km |
-| P6 | M 3 Tage | 3 Tage, 30 km/Wo, HM 2:05 vor 8 Wo, 18 Wo | Peak 40–45 km, LR-Peak 24–26 km, bewusster Grenzfall für LR-Anteil |
+| P6 | M 3 Tage | 3 Tage, 30 km/Wo, HM 2:05 vor 8 Wo, 18 Wo | Peak 40–45 km, LR-Peak 23–24 km (55-%-Anteil bei Peak 43; v0.7), bewusster Grenzfall für LR-Anteil |
 
 Pro Profil zusätzlich: Vergleichsspalte mit einem passenden Literaturplan (Daniels, Pfitzinger, Hansons): Peak-km, LR-Max, Anzahl LR ≥ 30 km, Q-Einheiten/Woche, Taper-Volumen. Abweichung > 15 % → begründen oder Regel anpassen.
 
@@ -324,6 +339,17 @@ Pro Profil zusätzlich: Vergleichsspalte mit einem passenden Literaturplan (Dani
 16. Entfällt Q2 in der Entlastungswoche? Die Entlastungswoche ist im Layout neutral (§5.3, §6): gleiche Wochenform, nur kleinere Größen. Offen ist, ob Q2 (und der MLR) dort zu E werden sollen.
 17. Long-Run-Sperrfenster und Rennwoche (§5.4, §6, §8): Höchstens 2 Ruhetage direkt vor dem Rennen und höchstens 2 am Stück (auch am Wochenanfang), E bevorzugt an Renntag−2/−1 (Folge: das Q rückt bei 5k/10k/HM oft auf Mi/Renntag−4; steht der Q-Soll-Tag im Rang vor der E-Bevorzugung, bleibt das Q auf Do, dafür liegt E am Montag); bei höchstens 3 Lauftagen alle Läufe in der Rennwoche (statt Lauftage − 1). Kein LR in den 7 Tagen bis zum Rennen statt in der Kalenderwoche (bei Rennen Mo–Sa entfällt der LR der Vorwoche); Rennwoche mit Lauftage − 1 Läufen inklusive Rennen (bei höchstens 3 Lauftagen alle Lauftage) und höchstens 1 Q; Taper-Woche ohne Q2 und MLR.
 18. Platzierung (§6): Long Run, Q und Rennen gelten als hart, bevor Dauer und km feststehen (etwas strenger als §1); MLR nie zwischen zwei harten Tagen; Rangfolge der weichen Zielgrößen (Q vor MLR, MLR nicht neben hartem Tag, MLR weit vom LR, Q-Soll-Tage).
+19. Q-Budget (§6): 20 % der Wochen-km, 15 % bei 3–4 Lauftagen, 25 % hart; erste Einheit höchstens 70 %, wenn noch eine folgt; Taper- und Rennwoche × 0,6 (`intensity.*`, `taper.qualityKmFactor`).
+20. Taper-Long-Run (§5.4, §7.1): höchstens 60 % des längsten Long Runs (Folgepunkt b).
+21. Ziel des längsten Long Runs (§7.1): 30 % des Peak-Wochenumfangs innerhalb der Peak-Ziele; Plateau von 2 Wochen beim Marathon. P4/P6 liegen durch den Anteil (50 %/55 %) unter den Peak-Zielen der Tabelle.
+22. Gewichte der Verteilung (§6): E 1, REC 0,8, MLR 2.
+23. Ein-/Auslaufen nach Wochen-km (§7): bis 40 km 1,5/1,5, bis 70 km 2/1,5, darüber 2,5/2.
+24. M-Block höchstens 10 km, wenn der Long Run höchstens 2 Tage später kommt (§7).
+25. Strides (§7): 6 × 100 m (≈ 20 s), in der Rennwoche 4; zählen nicht zu den Wochen-km.
+26. Renntempo-Blöcke (§7.2): HM 2 km / 120 s, 10k 1 km / 90 s, 5k 600 m / 90 s, mindestens 2; HM und 10k als T, 5k als I. I-Wiederholungen ≈ 4 min (3–5), Pause gleich lang, mindestens 3; R 400 m ab 6 Wiederholungen, sonst 200 m, Pause 2 × Dauer, mindestens 4; Cruise 3–5 × höchstens 1,6 km; Blöcke unter 5 min entfallen.
+27. Pace-Bänder im `pace`-Feld (§3): E aus 0,70/0,62 VO2max, REC E + 20…40 s, M/T/I/R/Renntempo ± 5 s; Einsteiger E 7:00–7:30.
+28. Rennwoche mit allen Lauftagen inklusive Rennen (§5.4, §6) statt N − 1. Folge: Q1 bei HM 5 Tage wieder Renntag−3 (Do).
+29. Mindest-Wochen-km (§5.1) und Bezug des Long-Run-Anteils auf die geplanten Wochen-km (§6). Befund aus dem Property-Test: Bei 3–4 Lauftagen begrenzen E ≤ 75 % des Long Runs, der langsame Long-Run-Aufbau (Start 30 % + 2 km, +2–3 km/Woche) und E ≤ 75 min die Woche oft deutlich (≥ 10 % unter dem Ziel in 59 % der vollen Wochen bei 3 Tagen, 44 % bei 4 Tagen; 5 Tage 8 %, 6 Tage 14 %). Optionen: Vorgabe für den längsten Lauf nach Lauftagen (z. B. 3 Tage 40 %), E-Grenze 75 % lockern oder `planVolume` die Long-Run-Tragfähigkeit vorab geben.
 
 ## 15. Abgleich mit der Bestandsaufnahme
 

@@ -6,8 +6,9 @@
  * Je Woche, in dieser Reihenfolge:
  * 1. Q-Arten (`qTypes.ts`), LR+M-Woche, Long-Run-Grenze aus dem Verlauf (`longRun.ts`).
  * 2. Q-Budget = 20 % der Wochen-km (15 % bei 3–4 Lauftagen; Taper/Rennwoche × 0,6). Reihenfolge: M-Block des LR+M,
- *    Q1, Q2; folgt noch eine, bekommt die erste höchstens 70 %. Jede Einheit höchstens ihr Limit (I12); ist das Budget
- *    aufgebraucht oder der Block zu klein, wird das Q zu E + Strides.
+ *    Q1, Q2; folgt noch eine, bekommt die erste höchstens 70 %. Jede Einheit höchstens ihr Limit (I12). Ist das Budget
+ *    aufgebraucht, wird Q2 zu E + Strides; Q1 bekommt mindestens einen Minimalblock (5 min), wenn Limit und 25 % ihn
+ *    zulassen, sonst ebenfalls E + Strides.
  * 3. Long Run = Grenze, aber höchstens so groß, dass E/REC/MLR ihre Mindestdauer bekommen.
  * 4. Rest gewichtet auf E/REC/MLR (`distribute.ts`), jede höchstens ihr Limit, 75 % des Long Runs (in Wochen ohne Long
  *    Run des letzten davor), in den letzten 2 Tagen vor dem Rennen 30 min. Zu viel Rest → Woche kleiner.
@@ -49,6 +50,7 @@ import {
   easyMaxShareOfLongRun,
   easyMinKm,
   longRunPlusMBlockLimitKm,
+  minQualityKm,
   qualityLimitKm,
   segmentsKm,
   sessionPacesOf,
@@ -129,12 +131,40 @@ function nearLongRun(ymd: Ymd, longRunDates: Ymd[]): boolean {
   });
 }
 
+type WeekResult = { week: WeekSessions; longRunKm: number | null; spreadStatus: "ok" | "reduced" | "raised" };
+
+/**
+ * Eine Woche. Wird sie kleiner als geplant (Limits von E/REC/MLR), rechnet sie mit den tatsächlichen km noch einmal,
+ * damit Q-Limits (I12) und Q-Budget (I8) für die Woche gelten, die tatsächlich gelaufen wird. Der Long-Run-Anteil (I9)
+ * bleibt auf die geplanten Wochen-km bezogen.
+ * Die Hinweise `week-km-reduced`/`-raised` vergleichen das Ergebnis mit `planVolume`.
+ */
 function assembleWeek(args: WeekArgs): { week: WeekSessions; longRunKm: number | null } {
+  const isRace = args.layout.mode === "race";
+  const planned = isRace ? args.volumeWeek.raceWeekExtraKm ?? 0 : args.volumeWeek.targetKm;
+  const raceKm = isRace ? CONFIG.scope.raceKm.value[args.inputs.distance] : 0;
+  let weekKm = planned;
+  let result = assembleWeekAt(args, weekKm);
+  // Konvergiert schnell (nur die Q-Größen hängen an den Wochen-km); 30 Runden als Obergrenze.
+  for (let round = 0; round < 30 && result.spreadStatus === "reduced"; round += 1) {
+    const actual = roundTenth(result.week.totalKm - raceKm);
+    if (!(actual < weekKm - EPS)) break;
+    weekKm = actual;
+    result = assembleWeekAt(args, weekKm);
+  }
+  const { week } = result;
+  const notes = week.notes.filter((note) => note === "long-run-raised-to-min");
+  const diff = roundTenth(week.totalKm - week.targetKm);
+  if (diff < 0) notes.unshift("week-km-reduced");
+  if (diff > 0) notes.unshift("week-km-raised");
+  return { week: { ...week, notes }, longRunKm: result.longRunKm };
+}
+
+function assembleWeekAt(args: WeekArgs, weekKm: number): WeekResult {
   const { inputs, layout, volumeWeek, paces } = args;
   const runDays = inputs.runDaysPerWeek;
   const isRace = layout.mode === "race";
   const taperLike = isRace || layout.mode === "taper";
-  const weekKm = isRace ? volumeWeek.raceWeekExtraKm ?? 0 : volumeWeek.targetKm;
   const { intensity } = CONFIG;
 
   const qDays = layout.days.filter((day) => isQSlot(day.slot));
@@ -170,7 +200,10 @@ function assembleWeek(args: WeekArgs): { week: WeekSessions; longRunKm: number |
           isRecoveryWeek: volumeWeek.isRecoveryWeek,
           taper: layout.mode === "taper",
           runDays,
-          weekKm,
+          // Anteil an den geplanten Wochen-km (`planVolume`), nicht an der nach den E-Limits gekürzten Woche: sonst
+          // schrumpfen bei 3 Tagen Woche und Long Run gemeinsam (E ≤ 75 min). Angebrochene Woche 1: am
+          // Vollwochen-Äquivalent (wie I3/I4); mit nur E + LR wäre der Anteil sonst zwingend über 55 %. Review-Punkt 29.
+          weekKm: layout.days.length < 7 ? Math.max(volumeWeek.targetKm, volumeWeek.fullWeekKm) : volumeWeek.targetKm,
           ePaceSecPerKm: paces.E,
           startCapKm: args.startCapKm,
         });
@@ -212,7 +245,15 @@ function assembleWeek(args: WeekArgs): { week: WeekSessions; longRunKm: number |
       const light = plan.slot === "Q1L";
       const limit = qualityLimitKm(choice, weekKm, paces, { light, nearLongRun: near });
       const free = allowance();
-      const parts = buildQualityParts(choice, Math.min(limit, free), weekKm, paces);
+      let target = Math.min(limit, free);
+      // Q1 entfällt nicht wegen des Budgets (I13: 1 Q pro Taper-Woche; weicher machen bei aufgebrauchtem Budget gilt
+      // nur für Q2): mindestens ein Minimalblock, solange Typ-Limit und die harte 25-%-Grenze ihn zulassen.
+      if (plan.slot !== "Q2") {
+        const floor = minQualityKm(choice, paces);
+        const hardRoom = intensity.qualityShareHard.value * weekKm - (budget - remaining);
+        if (floor <= limit + EPS && floor <= hardRoom + EPS) target = Math.max(target, floor);
+      }
+      const parts = buildQualityParts(choice, target, weekKm, paces);
       consumerIndex += 1;
       if (parts === null) {
         plan.choice = { type: "STRIDES" };
@@ -256,7 +297,8 @@ function assembleWeek(args: WeekArgs): { week: WeekSessions; longRunKm: number |
     }
     const refLongRun = lr !== null ? lr : args.longRunState.last;
     const fmax = fillerDays.map((filler) => {
-      let max = Math.min(easyMaxKmByMinutes(filler.kind, paces, runDays), lastDaysMaxKm(filler.ymd, inputs.raceDate, paces));
+      const pace = filler.kind === "REC" ? paces.REC : paces.E;
+      let max = Math.min(easyMaxKmByMinutes(filler.kind, paces, runDays), lastDaysMaxKm(filler.ymd, inputs.raceDate, pace));
       if (refLongRun !== null) {
         const share = filler.kind === "REC" ? 1 : easyMaxShareOfLongRun(filler.kind);
         max = Math.min(max, floorTenth(share * refLongRun));
@@ -313,6 +355,7 @@ function assembleWeek(args: WeekArgs): { week: WeekSessions; longRunKm: number |
         layoutNotes: layout.notes,
       },
       longRunKm: lr,
+      spreadStatus: spread.status,
     };
   }
   // Stufe 3 kehrt immer zurück.
