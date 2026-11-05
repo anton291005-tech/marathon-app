@@ -318,6 +318,56 @@ describe("Rennwoche und Sperrfenster", () => {
     expect(hm.runDayCount).toBe(4); // Lauftage 5 − 1, Rennen eingerechnet
   });
 
+  it("Rennen am Sonntag, alle Tage frei: E bevorzugt an Renntag−2/−1, höchstens 2 Ruhetage direkt vor dem Rennen", () => {
+    const line = (distance: Distance, runDays: RunDays) => compactWeek(raceWeek(distance, 6, { runDays }));
+    expect(line("m", 4)).toBe("Mo – · Di – · Mi Q1 · Do – · Fr E · Sa – · So RACE");
+    expect(line("m", 3)).toBe("Mo – · Di – · Mi Q1 · Do – · Fr E · Sa – · So RACE");
+    expect(line("10k", 4)).toBe("Mo – · Di – · Mi – · Do Q1 · Fr E · Sa – · So RACE");
+    expect(line("hm", 5)).toBe("Mo – · Di – · Mi – · Do Q1 · Fr E · Sa E · So RACE");
+    expect(line("m", 6)).toBe("Mo E · Di – · Mi Q1 · Do – · Fr E · Sa E · So RACE");
+  });
+
+  it("bei höchstens 3 Lauftagen hat die Rennwoche alle Läufe (Q1, E, Rennen), ab 4 Lauftagen Lauftage − 1", () => {
+    expect(raceWeek("10k", 6, { runDays: 3 }).runDayCount).toBe(3);
+    expect(raceWeek("m", 6, { runDays: 3 }).runDayCount).toBe(3);
+    expect(raceWeek("m", 6, { runDays: 4 }).runDayCount).toBe(3);
+    expect(raceWeek("m", 6, { runDays: 6 }).runDayCount).toBe(5);
+  });
+
+  it("Fr/Sa nicht verfügbar, Do verfügbar: Beispielwoche mit höchstens 2 Ruhetagen direkt vor dem Rennen (die Regel selbst sichert die erschöpfende Rennwochen-Prüfung)", () => {
+    const input = weekInput({
+      mode: "race",
+      phase: "taper",
+      distance: "m",
+      runDays: 5,
+      availableDays: ["Mo", "Di", "Mi", "Do", "So"],
+      longRunDay: "So",
+      raceDate: addDays(WEEK_START, 6),
+      lastDayYmd: addDays(WEEK_START, 6),
+      carry: STEADY,
+    });
+    const layout = placeWeek(input);
+    expect(compactWeek(layout)).toBe("Mo E · Di – · Mi Q1 · Do E · Fr – · Sa – · So RACE");
+    expect(checkWeekLayout(layout, contextOf(input))).toEqual([]);
+  });
+
+  it("nur Mo/Di/Mi und So verfügbar: die Ruhetage direkt vor dem Rennen sind unvermeidbar und kein Verstoß", () => {
+    const input = weekInput({
+      mode: "race",
+      phase: "taper",
+      distance: "m",
+      runDays: 4,
+      availableDays: ["Mo", "Di", "Mi", "So"],
+      longRunDay: "So",
+      raceDate: addDays(WEEK_START, 6),
+      lastDayYmd: addDays(WEEK_START, 6),
+      carry: STEADY,
+    });
+    const layout = placeWeek(input);
+    expect(checkWeekLayout(layout, contextOf(input))).toEqual([]);
+    expect(layout.days.slice(3, 6).map((d) => d.slot)).toEqual(["REST", "REST", "REST"]);
+  });
+
   it("Rennen am Mittwoch: kein zulässiger Q-Tag → kein Q, Hinweis q-dropped-race-gap", () => {
     const layout = raceWeek("hm", 2);
     expect(layout.days).toHaveLength(3);

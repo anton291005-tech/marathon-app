@@ -98,7 +98,7 @@ describe("slotsFor (§6)", () => {
     );
   });
 
-  it("Rennwoche: kein Long Run, ein Q1 plus E; mit dem Rennen mindestens Lauftage − 1", () => {
+  it("Rennwoche: kein Long Run, ein Q1 plus E; mit dem Rennen Lauftage − 1, bei höchstens 3 Lauftagen alle Lauftage", () => {
     DISTANCES.forEach((distance) =>
       RUN_DAYS.forEach((runDays) => {
         const race = slotsFor({ distance, runDays, mode: "race", phase: "taper", beginner: false });
@@ -106,7 +106,8 @@ describe("slotsFor (§6)", () => {
         expect(race[0]).toBe("Q1");
         expect(race.filter(isQ)).toHaveLength(1);
         // + 1 für das Rennen
-        expect(race.length + 1).toBe(runDays - CONFIG.taper.minRunDaysBelowRunDays.value);
+        const expected = runDays <= CONFIG.raceWeek.fullRunDaysUpToRunDays.value ? runDays : runDays - CONFIG.taper.minRunDaysBelowRunDays.value;
+        expect(race.length + 1).toBe(expected);
       }),
     );
   });

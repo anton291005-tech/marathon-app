@@ -69,8 +69,36 @@ export function checkWeekLayout(layout: WeekLayout, ctx: WeekContext): string[] 
   const full = days.length === 7;
   if (isRace) {
     const usable = days.filter((day) => day.slot !== "RACE" && ctx.availableDays.indexOf(day.weekday) >= 0).length;
-    const expected = Math.min(ctx.runDays - CONFIG.taper.minRunDaysBelowRunDays.value, 1 + usable);
+    const target =
+      ctx.runDays <= CONFIG.raceWeek.fullRunDaysUpToRunDays.value
+        ? ctx.runDays
+        : ctx.runDays - CONFIG.taper.minRunDaysBelowRunDays.value;
+    const expected = Math.min(target, 1 + usable);
     if (runDayCount !== expected) out.push(`race-week-run-days:${runDayCount}!=${expected}`);
+
+    // Höchstens 2 Ruhetage direkt vor dem Rennen, wenn ein verfügbarer Tag an Renntag−1/−2 frei wäre; E/REC lieber dort als früher.
+    const raceIndex = days.length - 1;
+    const lastDays = CONFIG.raceWeek.lastDaysCount.value;
+    const freeBack: number[] = [];
+    for (let back = 1; back <= lastDays; back += 1) {
+      const day = days[raceIndex - back];
+      if (day !== undefined && day.slot === "REST" && ctx.availableDays.indexOf(day.weekday) >= 0) freeBack.push(back);
+    }
+    let restRun = 0;
+    for (let index = raceIndex - 1; index >= 0 && days[index].slot === "REST"; index -= 1) restRun += 1;
+    // Die Lücke ließe sich schließen, wenn einer der Tage Renntag−1 … −(max+1) verfügbar und frei ist.
+    const maxRest = CONFIG.raceWeek.maxRestDaysBeforeRace.value;
+    let closable = false;
+    for (let back = 1; back <= maxRest + 1; back += 1) {
+      const day = days[raceIndex - back];
+      if (day !== undefined && day.slot === "REST" && ctx.availableDays.indexOf(day.weekday) >= 0) closable = true;
+    }
+    if (restRun > maxRest && closable) out.push(`race-week-rest-gap:${restRun}`);
+    days.forEach((day, index) => {
+      if ((day.slot === "E" || day.slot === "REC") && raceIndex - index > lastDays && freeBack.length > 0) {
+        out.push(`race-week-filler-too-early:${day.ymd}`);
+      }
+    });
   } else if (full) {
     if (runDayCount !== ctx.runDays) out.push(`run-days:${runDayCount}!=${ctx.runDays}`);
   } else if (runDayCount > ctx.runDays) {

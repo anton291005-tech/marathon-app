@@ -100,6 +100,22 @@ describe("Referenzprofile P1–P6: Wochenformen", () => {
     layouts.filter((l) => l.days.length === 7 && l.mode !== "race").forEach((l) => expect(l.runDayCount).toBe(3));
   });
 
+  it("Rennwoche: höchstens 2 Ruhetage direkt vor dem Rennen, E an Renntag−2 (Zeilen für die Freigabe)", () => {
+    const lines: Record<string, string> = {};
+    PROFILES.forEach((profile) => {
+      const race = layoutOf(profile).layouts.slice(-1)[0];
+      lines[profile.name] = race.days.map((d) => (d.slot === "REST" ? "–" : d.slot)).join(" ");
+    });
+    expect(lines).toEqual({
+      P1: "– – – Q1 E – RACE",
+      P2: "– – – Q1 E – RACE",
+      P3: "– – – Q1 E E RACE",
+      P4: "– – Q1 – E – RACE",
+      P5: "E – Q1 – E E RACE",
+      P6: "– – Q1 – E – RACE",
+    });
+  });
+
   it("jedes Profil hat eine Rennwoche, die Profile mit Taper-Woche vor der Rennwoche (M, HM) zeigen sie", () => {
     PROFILES.forEach((profile) => {
       const shown = representative(layoutOf(profile).layouts);

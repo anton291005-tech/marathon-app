@@ -54,16 +54,17 @@ export type SlotsArgs = {
  * - Q2 bei 4 Lauftagen nur ab Aufbau und nie im Einsteiger-Modus, sonst E (§6, Fußnote);
  * - MLR nur bei HM/M, sonst E (§6);
  * - Taper-Woche: wie Aufbau, aber Q2 und MLR werden zu E (genau 1 Q, §5.4);
- * - Rennwoche: ohne Long Run; Q1 plus E, so dass mit dem Rennen mindestens `runDays − 1` Lauftage entstehen (§5.4).
- *   Das Rennen selbst gehört nicht zur Liste.
+ * - Rennwoche: ohne Long Run; Q1 plus E, so dass mit dem Rennen `runDays − 1` Lauftage entstehen (§5.4), bei höchstens
+ *   `raceWeek.fullRunDaysUpToRunDays` Lauftagen alle `runDays`. Das Rennen selbst gehört nicht zur Liste.
  */
 export function slotsFor(args: SlotsArgs): WeekSlot[] {
   const { distance, runDays, mode, phase, beginner } = args;
   const { slots, q2At4DaysFromPhase, mlrDistances } = CONFIG.weekTemplates;
 
   if (mode === "race") {
-    // Läufe außer dem Rennen: (runDays − minRunDaysBelowRunDays) − 1; mindestens das Q1.
-    const others = Math.max(1, runDays - CONFIG.taper.minRunDaysBelowRunDays.value - 1);
+    // Läufe außer dem Rennen: bei wenigen Lauftagen runDays − 1 (alle Läufe), sonst (runDays − minRunDaysBelowRunDays) − 1; mindestens das Q1.
+    const full = runDays <= CONFIG.raceWeek.fullRunDaysUpToRunDays.value;
+    const others = Math.max(1, full ? runDays - 1 : runDays - CONFIG.taper.minRunDaysBelowRunDays.value - 1);
     const out: WeekSlot[] = ["Q1"];
     for (let index = 1; index < others; index += 1) out.push("E");
     return out;
