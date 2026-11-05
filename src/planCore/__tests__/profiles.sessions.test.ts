@@ -1,6 +1,7 @@
 import { CONFIG } from "../config";
 import { diffDays } from "../dates";
-import { checkSessionPlan, compactSessions } from "../__fixtures__/sessionChecks";
+import { codesOf, compactSessions, unreasoned } from "../__fixtures__/compact";
+import { checkPlan } from "../invariants";
 import { PROFILES } from "../__fixtures__/profiles";
 import type { Profile, ProfileName } from "../__fixtures__/profiles";
 import { planSessions } from "../planSessions";
@@ -35,7 +36,7 @@ describe("Referenzprofile P1–P6: Einheiten (§13)", () => {
   PROFILES.forEach((profile) => {
     it(`${profile.name} ${profile.label}: keine Verstöße, Peak und Long-Run-Peak in den Abnahmebereichen`, () => {
       const plan = planOf(profile);
-      expect(checkSessionPlan(plan, profile.inputs)).toEqual([]);
+      expect(codesOf(unreasoned(checkPlan(plan, profile.inputs).violations))).toEqual([]);
       const { peak, longRun } = ACCEPTANCE[profile.name];
       const lrPeak = Math.max.apply(null, longRuns(plan));
       expect([plan.volume.peakKm >= peak[0], plan.volume.peakKm <= peak[1]]).toEqual([true, true]);

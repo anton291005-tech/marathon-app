@@ -1,8 +1,9 @@
 import { CONFIG } from "../config";
 import { addDays, mondayOf, WEEKDAYS } from "../dates";
-import { checkPlanLayouts, checkWeekLayout } from "../__fixtures__/layoutChecks";
-import { carryOf, layoutWeeks, NO_CARRY } from "../placement";
-import type { LayoutCarry, WeekLayout } from "../placement";
+import { codesOf, unreasoned } from "../__fixtures__/compact";
+import { checkPlanLayouts } from "../invariants";
+import { layoutWeeks } from "../placement";
+import type { WeekLayout } from "../placement";
 import { planPhases } from "../phases";
 import { createRng } from "../random";
 import type { Distance, RunDays, Weekday, Ymd } from "../types";
@@ -73,30 +74,20 @@ describe(`Wochenformen über zufällige Pläne (Seed ${SEED}, ${CASES} Fälle)`,
       const { layouts, longRunDay } = layoutsOf(c);
       const label = `seed ${caseSeed}`;
 
-      checkPlanLayouts(layouts, {
-        distance: c.distance,
-        runDays: c.runDaysPerWeek,
-        availableDays: c.availableDays,
-        longRunDay,
-        raceDate: c.raceDate,
-      }).forEach((code) => problems.push(`${label}: ${code}`));
+      // Jede Woche für sich (Zustand der Vorwoche weitergereicht) und der ganze Plan; begründete Abweichungen zählen nicht.
+      codesOf(
+        unreasoned(
+          checkPlanLayouts(layouts, {
+            distance: c.distance,
+            runDays: c.runDaysPerWeek,
+            availableDays: c.availableDays,
+            longRunDay,
+            raceDate: c.raceDate,
+          }),
+        ),
+      ).forEach((code) => problems.push(`${label}: ${code}`));
 
-      let carry: LayoutCarry = NO_CARRY;
       layouts.forEach((layout) => {
-        checkWeekLayout(layout, {
-          mode: layout.mode,
-          distance: c.distance,
-          runDays: c.runDaysPerWeek,
-          availableDays: c.availableDays,
-          longRunDay,
-          raceDate: c.raceDate,
-          carry,
-          nextHard: false,
-        })
-          // Die Übergänge prüft `checkPlanLayouts` über die ganze Tagesliste; der Wochenprüfer kennt Woche 1 ohne Vorwoche.
-          .filter((code) => code.indexOf("hard-after-carry") !== 0)
-          .forEach((code) => problems.push(`${label} W${layout.wn}: ${code}`));
-        carry = carryOf(layout);
         layout.notes.forEach((note) => {
           if (note.code === "q1-dropped" || note.code === "q2-dropped") seen.qDropped += 1;
           if (note.code === "no-long-run-in-window") seen.noLongRun += 1;

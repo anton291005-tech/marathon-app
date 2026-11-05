@@ -1,9 +1,11 @@
 import { CONFIG } from "../config";
-import { addDays, diffDays, mondayOf } from "../dates";
+import { addDays, mondayOf } from "../dates";
 import { PROFILES } from "../__fixtures__/profiles";
 import { isPlanCoreError } from "../phases";
 import { createRng } from "../random";
 import type { Distance, RunDays, Ymd } from "../types";
+import { codesOf, unreasoned } from "../__fixtures__/compact";
+import { checkVolume } from "../invariants";
 import { planVolume } from "../volume";
 import type { PlanVolume, VolumeInputs, VolumeOptions } from "../volume";
 
@@ -31,87 +33,26 @@ function inputsFor(
   };
 }
 
-/** Prüft §5 / I3–I5 / Teil von I13 und die Struktur der Wochenliste; leer = alles gehalten. */
+/**
+ * Prüft §5 / I3–I5 / Teil von I13 und die Struktur der Wochenliste mit `checkVolume` (invariants.ts); leer = alles
+ * gehalten. Ohne Tragfähigkeit zusätzlich: Entlastung genau nach Formel (−20 % abgerundet, bei winzigen Umfängen die
+ * I3-Untergrenze auf 0,1 km).
+ */
 function violations(inputs: VolumeInputs, volume: PlanVolume): string[] {
-  const out: string[] = [];
-  const { weeks, peakWeek } = volume;
-  const pre = weeks.filter((week) => week.wn <= peakWeek);
-  const full = pre.map((week) => week.fullWeekKm);
+  const out = codesOf(unreasoned(checkVolume(volume, inputs)));
   const { growth, recovery } = CONFIG.volume;
-
-  // I3: km(w) ≤ 1,30 × km(w−2) für w ≥ 3
-  for (let i = 2; i < full.length; i += 1) {
-    if (full[i] > growth.twoWeekFactor.value * full[i - 2] + EPS) out.push(`I3 w${i + 1}`);
-  }
-  // I4: +10 % oder +4 km; nach der Entlastung höchstens das Niveau davor
-  for (let i = 1; i < full.length; i += 1) {
-    const previous = full[i - 1];
-    if (pre[i].isRecoveryWeek) {
-      // −20 % abgerundet (nie flacher, freigegeben 2026-11-05), bei winzigen Umfängen die I3-Untergrenze auf 0,1 km.
+  const pre = volume.weeks.filter((week) => week.wn <= volume.peakWeek);
+  if (pre.every((week) => week.curveKm === week.fullWeekKm)) {
+    pre.forEach((week, i) => {
+      if (!week.isRecoveryWeek || i === 0) return;
+      const previous = pre[i - 1].fullWeekKm;
       const depth = Math.max(
         Math.floor(previous * (1 - recovery.reduction.value) + EPS),
         Math.ceil((previous / growth.twoWeekFactor.value) * 10 - EPS) / 10,
       );
-      if (full[i] !== depth) out.push(`Entlastung w${i + 1}`);
-      continue;
-    }
-    const limit = pre[i - 1].isRecoveryWeek
-      ? full[i - 2]
-      : Math.max(previous * (1 + growth.weeklyShare.value), previous + growth.weeklyKm.value);
-    if (full[i] > limit + EPS) out.push(`I4 w${i + 1}`);
-    if (full[i] < previous - EPS) out.push(`Rückgang ohne Entlastung w${i + 1}`);
+      if (week.fullWeekKm !== depth) out.push(`Entlastung w${week.wn}`);
+    });
   }
-  // Entlastung nur jede 4. Woche, nie in den letzten zwei Wochen vor dem Taper, nie in Woche 1
-  pre.forEach((week) => {
-    const expected = week.wn > 1 && week.wn % recovery.everyNWeeks.value === 0 && week.wn <= peakWeek - 2;
-    if (week.isRecoveryWeek !== expected) out.push(`isRecoveryWeek w${week.wn}`);
-  });
-  // I5
-  const table = CONFIG.volume.peakKm.value[inputs.distance][inputs.runDaysPerWeek];
-  const startKm = Math.min(Math.max(inputs.currentWeeklyKm, CONFIG.volume.minStartKm.value[inputs.distance]), 150);
-  const peakLimit = Math.min(table.max, startKm * CONFIG.volume.peakStartFactor.value);
-  full.forEach((value, i) => {
-    if (value > peakLimit + EPS) out.push(`I5 w${i + 1}`);
-  });
-  if (volume.peakKm !== Math.max.apply(null, full)) out.push("peakKm ist nicht das Maximum");
-  if (full[peakWeek - 1] !== volume.peakKm) out.push("Peak liegt nicht in der Peak-Woche");
-  // Woche 1 = min(Ist, Obergrenze), mindestens weekOneMinKm
-  const weekOne = Math.max(CONFIG.volume.weekOneMinKm.value, Math.min(Math.round(inputs.currentWeeklyKm), volume.peakCorridor.max));
-  if (full[0] !== weekOne) out.push("Woche 1");
-
-  // Taper: nie über dem Peak, Reihenfolge fallend, Rennwoche zuletzt
-  const taper = weeks.filter((week) => week.wn > peakWeek);
-  if (taper.length !== volume.taperWeeks) out.push("Taper-Anzahl");
-  const raceWeek = weeks[weeks.length - 1];
-  taper.forEach((week) => {
-    if (week.fullWeekKm > volume.peakKm) out.push(`Taper über Peak w${week.wn}`);
-    if (week.isRecoveryWeek) out.push(`Taper als Entlastung w${week.wn}`);
-  });
-  for (let i = 1; i < taper.length; i += 1) {
-    if (taper[i].fullWeekKm > taper[i - 1].fullWeekKm) out.push(`Taper steigt w${taper[i].wn}`);
-  }
-  const raceKm = CONFIG.scope.raceKm.value[inputs.distance];
-  if (raceWeek.raceWeekExtraKm === undefined) out.push("raceWeekExtraKm fehlt");
-  else if (Math.abs(raceWeek.targetKm - (raceKm + raceWeek.raceWeekExtraKm)) > 0.051) out.push("Rennwoche = Rennen + Rest");
-  // I13 (Volumen): −41 bis −60 % gegenüber dem Peak über die Taper-Phase. Die Spec-Anteile gelten für eine volle
-  // Rennwoche (Rennen am Sonntag); bei weniger Tagen wird der Rest ohne Rennen anteilig kleiner.
-  if (raceWeek.days === 7) {
-    const sum = taper.reduce((acc, week) => acc + week.fullWeekKm, 0);
-    const reduction = 1 - sum / (taper.length * volume.peakKm);
-    const tolerance = 1.5 / volume.peakKm;
-    if (reduction < CONFIG.taper.totalReduction.value.min - tolerance) out.push(`Taper zu mild ${reduction.toFixed(3)}`);
-    if (reduction > CONFIG.taper.totalReduction.value.max + tolerance) out.push(`Taper zu streng ${reduction.toFixed(3)}`);
-  }
-
-  // Wochenliste: lückenlos, endet am Renntag, Teilwochen anteilig
-  weeks.forEach((week, i) => {
-    if (week.wn !== i + 1) out.push("wn");
-    if (week.targetKm < 0) out.push(`negative km w${week.wn}`);
-    if (i > 0 && diffDays(week.firstDayYmd, weeks[i - 1].lastDayYmd) !== 1) out.push(`Lücke w${week.wn}`);
-    if (week.wn < weeks.length && week.days < 7 && week.wn > 1) out.push(`Teilwoche mitten im Plan w${week.wn}`);
-  });
-  if (raceWeek.lastDayYmd !== inputs.raceDate) out.push("Ende != raceDate");
-  if (weeks.length > CONFIG.planLength.maxWeeks.value[inputs.distance]) out.push("über Max");
   return out;
 }
 
@@ -364,9 +305,8 @@ describe("planCore volume (§5)", () => {
       // Woche 9 trägt nur 44 km (P3 ohne Tragfähigkeit: 59).
       const volume = cappedP3({ 8: 44 });
       expect(monotoneProblems(volume)).toEqual([]);
-      // Ausgenommen: Woche 1 (für den monotonen Verlauf gesenkt) und das Taper-Mittel.
-      const exempt = ["I13", "Woche 1"];
-      expect(violations(p3, volume).filter((code) => exempt.every((prefix) => code.indexOf(prefix) < 0))).toEqual([]);
+      // Ausgenommen: das Taper-Mittel (der Taper bezieht sich auf den gesenkten Peak der Delle nicht).
+      expect(violations(p3, volume).filter((code) => code.indexOf("I13/") < 0)).toEqual([]);
       volume.weeks.slice(0, 9).forEach((w) => expect([w.wn, w.fullWeekKm <= 44]).toEqual([w.wn, true]));
       expect(volume.weeks[0].fullWeekKm).toBeLessThan(volume.weeks[0].curveKm);
       expect(volume.peakKm).toBeGreaterThan(44);
