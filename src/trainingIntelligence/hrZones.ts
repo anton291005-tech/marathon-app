@@ -12,7 +12,7 @@ export type HrZoneLabel = "Zone 1" | "Zone 2" | "Zone 3" | "Zone 4" | "Zone 3–
 export const HR_ZONE_PCT_BANDS: Record<HrZoneLabel, { lo: number; hi: number }> = {
   "Zone 1": { lo: 0.5, hi: 0.6 },
   "Zone 2": { lo: 0.6, hi: 0.75 },
-  // Vorläufig (Spoho-Review-Punkt): "Zone 3–4" geteilt. Daniels setzt M/T eher bei ~80–90 % bzw. 88–92 % HFmax an.
+  // Vorläufig (Spoho-Review-Punkt 13, docs/plan-spec.md §14): "Zone 3–4" geteilt. Daniels setzt M/T eher bei ~80–90 % bzw. 88–92 % HFmax an.
   "Zone 3": { lo: 0.76, hi: 0.82 },
   "Zone 4": { lo: 0.82, hi: 0.88 },
   "Zone 3–4": { lo: 0.76, hi: 0.88 },
