@@ -49,3 +49,17 @@ export { slotsFor, weekModeOf } from "./templates";
 export type { LayoutNote, LayoutNoteCode, PlacedSlot, SlotsArgs, WeekMode } from "./templates";
 export { carryOf, layoutWeeks, NO_CARRY, placeWeek, resolveLongRunDay } from "./placement";
 export type { LayoutCarry, LayoutDay, LayoutInputs, PlaceWeekInput, WeekLayout } from "./placement";
+export {
+  advanceLongRun,
+  INITIAL_LONG_RUN_STATE,
+  longestRecentRunKm,
+  longRunLimitKm,
+  longRunMinutesCapKm,
+  longRunPeakTargetKm,
+  longRunSchedule,
+  longRunShareCapKm,
+  longRunStartCapKm,
+  longRunStepKm,
+  peakLongRunRange,
+} from "./longRun";
+export type { LongRunLimit, LongRunLimitArgs, LongRunState, LongRunWeek } from "./longRun";

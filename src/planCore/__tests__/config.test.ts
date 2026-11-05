@@ -154,6 +154,32 @@ describe("planCore config", () => {
       expect(CONFIG.volume.recovery.reduction.value).toBe(CONFIG.longRun.recoveryReduction.value.min);
     });
 
+    it("Schritt-6-Werte liegen in den Bereichen der Spec", () => {
+      const { library, longRun, intensity, qualityTypes } = CONFIG;
+      expect(longRun.recoveryReductionUsed.value).toBeGreaterThanOrEqual(longRun.recoveryReduction.value.min);
+      expect(longRun.recoveryReductionUsed.value).toBeLessThanOrEqual(longRun.recoveryReduction.value.max);
+      library.warmupCooldownByWeekKm.value.forEach((row) => {
+        [row.warmupKm, row.cooldownKm].forEach((km) => {
+          expect(km).toBeGreaterThanOrEqual(library.warmupCooldownKm.value.min);
+          expect(km).toBeLessThanOrEqual(library.warmupCooldownKm.value.max);
+        });
+      });
+      [library.strides.repsStandard.value, library.strides.repsRaceWeek.value].forEach((reps) => {
+        expect(reps).toBeGreaterThanOrEqual(library.strides.reps.value.min);
+        expect(reps).toBeLessThanOrEqual(library.strides.reps.value.max);
+      });
+      expect(library.i.repTargetMinutes.value).toBeGreaterThanOrEqual(library.i.repMinutes.value.min);
+      expect(library.i.repTargetMinutes.value).toBeLessThanOrEqual(library.i.repMinutes.value.max);
+      expect(library.m.nearLongRunMaxKm.value).toBeLessThan(library.m.maxKm.value);
+      expect(intensity.qualityShareTargetFewDays.value).toBeLessThan(intensity.qualityShareTarget.value);
+      expect(intensity.qualityShareTarget.value).toBeLessThanOrEqual(intensity.qualityShareHard.value);
+      expect(intensity.firstQualityBudgetShare.value).toBeGreaterThan(0);
+      expect(intensity.firstQualityBudgetShare.value).toBeLessThan(1);
+      qualityTypes.hmSpecificQ2.value.forEach((token) => expect(["I", "T"]).toContain(token));
+      // Strides zählen nicht zu den Wochen-km: der Parser zählt Wiederholungen bis 150 m als Strides.
+      expect(library.strides.meters.value).toBeLessThanOrEqual(150);
+    });
+
     it("Long-Run-Anteil sinkt mit mehr Lauftagen", () => {
       const share = CONFIG.longRun.maxShareOfWeek.value;
       expect(share[3]).toBeGreaterThan(share[4]);
