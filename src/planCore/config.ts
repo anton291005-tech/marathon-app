@@ -68,7 +68,7 @@ function deepFreeze<T>(node: T): T {
 }
 
 /** Erhöhen bei jeder Änderung eines Werts; steht später in `plan.meta.core.configVersion`. */
-export const CONFIG_VERSION = "0.5.0";
+export const CONFIG_VERSION = "0.6.2";
 
 export const CONFIG = deepFreeze({
   /** §0 Scope MVP */
@@ -253,6 +253,11 @@ export const CONFIG = deepFreeze({
     q2DaysAfterLongRun: E(2, "§6"),
     /** Zwischen zwei harten Einheiten mindestens so viele Tage mit E/REC/Ruhe (≈ 48 h). */
     minEasyDaysBetweenHard: P(1, "§6"),
+    /**
+     * Der MLR liegt nie zwischen zwei harten Tagen (Tag davor und Tag danach hart), auch über die Wochengrenze.
+     * Dazu die weiche Zielgröße: MLR möglichst nicht direkt neben einer harten Einheit und möglichst weit vom Long Run.
+     */
+    mlrNoSandwich: E(true, "§6"),
     /** Q-Einheiten pro Woche ohne Long Run, höchstens. */
     maxQ: E<ByRunDays<number>>({ 3: 1, 4: 2, 5: 2, 6: 2 }, "§6"),
   },
@@ -405,5 +410,19 @@ export const CONFIG = deepFreeze({
     /** Die letzten Tage vor dem Rennen: nur REC/E bis zur Höchstdauer oder Ruhe. */
     lastDaysCount: E(2, "§8"),
     lastDaysMaxMinutes: E(30, "§8"),
+    /**
+     * Kein Long Run in den Tagen vor dem Rennen: Renntag−6 … Renntag−1 (Fenster von 7 Tagen inkl. Renntag, nicht die Kalenderwoche).
+     * Liegt der Long-Run-Tag der Vorwoche in diesem Fenster, entfällt der Long Run dieser Woche (kein Verschieben).
+     */
+    noLongRunDaysBefore: E(6, "§8"),
+    /**
+     * Höchstens so viele Ruhetage direkt vor dem Rennen, soweit `availableDays` es zulassen. E/REC liegen in der Rennwoche
+     * bevorzugt an Renntag−2, dann −1 (`lastDaysCount`), nicht am Wochenanfang.
+     */
+    maxRestDaysBeforeRace: E(2, "§8"),
+    /** Höchstens so viele Ruhetage am Stück in der Rennwoche (weiche Regel, soweit `availableDays` und das Q es zulassen); gilt auch am Wochenanfang. */
+    maxRestDaysInRow: E(2, "§8"),
+    /** Bis zu dieser Zahl Lauftage hat die Rennwoche so viele Läufe inkl. Rennen (sonst Lauftage − 1, §5.4); schließt die Lücke bei 3 Tagen. */
+    fullRunDaysUpToRunDays: E(3, "§8"),
   },
 });

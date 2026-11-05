@@ -129,6 +129,7 @@
         ],
         "excludedFiles": [
           "src/planCore/**/__tests__/**",
+          "src/planCore/**/__fixtures__/**",
           "src/planCore/**/*.test.ts"
         ],
         "rules": {

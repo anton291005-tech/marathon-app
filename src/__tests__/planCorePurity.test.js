@@ -75,8 +75,11 @@ function forbiddenTokensIn(source) {
 
 function importProblems(file, source) {
   const dir = path.dirname(file);
+  // Testhilfen unter __fixtures__ dürfen auch aus dem Kern importieren (../config …); der Zielpfad muss trotzdem in src/planCore liegen.
+  const isFixture = file.split(path.sep).includes("__fixtures__");
   return specifiersOf(source).flatMap((specifier) => {
-    if (!specifier.startsWith("./")) return [`${specifier}: nur ./… erlaubt`];
+    const allowed = specifier.startsWith("./") || (isFixture && specifier.startsWith("../"));
+    if (!allowed) return [`${specifier}: nur ./… erlaubt`];
     const target = path.resolve(dir, specifier);
     const inside = target === ROOT || target.startsWith(ROOT + path.sep);
     if (!inside || target.includes(`${path.sep}__tests__`)) return [`${specifier}: außerhalb von src/planCore`];
