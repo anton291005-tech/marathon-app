@@ -68,7 +68,7 @@ function deepFreeze<T>(node: T): T {
 }
 
 /** Erhöhen bei jeder Änderung eines Werts; steht später in `plan.meta.core.configVersion`. */
-export const CONFIG_VERSION = "0.7.0";
+export const CONFIG_VERSION = "0.8.0";
 
 export const CONFIG = deepFreeze({
   /** §0 Scope MVP */
@@ -284,8 +284,6 @@ export const CONFIG = deepFreeze({
     firstQualityBudgetShare: E(0.7, "§6"),
     /** Q1L (leichte Q1, 4 Tage Basis): dieser Anteil des Typ-Limits. Review-Punkt 30. */
     lightQualityFactor: E(0.5, "§6"),
-    /** T-, M- und Renntempo-Blöcke kürzer als so viele Minuten werden zu E + Strides; Q1 bekommt mindestens so einen Block. Review-Punkte 26, 31. */
-    minBlockMinutes: E(5, "§7"),
     /** Q2 wird in der Entlastungswoche zu E + Strides (Review-Punkt 16 bleibt offen). */
     q2AsEInRecoveryWeek: E(true, "§6"),
     /** Einsteiger-Modus: Q2 (5–6 Lauftage) wird zu E + Strides (freigegeben). Review-Punkt 30. */
@@ -361,12 +359,16 @@ export const CONFIG = deepFreeze({
       maxMinutes: L(110, "§7"),
       /** Liegt eine M-Einheit höchstens `nearLongRunDays` Tage vor dem Long Run, ist der M-Block höchstens so lang. Review-Punkt 24. */
       nearLongRunMaxKm: E(10, "§7"),
+      /** M-Block (M-Lauf und LR+M) mindestens so lang, sonst E + Strides bzw. Long Run ohne M (freigegeben 2026-11-05). Review-Punkt 31. */
+      minKm: E(3, "§7"),
       /** Abstand in Tagen für `nearLongRunMaxKm` (freigegeben: "≤ 2 Tage vor dem LR"). Review-Punkt 24. */
       nearLongRunDays: E(2, "§7"),
     },
     t: {
       /** Dauerlauf-Block höchstens so lange (Spec nennt keine Herkunft an dieser Zelle). */
       continuousMaxMinutes: E(20, "§7"),
+      /** T-Block (auch Renntempo HM/10k) mindestens so lange, sonst E + Strides (freigegeben 2026-11-05). Review-Punkt 31. */
+      minMinutes: E(10, "§7"),
       /** Cruise-Intervalle (Beispiel aus der Spec). */
       cruiseReps: E(range(3, 5), "§7"),
       cruiseRepKm: E(1.6, "§7"),
@@ -400,6 +402,7 @@ export const CONFIG = deepFreeze({
      * Zone der Art). Review-Punkt 26.
      */
     racePaceBlocks: {
+      /** HM/10k (Art T); 5k (Art I) braucht `library.i.minReps` Wiederholungen der vollen Länge. */
       reps: E<Readonly<Record<"5k" | "10k" | "hm", { repKm: number; restSec: number }>>>(
         { "5k": { repKm: 0.6, restSec: 90 }, "10k": { repKm: 1, restSec: 90 }, hm: { repKm: 2, restSec: 120 } },
         "§7",
@@ -438,11 +441,6 @@ export const CONFIG = deepFreeze({
     recoveryReduction: E(range(0.2, 0.3), "§7.1"),
     /** Wert aus `recoveryReduction`, den der Kern nimmt (Mitte). Review-Punkt 30. */
     recoveryReductionUsed: E(0.25, "§7.1"),
-    /**
-     * Ziel des längsten Long Runs: dieser Anteil am Peak-Wochenumfang, begrenzt auf die Peak-Ziele der Distanz (Daniels
-     * 25–30 %, oberes Ende). Danach wirken Anteil, Zeit und Steigerung. Review-Punkt 21.
-     */
-    targetShareOfPeakWeek: E(0.3, "§7.1"),
   },
 
   /** §7.2 Q-Typen je Phase und Distanz */

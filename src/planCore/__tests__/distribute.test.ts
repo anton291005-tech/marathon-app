@@ -20,12 +20,12 @@ const sumTenths = (values: number[]): number => values.reduce((total, value) => 
 
 describe("planCore distribute (§6)", () => {
   describe("Mindest-Wochen-km (Folgepunkt minWeekKmPerRunDay)", () => {
-    it("(Lauftage − 1) × E 25 min + Long Run, in dem ein E höchstens 75 % ist", () => {
-      // P1: E 7:00 → 3,6 km; Long Run 4,8 km; 2 × 3,6 + 4,8 = 12
-      expect(minWeekKm(3, pacesOf("P1"))).toBe(12);
-      // P3: E 5:38 → 4,5 km; 4 × 4,5 + 6 = 24
-      expect(minWeekKm(5, pacesOf("P3"))).toBe(24);
-      expect(minWeekKm(6, pacesOf("P1"))).toBe(23);
+    it("Lauftage × E 25 min, aufgerundet (E darf bis zur Länge des Long Runs gehen, freigegeben 2026-11-05)", () => {
+      // P1: E 7:00 → 3,6 km; 3 × 3,6 = 10,8 → 11
+      expect(minWeekKm(3, pacesOf("P1"))).toBe(11);
+      // P3: E 5:38 → 4,5 km; 5 × 4,5 = 22,5 → 23
+      expect(minWeekKm(5, pacesOf("P3"))).toBe(23);
+      expect(minWeekKm(6, pacesOf("P1"))).toBe(22);
     });
   });
 

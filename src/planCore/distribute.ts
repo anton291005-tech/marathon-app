@@ -24,13 +24,11 @@ export type FillerResult = {
 const tenths = (km: number): number => Math.round(km * 10);
 
 /**
- * Mindest-Wochen-km (Folgepunkt `minWeekKmPerRunDay` aus Schritt 2): jeder Lauftag mindestens ein E-Lauf von 25 min, der
- * Long Run so lang, dass ein E von 25 min höchstens 75 % davon ist (I2/I11). Ganze km, aufgerundet.
+ * Mindest-Wochen-km (Folgepunkt `minWeekKmPerRunDay` aus Schritt 2): jeder Lauftag mindestens ein E-Lauf von 25 min
+ * (E darf bis zur Länge des Long Runs gehen, wenn sonst die Mindestdauer nicht passt). Ganze km, aufgerundet.
  */
 export function minWeekKm(runDays: RunDays, paces: SessionPaces): number {
-  const easy = easyMinKm("E", paces);
-  const longRun = easy / CONFIG.library.e.maxShareOfLongRun.value;
-  return Math.ceil((runDays - 1) * easy + longRun - EPS);
+  return Math.ceil(runDays * easyMinKm("E", paces) - EPS);
 }
 
 /**

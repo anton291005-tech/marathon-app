@@ -44,7 +44,11 @@ export type SessionNoteCode =
   /** Taper-Long-Run auf 60 % des längsten Long Runs gekürzt (Folgepunkt b). */
   | "taper-long-run-cut"
   /** M-Block höchstens `nearLongRunMaxKm`, weil der Long Run höchstens `nearLongRunDays` Tage später kommt. */
-  | "m-block-near-long-run";
+  | "m-block-near-long-run"
+  /** E länger als 75 % des Long Runs (höchstens so lang wie er), weil sonst die Mindestdauer nicht passt (Review-Punkt 31a). */
+  | "e-above-75-percent-long-run"
+  /** E/REC unter der Mindestdauer, weil der Long Run (in seinen Grenzen) kürzer ist: nie länger als er (I11 vor I2). */
+  | "e-shortened-to-long-run";
 
 export type CoreSession = {
   ymd: Ymd;
@@ -262,16 +266,17 @@ export function qualityLimitKm(
 }
 
 /**
- * Kleinste Qualitäts-km, die einen Block ergeben: T/M/Renntempo `minBlockMinutes` (Einsteiger über die E-Pace),
- * I `minReps` × 3 min, R `minReps` × 200 m.
+ * Kleinste Qualitäts-km, die einen Block ergeben (freigegeben 2026-11-05): M ≥ 3 km, T ≥ 10 min (auch Renntempo HM/10k;
+ * Einsteiger über die E-Pace), I ≥ 3 Wiederholungen à 3 min, R ≥ 4 × 200 m, 5k-Renntempo ≥ 3 Wiederholungen voller Länge.
  */
 export function minQualityKm(choice: QualityType, paces: SessionPaces): number {
-  const { library, intensity } = CONFIG;
+  const { library } = CONFIG;
   if (choice.type === "I") return roundTenth(library.i.minReps.value * ceilTenth(kmAt(library.i.repMinutes.value.min, paceOf("I", paces))));
   if (choice.type === "R") return roundTenth((library.r.minReps.value * library.r.repMeters.value.min) / 1000);
-  const code: SegmentPace = choice.type === "RACE_PACE" ? "RACE" : choice.type;
-  const pace = paces.beginner ? paces.E : paceOf(code, paces);
-  return ceilTenth(kmAt(intensity.minBlockMinutes.value, pace));
+  if (choice.type === "M") return paces.beginner ? ceilTenth(kmAt(Math.ceil(minutesAt(library.m.minKm.value, paces.E) - EPS), paces.E)) : library.m.minKm.value;
+  if (choice.type === "RACE_PACE" && choice.kind === "I") return roundTenth(library.i.minReps.value * library.racePaceBlocks.reps.value["5k"].repKm);
+  const pace = paces.beginner ? paces.E : paceOf(choice.type === "RACE_PACE" ? "RACE" : "T", paces);
+  return ceilTenth(kmAt(library.t.minMinutes.value, pace));
 }
 
 export type QualityBuild = {
@@ -288,8 +293,9 @@ function repsSegment(reps: number, repKm: number, pace: SegmentPace, restSec: nu
 
 /** Arbeitsteil einer Qualitätseinheit mit höchstens `targetKm` Qualitäts-km; `null` = zu klein. */
 function workSegment(choice: QualityType, targetKm: number, paces: SessionPaces): Segment | null {
-  const { library, intensity } = CONFIG;
-  const minMinutes = intensity.minBlockMinutes.value;
+  const { library } = CONFIG;
+  const tMinMinutes = library.t.minMinutes.value;
+  const mMinKm = library.m.minKm.value;
   const target = floorTenth(targetKm);
   if (!(target > 0)) return null;
 
@@ -299,12 +305,13 @@ function workSegment(choice: QualityType, targetKm: number, paces: SessionPaces)
       // Nach Minuten: T höchstens 20 min, M höchstens 110 min; km über die E-Pace.
       const cap = choice.type === "T" ? library.t.continuousMaxMinutes.value : library.m.maxMinutes.value;
       const minutes = Math.floor(Math.min(cap, minutesAt(target, paces.E)) + EPS);
-      if (minutes < minMinutes) return null;
-      return { type: "steady", km: floorTenth(kmAt(minutes, paces.E)), pace: code, minutes };
+      const km = floorTenth(kmAt(minutes, paces.E));
+      if (choice.type === "T" ? minutes < tMinMinutes : km < mMinKm - EPS) return null;
+      return { type: "steady", km, pace: code, minutes };
     }
     const pace = paceOf(code, paces);
     const minutes = minutesAt(target, pace);
-    if (minutes < minMinutes - EPS) return null;
+    if (choice.type === "T" ? minutes < tMinMinutes - EPS : target < mMinKm - EPS) return null;
     if (choice.type === "M" || minutes <= library.t.continuousMaxMinutes.value + EPS) {
       return { type: "steady", km: target, pace: code };
     }
@@ -346,14 +353,20 @@ function workSegment(choice: QualityType, targetKm: number, paces: SessionPaces)
   }
 
   // Renntempo-Blöcke
-  const distanceKey = choice.kind === "I" ? "5k" : paces.distance === "10k" ? "10k" : "hm";
-  const config = library.racePaceBlocks.reps.value[distanceKey];
-  const minReps = library.racePaceBlocks.minReps.value;
   const pace = paceOf("RACE", paces);
+  if (choice.kind === "I") {
+    // 5k-Renntempo zählt als I: mindestens `i.minReps` Wiederholungen voller Länge.
+    const config5k = library.racePaceBlocks.reps.value["5k"];
+    const reps5k = Math.floor(target / config5k.repKm + EPS);
+    if (reps5k < library.i.minReps.value) return null;
+    return repsSegment(reps5k, config5k.repKm, "RACE", config5k.restSec);
+  }
+  const config = library.racePaceBlocks.reps.value[paces.distance === "10k" ? "10k" : "hm"];
+  const minReps = library.racePaceBlocks.minReps.value;
   // Zahl der Wiederholungen gerundet (mindestens `minReps`), Länge höchstens die konfigurierte, nach unten angepasst.
   const reps = Math.max(minReps, Math.round(target / config.repKm));
   const rep = Math.min(config.repKm, floorTenth(target / reps));
-  if (!(rep > 0) || minutesAt(rep * reps, pace) < minMinutes - EPS) return null;
+  if (!(rep > 0) || minutesAt(rep * reps, pace) < tMinMinutes - EPS) return null;
   return repsSegment(reps, rep, "RACE", config.restSec);
 }
 
@@ -410,7 +423,7 @@ export function longRunPlusMBlockLimitKm(longRunKm: number, paces: SessionPaces)
   );
 }
 
-/** Long Run mit M-Block am Ende; `null`, wenn der Block kürzer als `minBlockMinutes` wäre. */
+/** Long Run mit M-Block am Ende; `null`, wenn der Block kürzer als `m.minKm` wäre. */
 export function buildLongRunPlusM(args: {
   ymd: Ymd;
   slot: PlacedSlot;
@@ -427,7 +440,7 @@ export function buildLongRunPlusM(args: {
     minutes = Math.floor(minutesAt(block, paces.E) + EPS);
     block = floorTenth(kmAt(minutes, paces.E));
   }
-  if (minutesAt(block, paceOf("M", paces)) < CONFIG.intensity.minBlockMinutes.value - EPS || !(block > 0)) return null;
+  if (block < CONFIG.library.m.minKm.value - EPS) return null;
   const steady: Segment = minutes === undefined ? { type: "steady", km: block, pace: "M" } : { type: "steady", km: block, pace: "M", minutes };
   const segments: Segment[] = [{ type: "easy", km: roundTenth(lr - block) }, steady];
   return {

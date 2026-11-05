@@ -97,9 +97,7 @@ export function checkSessionPlan(plan: SessionPlan, inputs: CoreInputs): string[
     });
     const diff = r1(week.totalKm - week.targetKm);
     if (diff < 0 && week.notes.indexOf("week-km-reduced") < 0) out.push(`I1:${tag}:below-target-without-note:${diff}`);
-    if (diff > 0 && week.notes.indexOf("week-km-raised") < 0 && week.notes.indexOf("long-run-raised-to-min") < 0) {
-      out.push(`I1:${tag}:above-target-without-note:${diff}`);
-    }
+    if (diff > 0 && week.notes.indexOf("week-km-raised") < 0) out.push(`I1:${tag}:above-target-without-note:${diff}`);
 
     // Rollen ↔ Arten (I2)
     week.sessions.forEach((s) => {
@@ -125,41 +123,26 @@ export function checkSessionPlan(plan: SessionPlan, inputs: CoreInputs): string[
     const lr = week.sessions.filter((s) => s.kind === "LR" || s.kind === "LR+M")[0];
     if (layout.hasLongRun !== (lr !== undefined)) out.push(`I10:${tag}:lr-mismatch`);
     if (lr !== undefined) {
-      const raised = week.notes.indexOf("long-run-raised-to-min") >= 0;
-      if (raised) {
-        // Ausnahme von I9 (Spec §14 Punkt 31a) nur, wenn der Long Run genau auf dem Minimum liegt, das die übrigen Läufe
-        // verlangen: E ≥ 25 min und E/MLR ≤ 75 %, REC ≤ 100 % des Long Runs.
-        const ceil1 = (km: number): number => Math.ceil(km * 10 - EPS) / 10;
-        const eMin = ceil1((library.e.minutes.value.min * 60) / paces.E);
-        const need = week.sessions.reduce((most, s) => {
-          if (s.kind === "E") return Math.max(most, eMin / library.e.maxShareOfLongRun.value);
-          if (s.kind === "MLR") return Math.max(most, ceil1((library.mlr.minutes.value.min * 60) / paces.E) / library.mlr.maxShareOfLongRun.value);
-          if (s.kind === "REC") return Math.max(most, ceil1((library.rec.minutes.value.min * 60) / paces.REC));
-          return most;
-        }, eMin);
-        if (Math.abs(lr.km - ceil1(need)) > EPS) out.push(`I9:${tag}:raised-not-minimum:${lr.km}/${ceil1(need)}`);
-      }
-      // Anteil an den geplanten Wochen-km (planVolume), angebrochene Woche 1 am Vollwochen-Äquivalent (Review-Punkt 29).
-      const planned = plan.volume.weeks[index];
-      const shareBase = week.sessions.length < 7 ? Math.max(planned.targetKm, planned.fullWeekKm) : planned.targetKm;
-      if (lr.km > longRun.maxShareOfWeek.value[runDays] * shareBase + EPS && !raised) out.push(`I9:${tag}:share`);
+      // Anteil am geplanten Verlauf vor der Tragfähigkeit (`curveKm`, Vollwochen-Äquivalent; Review-Punkt 29). Seit
+      // 2026-11-05 ohne Ausnahme: kein Long Run über Start-, Steigerungs-, Entlastungs-, Taper- oder Anteilsgrenze.
+      const shareBase = plan.volume.weeks[index].curveKm;
+      if (lr.km > longRun.maxShareOfWeek.value[runDays] * shareBase + EPS) out.push(`I9:${tag}:share`);
       if (minutesAt(lr.km, paces.E) > longRun.minutesHard.value + TOL_MIN) out.push(`I9:${tag}:minutes`);
-      if (!raised) {
-        if (week.mode === "taper") {
-          if (lr.km > CONFIG.taper.longRunShareOfPeak.value * longest + EPS) out.push(`I9:${tag}:taper`);
-        } else if (week.isRecoveryWeek) {
-          if (lastLr !== null && lr.km > (1 - longRun.recoveryReduction.value.min) * lastLr + EPS) out.push(`I9:${tag}:recovery`);
-        } else if (lastLr === null) {
-          if (lr.km > r1(longestRecent + longRun.startAboveLongestRecentKm.value) + EPS) out.push(`I9:${tag}:start`);
-        } else if (afterRecovery && level !== null) {
-          if (lr.km > level + EPS) out.push(`I9:${tag}:after-recovery`);
-        } else {
-          const step = Math.min(longRun.absoluteMaxStepKm.value, Math.max(longRun.maxStepKm.value, longRun.maxStepShare.value * lastLr));
-          if (lr.km > lastLr + step + EPS) out.push(`I9:${tag}:step`);
-        }
+      if (week.mode === "taper") {
+        if (lr.km > CONFIG.taper.longRunShareOfPeak.value * longest + EPS) out.push(`I9:${tag}:taper`);
+      } else if (week.isRecoveryWeek) {
+        if (lastLr !== null && lr.km > (1 - longRun.recoveryReduction.value.min) * lastLr + EPS) out.push(`I9:${tag}:recovery`);
+      } else if (lastLr === null) {
+        if (lr.km > r1(longestRecent + longRun.startAboveLongestRecentKm.value) + EPS) out.push(`I9:${tag}:start`);
+      } else if (afterRecovery && level !== null) {
+        if (lr.km > level + EPS) out.push(`I9:${tag}:after-recovery`);
+      } else {
+        const step = Math.min(longRun.absoluteMaxStepKm.value, Math.max(longRun.maxStepKm.value, longRun.maxStepShare.value * lastLr));
+        if (lr.km > lastLr + step + EPS) out.push(`I9:${tag}:step`);
       }
       if (lr.kind === "LR+M") {
         const block = qualityOf(lr.segments);
+        if (block < library.m.minKm.value - EPS) out.push(`Qmin:${tag}:lrm-block`);
         if (block > library.longRunPlusM.maxShareOfLongRun.value * lr.km + EPS) out.push(`I12:${tag}:lrm-share`);
         if (block > library.longRunPlusM.maxKm.value + EPS) out.push(`I12:${tag}:lrm-km`);
         const w = workOf(lr);
@@ -180,12 +163,23 @@ export function checkSessionPlan(plan: SessionPlan, inputs: CoreInputs): string[
           : s.kind === "MLR"
             ? library.mlr.minutes.value
             : { min: library.e.minutes.value.min, max: runDays >= 6 ? library.e.minutesMaxSixDays.value : library.e.minutes.value.max };
-      if (minutes < lim.min - TOL_MIN) out.push(`I2:${s.ymd}:${s.kind}-too-short`);
+      // Ausnahme (freigegeben 2026-11-05): E/REC nie länger als der Long Run, auch unter der Mindestdauer (Hinweis).
+      const shortenedToLr = s.notes.indexOf("e-shortened-to-long-run") >= 0 && refLr !== null && s.km <= refLr + EPS;
+      if (minutes < lim.min - TOL_MIN && !shortenedToLr) out.push(`I2:${s.ymd}:${s.kind}-too-short`);
       if (minutes > lim.max + TOL_MIN) out.push(`I2:${s.ymd}:${s.kind}-too-long`);
       if (refLr !== null) {
         if (s.km > refLr + EPS) out.push(`I11:${s.ymd}:${s.kind}>LR`);
-        const share = s.kind === "MLR" ? library.mlr.maxShareOfLongRun.value : library.e.maxShareOfLongRun.value;
-        if (s.kind !== "REC" && s.km > share * refLr + EPS) out.push(`I2:${s.ymd}:${s.kind}>75%LR`);
+        // MLR ≤ 75 % des Long Runs; E ≤ max(75 % des Long Runs, E-Mindestdauer), nie länger als er (freigegeben 2026-11-05).
+        const eMin = Math.ceil(((library.e.minutes.value.min * 60) / paces.E) * 10 - EPS) / 10;
+        const allowed =
+          s.kind === "MLR"
+            ? library.mlr.maxShareOfLongRun.value * refLr
+            : s.kind === "E"
+              ? Math.max(Math.floor(library.e.maxShareOfLongRun.value * refLr * 10 + EPS) / 10, eMin)
+              : refLr;
+        if (s.km > allowed + EPS) out.push(`I2:${s.ymd}:${s.kind}>allowed-share-of-LR`);
+        const flagged = s.notes.indexOf("e-above-75-percent-long-run") >= 0;
+        if (s.kind === "E" && (s.km > library.e.maxShareOfLongRun.value * refLr + EPS) !== flagged) out.push(`I2:${s.ymd}:e-75-note`);
       }
       const before = diffDays(inputs.raceDate, s.ymd);
       if (before >= 1 && before <= raceWeek.lastDaysCount.value && minutes > raceWeek.lastDaysMaxMinutes.value + TOL_MIN) out.push(`I15:${s.ymd}:last-days`);
@@ -211,6 +205,17 @@ export function checkSessionPlan(plan: SessionPlan, inputs: CoreInputs): string[
         if (near) limit = Math.min(limit, library.m.nearLongRunMaxKm.value);
       }
       if (q > limit + EPS) out.push(`I12:${s.ymd}:${s.kind}:${q}>${r1(limit)}`);
+      // Mindestgrößen (freigegeben 2026-11-05): M ≥ 3 km, T ≥ 10 min, I ≥ 3 Wdh., R ≥ 4 Wdh.
+      const w = workOf(s);
+      if (s.kind === "M" && q < library.m.minKm.value - EPS) out.push(`Qmin:${s.ymd}:M`);
+      if (s.kind === "T" && w !== undefined) {
+        const tMinutes =
+          w.type === "steady" && w.minutes !== undefined ? w.minutes : minutesAt(q, s.racePace ? paces.RACE ?? paces.E : paces.T ?? paces.E);
+        if (tMinutes < library.t.minMinutes.value - TOL_MIN) out.push(`Qmin:${s.ymd}:T`);
+      }
+      if ((s.kind === "I" || s.kind === "R") && (w === undefined || w.type !== "reps" || w.reps < (s.kind === "R" ? library.r.minReps.value : library.i.minReps.value))) {
+        out.push(`Qmin:${s.ymd}:${s.kind}`);
+      }
       if (s.kind === "R" && library.r.distances.value.indexOf(inputs.distance) < 0) out.push(`I12:${s.ymd}:R-distance`);
       // I15: Abstand der letzten Q-Einheit zum Rennen
       if (diffDays(inputs.raceDate, s.ymd) < raceWeek.lastQDaysBefore.value[inputs.distance]) out.push(`I15:${s.ymd}:q-too-close`);
@@ -268,7 +273,12 @@ export function taperMeanOf(plan: SessionPlan, inputs: CoreInputs): { mean: numb
   return {
     mean,
     inRange: mean >= 1 - max - 0.005 && mean <= 1 - min + 0.005,
-    excused: taperWeeks.some((w) => w.notes.indexOf("week-km-reduced") >= 0 || w.notes.indexOf("week-km-raised") >= 0),
+    // Ausnahme: Limits oder Mindestdauern haben eine Taper-Woche gekürzt bzw. angehoben, oder die Tragfähigkeit hat sie
+    // schon in planVolume begrenzt (`curveKm` > `fullWeekKm`).
+    excused: taperWeeks.some((w) => {
+      const volumeWeek = plan.volume.weeks[w.wn - 1];
+      return w.notes.indexOf("week-km-reduced") >= 0 || w.notes.indexOf("week-km-raised") >= 0 || volumeWeek.curveKm > volumeWeek.fullWeekKm;
+    }),
   };
 }
 

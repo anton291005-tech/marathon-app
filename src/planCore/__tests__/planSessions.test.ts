@@ -1,3 +1,4 @@
+import { checkSessionPlan } from "../__fixtures__/sessionChecks";
 import { PROFILES } from "../__fixtures__/profiles";
 import type { ProfileName } from "../__fixtures__/profiles";
 import { planSessions } from "../planSessions";
@@ -30,10 +31,30 @@ describe("planCore planSessions (Schritt 6)", () => {
     });
   });
 
-  it("minWeekKm geht an planVolume: P1 beginnt mit 12 statt 10 km", () => {
+  it("minWeekKm geht an planVolume: P1 beginnt mit 11 statt 10 km", () => {
     const plan = planOf("P1");
-    expect(plan.minWeekKm).toBe(12);
-    expect(plan.volume.weeks[0].targetKm).toBe(12);
+    expect(plan.minWeekKm).toBe(11);
+    expect(plan.volume.weeks[0].targetKm).toBe(11);
+  });
+
+  it("planVolume plant nur Lieferbares: volle Nicht-Taper-Wochen treffen ihr Ziel, P6 ist durch die Tragfähigkeit begrenzt", () => {
+    PROFILES.forEach((profile) => {
+      const plan = planOf(profile.name);
+      plan.weeks
+        .filter((w) => w.sessions.length === 7 && w.phase !== "taper")
+        .forEach((w) => expect([profile.name, w.wn, w.notes]).toEqual([profile.name, w.wn, []]));
+    });
+    const p6 = planOf("P6");
+    const capped = p6.volume.weeks.filter((w) => w.curveKm > w.fullWeekKm);
+    expect(capped.length).toBeGreaterThan(0);
+    expect(p6.volume.notes.some((note) => note.code === "peak-not-reached")).toBe(false);
+  });
+
+  it("kein Long Run über Start-, Steigerungs-, Entlastungs-, Taper- oder Anteilsgrenze (Prüfer ohne Ausnahme)", () => {
+    PROFILES.forEach((profile) => {
+      const plan = planOf(profile.name);
+      expect(checkSessionPlan(plan, profile.inputs).filter((code) => code.indexOf("I9") === 0)).toEqual([]);
+    });
   });
 
   it("ist deterministisch (I20-Anteil)", () => {

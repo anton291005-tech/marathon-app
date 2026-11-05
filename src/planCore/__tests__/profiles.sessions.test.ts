@@ -18,11 +18,14 @@ const quality = (s: CoreSession): number =>
 /** Höchster tatsächlicher Wochenumfang bis zur Peak-Woche (ohne Taper). */
 const peakActual = (plan: SessionPlan): number => Math.max.apply(null, plan.weeks.filter((w) => w.phase !== "taper").map((w) => w.totalKm));
 
-/** Abnahmebereiche aus docs/plan-spec.md §13 (P4/P6 Long-Run-Peak nach der Freigabe zu Schritt 6). */
+/**
+ * Abnahmebereiche aus docs/plan-spec.md §13: P4/P6 Long-Run-Peak nach der Freigabe zu Schritt 6; P2 (10–13 → 10–15) und
+ * P3 (18–21 → 18–22) als Folge der Long-Run-Ziel-Regel vom 2026-11-05 (Anteilsgrenze × Peak-Woche), zu bestätigen.
+ */
 const ACCEPTANCE: Record<ProfileName, { peak: [number, number]; longRun: [number, number] }> = {
   P1: { peak: [13, 15], longRun: [7, 8] },
-  P2: { peak: [28, 35], longRun: [10, 13] },
-  P3: { peak: [55, 65], longRun: [18, 21] },
+  P2: { peak: [28, 35], longRun: [10, 15] },
+  P3: { peak: [55, 65], longRun: [18, 22] },
   P4: { peak: [50, 55], longRun: [24, 25] },
   P5: { peak: [95, 105], longRun: [30, 34] },
   P6: { peak: [40, 45], longRun: [23, 24] },

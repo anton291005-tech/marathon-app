@@ -223,11 +223,6 @@ Object {
         "spec": "§6",
         "value": 0.5,
       },
-      "minBlockMinutes": Object {
-        "source": "E",
-        "spec": "§7",
-        "value": 5,
-      },
       "q2AsEInRecoveryWeek": Object {
         "source": "E",
         "spec": "§6",
@@ -344,6 +339,11 @@ Object {
           "source": "L",
           "spec": "§7",
           "value": 110,
+        },
+        "minKm": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 3,
         },
         "nearLongRunDays": Object {
           "source": "E",
@@ -531,6 +531,11 @@ Object {
           "spec": "§7",
           "value": 0.1,
         },
+        "minMinutes": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 10,
+        },
       },
       "warmupCooldownByWeekKm": Object {
         "source": "E",
@@ -675,11 +680,6 @@ Object {
         "source": "E",
         "spec": "§7.1",
         "value": 2,
-      },
-      "targetShareOfPeakWeek": Object {
-        "source": "E",
-        "spec": "§7.1",
-        "value": 0.3,
       },
     },
     "phases": Object {
@@ -1303,6 +1303,6 @@ Object {
       },
     },
   },
-  "version": "0.7.0",
+  "version": "0.8.0",
 }
 `;

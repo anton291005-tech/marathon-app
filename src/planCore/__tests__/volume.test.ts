@@ -1,5 +1,6 @@
 import { CONFIG } from "../config";
 import { addDays, diffDays, mondayOf } from "../dates";
+import { PROFILES } from "../__fixtures__/profiles";
 import { isPlanCoreError } from "../phases";
 import { createRng } from "../random";
 import type { Distance, RunDays, Ymd } from "../types";
@@ -301,6 +302,45 @@ describe("planCore volume (§5)", () => {
       const race = volume.weeks[volume.weeks.length - 1];
       expect(race.days).toBe(3);
       expect(race.raceWeekExtraKm).toBe(Math.round(volume.peakKm * 0.425 * (2 / 6)));
+    });
+  });
+
+  describe("Tragfähigkeit (capacity, freigegeben 2026-11-05)", () => {
+    const p3 = PROFILES.filter((p) => p.name === "P3")[0].inputs;
+
+    it("plant höchstens das Lieferbare, die Steigerung rechnet mit den gelieferten Werten, curveKm hält den Plan davor", () => {
+      const calls: number[] = [];
+      const volume = planVolume(p3, {
+        capacity: {
+          begin: () => {
+            calls.length = 0;
+            return {
+              deliver: (index: number, km: number) => {
+                calls.push(index);
+                return Math.min(km, 50);
+              },
+            };
+          },
+        },
+      });
+      const plain = planVolume(p3);
+      const problems = volume.weeks.filter(
+        (w, i) =>
+          w.fullWeekKm > 50 ||
+          w.curveKm < w.fullWeekKm ||
+          (i >= 2 && w.wn <= volume.peakWeek && w.fullWeekKm > Math.floor(1.3 * volume.weeks[i - 2].fullWeekKm)),
+      );
+      expect(problems).toEqual([]);
+      expect(volume.peakKm).toBe(50);
+      expect(volume.notes).toContainEqual({ code: "peak-not-reached", reason: "run-days", targetPeakKm: plain.targetPeakKm, reachedPeakKm: 50 });
+      // je Woche genau ein Aufruf, in Reihenfolge, Taper- und Rennwoche eingeschlossen
+      expect(calls).toEqual(volume.weeks.map((_, i) => i));
+      // Taper relativ zum gelieferten Peak
+      expect(volume.weeks[volume.weeks.length - 2].curveKm).toBe(Math.round(50 * 0.7));
+    });
+
+    it("ohne capacity ist curveKm = fullWeekKm", () => {
+      planVolume(p3).weeks.forEach((w) => expect(w.curveKm).toBe(w.fullWeekKm));
     });
   });
 

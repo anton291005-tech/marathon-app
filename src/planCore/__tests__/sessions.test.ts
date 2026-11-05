@@ -8,6 +8,7 @@ import {
   buildQualityParts,
   easyMaxKmByMinutes,
   easyMinKm,
+  minQualityKm,
   qualityLimitKm,
   segmentsKm,
   sessionPacesOf,
@@ -133,10 +134,22 @@ describe("planCore sessions (§7)", () => {
       expect(hm.racePace).toBe(true);
       expect(hm.segments[1]).toEqual({ type: "reps", reps: 3, repKm: 2, pace: "RACE", restSec: 120, restKm: 0.8 });
       expect(buildQualityParts({ type: "RACE_PACE", kind: "T" }, 2.6, 26, p3)!.segments[1]).toMatchObject({ reps: 2, repKm: 1.3 });
+      expect(minQualityKm({ type: "M" }, p5)).toBe(3);
+      expect(minQualityKm({ type: "T" }, p3)).toBe(2.3);
     });
 
-    it("Blöcke unter 5 min ergeben null (E + Strides)", () => {
-      expect(buildQualityParts({ type: "T" }, 1, 10, p3)).toBeNull();
+    it("Mindestgrößen (freigegeben 2026-11-05): M ≥ 3 km, T ≥ 10 min, I ≥ 3 Wdh., R ≥ 4 Wdh., darunter null (E + Strides)", () => {
+      // T 4:28/km: 2,2 km = 9,8 min → null, 2,3 km = 10,3 min → Block
+      expect(buildQualityParts({ type: "T" }, 2.2, 30, p3)).toBeNull();
+      expect(buildQualityParts({ type: "T" }, 2.3, 30, p3)!.segments[1]).toEqual({ type: "steady", km: 2.3, pace: "T" });
+      expect(buildQualityParts({ type: "M" }, 2.9, 60, p5)).toBeNull();
+      expect(buildQualityParts({ type: "M" }, 3, 60, p5)!.segments[1]).toEqual({ type: "steady", km: 3, pace: "M" });
+      expect(buildQualityParts({ type: "RACE_PACE", kind: "T" }, 2, 30, p3)).toBeNull();
+      expect(buildQualityParts({ type: "RACE_PACE", kind: "I" }, 1.7, 40, p3)).toBeNull();
+      expect(buildQualityParts({ type: "RACE_PACE", kind: "I" }, 1.8, 40, p3)!.segments[1]).toMatchObject({ reps: 3, repKm: 0.6 });
+      // Einsteiger: T nach Minuten mindestens 10 min
+      expect(buildQualityParts({ type: "T" }, 1.1, 15, p1)).toBeNull();
+      expect(buildLongRunPlusM({ ymd: "2027-02-21", slot: "LR", longRunKm: 30, blockKm: 2.9, paces: p5 })).toBeNull();
     });
 
     it("Einsteiger: T/M nach Minuten, km über die E-Pace, kein Pace-Ziel", () => {

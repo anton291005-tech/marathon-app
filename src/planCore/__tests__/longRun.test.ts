@@ -45,15 +45,15 @@ describe("planCore longRun (§7.1)", () => {
     });
   });
 
-  describe("Ziel des längsten Long Runs (Abnahme §13)", () => {
+  describe("Ziel des längsten Long Runs = Anteilsgrenze × Peak-Woche, auf das Peak-Ziel begrenzt (freigegeben 2026-11-05)", () => {
     it.each([
       // Distanz, Lauftage, Peak-Woche, E-Pace, Ziel
-      ["P1 5k", "5k", 3, 15, 420, 8],
-      ["P2 10k", "10k", 4, 30, 468, 12],
-      ["P3 HM", "hm", 5, 61, 338, 18.3],
-      ["P4 M 4 Tage (Anteil 50 % begrenzt)", "m", 4, 50, 397, 25],
-      ["P5 M 6 Tage", "m", 6, 96, 287, 30],
-      ["P6 M 3 Tage (Anteil 55 % begrenzt)", "m", 3, 43, 429, 23.6],
+      ["P1 5k: 55 % × 15 = 8,2 (im Bereich 8–14)", "5k", 3, 15, 420, 8.2],
+      ["P2 10k: 50 % × 30 = 15 (im Bereich 12–18)", "10k", 4, 30, 468, 15],
+      ["P3 HM: 38 % × 61 = 23,1 → Peak-Ziel höchstens 22", "hm", 5, 61, 338, 22],
+      ["P4 M 4 Tage: 50 % × 50 = 25 (unter dem Peak-Ziel 26–30)", "m", 4, 50, 397, 25],
+      ["P5 M 6 Tage: 33 % × 96 = 31,6", "m", 6, 96, 287, 31.6],
+      ["P6 M 3 Tage: 55 % × 43 = 23,6 (unter dem Peak-Ziel 26–30)", "m", 3, 43, 429, 23.6],
     ] as const)("%s", (_label, distance, runDays, peakWeek, ePace, expected) => {
       expect(longRunPeakTargetKm(distance, runDays, peakWeek, ePace)).toBe(expected);
     });

@@ -26,10 +26,23 @@ export type VolumeOptions = {
    * Rennwochen nicht (dort kürzt oder hebt die Verteilung mit Hinweis). Ohne Angabe wie bisher.
    */
   minWeekKm?: number;
+  /**
+   * Tragfähigkeit der Wochen (freigegeben 2026-11-05): `planVolume` plant je Woche höchstens, was die Einheiten liefern
+   * können (Long-Run-Verlauf und E-Grenzen, siehe `planSessions`). Ohne Angabe unbegrenzt.
+   */
+  capacity?: VolumeCapacity;
 };
 
+/**
+ * Tragfähigkeit eines Durchlaufs von Woche 1 bis zur Rennwoche. Zustandsbehaftet (Long-Run-Verlauf): `deliver` wird je
+ * Woche genau einmal und in Reihenfolge aufgerufen, mit dem geplanten Wert (Vollwoche; Rennwoche ohne Rennen), und gibt
+ * den lieferbaren Wert zurück (auf 0,1 km, höchstens der geplante). Der Zustand rückt mit dem gelieferten Wert weiter.
+ */
+export type VolumeCapacityRun = { deliver(index: number, km: number): number };
+export type VolumeCapacity = { begin(): VolumeCapacityRun };
+
 export type PlanVolumeNote =
-  | { code: "peak-not-reached"; reason: "growth"; targetPeakKm: number; reachedPeakKm: number }
+  | { code: "peak-not-reached"; reason: "growth" | "run-days"; targetPeakKm: number; reachedPeakKm: number }
   | { code: "below-recommended"; weeks: number; recommendedMinWeeks: number }
   | { code: "plan-trimmed"; freeWeeks: number }
   /** Woche 1 oder der Peak-Korridor lagen unter `minWeekKm` und wurden angehoben. */
@@ -43,6 +56,11 @@ export type PlanVolumeWeek = PhaseWeek & {
   isRecoveryWeek: boolean;
   /** Nur in der Rennwoche: km ohne das Rennen. */
   raceWeekExtraKm?: number;
+  /**
+   * Geplanter Wert vor der Tragfähigkeit (Vollwoche; Rennwoche ohne Rennen). Bezug des Long-Run-Anteils (Review-Punkt 29):
+   * sonst schrumpfen Woche und Long Run bei 3 Tagen gemeinsam. Ohne `capacity` gleich `fullWeekKm`.
+   */
+  curveKm: number;
 };
 
 export type PlanVolume = {
@@ -92,7 +110,7 @@ function peakCorridorFor(inputs: VolumeInputs): Range {
   return { min: floor, max: cap };
 }
 
-type Curve = { full: number[]; recovery: boolean[] };
+type Curve = { full: number[]; planned: number[]; recovery: boolean[]; run: VolumeCapacityRun | null; capped: boolean };
 
 /**
  * Wochen 1 … `peakWeek` als Vollwochen-km. Pro Woche gilt das Kleinste aus Verlaufsform, I4-Grenze, I3-Grenze und
@@ -105,10 +123,14 @@ function simulate(
   peakTarget: number,
   capKm: number,
   minWeekKm: number,
+  capacity: VolumeCapacity | undefined,
 ): Curve {
   const { growth, recovery } = CONFIG.volume;
   const full: number[] = [];
+  const planned: number[] = [];
   const isRecovery: boolean[] = [];
+  const run = capacity === undefined ? null : capacity.begin();
+  let capped = false;
   const at = (week: number): number => (week < 1 ? weekOneKm : full[week - 1]);
   let level = weekOneKm;
 
@@ -134,11 +156,17 @@ function simulate(
         value = Math.min(trend, stepCap, twoWeekCap, capKm);
       }
     }
+    planned.push(value);
+    if (run !== null) {
+      const delivered = Math.min(value, run.deliver(week - 1, value));
+      if (delivered < value) capped = true;
+      value = delivered;
+    }
     full.push(value);
     isRecovery.push(recoveryWeek);
     if (!recoveryWeek) level = value;
   }
-  return { full, recovery: isRecovery };
+  return { full, planned, recovery: isRecovery, run, capped };
 }
 
 /** Anteile am Peak je Taper-Woche (Reihenfolge: erste Taper-Woche … Rennwoche, Rennwoche "ohne Rennen"). */
@@ -179,10 +207,12 @@ export function planVolume(inputs: VolumeInputs, options: VolumeOptions = {}): P
   );
 
   const peakWeek = phases.weeks.length - phases.taperWeeks;
-  let curve = simulate(SHAPES[0], peakWeek, weekOneKm, peakTarget, corridor.max, minWeekKm);
+  let curve = simulate(SHAPES[0], peakWeek, weekOneKm, peakTarget, corridor.max, minWeekKm, options.capacity);
   for (let index = 1; index < SHAPES.length && curve.full[peakWeek - 1] < peakTarget; index += 1) {
-    curve = simulate(SHAPES[index], peakWeek, weekOneKm, peakTarget, corridor.max, minWeekKm);
+    curve = simulate(SHAPES[index], peakWeek, weekOneKm, peakTarget, corridor.max, minWeekKm, options.capacity);
   }
+  // Taper- und Rennwochen laufen im selben Durchlauf der Tragfähigkeit weiter.
+  const deliver = (index: number, km: number): number => (curve.run === null ? km : Math.min(km, curve.run.deliver(index, km)));
 
   const peakKm = curve.full.reduce((best, value) => Math.max(best, value), 0);
   const shares = taperShares(distance, phases.taperWeeks);
@@ -194,21 +224,25 @@ export function planVolume(inputs: VolumeInputs, options: VolumeOptions = {}): P
       return {
         ...week,
         fullWeekKm,
+        curveKm: curve.planned[index],
         targetKm: week.days < 7 ? Math.round((fullWeekKm * week.days) / 7) : fullWeekKm,
         isRecoveryWeek: curve.recovery[index],
       };
     }
     const share = shares[week.wn - peakWeek - 1];
     if (week.wn < phases.weeks.length) {
-      const fullWeekKm = Math.round(peakKm * share);
+      const curveKm = Math.round(peakKm * share);
+      const fullWeekKm = deliver(index, curveKm);
       // Taper-Wochen vor der Rennwoche sind immer volle Wochen (nur Woche 1 und die Rennwoche können angebrochen sein).
-      return { ...week, fullWeekKm, targetKm: fullWeekKm, isRecoveryWeek: false };
+      return { ...week, fullWeekKm, curveKm, targetKm: fullWeekKm, isRecoveryWeek: false };
     }
     // Rennwoche: Tage vor dem Rennen bestimmen den Anteil ohne Rennen (voll bei Rennen am Sonntag).
     const daysBeforeRace = Math.max(0, week.days - 1);
-    const extra = Math.round(peakKm * share * Math.min(1, daysBeforeRace / CONFIG.taper.fullRaceWeekDaysBefore.value));
+    const curveKm = Math.round(peakKm * share * Math.min(1, daysBeforeRace / CONFIG.taper.fullRaceWeekDaysBefore.value));
+    const extra = deliver(index, curveKm);
     return {
       ...week,
+      curveKm,
       fullWeekKm: extra,
       targetKm: Math.round((raceKm + extra) * 10) / 10,
       isRecoveryWeek: false,
@@ -219,7 +253,7 @@ export function planVolume(inputs: VolumeInputs, options: VolumeOptions = {}): P
   const notes: PlanVolumeNote[] = [];
   // Das Ziel ist weich (Entlastung und I3 kosten ab und zu 1–2 km); gemeldet wird erst bei mehr als 10 % darunter.
   if (peakKm < peakTarget * (1 - CONFIG.volume.peakShortfallNote.value) - EPS) {
-    notes.push({ code: "peak-not-reached", reason: "growth", targetPeakKm: peakTarget, reachedPeakKm: peakKm });
+    notes.push({ code: "peak-not-reached", reason: curve.capped ? "run-days" : "growth", targetPeakKm: peakTarget, reachedPeakKm: peakKm });
   }
   if (phases.belowRecommended) {
     notes.push({

@@ -64,13 +64,14 @@ export function longRunStepKm(lastKm: number): number {
 }
 
 /**
- * Ziel des längsten Long Runs: `targetShareOfPeakWeek` × Peak-Wochenumfang, auf das Peak-Ziel der Distanz begrenzt,
- * danach Anteil und 180 min in der Peak-Woche. Liegt das Peak-Ziel über diesen Grenzen, gewinnen die Grenzen (P4, P6).
+ * Ziel des längsten Long Runs (freigegeben 2026-11-05): Anteilsgrenze der Lauftage (`maxShareOfWeek`) × Peak-Wochenumfang,
+ * auf das Peak-Ziel der Distanz begrenzt, danach 180 min. Liegt das Peak-Ziel über dem Anteil, gewinnt der Anteil (P4, P6).
  */
 export function longRunPeakTargetKm(distance: Distance, runDays: RunDays, peakWeekKm: number, ePaceSecPerKm: number): number {
   const range = peakLongRunRange(distance, runDays);
-  const wanted = Math.min(range.max, Math.max(range.min, CONFIG.longRun.targetShareOfPeakWeek.value * peakWeekKm));
-  return floorTenth(Math.min(wanted, longRunShareCapKm(runDays, peakWeekKm), longRunMinutesCapKm(ePaceSecPerKm)));
+  const share = longRunShareCapKm(runDays, peakWeekKm);
+  const wanted = Math.min(range.max, Math.max(range.min, share));
+  return floorTenth(Math.min(wanted, share, longRunMinutesCapKm(ePaceSecPerKm)));
 }
 
 export type LongRunWeek = {
