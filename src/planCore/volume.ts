@@ -4,6 +4,11 @@
  * Alle Wachstumsregeln (I3, I4) gelten für das Vollwochen-Äquivalent `fullWeekKm`: eine angebrochene Woche 1 wird
  * anteilig skaliert (`targetKm`), die Kurve rechnet mit der vollen Woche. Taper- und Rennwochen sind von I3/I4 und
  * vom Peak ausgenommen; das Rennwochen-Volumen steht "ohne Rennen" in `raceWeekExtraKm`, das Rennen zählt separat.
+ *
+ * Mit Tragfähigkeit (`capacity`) bleibt der gelieferte Verlauf monoton (freigegeben 2026-11-05): keine Aufbauwoche
+ * kleiner als die Vorwoche (frühere Wochen werden gesenkt, spätere nie), der Peak liegt in der letzten Woche vor dem
+ * Taper, und eine Entlastungswoche liegt −20 bis −30 % unter der gelieferten Vorwoche (flacher nur, wenn `minWeekKm`
+ * sie anhebt).
  */
 
 import { CONFIG } from "./config";
@@ -28,7 +33,8 @@ export type VolumeOptions = {
   minWeekKm?: number;
   /**
    * Tragfähigkeit der Wochen (freigegeben 2026-11-05): `planVolume` plant je Woche höchstens, was die Einheiten liefern
-   * können (Long-Run-Verlauf und E-Grenzen, siehe `planSessions`). Ohne Angabe unbegrenzt.
+   * können (Long-Run-Verlauf und E-Grenzen, siehe `planSessions`), und hält den Verlauf danach monoton. Ohne Angabe
+   * unbegrenzt.
    */
   capacity?: VolumeCapacity;
 };
@@ -57,8 +63,9 @@ export type PlanVolumeWeek = PhaseWeek & {
   /** Nur in der Rennwoche: km ohne das Rennen. */
   raceWeekExtraKm?: number;
   /**
-   * Geplanter Wert vor der Tragfähigkeit (Vollwoche; Rennwoche ohne Rennen). Bezug des Long-Run-Anteils (Review-Punkt 29):
-   * sonst schrumpfen Woche und Long Run bei 3 Tagen gemeinsam. Ohne `capacity` gleich `fullWeekKm`.
+   * Geplanter Wert vor der Tragfähigkeit und vor dem Senken für den monotonen Verlauf (Vollwoche; Rennwoche ohne
+   * Rennen). Bezug des Long-Run-Anteils (Review-Punkt 29): sonst schrumpfen Woche und Long Run bei 3 Tagen gemeinsam.
+   * Ohne `capacity` gleich `fullWeekKm`.
    */
   curveKm: number;
 };
@@ -80,6 +87,11 @@ export type PlanVolume = {
 };
 
 const EPS = 1e-9;
+
+/** Höchstzahl der Runden für den monotonen Verlauf (jede Runde senkt mindestens eine Woche um 0,1 km). */
+const MONOTONE_MAX_ROUNDS = 200;
+
+const floorTenth = (km: number): number => Math.floor(km * 10 + EPS) / 10;
 
 const mid = (range: Range): number => (range.min + range.max) / 2;
 
@@ -112,19 +124,23 @@ function peakCorridorFor(inputs: VolumeInputs): Range {
 
 type Curve = { full: number[]; planned: number[]; recovery: boolean[]; run: VolumeCapacityRun | null; capped: boolean };
 
+type SimulateArgs = {
+  shape: (x: number) => number;
+  peakWeek: number;
+  weekOneKm: number;
+  peakTarget: number;
+  capKm: number;
+  minWeekKm: number;
+  capacity: VolumeCapacity | undefined;
+};
+
 /**
  * Wochen 1 … `peakWeek` als Vollwochen-km. Pro Woche gilt das Kleinste aus Verlaufsform, I4-Grenze, I3-Grenze und
- * Peak-Obergrenze. Der Verlauf vor Woche 1 zählt als Woche 1 (die Angaben des Nutzers sind Ø der letzten Wochen).
+ * Peak-Obergrenze, danach `ceilings` (monotoner Verlauf) und die Tragfähigkeit. Der Verlauf vor Woche 1 zählt als
+ * Woche 1 (die Angaben des Nutzers sind Ø der letzten Wochen).
  */
-function simulate(
-  shape: (x: number) => number,
-  peakWeek: number,
-  weekOneKm: number,
-  peakTarget: number,
-  capKm: number,
-  minWeekKm: number,
-  capacity: VolumeCapacity | undefined,
-): Curve {
+function simulate(args: SimulateArgs, ceilings: number[]): Curve {
+  const { shape, peakWeek, weekOneKm, peakTarget, capKm, minWeekKm, capacity } = args;
   const { growth, recovery } = CONFIG.volume;
   const full: number[] = [];
   const planned: number[] = [];
@@ -140,13 +156,14 @@ function simulate(
     if (week > 1) {
       const previous = at(week - 1);
       if (recoveryWeek) {
-        // −20 %; bei winzigen Umfängen nicht tiefer, als I3 für die übernächste Woche zulässt (sonst gäbe es danach einen Rückgang).
-        // Nie über der Vorwoche: mit Tragfähigkeit kann die gelieferte Vorwoche unter `minWeekKm` liegen.
+        // −20 % (abgerundet, nie flacher); bei winzigen Umfängen nicht tiefer, als I3 für die übernächste Woche zulässt
+        // (sonst gäbe es danach einen Rückgang). Nie über der Vorwoche: mit Tragfähigkeit kann die gelieferte Vorwoche
+        // unter `minWeekKm` liegen.
         value = Math.min(
           previous,
           Math.max(
-            Math.round(previous * (1 - recovery.reduction.value)),
-            Math.ceil(previous / growth.twoWeekFactor.value - EPS),
+            Math.floor(previous * (1 - recovery.reduction.value) + EPS),
+            Math.ceil((previous / growth.twoWeekFactor.value) * 10 - EPS) / 10,
             minWeekKm,
           ),
         );
@@ -161,6 +178,11 @@ function simulate(
       }
     }
     planned.push(value);
+    const ceiling = ceilings[week - 1];
+    if (ceiling !== undefined && ceiling < value - EPS) {
+      value = ceiling;
+      capped = true;
+    }
     if (run !== null) {
       const delivered = Math.min(value, run.deliver(week - 1, value));
       if (delivered < value) capped = true;
@@ -171,6 +193,49 @@ function simulate(
     if (!recoveryWeek) level = value;
   }
   return { full, planned, recovery: isRecovery, run, capped };
+}
+
+/**
+ * Obergrenzen für einen monotonen Verlauf (Rückwärtsdurchlauf von der Peak-Woche): jede Aufbauwoche höchstens so groß
+ * wie die nächste, die Woche vor einer Entlastung höchstens so groß, dass die gelieferte Entlastung nicht tiefer als
+ * `maxReduction` liegt. Gesenkt werden nur frühere Wochen. `null`, wenn der Verlauf schon passt.
+ */
+function monotoneCeilings(curve: Curve): number[] | null {
+  const keep = 1 - CONFIG.volume.recovery.maxReduction.value;
+  const ceilings = curve.full.slice();
+  let next = Infinity;
+  let changed = false;
+  for (let index = ceilings.length - 1; index >= 0; index -= 1) {
+    if (curve.recovery[index]) {
+      next = Math.min(next, floorTenth(curve.full[index] / keep));
+    } else {
+      if (ceilings[index] > next + EPS) {
+        ceilings[index] = next;
+        changed = true;
+      }
+      next = ceilings[index];
+    }
+  }
+  return changed ? ceilings : null;
+}
+
+/**
+ * `simulate` mit Tragfähigkeit, bis der gelieferte Verlauf monoton ist: Obergrenzen aus `monotoneCeilings` werden
+ * gesammelt (nur kleiner) und der Verlauf neu gerechnet, weil die gesenkten Wochen den Long-Run-Verlauf und damit die
+ * Tragfähigkeit der folgenden Wochen ändern können.
+ */
+function simulateMonotone(args: SimulateArgs): Curve {
+  let ceilings: number[] = [];
+  let curve = simulate(args, ceilings);
+  if (args.capacity === undefined) return curve;
+  for (let round = 0; round < MONOTONE_MAX_ROUNDS; round += 1) {
+    const next = monotoneCeilings(curve);
+    if (next === null) break;
+    const previous = ceilings;
+    ceilings = next.map((km, index) => (previous[index] === undefined ? km : Math.min(km, previous[index])));
+    curve = simulate(args, ceilings);
+  }
+  return curve;
 }
 
 /** Anteile am Peak je Taper-Woche (Reihenfolge: erste Taper-Woche … Rennwoche, Rennwoche "ohne Rennen"). */
@@ -211,9 +276,18 @@ export function planVolume(inputs: VolumeInputs, options: VolumeOptions = {}): P
   );
 
   const peakWeek = phases.weeks.length - phases.taperWeeks;
-  let curve = simulate(SHAPES[0], peakWeek, weekOneKm, peakTarget, corridor.max, minWeekKm, options.capacity);
+  const args = (shape: (x: number) => number): SimulateArgs => ({
+    shape,
+    peakWeek,
+    weekOneKm,
+    peakTarget,
+    capKm: corridor.max,
+    minWeekKm,
+    capacity: options.capacity,
+  });
+  let curve = simulateMonotone(args(SHAPES[0]));
   for (let index = 1; index < SHAPES.length && curve.full[peakWeek - 1] < peakTarget; index += 1) {
-    curve = simulate(SHAPES[index], peakWeek, weekOneKm, peakTarget, corridor.max, minWeekKm, options.capacity);
+    curve = simulateMonotone(args(SHAPES[index]));
   }
   // Taper- und Rennwochen laufen im selben Durchlauf der Tragfähigkeit weiter.
   const deliver = (index: number, km: number): number => (curve.run === null ? km : Math.min(km, curve.run.deliver(index, km)));

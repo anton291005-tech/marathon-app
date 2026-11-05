@@ -1,6 +1,6 @@
 import { randomInputs } from "../__fixtures__/randomInputs";
-import { checkSessionPlan } from "../__fixtures__/sessionChecks";
-import { easyMinKm } from "../sessions";
+import { checkSessionPlan, checkVolumeGrowth } from "../__fixtures__/sessionChecks";
+import { easyHardMinKm, easyMinKm } from "../sessions";
 import { PROFILES } from "../__fixtures__/profiles";
 import type { ProfileName } from "../__fixtures__/profiles";
 import { planSessions } from "../planSessions";
@@ -88,6 +88,43 @@ describe("planCore planSessions (Schritt 6)", () => {
     const { plan, km, refLr } = firstWith("e-shortened-to-long-run");
     expect(refLr).toBeLessThan(easyMinKm("E", plan.paces));
     expect(km).toBe(Math.floor(refLr * 10 + 1e-9) / 10);
+  });
+
+  it("harte Untergrenze 15 min: liegt die Long-Run-Grenze darunter, ist der Long Run genau 15 min (long-run-raised-to-minimum)", () => {
+    const { plan, refLr } = firstWith("long-run-raised-to-minimum");
+    expect(refLr).toBe(easyHardMinKm("LR", plan.paces));
+    plan.weeks.forEach((w) =>
+      w.sessions
+        .filter((s) => s.kind === "E" || s.kind === "REC" || s.kind === "LR")
+        .forEach((s) => expect(s.km).toBeGreaterThanOrEqual(easyHardMinKm(s.kind as "E" | "REC" | "LR", plan.paces))),
+    );
+  });
+
+  it("Entlastungswoche: Q1 mit dem Faktor der Woche (P5 W12: M-Block ≤ 10 km × 71/89; Review-Punkt 36)", () => {
+    const plan = planOf("P5");
+    const w12 = plan.weeks[11];
+    expect(w12.isRecoveryWeek).toBe(true);
+    const factor = plan.volume.weeks[11].fullWeekKm / plan.volume.weeks[10].fullWeekKm;
+    const q1 = w12.sessions.filter((s) => s.slot === "Q1")[0];
+    expect(q1.kind).toBe("M");
+    expect(q1.qualityKm).toBe(Math.floor(10 * factor * 10) / 10);
+    expect(q1.notes).toEqual(expect.arrayContaining(["m-block-near-long-run", "q1-scaled-recovery-week"]));
+  });
+
+  it("3 Lauftage HM/M: E bis 90 min (übernimmt die MLR-Rolle; Review-Punkt 33)", () => {
+    const plan = planOf("P6");
+    const minutes = plan.weeks.reduce((list, w) => list.concat(w.sessions.filter((s) => s.kind === "E").map((s) => s.minutes)), [] as number[]);
+    expect(Math.max.apply(null, minutes)).toBeGreaterThan(75);
+    expect(Math.max.apply(null, minutes)).toBeLessThanOrEqual(90);
+  });
+
+  it("monotoner Verlauf in allen Profilen: keine Aufbauwoche kleiner als die Vorwoche, Peak in der letzten Woche vor dem Taper", () => {
+    PROFILES.forEach((profile) => {
+      const plan = planOf(profile.name);
+      expect([profile.name, checkVolumeGrowth(plan, profile.inputs)]).toEqual([profile.name, []]);
+      const pre = plan.volume.weeks.filter((w) => w.wn <= plan.volume.peakWeek);
+      expect([profile.name, pre[pre.length - 1].fullWeekKm]).toEqual([profile.name, plan.volume.peakKm]);
+    });
   });
 
   it("ist deterministisch (I20-Anteil)", () => {

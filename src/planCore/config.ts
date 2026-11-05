@@ -68,7 +68,7 @@ function deepFreeze<T>(node: T): T {
 }
 
 /** Erhöhen bei jeder Änderung eines Werts; steht später in `plan.meta.core.configVersion`. */
-export const CONFIG_VERSION = "0.8.0";
+export const CONFIG_VERSION = "0.9.0";
 
 export const CONFIG = deepFreeze({
   /** §0 Scope MVP */
@@ -208,8 +208,16 @@ export const CONFIG = deepFreeze({
     recovery: {
       /** Jede n-te Woche in Basis/Aufbau/Spezifisch (3:1). */
       everyNWeeks: P(4, "§5.3"),
-      /** Fester Abschlag zur Vorwoche; −20 % ist verträglich mit I3 (danach ist wieder das alte Niveau erreichbar). */
+      /**
+       * Fester Abschlag zur Vorwoche; −20 % ist verträglich mit I3 (danach ist wieder das alte Niveau erreichbar).
+       * Geplant wird abgerundet (nie flacher als −20 %, außer `minWeekKm` hebt die Woche an).
+       */
       reduction: P(0.2, "§5.3"),
+      /**
+       * Tiefster Abschlag zur gelieferten Vorwoche (freigegeben 2026-11-05): kürzt die Tragfähigkeit die Entlastungswoche
+       * tiefer, werden die Wochen davor gesenkt. Review-Punkt 35.
+       */
+      maxReduction: E(0.3, "§5.3"),
       /** Wort, an dem die App heute Entlastungswochen im `focus` erkennt. */
       focusKeyword: E("Entlastung", "§5.3"),
     },
@@ -288,6 +296,12 @@ export const CONFIG = deepFreeze({
     q2AsEInRecoveryWeek: E(true, "§6"),
     /** Einsteiger-Modus: Q2 (5–6 Lauftage) wird zu E + Strides (freigegeben). Review-Punkt 30. */
     beginnerQ2AsE: E(true, "§7.2"),
+    /**
+     * Entlastungswoche: Q1 höchstens so groß wie in der Vorwoche mal den Faktor der Woche (Wochen-km ÷ Vorwoche;
+     * freigegeben 2026-11-05). Wirkt bei festen km-Grenzen (M ≤ 10 km vor dem Long Run, M ≤ 29 km/110 min, I ≤ 10 km,
+     * R ≤ 8 km); Anteilsgrenzen schrumpfen ohnehin mit der Woche. Review-Punkt 36.
+     */
+    recoveryWeekQ1ScalesWithWeek: E(true, "§6"),
   },
 
   /** Verteilung der Wochen-km auf E/REC/MLR (§6): Gewichte relativ zu einem E-Lauf. Review-Punkt 22. */
@@ -328,10 +342,23 @@ export const CONFIG = deepFreeze({
     rec: {
       minutes: E(range(20, 45), "§7"),
     },
+    /**
+     * Harte Untergrenze jeder lockeren Einheit und des Long Runs (freigegeben 2026-11-05): E/REC dürfen unter ihre
+     * Mindestdauer fallen, wenn der Long Run kürzer ist (I11), aber nie unter diese Dauer. Liegt die Grenze des Long Runs
+     * darunter (sehr kurzer längster Lauf), wird er auf diese Dauer angehoben (Hinweis). Review-Punkt 34.
+     */
+    easyHardMinMinutes: E(15, "§7"),
     e: {
       minutes: E(range(25, 75), "§7"),
       /** Bei 6 Lauftagen bis zu dieser Dauer. */
       minutesMaxSixDays: E(90, "§7"),
+      /**
+       * Bei so wenigen Lauftagen (HM/M) bis 90 min: E übernimmt die Rolle des MLR (freigegeben 2026-11-05). Review-Punkt 33.
+       */
+      minutesMaxFewDays: E<{ upToRunDays: number; distances: Distance[]; minutes: number }>(
+        { upToRunDays: 3, distances: ["hm", "m"], minutes: 90 },
+        "§7",
+      ),
       maxShareOfLongRun: E(0.75, "§7"),
     },
     mlr: {

@@ -137,16 +137,26 @@ export type LongRunLimitArgs = {
   weekKm: number;
   ePaceSecPerKm: number;
   startCapKm: number;
+  /** Harte Untergrenze (15 min bei E-Pace, `easyHardMinKm("LR")`); liegt die Grenze darunter, gilt sie (Review-Punkt 34). */
+  hardMinKm: number;
 };
 
 export type LongRunLimit = {
   km: number;
   /** Taper-Grenze (60 % des längsten) hat gegriffen. */
   taperCut: boolean;
+  /** Die Grenzen lagen unter der harten Untergrenze; `km` ist diese Untergrenze (Review-Punkt 34). */
+  raisedToMinimum: boolean;
 };
 
-/** Long Run dieser Woche aus Wunschwert, Grenzen und dem Verlauf davor. */
+/** Long Run dieser Woche aus Wunschwert, Grenzen und dem Verlauf davor, mindestens die harte Untergrenze. */
 export function longRunLimitKm(state: LongRunState, args: LongRunLimitArgs): LongRunLimit {
+  const limit = longRunLimitWithinCaps(state, args);
+  if (limit.km >= args.hardMinKm - EPS) return { ...limit, raisedToMinimum: false };
+  return { km: args.hardMinKm, taperCut: false, raisedToMinimum: true };
+}
+
+function longRunLimitWithinCaps(state: LongRunState, args: LongRunLimitArgs): { km: number; taperCut: boolean } {
   const caps = Math.min(longRunShareCapKm(args.runDays, args.weekKm), longRunMinutesCapKm(args.ePaceSecPerKm));
   if (args.taper) {
     const taperMax = floorTenth(CONFIG.taper.longRunShareOfPeak.value * state.longest);

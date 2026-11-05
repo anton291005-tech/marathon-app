@@ -20,7 +20,7 @@ const peakActual = (plan: SessionPlan): number => Math.max.apply(null, plan.week
 
 /**
  * Abnahmebereiche aus docs/plan-spec.md §13: P4/P6 Long-Run-Peak nach der Freigabe zu Schritt 6; P2 (10–13 → 10–15) und
- * P3 (18–21 → 18–22) als Folge der Long-Run-Ziel-Regel vom 2026-11-05 (Anteilsgrenze × Peak-Woche), zu bestätigen.
+ * P3 (18–21 → 18–22) als Folge der Long-Run-Ziel-Regel vom 2026-11-05 (Anteilsgrenze × Peak-Woche), bestätigt 2026-11-05.
  */
 const ACCEPTANCE: Record<ProfileName, { peak: [number, number]; longRun: [number, number] }> = {
   P1: { peak: [13, 15], longRun: [7, 8] },

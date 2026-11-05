@@ -76,6 +76,7 @@ export function checkSessionPlan(plan: SessionPlan, inputs: CoreInputs): string[
   let longest = 0;
   let afterRecovery = false;
   const lrDates = all.filter((s) => s.kind === "LR" || s.kind === "LR+M").map((s) => s.ymd);
+  const hardMinKm = Math.ceil(((library.easyHardMinMinutes.value * 60) / paces.E) * 10 - EPS) / 10;
   const longestRecent =
     inputs.longestRecentRunKm !== undefined
       ? inputs.longestRecentRunKm
@@ -123,12 +124,18 @@ export function checkSessionPlan(plan: SessionPlan, inputs: CoreInputs): string[
     const lr = week.sessions.filter((s) => s.kind === "LR" || s.kind === "LR+M")[0];
     if (layout.hasLongRun !== (lr !== undefined)) out.push(`I10:${tag}:lr-mismatch`);
     if (lr !== undefined) {
-      // Anteil am geplanten Verlauf vor der Tragfähigkeit (`curveKm`, Vollwochen-Äquivalent; Review-Punkt 29). Seit
-      // 2026-11-05 ohne Ausnahme: kein Long Run über Start-, Steigerungs-, Entlastungs-, Taper- oder Anteilsgrenze.
-      const shareBase = plan.volume.weeks[index].curveKm;
-      if (lr.km > longRun.maxShareOfWeek.value[runDays] * shareBase + EPS) out.push(`I9:${tag}:share`);
+      // Anteil am geplanten Verlauf ohne Tragfähigkeit (erster Durchlauf, Vollwochen-Äquivalent; Review-Punkt 29). Kein
+      // Long Run über Start-, Steigerungs-, Entlastungs-, Taper- oder Anteilsgrenze; einzige Ausnahme (Review-Punkt 34):
+      // liegen die Grenzen unter 15 min, ist der Long Run genau 15 min lang (Hinweis).
+      const shareBase = plan.uncappedVolume.weeks[index].fullWeekKm;
+      const raised = lr.notes.indexOf("long-run-raised-to-minimum") >= 0;
+      if (raised && lr.km !== hardMinKm) out.push(`I9:${tag}:raised-not-to-minimum`);
+      if (minutesAt(lr.km, paces.E) < library.easyHardMinMinutes.value - TOL_MIN) out.push(`I9:${tag}:below-15-min`);
+      if (lr.km > longRun.maxShareOfWeek.value[runDays] * shareBase + EPS && !raised) out.push(`I9:${tag}:share`);
       if (minutesAt(lr.km, paces.E) > longRun.minutesHard.value + TOL_MIN) out.push(`I9:${tag}:minutes`);
-      if (week.mode === "taper") {
+      if (raised) {
+        // Grenzen nicht nachgerechnet: die Untergrenze gilt nur, wenn der Kern sie braucht (Test in planSessions.test).
+      } else if (week.mode === "taper") {
         if (lr.km > CONFIG.taper.longRunShareOfPeak.value * longest + EPS) out.push(`I9:${tag}:taper`);
       } else if (week.isRecoveryWeek) {
         if (lastLr !== null && lr.km > (1 - longRun.recoveryReduction.value.min) * lastLr + EPS) out.push(`I9:${tag}:recovery`);
@@ -162,7 +169,16 @@ export function checkSessionPlan(plan: SessionPlan, inputs: CoreInputs): string[
           ? library.rec.minutes.value
           : s.kind === "MLR"
             ? library.mlr.minutes.value
-            : { min: library.e.minutes.value.min, max: runDays >= 6 ? library.e.minutesMaxSixDays.value : library.e.minutes.value.max };
+            : {
+                min: library.e.minutes.value.min,
+                max:
+                  runDays >= 6
+                    ? library.e.minutesMaxSixDays.value
+                    : runDays <= library.e.minutesMaxFewDays.value.upToRunDays && library.e.minutesMaxFewDays.value.distances.indexOf(inputs.distance) >= 0
+                      ? library.e.minutesMaxFewDays.value.minutes
+                      : library.e.minutes.value.max,
+              };
+      if (minutes < library.easyHardMinMinutes.value - TOL_MIN) out.push(`I2:${s.ymd}:${s.kind}-below-15-min`);
       // Ausnahme (freigegeben 2026-11-05): E/REC nie länger als der Long Run, auch unter der Mindestdauer (Hinweis).
       // Gekürzt heißt: genau auf die Länge des Long Runs (auf 0,1 km abgerundet), nicht beliebig kurz.
       const shortenedToLr =
@@ -211,6 +227,18 @@ export function checkSessionPlan(plan: SessionPlan, inputs: CoreInputs): string[
         if (near) limit = Math.min(limit, library.m.nearLongRunMaxKm.value);
       }
       if (q > limit + EPS) out.push(`I12:${s.ymd}:${s.kind}:${q}>${r1(limit)}`);
+      // Entlastungswoche (Review-Punkt 36): feste km-Grenzen mal Faktor der Woche (gelieferte km ÷ gelieferte Vorwoche).
+      if (week.isRecoveryWeek && s.slot !== "Q2" && index > 0) {
+        const factor = Math.min(1, plan.volume.weeks[index].fullWeekKm / plan.volume.weeks[index - 1].fullWeekKm);
+        let fixed = Infinity;
+        if (s.kind === "I") fixed = library.i.maxKm.value;
+        if (s.kind === "R") fixed = library.r.maxKm.value;
+        if (s.kind === "M") {
+          const near = lrDates.some((d) => diffDays(d, s.ymd) >= 1 && diffDays(d, s.ymd) <= library.m.nearLongRunDays.value);
+          fixed = near ? library.m.nearLongRunMaxKm.value : Math.min(library.m.maxKm.value, (library.m.maxMinutes.value * 60) / (paces.M ?? paces.E));
+        }
+        if (q > factor * fixed + EPS) out.push(`I12:${s.ymd}:recovery-q1:${q}>${r1(factor * fixed)}`);
+      }
       // Mindestgrößen (freigegeben 2026-11-05): M ≥ 3 km, T ≥ 10 min, I ≥ 3 Wdh., R ≥ 4 Wdh.
       const w = workOf(s);
       if (s.kind === "M" && q < library.m.minKm.value - EPS) out.push(`Qmin:${s.ymd}:M`);
@@ -295,7 +323,9 @@ export function taperMeanOf(plan: SessionPlan, inputs: CoreInputs): { mean: numb
 /**
  * Steigerungsregeln auf dem gelieferten Volumen (mit Tragfähigkeit, `planSessions(...).volume`) bis zur Peak-Woche:
  * I3 (≤ 1,3 × w−2), I4 (≤ max(1,1 × w−1, w−1 + 4), nach Entlastung ≤ Niveau davor), I5 (≤ max(Grenze, `minWeekKm`)),
- * Entlastung höchstens so groß wie die Vorwoche, nichts über dem geplanten Verlauf (`curveKm`).
+ * nichts über dem geplanten Verlauf (`curveKm`). Monoton (freigegeben 2026-11-05): keine Aufbauwoche kleiner als die
+ * Vorwoche, Peak = letzte Woche vor dem Taper, Entlastung −20 bis −30 % zur gelieferten Vorwoche (flacher nur bis
+ * `minWeekKm`).
  */
 export function checkVolumeGrowth(plan: SessionPlan, inputs: CoreInputs): string[] {
   const out: string[] = [];
@@ -316,14 +346,44 @@ export function checkVolumeGrowth(plan: SessionPlan, inputs: CoreInputs): string
     if (km > v.growth.twoWeekFactor.value * prev2 + EPS) out.push(`I3:${tag}`);
     if (w.isRecoveryWeek) {
       if (km > prev + EPS) out.push(`V:${tag}:recovery-above-previous`);
-    } else if (i > 0 && weeks[i - 1].isRecoveryWeek) {
-      if (km > level + EPS) out.push(`I4:${tag}:after-recovery`);
-    } else if (i > 0 && km > Math.max(prev * (1 + v.growth.weeklyShare.value), prev + v.growth.weeklyKm.value) + EPS) {
-      out.push(`I4:${tag}`);
+      if (km < (1 - v.recovery.maxReduction.value) * prev - EPS) out.push(`V:${tag}:recovery-too-deep`);
+      if (km > Math.max((1 - v.recovery.reduction.value) * prev, plan.minWeekKm) + EPS) out.push(`V:${tag}:recovery-too-shallow`);
+    } else {
+      // Nie kleiner als die letzte Aufbauwoche (über eine Entlastung hinweg: so groß wie die Woche davor).
+      if (i > 0 && km < level - EPS) out.push(`V:${tag}:drop`);
+      if (i > 0 && weeks[i - 1].isRecoveryWeek) {
+        if (km > level + EPS) out.push(`I4:${tag}:after-recovery`);
+      } else if (i > 0 && km > Math.max(prev * (1 + v.growth.weeklyShare.value), prev + v.growth.weeklyKm.value) + EPS) {
+        out.push(`I4:${tag}`);
+      }
     }
     if (!w.isRecoveryWeek) level = km;
   });
+  const last = weeks[weeks.length - 1].fullWeekKm;
+  if (weeks.some((w) => w.fullWeekKm > last + EPS) || Math.abs(plan.volume.peakKm - last) > EPS) out.push("V:peak-not-last");
+
+  // Dasselbe auf den sichtbaren Wochen (`totalKm`, volle Wochen bis zur Peak-Woche). Einzige Ausnahme (§5.3, zu bestätigen):
+  // eine Woche, die die Mindestdauern über den Plan heben (`week-km-raised`), darf über späteren Wochen liegen.
+  const shown = plan.weeks.filter((w) => w.wn <= plan.volume.peakWeek && w.sessions.length === 7);
+  let shownLevel: { km: number; raised: boolean } | null = null;
+  shown.forEach((w) => {
+    if (w.isRecoveryWeek) return;
+    if (shownLevel !== null && w.totalKm < shownLevel.km - EPS && !shownLevel.raised) out.push(`V:W${w.wn}:shown-drop`);
+    shownLevel = { km: w.totalKm, raised: w.notes.indexOf("week-km-raised") >= 0 };
+  });
+  const peakShown = shown.length > 0 ? shown[shown.length - 1] : undefined;
+  if (peakShown !== undefined && peakShown.wn === plan.volume.peakWeek) {
+    shown.forEach((w) => {
+      if (w.totalKm > peakShown.totalKm + EPS && w.notes.indexOf("week-km-raised") < 0) out.push(`V:W${w.wn}:shown-above-peak-week`);
+    });
+  }
   return out;
+}
+
+/** Pläne, in denen eine angehobene Woche (`week-km-raised`) über einer späteren Aufbauwoche liegt (Ausnahme in §5.3). */
+export function raisedAboveLaterWeek(plan: SessionPlan): boolean {
+  const shown = plan.weeks.filter((w) => w.wn <= plan.volume.peakWeek && w.sessions.length === 7 && !w.isRecoveryWeek);
+  return shown.some((w, i) => w.notes.indexOf("week-km-raised") >= 0 && shown.slice(i + 1).some((later) => later.totalKm < w.totalKm - EPS));
 }
 
 /** Kurzform einer Woche für Snapshots: "Mo E 9.2 · Di T 8.7[3x1.6] · …". */

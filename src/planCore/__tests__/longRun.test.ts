@@ -94,7 +94,7 @@ describe("planCore longRun (§7.1)", () => {
   });
 
   describe("Grenzen je Woche aus dem Verlauf davor", () => {
-    const base = { runDays: 5 as const, weekKm: 60, ePaceSecPerKm: 338, startCapKm: 15.5 };
+    const base = { runDays: 5 as const, weekKm: 60, ePaceSecPerKm: 338, startCapKm: 15.5, hardMinKm: 2.7 };
 
     it("erster Long Run höchstens längster Lauf + 2 km", () => {
       expect(longRunLimitKm(INITIAL_LONG_RUN_STATE, { ...base, desired: 18, isRecoveryWeek: false, taper: false }).km).toBe(15.5);
@@ -119,8 +119,17 @@ describe("planCore longRun (§7.1)", () => {
     it("Taper: höchstens 60 % des längsten Long Runs (Folgepunkt b)", () => {
       const state: LongRunState = { last: 20, level: 20, longest: 20, afterRecovery: false };
       const taper = longRunLimitKm(state, { ...base, weekKm: 43, desired: null, isRecoveryWeek: false, taper: true });
-      expect(taper).toEqual({ km: 12, taperCut: true });
+      expect(taper).toEqual({ km: 12, taperCut: true, raisedToMinimum: false });
       expect(CONFIG.taper.longRunShareOfPeak.value).toBe(0.6);
+    });
+
+    it("harte Untergrenze (15 min, Review-Punkt 34): liegt die Grenze darunter, gilt die Untergrenze (Hinweis)", () => {
+      // längster Lauf 0 km → erster Long Run höchstens 2 km, bei 5:38/km sind 15 min 2,7 km
+      const first = longRunLimitKm(INITIAL_LONG_RUN_STATE, { ...base, startCapKm: 2, desired: 10, isRecoveryWeek: false, taper: false });
+      expect(first).toEqual({ km: 2.7, taperCut: false, raisedToMinimum: true });
+      const state: LongRunState = { last: 4, level: 4, longest: 4, afterRecovery: false };
+      expect(longRunLimitKm(state, { ...base, desired: null, isRecoveryWeek: false, taper: true })).toEqual({ km: 2.7, taperCut: false, raisedToMinimum: true });
+      expect(longRunLimitKm(state, { ...base, desired: 5, isRecoveryWeek: false, taper: false }).raisedToMinimum).toBe(false);
     });
   });
 });

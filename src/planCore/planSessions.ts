@@ -46,6 +46,7 @@ import {
   buildQualityParts,
   buildQualitySession,
   buildRestSession,
+  easyHardMinKm,
   easyMaxKmByMinutes,
   easyMaxShareOfLongRun,
   easyMinKm,
@@ -91,6 +92,8 @@ export type SessionPlan = {
   pace: PaceProfile;
   paces: SessionPaces;
   volume: PlanVolume;
+  /** Erster Durchlauf von `planVolume` ohne Tragfähigkeit: Bezug des Long-Run-Anteils (Review-Punkt 29) und Long-Run-Ziel. */
+  uncappedVolume: PlanVolume;
   layouts: WeekLayout[];
   weeks: WeekSessions[];
   /** An `planVolume` übergebene Mindest-Wochen-km. */
@@ -119,6 +122,10 @@ type WeekArgs = {
   startCapKm: number;
   phaseIndex: number;
   longRunDates: Ymd[];
+  /** Gelieferte km der Vorwoche (Vollwoche; Rennwoche ohne Rennen), `null` in Woche 1. Bezug für Q1 der Entlastungswoche. */
+  previousWeekKm: number | null;
+  /** Bezug des Long-Run-Anteils: geplante Wochen-km ohne Tragfähigkeit (Vollwoche; Review-Punkt 29). */
+  shareBaseKm: number;
 };
 
 function nearLongRun(ymd: Ymd, longRunDates: Ymd[]): boolean {
@@ -198,17 +205,30 @@ function assembleWeekAt(args: WeekArgs, weekKm: number): WeekResult {
           isRecoveryWeek: volumeWeek.isRecoveryWeek,
           taper: layout.mode === "taper",
           runDays,
-          // Anteil am geplanten Verlauf vor der Tragfähigkeit (`curveKm`, Vollwochen-Äquivalent): sonst schrumpfen bei
-          // 3 Tagen Woche und Long Run gemeinsam (E ≤ 75 min); mit nur E + LR in einer angebrochenen Woche 1 wäre der
+          // Anteil am geplanten Verlauf ohne Tragfähigkeit (erster Durchlauf von `planVolume`, Vollwochen-Äquivalent):
+          // sonst schrumpfen Woche und Long Run gemeinsam (Tragfähigkeit und monotoner Verlauf senken die Wochen, der
+          // kleinere Long Run senkt die Tragfähigkeit weiter); mit nur E + LR in einer angebrochenen Woche 1 wäre der
           // Anteil sonst zwingend über 55 %. Review-Punkt 29.
-          weekKm: volumeWeek.curveKm,
+          weekKm: args.shareBaseKm,
           ePaceSecPerKm: paces.E,
           startCapKm: args.startCapKm,
+          hardMinKm: easyHardMinKm("LR", paces),
         });
 
   const shareTarget =
     runDays <= intensity.fewRunDaysUpTo.value ? intensity.qualityShareTargetFewDays.value : intensity.qualityShareTarget.value;
   const budget = shareTarget * weekKm * (taperLike ? CONFIG.taper.qualityKmFactor.value : 1);
+  // Entlastungswoche: Q1 mit dem Faktor der Woche (Review-Punkt 36). Typ-Limit wie in einer Woche mit den km der Vorwoche,
+  // mal Wochen-km ÷ Vorwoche; Anteilsgrenzen bleiben damit gleich, feste km-Grenzen schrumpfen mit.
+  const recoveryFactor =
+    volumeWeek.isRecoveryWeek && intensity.recoveryWeekQ1ScalesWithWeek.value && args.previousWeekKm !== null && args.previousWeekKm > 0
+      ? Math.min(1, weekKm / args.previousWeekKm)
+      : null;
+  const limitOf = (choice: QualityType, light: boolean, near: boolean): number => {
+    const plain = qualityLimitKm(choice, weekKm, paces, { light, nearLongRun: near });
+    if (recoveryFactor === null || args.previousWeekKm === null) return plain;
+    return Math.min(plain, floorTenth(recoveryFactor * qualityLimitKm(choice, args.previousWeekKm, paces, { light, nearLongRun: near })));
+  };
 
   for (let level = 0; level <= 3; level += 1) {
     const lastLevel = level === 3;
@@ -241,7 +261,7 @@ function assembleWeekAt(args: WeekArgs, weekKm: number): WeekResult {
       const choice = plan.choice as QualityType;
       const near = choice.type === "M" && nearLongRun(plan.ymd, args.longRunDates);
       const light = plan.slot === "Q1L";
-      const limit = qualityLimitKm(choice, weekKm, paces, { light, nearLongRun: near });
+      const limit = limitOf(choice, light, near);
       const free = allowance();
       let target = Math.min(limit, free);
       // Q1 entfällt nicht wegen des Budgets (I13: 1 Q pro Taper-Woche; weicher machen bei aufgebrauchtem Budget gilt
@@ -258,7 +278,9 @@ function assembleWeekAt(args: WeekArgs, weekKm: number): WeekResult {
         plan.notes.push("q-softened-budget");
         return;
       }
-      if (near && Math.min(qualityLimitKm(choice, weekKm, paces, { light }), free) > limit + EPS) plan.notes.push("m-block-near-long-run");
+      if (near && Math.min(limitOf(choice, light, false), free) > limit + EPS) plan.notes.push("m-block-near-long-run");
+      const unscaled = qualityLimitKm(choice, weekKm, paces, { light, nearLongRun: near });
+      if (recoveryFactor !== null && Math.min(unscaled, free) > limit + EPS) plan.notes.push("q1-scaled-recovery-week");
       plan.parts = parts;
       remaining = Math.max(0, remaining - parts.qualityKm);
     });
@@ -294,12 +316,13 @@ function assembleWeekAt(args: WeekArgs, weekKm: number): WeekResult {
     const refLongRun = lr !== null ? lr : args.longRunState.last;
     // E und REC nie länger als der Long Run (I11, freigegeben 2026-11-05), auch wenn die Mindestdauer dann nicht passt.
     const shortened = fillerDays.map((filler, k) => filler.kind !== "MLR" && refLongRun !== null && fmin[k] > refLongRun + EPS);
+    // Harte Untergrenze 15 min (Review-Punkt 34): der Long Run ist mindestens so lang (`longRunLimitKm`), E/REC damit auch.
     shortened.forEach((short, k) => {
-      if (short && refLongRun !== null) fmin[k] = floorTenth(refLongRun);
+      if (short && refLongRun !== null) fmin[k] = Math.max(floorTenth(refLongRun), easyHardMinKm(fillerDays[k].kind, paces));
     });
     const fmax = fillerDays.map((filler, k) => {
       const pace = filler.kind === "REC" ? paces.REC : paces.E;
-      let max = Math.min(easyMaxKmByMinutes(filler.kind, paces, runDays), lastDaysMaxKm(filler.ymd, inputs.raceDate, pace));
+      let max = Math.min(easyMaxKmByMinutes(filler.kind, paces, runDays, inputs.distance), lastDaysMaxKm(filler.ymd, inputs.raceDate, pace));
       if (refLongRun !== null) {
         // REC höchstens so lang wie der Long Run, MLR höchstens 75 %. E höchstens 75 %, aber mindestens seine
         // Mindestdauer, nie länger als der Long Run (freigegeben 2026-11-05).
@@ -326,6 +349,7 @@ function assembleWeekAt(args: WeekArgs, weekKm: number): WeekResult {
       if (day.slot === "RACE") return buildRaceSession(day.ymd, inputs.distance, paces);
       if (day.slot === "LR" && lr !== null && lrLimit !== null) {
         const notes: SessionNoteCode[] = lrLimit.taperCut && lr <= lrLimit.km + EPS ? ["taper-long-run-cut"] : [];
+        if (lrLimit.raisedToMinimum) notes.push("long-run-raised-to-minimum");
         const withM = lrPlusM && lrmTarget > 0 ? buildLongRunPlusM({ ymd: day.ymd, slot: "LR", longRunKm: lr, blockKm: lrmTarget, paces, notes }) : null;
         return withM !== null ? withM : buildEasySession({ ymd: day.ymd, slot: "LR", kind: "LR", km: lr, paces, notes });
       }
@@ -396,6 +420,7 @@ function volumeWeekWith(base: PlanVolumeWeek, km: number, curveKm: number, raceK
  */
 function weekRunner(ctx: PlanContext): { deliver(index: number, km: number): number; take(index: number, week: PlanVolumeWeek): WeekSessions } {
   let state = INITIAL_LONG_RUN_STATE;
+  let previousWeekKm: number | null = null;
   const counters: Record<CorePhase, number> = { base: 0, build: 0, peak: 0, taper: 0 };
   const raceKm = CONFIG.scope.raceKm.value[ctx.inputs.distance];
   const assemble = (index: number, volumeWeek: PlanVolumeWeek) =>
@@ -410,9 +435,12 @@ function weekRunner(ctx: PlanContext): { deliver(index: number, km: number): num
       startCapKm: ctx.startCapKm,
       phaseIndex: counters[ctx.layouts[index].phase],
       longRunDates: ctx.longRunDates,
+      previousWeekKm,
+      shareBaseKm: ctx.grid[index].fullWeekKm,
     });
-  const commit = (index: number, result: { week: WeekSessions; longRunKm: number | null }): WeekSessions => {
+  const commit = (index: number, result: { week: WeekSessions; longRunKm: number | null }, weekKm: number): WeekSessions => {
     const layout = ctx.layouts[index];
+    previousWeekKm = weekKm;
     const isRecoveryWeek = ctx.grid[index].isRecoveryWeek;
     if (result.longRunKm !== null) state = advanceLongRun(state, { isRecoveryWeek, taper: layout.mode === "taper" }, result.longRunKm);
     if (!isRecoveryWeek) counters[layout.phase] += 1;
@@ -432,11 +460,11 @@ function weekRunner(ctx: PlanContext): { deliver(index: number, km: number): num
         delivered = Math.min(km, floorTenth(total));
         result = assemble(index, volumeWeekWith(base, delivered, km, raceKm, isRace));
       }
-      commit(index, result);
+      commit(index, result, delivered);
       return delivered;
     },
     take(index: number, week: PlanVolumeWeek): WeekSessions {
-      return commit(index, assemble(index, week));
+      return commit(index, assemble(index, week), week.fullWeekKm);
     },
   };
 }
@@ -482,5 +510,5 @@ export function planSessions(inputs: CoreInputs, todayYmd: Ymd, options: { peakP
   const runner = weekRunner(ctx);
   const weeks = layouts.map((_, index) => runner.take(index, volume.weeks[index]));
 
-  return { pace, paces, volume, layouts, weeks, minWeekKm: minWeek, longRunPeakTargetKm: peakTarget };
+  return { pace, paces, volume, uncappedVolume: grid, layouts, weeks, minWeekKm: minWeek, longRunPeakTargetKm: peakTarget };
 }

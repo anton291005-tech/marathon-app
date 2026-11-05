@@ -6,7 +6,9 @@ import {
   buildEasySession,
   buildLongRunPlusM,
   buildQualityParts,
+  easyHardMinKm,
   easyMaxKmByMinutes,
+  easyMaxMinutes,
   easyMinKm,
   minQualityKm,
   qualityLimitKm,
@@ -63,9 +65,25 @@ describe("planCore sessions (§7)", () => {
       expect(easyMinKm("E", p1)).toBe(3.6);
       expect(easyMinKm("REC", p5)).toBe(3.8);
       expect(easyMinKm("MLR", p5)).toBe(15.7);
-      expect(easyMaxKmByMinutes("E", p3, 5)).toBe(13.3);
-      expect(easyMaxKmByMinutes("E", p5, 6)).toBe(18.8);
-      expect(easyMaxKmByMinutes("MLR", p5, 6)).toBe(22.9);
+      expect(easyMaxKmByMinutes("E", p3, 5, "hm")).toBe(13.3);
+      expect(easyMaxKmByMinutes("E", p5, 6, "m")).toBe(18.8);
+      expect(easyMaxKmByMinutes("MLR", p5, 6, "m")).toBe(22.9);
+    });
+
+    it("E bei 3 Lauftagen: HM/M bis 90 min (E übernimmt die MLR-Rolle, Review-Punkt 33), 5k/10k bis 75 min", () => {
+      expect(easyMaxMinutes(3, "m")).toBe(90);
+      expect(easyMaxMinutes(3, "hm")).toBe(90);
+      expect(easyMaxMinutes(3, "10k")).toBe(75);
+      expect(easyMaxMinutes(4, "m")).toBe(75);
+      expect(easyMaxMinutes(6, "5k")).toBe(90);
+      expect(easyMaxKmByMinutes("E", p3, 3, "hm")).toBe(15.9);
+      expect(easyMaxKmByMinutes("E", p3, 3, "10k")).toBe(13.3);
+    });
+
+    it("harte Untergrenze 15 min (Review-Punkt 34): E/LR bei E-Pace, REC bei REC-Pace", () => {
+      expect(easyHardMinKm("E", p1)).toBe(2.2);
+      expect(easyHardMinKm("LR", p3)).toBe(2.7);
+      expect(easyHardMinKm("REC", p3)).toBe(2.5);
     });
 
     it("Strides zählen nicht zu den km", () => {

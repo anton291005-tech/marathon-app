@@ -48,7 +48,11 @@ export type SessionNoteCode =
   /** E länger als 75 % des Long Runs (höchstens so lang wie er), weil sonst die Mindestdauer nicht passt (Review-Punkt 31a). */
   | "e-above-75-percent-long-run"
   /** E/REC unter der Mindestdauer, weil der Long Run (in seinen Grenzen) kürzer ist: nie länger als er (I11 vor I2). */
-  | "e-shortened-to-long-run";
+  | "e-shortened-to-long-run"
+  /** Long Run über seine Grenze auf die harte Untergrenze (15 min) angehoben, weil die Grenze darunter lag (Review-Punkt 34). */
+  | "long-run-raised-to-minimum"
+  /** Entlastungswoche: Q1 mit dem Faktor der Woche gekürzt (Review-Punkt 36). */
+  | "q1-scaled-recovery-week";
 
 export type CoreSession = {
   ymd: Ymd;
@@ -163,13 +167,29 @@ export function easyMinKm(kind: EasyKind, paces: SessionPaces): number {
   return ceilTenth(kmAt(library.e.minutes.value.min, paces.E));
 }
 
-/** Höchst-km nach Dauer (§7: E 75 min, bei 6 Tagen 90; REC 45; MLR 110). Der Bezug auf den Long Run kommt dazu. */
-export function easyMaxKmByMinutes(kind: EasyKind, paces: SessionPaces, runDays: RunDays): number {
+/**
+ * Harte Untergrenze (15 min, Review-Punkt 34) in km: E und Long Run bei E-Pace, REC bei REC-Pace. E/REC dürfen unter
+ * ihre Mindestdauer fallen, wenn der Long Run kürzer ist, aber nie darunter; der Long Run wird mindestens so lang.
+ */
+export function easyHardMinKm(kind: EasyKind | "LR", paces: SessionPaces): number {
+  return ceilTenth(kmAt(CONFIG.library.easyHardMinMinutes.value, kind === "REC" ? paces.REC : paces.E));
+}
+
+/** Höchstdauer von E in Minuten: 75, bei 6 Tagen 90, bei 3 Tagen HM/M 90 (E übernimmt die MLR-Rolle, Review-Punkt 33). */
+export function easyMaxMinutes(runDays: RunDays, distance: Distance): number {
+  const { e } = CONFIG.library;
+  if (runDays >= 6) return e.minutesMaxSixDays.value;
+  const few = e.minutesMaxFewDays.value;
+  if (runDays <= few.upToRunDays && few.distances.indexOf(distance) >= 0) return few.minutes;
+  return e.minutes.value.max;
+}
+
+/** Höchst-km nach Dauer (§7: E siehe `easyMaxMinutes`; REC 45; MLR 110). Der Bezug auf den Long Run kommt dazu. */
+export function easyMaxKmByMinutes(kind: EasyKind, paces: SessionPaces, runDays: RunDays, distance: Distance): number {
   const { library } = CONFIG;
   if (kind === "REC") return floorTenth(kmAt(library.rec.minutes.value.max, paces.REC));
   if (kind === "MLR") return floorTenth(kmAt(library.mlr.minutes.value.max, paces.E));
-  const minutes = runDays >= 6 ? library.e.minutesMaxSixDays.value : library.e.minutes.value.max;
-  return floorTenth(kmAt(minutes, paces.E));
+  return floorTenth(kmAt(easyMaxMinutes(runDays, distance), paces.E));
 }
 
 /** Höchstanteil am Long Run (E und MLR 75 %; REC hat keinen eigenen, I11 gilt trotzdem). */

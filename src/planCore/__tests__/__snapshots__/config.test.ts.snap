@@ -243,6 +243,11 @@ Object {
         "spec": "§6",
         "value": 0.15,
       },
+      "recoveryWeekQ1ScalesWithWeek": Object {
+        "source": "E",
+        "spec": "§6",
+        "value": true,
+      },
     },
     "library": Object {
       "e": Object {
@@ -259,11 +264,28 @@ Object {
             "min": 25,
           },
         },
+        "minutesMaxFewDays": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": Object {
+            "distances": Array [
+              "hm",
+              "m",
+            ],
+            "minutes": 90,
+            "upToRunDays": 3,
+          },
+        },
         "minutesMaxSixDays": Object {
           "source": "E",
           "spec": "§7",
           "value": 90,
         },
+      },
+      "easyHardMinMinutes": Object {
+        "source": "E",
+        "spec": "§7",
+        "value": 15,
       },
       "i": Object {
         "maxKm": Object {
@@ -1199,6 +1221,11 @@ Object {
           "spec": "§5.3",
           "value": "Entlastung",
         },
+        "maxReduction": Object {
+          "source": "E",
+          "spec": "§5.3",
+          "value": 0.3,
+        },
         "reduction": Object {
           "source": "P",
           "spec": "§5.3",
@@ -1303,6 +1330,6 @@ Object {
       },
     },
   },
-  "version": "0.8.0",
+  "version": "0.9.0",
 }
 `;
