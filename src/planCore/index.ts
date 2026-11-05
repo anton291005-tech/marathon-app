@@ -27,6 +27,7 @@ export {
   buildPaceProfile,
   formatPace,
   formatPaceRange,
+  paceBands,
   predictRaceSeconds,
   trainingPaces,
   vdotFromRace,
@@ -37,6 +38,8 @@ export type {
   GoalInfo,
   PaceCode,
   PaceInputs,
+  PaceBand,
+  PaceBands,
   PaceNote,
   PaceProfile,
   RacePace,
@@ -65,3 +68,22 @@ export {
 export type { LongRunLimit, LongRunLimitArgs, LongRunState, LongRunWeek } from "./longRun";
 export { chooseQuality, isLongRunPlusMWeek } from "./qTypes";
 export type { QualityChoice, QualityContext, QualityNoteCode, QualityPick, QualitySlot } from "./qTypes";
+export {
+  buildEasySession,
+  buildLongRunPlusM,
+  buildQualityParts,
+  buildQualitySession,
+  buildRestSession,
+  easyMaxKmByMinutes,
+  easyMaxShareOfLongRun,
+  easyMinKm,
+  longRunPlusMBlockLimitKm,
+  qualityLimitKm,
+  segmentsKm,
+  segmentsMinutes,
+  segmentsQualityKm,
+  sessionPacesOf,
+  stridesSegment,
+  warmupCooldownFor,
+} from "./sessions";
+export type { CoreSession, EasyKind, QualityBuild, QualityType, Segment, SegmentPace, SessionNoteCode, SessionPaces } from "./sessions";
