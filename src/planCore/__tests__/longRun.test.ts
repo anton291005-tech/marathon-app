@@ -75,10 +75,17 @@ describe("planCore longRun (§7.1)", () => {
       ]);
     });
 
-    it("Marathon mit 5–6 Tagen hält das Ziel in den letzten zwei normalen Wochen (2–3 LR ≥ 30 km)", () => {
+    it("Marathon hält das Ziel in den letzten zwei normalen Wochen (2–3 LR ≥ 30 km; P4: ≥ 2 LR ≥ 24 km), HM nicht", () => {
       const weeks = [plainWeek, plainWeek, plainWeek, plainWeek];
       expect(longRunSchedule(weeks, { startKm: 24, peakKm: 30, distance: "m", runDays: 6 })).toEqual([24, 27, 30, 30]);
-      expect(longRunSchedule(weeks, { startKm: 24, peakKm: 30, distance: "m", runDays: 4 })).toEqual([24, 26, 28, 30]);
+      expect(longRunSchedule(weeks, { startKm: 24, peakKm: 30, distance: "m", runDays: 4 })).toEqual([24, 27, 30, 30]);
+      expect(longRunSchedule(weeks, { startKm: 15, peakKm: 18, distance: "hm", runDays: 5 })).toEqual([15, 16, 17, 18]);
+    });
+
+    it("folgt eine Plateau-Woche auf eine Entlastung, beginnt das Plateau vor der Entlastung (I9-Ausnahme)", () => {
+      const recovery: LongRunWeek = { hasLongRun: true, isRecoveryWeek: true, taper: false };
+      const weeks = [plainWeek, plainWeek, plainWeek, recovery, plainWeek, plainWeek];
+      expect(longRunSchedule(weeks, { startKm: 20, peakKm: 26, distance: "m", runDays: 4 })).toEqual([20, 23, 26, null, 26, 26]);
     });
 
     it("Startwert über dem Ziel: Ziel von Anfang an", () => {

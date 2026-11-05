@@ -3,7 +3,7 @@
  *
  * Zwei Teile:
  * - `longRunSchedule` rechnet den gewünschten Verlauf vorab (linear vom Startwert zum Ziel des längsten Long Runs,
- *   beim Marathon mit 5–6 Tagen wird das Ziel `marathonLongRunsAtLeast.min` Wochen lang gehalten).
+ *   beim Marathon wird das Ziel `marathonLongRunsAtLeast.min` normale Wochen lang gehalten).
  * - `longRunLimitKm` begrenzt die Woche nach dem tatsächlichen Verlauf davor: Anteil an den Wochen-km, 180 min,
  *   Steigerung (+2 km oder +15 %, höchstens +3 km; erste Woche nach Entlastung höchstens das Niveau davor), Entlastung
  *   −25 %, Taper höchstens 60 % des längsten Long Runs.
@@ -93,9 +93,15 @@ export function longRunSchedule(
   weeks.forEach((week, index) => {
     if (week.hasLongRun && !week.isRecoveryWeek && !week.taper) plain.push(index);
   });
-  const manyDaysMarathon = args.distance === "m" && args.runDays >= longRun.marathonManyDaysFrom.value;
-  const plateau = manyDaysMarathon ? longRun.marathonLongRunsAtLeast.value.min : 1;
-  const reachAt = Math.max(0, plain.length - plateau);
+  // Marathon: das Ziel in mindestens `marathonLongRunsAtLeast.min` Wochen (§7.1 "2–3 Läufe ≥ 30 km", P4 "≥ 2 LR ≥ 24 km").
+  const plateau = args.distance === "m" ? longRun.marathonLongRunsAtLeast.value.min : 1;
+  let reachAt = Math.max(0, plain.length - plateau);
+  // Folgt eine Plateau-Woche direkt auf eine Entlastung, darf sie nur auf das Niveau davor (I9-Ausnahme): die Woche vor
+  // der Entlastung gehört dann mit zum Plateau.
+  for (let j = plain.length - 1; j >= reachAt && j > 0; j -= 1) {
+    const before = weeks[plain[j] - 1];
+    if (before !== undefined && before.isRecoveryWeek && before.hasLongRun) reachAt = Math.min(reachAt, j - 1);
+  }
   const start = Math.min(args.startKm, args.peakKm);
 
   const out: Array<number | null> = weeks.map(() => null);

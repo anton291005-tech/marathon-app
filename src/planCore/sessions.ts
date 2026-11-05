@@ -295,16 +295,11 @@ function workSegment(choice: QualityType, targetKm: number, paces: SessionPaces)
     if (choice.type === "M" || minutes <= library.t.continuousMaxMinutes.value + EPS) {
       return { type: "steady", km: target, pace: code };
     }
-    // Cruise-Intervalle: 3–5 × 1,6 km; passen keine 3, werden die Wiederholungen kürzer.
+    // Cruise-Intervalle: 3–5 Wiederholungen, höchstens 1,6 km; die Zahl ist gerundet, die Länge passt sich nach unten an.
     const repKm = library.t.cruiseRepKm.value;
     const { min, max } = library.t.cruiseReps.value;
-    let reps = Math.min(max, Math.floor(target / repKm + EPS));
-    let rep = repKm;
-    if (reps < min) {
-      reps = min;
-      rep = floorTenth(target / min);
-    }
-    return repsSegment(reps, rep, "T", library.t.cruiseRestSeconds.value);
+    const reps = Math.min(max, Math.max(min, Math.round(target / repKm)));
+    return repsSegment(reps, Math.min(repKm, floorTenth(target / reps)), "T", library.t.cruiseRestSeconds.value);
   }
 
   if (choice.type === "I") {
@@ -342,12 +337,9 @@ function workSegment(choice: QualityType, targetKm: number, paces: SessionPaces)
   const config = library.racePaceBlocks.reps.value[distanceKey];
   const minReps = library.racePaceBlocks.minReps.value;
   const pace = paceOf("RACE", paces);
-  let rep = config.repKm;
-  let reps = Math.floor(target / rep + EPS);
-  if (reps < minReps) {
-    reps = minReps;
-    rep = floorTenth(target / minReps);
-  }
+  // Zahl der Wiederholungen gerundet (mindestens `minReps`), Länge höchstens die konfigurierte, nach unten angepasst.
+  const reps = Math.max(minReps, Math.round(target / config.repKm));
+  const rep = Math.min(config.repKm, floorTenth(target / reps));
   if (!(rep > 0) || minutesAt(rep * reps, pace) < minMinutes - EPS) return null;
   return repsSegment(reps, rep, "RACE", config.restSec);
 }

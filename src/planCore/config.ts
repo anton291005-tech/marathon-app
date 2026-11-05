@@ -505,8 +505,12 @@ export const CONFIG = deepFreeze({
     maxRestDaysBeforeRace: E(2, "§8"),
     /** Höchstens so viele Ruhetage am Stück in der Rennwoche (weiche Regel, soweit `availableDays` und das Q es zulassen); gilt auch am Wochenanfang. */
     maxRestDaysInRow: E(2, "§8"),
-    /** Bis zu dieser Zahl Lauftage hat die Rennwoche so viele Läufe inkl. Rennen (sonst Lauftage − 1, §5.4); schließt die Lücke bei 3 Tagen. */
-    fullRunDaysUpToRunDays: E(3, "§8"),
+    /**
+     * Bis zu dieser Zahl Lauftage hat die Rennwoche so viele Läufe inkl. Rennen (sonst Lauftage − 1, §5.4). Seit Schritt 6
+     * für alle Lauftage (6): die Frequenz bleibt, damit das Rennwochen-Volumen in die 30-min-Grenze der letzten Tage passt.
+     * Review-Punkt 28.
+     */
+    fullRunDaysUpToRunDays: E(6, "§8"),
     /** E-Lauf am Tag vor dem Rennen mit Strides (`library.strides.repsRaceWeek`). */
     stridesDayBefore: E(true, "§8"),
   },

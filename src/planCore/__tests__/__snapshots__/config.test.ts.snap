@@ -930,7 +930,7 @@ Object {
       "fullRunDaysUpToRunDays": Object {
         "source": "E",
         "spec": "§8",
-        "value": 3,
+        "value": 6,
       },
       "lastDaysCount": Object {
         "source": "E",

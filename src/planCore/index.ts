@@ -89,3 +89,6 @@ export {
 export type { CoreSession, EasyKind, QualityBuild, QualityType, Segment, SegmentPace, SessionNoteCode, SessionPaces } from "./sessions";
 export { distributeFillers, minWeekKm } from "./distribute";
 export type { Filler, FillerResult } from "./distribute";
+export { buildRaceSession, isLastDaysBeforeRace, lastDaysMaxKm, stridesBeforeRace } from "./raceWeek";
+export { planSessions } from "./planSessions";
+export type { SessionPlan, WeekNoteCode, WeekSessions } from "./planSessions";
