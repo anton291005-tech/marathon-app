@@ -13,8 +13,9 @@
  * 4. Rest gewichtet auf E/REC/MLR (`distribute.ts`), jede höchstens ihr Limit, 75 % des Long Runs (in Wochen ohne Long
  *    Run des letzten davor), in den letzten 2 Tagen vor dem Rennen 30 min. Zu viel Rest → Woche kleiner.
  * Passt eine Woche nicht, wird sie schrittweise weicher (nie härter, Hart-Annahme der Platzierung): erst MLR → E, dann
- * Q2 → E + Strides, dann Q1 → E + Strides; reicht auch das nicht, bekommen alle Einheiten ihre Mindestdauer und die
- * Woche wird größer (Hinweis).
+ * Q2 → E + Strides, dann Q1 → E + Strides, dann E/REC bis zur harten Untergrenze 15 min statt 25/20 min (Hinweis
+ * `e-shortened-to-fit-week`, freigegeben 2026-11-05, nur außerhalb von Taper und Rennwoche und nur, wenn Stufe 3 die
+ * Woche anheben würde: sonst wäre der Verlauf nicht mehr monoton); reicht auch das nicht, bekommen alle Einheiten diese Untergrenze und die Woche wird größer (Hinweis).
  */
 
 import { CONFIG } from "./config";
@@ -230,8 +231,15 @@ function assembleWeekAt(args: WeekArgs, weekKm: number): WeekResult {
     return Math.min(plain, floorTenth(recoveryFactor * qualityLimitKm(choice, args.previousWeekKm, paces, { light, nearLongRun: near })));
   };
 
-  for (let level = 0; level <= 3; level += 1) {
-    const lastLevel = level === 3;
+  // Stufe 4 (E/REC bis 15 min) nur in Wochen bis zur Peak-Woche (ohne Taper und Rennwoche), wo der Verlauf monoton sein
+  // muss, und nur wenn Stufe 3 die Woche anheben würde; sonst gilt Stufe 3 wie bisher. Taper- und Rennwochen werden wie
+  // bisher angehoben.
+  const maxLevel = !taperLike ? 4 : 3;
+  for (let level = 0; level <= maxLevel; level += 1) {
+    const lastLevel = level >= 3;
+    // Stufe 4: E/REC nur noch mit der harten Untergrenze (15 min) statt ihrer Mindestdauer.
+    const hardMins = level >= 4;
+    const minKmOf = (kind: EasyKind): number => (hardMins && kind !== "MLR" ? easyHardMinKm(kind, paces) : easyMinKm(kind, paces));
     // 1. Q-Arten nach Stufe weicher machen
     const qPlans: QPlan[] = qDays.map((day, k) => {
       let pick: { choice: QPlan["choice"]; note?: SessionNoteCode } = picks[k];
@@ -297,7 +305,7 @@ function assembleWeekAt(args: WeekArgs, weekKm: number): WeekResult {
         if (plan.parts === null) fillerDays.push({ ymd: day.ymd, slot: day.slot, kind: "E", qPlan: plan });
       }
     });
-    const fmin = fillerDays.map((filler) => easyMinKm(filler.kind, paces));
+    const fmin = fillerDays.map((filler) => minKmOf(filler.kind));
     const sumMin = fmin.reduce((sum, km) => sum + km, 0);
     const weekNotes: WeekNoteCode[] = [];
 
@@ -306,7 +314,7 @@ function assembleWeekAt(args: WeekArgs, weekKm: number): WeekResult {
       // Der Long Run bleibt in seinen Grenzen (Start, Steigerung, Entlastung, Taper, Anteil; freigegeben 2026-11-05) und
       // ist mindestens so lang wie jeder Füller (I11), mindestens ein E von 25 min.
       // Liegt die Grenze selbst darunter, gilt sie (E/REC werden dann auf die Länge des Long Runs gekürzt).
-      const lrMin = Math.min(lrLimit.km, fillerDays.reduce((most, filler, k) => Math.max(most, fmin[k]), easyMinKm("E", paces)));
+      const lrMin = Math.min(lrLimit.km, fillerDays.reduce((most, filler, k) => Math.max(most, fmin[k]), minKmOf("E")));
       lr = Math.min(lrLimit.km, floorTenth(weekKm - qKm - sumMin));
       if (lr < lrMin - EPS || !(lr > 0)) {
         if (!lastLevel) continue;
@@ -328,7 +336,7 @@ function assembleWeekAt(args: WeekArgs, weekKm: number): WeekResult {
         // Mindestdauer, nie länger als der Long Run (freigegeben 2026-11-05).
         if (filler.kind === "REC") max = Math.min(max, refLongRun);
         else if (filler.kind === "MLR") max = Math.min(max, floorTenth(easyMaxShareOfLongRun("MLR") * refLongRun));
-        else max = Math.min(max, refLongRun, Math.max(floorTenth(easyMaxShareOfLongRun("E") * refLongRun), fmin[k]));
+        else max = Math.min(max, refLongRun, Math.max(floorTenth(easyMaxShareOfLongRun("E") * refLongRun), fmin[k], easyMinKm("E", paces)));
       }
       return max;
     });
@@ -337,6 +345,8 @@ function assembleWeekAt(args: WeekArgs, weekKm: number): WeekResult {
     if (lr === null && rest < sumMin - EPS && !lastLevel) continue;
     const fillers: Filler[] = fillerDays.map((filler, k) => ({ kind: filler.kind, minKm: fmin[k], maxKm: Math.max(fmin[k], fmax[k]) }));
     const spread = distributeFillers(fillers, rest);
+    // Stufe 3 würde die Woche anheben: in Wochen bis zur Peak-Woche stattdessen Stufe 4 (E/REC bis 15 min).
+    if (spread.status === "raised" && level < maxLevel) continue;
     if (spread.status === "reduced") weekNotes.push("week-km-reduced");
     if (spread.status === "raised") weekNotes.push("week-km-raised");
 
@@ -365,6 +375,7 @@ function assembleWeekAt(args: WeekArgs, weekKm: number): WeekResult {
         notes.push("e-above-75-percent-long-run");
       }
       if (shortened[k]) notes.push("e-shortened-to-long-run");
+      else if (filler.kind !== "MLR" && spread.km[k] < easyMinKm(filler.kind, paces) - EPS) notes.push("e-shortened-to-fit-week");
       let strides = null;
       if (stridesBeforeRace(day.ymd, inputs.raceDate)) strides = stridesSegment(true);
       else if (filler.qPlan !== null) strides = stridesSegment(isRace);
@@ -390,7 +401,7 @@ function assembleWeekAt(args: WeekArgs, weekKm: number): WeekResult {
       spreadStatus: spread.status,
     };
   }
-  // Stufe 3 kehrt immer zurück.
+  // Die letzte Stufe kehrt immer zurück.
   throw new Error("unreachable");
 }
 

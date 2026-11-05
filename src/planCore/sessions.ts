@@ -49,6 +49,8 @@ export type SessionNoteCode =
   | "e-above-75-percent-long-run"
   /** E/REC unter der Mindestdauer, weil der Long Run (in seinen Grenzen) kürzer ist: nie länger als er (I11 vor I2). */
   | "e-shortened-to-long-run"
+  /** E/REC unter ihrer Mindestdauer (nie unter 15 min), weil die Woche sonst angehoben würde (monotoner Verlauf, Review-Punkt 34). */
+  | "e-shortened-to-fit-week"
   /** Long Run über seine Grenze auf die harte Untergrenze (15 min) angehoben, weil die Grenze darunter lag (Review-Punkt 34). */
   | "long-run-raised-to-minimum"
   /** Entlastungswoche: Q1 mit dem Faktor der Woche gekürzt (Review-Punkt 36). */

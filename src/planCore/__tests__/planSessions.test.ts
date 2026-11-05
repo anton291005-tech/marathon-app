@@ -127,6 +127,21 @@ describe("planCore planSessions (Schritt 6)", () => {
     });
   });
 
+  it("statt eine Aufbauwoche anzuheben, wird E bis 15 min gekürzt: sichtbarer Verlauf monoton (5k, längster Lauf 0 km)", () => {
+    // Vorher: Wochen ohne Q auf 3 × 25 min = 18,6 km angehoben, Wochen mit R-Einheit 16,8 km (nicht monoton).
+    const { inputs, todayYmd } = randomInputs(20261716);
+    const plan = planSessions(inputs, todayYmd);
+    expect(checkVolumeGrowth(plan, inputs)).toEqual([]);
+    const build = plan.weeks.filter((w) => w.wn <= plan.volume.peakWeek && w.sessions.length === 7);
+    expect(build.filter((w) => w.notes.indexOf("week-km-raised") >= 0)).toEqual([]);
+    const shortened = build.reduce((list, w) => list.concat(w.sessions.filter((s) => s.notes.indexOf("e-shortened-to-fit-week") >= 0)), [] as SessionPlan["weeks"][number]["sessions"]);
+    expect(shortened.length).toBeGreaterThan(0);
+    shortened.forEach((s) => {
+      expect(s.km).toBeLessThan(easyMinKm(s.kind as "E" | "REC", plan.paces));
+      expect(s.km).toBeGreaterThanOrEqual(easyHardMinKm(s.kind as "E" | "REC", plan.paces));
+    });
+  });
+
   it("ist deterministisch (I20-Anteil)", () => {
     PROFILES.forEach((profile) => expect(planOf(profile.name)).toEqual(planOf(profile.name)));
   });
