@@ -12,19 +12,20 @@
  * ist `warning`, darüber `error`. Begründete Abweichungen (ein Hinweis des Kerns erklärt sie, die Bedingung des
  * Hinweises stimmt nachgerechnet) erscheinen als `warning` mit eigener Regel (`reasoned`).
  *
- * I19 (Claude-Text-Schritt, §11) ist im MVP nicht anwendbar, I20 (Determinismus) prüft der Property-Test; I21/I22
- * prüft `checkAssembledPlan` am fertigen `CorePlan` (Schritt 7b).
+ * I19 (Claude-Text-Schritt, §11) ist im MVP nicht anwendbar, I20 (Determinismus) prüft der Property-Test. Am fertigen
+ * `CorePlan` (Schritt 7b) prüft `checkAssembledPlan` I1 (Wochensummen, Workouts = Wochen), I14, I21, I22 und eindeutige
+ * IDs.
  */
 
 import { CONFIG } from "./config";
-import { addDays, diffDays, WEEKDAYS } from "./dates";
+import { addDays, diffDays, mondayOf, WEEKDAYS } from "./dates";
 import { findHardSpacingViolations, isHardSession, isHardSlot } from "./hard";
 import { carryOf, NO_CARRY, resolveLongRunDay } from "./placement";
 import type { LayoutCarry, WeekLayout } from "./placement";
 import type { SessionPlan, WeekSessions } from "./planSessions";
 import type { CoreSession, Segment } from "./sessions";
 import type { LayoutNoteCode, PlacedSlot, WeekMode } from "./templates";
-import type { CoreInputs, CoreKind, Distance, RunDays, Weekday, Ymd } from "./types";
+import type { CoreInputs, CoreKind, CorePlan, Distance, RunDays, Weekday, Ymd } from "./types";
 import type { PlanVolume } from "./volume";
 
 // ───────────────────────────── Regeln ─────────────────────────────
@@ -91,6 +92,7 @@ export const INVARIANT_RULES = {
   "I1/segments-sum": err("I1", "km"),
   "I1/zero-km": err("I1"),
   "I1/race-week-sum": err("I1", "km"),
+  "I1/workouts-weeks": err("I1"),
   // I2 Typen und Limits der Einheiten
   "I2/slot-kind": err("I2"),
   "I2/mlr-distance": err("I2"),
@@ -253,6 +255,9 @@ const EPS = 1e-6;
 const NOISE_MIN = 0.05;
 
 const r1 = (value: number): number => Math.round(value * 10) / 10;
+
+/** Späterer Tag eines Codes von `findHardSpacingViolations` ("hard-too-close:A>B" → B). */
+const spacingYmd = (code: string): Ymd => code.slice(code.lastIndexOf(">") + 1);
 const r3 = (value: number): number => Math.round(value * 1000) / 1000;
 
 type Where = { wn?: number; ymd?: Ymd };
@@ -396,7 +401,7 @@ function weekLayoutInto(c: Collector, layout: WeekLayout, ctx: WeekLayoutContext
     if (index === 0 && day.weekday === "Mo" && (ctx.carry.prevHard || ctx.carry.prevMlrAfterHard)) c.flag("I6/hard-after-carry", { wn, ymd: day.ymd });
     if (index === days.length - 1 && day.weekday === "So" && ctx.nextHard) c.flag("I6/hard-before-next-hard", { wn, ymd: day.ymd });
   });
-  findHardSpacingViolations(days.map((day) => ({ ymd: day.ymd, hard: isHardSlot(day.slot) }))).forEach(() => c.flag("I6/hard-spacing", { wn }));
+  findHardSpacingViolations(days.map((day) => ({ ymd: day.ymd, hard: isHardSlot(day.slot) }))).forEach((code) => c.flag("I6/hard-spacing", { wn, ymd: spacingYmd(code) }));
 
   // MLR: Abstand zum LR, Sandwich
   const lrIndexInWeek = WEEKDAYS.indexOf(ctx.longRunDay);
@@ -526,7 +531,10 @@ function planLayoutsInto(c: Collector, layouts: WeekLayout[], ctx: PlanLayoutCon
   if (all.length === 0 || all[all.length - 1].ymd !== ctx.raceDate) c.flag("I14/plan-end");
   if (all.filter((day) => day.slot === "RACE").length !== 1) c.flag("I14/race");
 
-  findHardSpacingViolations(all.map((day) => ({ ymd: day.ymd, hard: isHardSlot(day.slot) }))).forEach(() => c.flag("I6/hard-spacing"));
+  findHardSpacingViolations(all.map((day) => ({ ymd: day.ymd, hard: isHardSlot(day.slot) }))).forEach((code) => {
+    const ymd = spacingYmd(code);
+    c.flag("I6/hard-spacing", { wn: wnOf(ymd), ymd });
+  });
   all.forEach((day, index) => {
     if (day.slot !== "MLR") return;
     const before = index > 0 && isHardSlot(all[index - 1].slot);
@@ -747,7 +755,10 @@ function sessionsInto(c: Collector, plan: SessionPlan, inputs: CoreInputs): void
   all.forEach((s) => {
     if (hardOf(s) && !isHardSlot(s.slot)) c.flag("I6/harder-than-layout", at(s));
   });
-  findHardSpacingViolations(all.map((s) => ({ ymd: s.ymd, hard: hardOf(s) }))).forEach(() => c.flag("I6/hard-spacing"));
+  findHardSpacingViolations(all.map((s) => ({ ymd: s.ymd, hard: hardOf(s) }))).forEach((code) => {
+    const ymd = spacingYmd(code);
+    c.flag("I6/hard-spacing", { wn: wnOf[ymd], ymd });
+  });
 
   let lastLr: number | null = null;
   let level: number | null = null;
@@ -1091,5 +1102,58 @@ export function checkPlan(plan: SessionPlan, inputs: CoreInputs): CheckResult {
     const { min, max } = CONFIG.taper.totalReduction.value;
     c.flag(taper.excused ? "I13/taper-mean-excused" : "I13/taper-mean", {}, { actual: 1 - taper.mean, limit: 1 - taper.mean < min ? min : max, unit: "share" });
   }
+  return resultOf(c.list);
+}
+
+// ───────────────────────────── Fertiger Plan (Schritt 7b) ─────────────────────────────
+
+/**
+ * Fertiger `CorePlan` (= `TrainingPlanV2`): I1 (Wochensumme = Summe der Lauf-km; `workouts` = Workouts der Wochen in
+ * gleicher Reihenfolge; jedes Workout in der Woche seines Montags), I14 (genau ein Rennen, am `raceDate`, letztes
+ * Workout), I21 (jede Woche mit `wn`, `phase`, Label, `dates` und `focus`, auch eine angebrochene Woche 1), I22
+ * (`isRecoveryWeek` genau dann, wenn „Entlastung“ im `focus` steht), eindeutige IDs.
+ */
+export function checkAssembledPlan(plan: CorePlan, inputs: Pick<CoreInputs, "raceDate">): CheckResult {
+  const c = new Collector();
+  const keyword = CONFIG.volume.recovery.focusKeyword.value.toLowerCase();
+
+  const flat = plan.weeks.reduce((list, week) => list.concat(week.workouts), [] as CorePlan["workouts"]);
+  if (flat.length !== plan.workouts.length || flat.some((w, i) => w.id !== plan.workouts[i].id)) c.flag("I1/workouts-weeks");
+
+  const ids: Record<string, boolean> = {};
+  plan.workouts.forEach((w) => {
+    const ymd = w.dateIso.slice(0, 10);
+    if (ids[w.id]) c.flag("PLAN/duplicate-id", { ymd });
+    ids[w.id] = true;
+  });
+
+  plan.weeks.forEach((week, index) => {
+    const wn = week.meta === undefined ? index + 1 : week.meta.wn;
+    let sum = 0;
+    week.workouts.forEach((w) => {
+      if (w.sport !== "rest" && w.km) sum += w.km;
+      if (mondayOf(w.dateIso.slice(0, 10)) !== week.startIso) c.flag("I1/workouts-weeks", { wn, ymd: w.dateIso.slice(0, 10) });
+    });
+    c.over("I1/week-sum", Math.abs(sum - week.totalKm), 0, { wn }, "km");
+    const meta = week.meta;
+    const complete =
+      meta !== undefined &&
+      meta.wn === index + 1 &&
+      typeof meta.phase === "string" &&
+      typeof meta.label === "string" &&
+      meta.label.trim() !== "" &&
+      typeof meta.dates === "string" &&
+      meta.dates.trim() !== "" &&
+      typeof meta.focus === "string" &&
+      meta.focus.trim() !== "";
+    if (!complete) c.flag("I21/week-meta", { wn });
+    if (meta !== undefined && (meta.isRecoveryWeek === true) !== (typeof meta.focus === "string" && meta.focus.toLowerCase().indexOf(keyword) >= 0)) {
+      c.flag("I22/recovery-focus", { wn });
+    }
+  });
+
+  const races = plan.workouts.filter((w) => w.kind === "RACE");
+  const last = plan.workouts[plan.workouts.length - 1];
+  if (races.length !== 1 || last === undefined || last.kind !== "RACE" || last.dateIso.slice(0, 10) !== inputs.raceDate) c.flag("I14/race");
   return resultOf(c.list);
 }

@@ -309,6 +309,15 @@ type PlanRules = {
 
 Zusätzlich: Property-Tests über zufällige gültige Inputs (alle Distanzen × 3–6 Tage × Planlängen × Startumfänge), alle Invarianten müssen halten.
 
+**Prüfer** (Schritt 7, `src/planCore/invariants.ts`): `checkPlan` (I1–I18, ohne I19/I20) und `checkAssembledPlan` (fertiger Plan: I1, I14, I21, I22, eindeutige IDs). Jede Regel hat eine Schwere:
+- **error:** Sicherheitsgrenze, Vorgabe des Nutzers oder kaputter Plan. Der Server liefert den Plan dann nicht aus.
+- **warning:** Zielwert, Qualitätsregel, Mittelwert.
+- **Toleranz:** Jede error-Grenze auf Zahlen hat eine (0,1 km, 0,5 Prozentpunkte, 1 min); eine Überschreitung innerhalb davon ist warning.
+- **Begründete Abweichungen** (ein Hinweis des Kerns erklärt sie) sind warnings mit eigener Regel.
+- I19 gilt erst mit dem Claude-Text-Schritt (§11), I20 prüft der Property-Test.
+
+Einteilung und Häufigkeiten: `docs/plan-core-plan.md`, Schritt 7.
+
 ## 13. Referenzprofile (Abnahmekriterien)
 
 | # | Profil | Inputs | Erwartung |

@@ -303,8 +303,8 @@ const REASONED: Array<{ key: RuleKey; note: string; without: RuleKey[]; scope: "
   { key: "I5/min-week-km-raised", note: "", without: ["I5/cap", "I5/recovery-too-shallow"], scope: "min-week" },
 ];
 
-/** Rules, die erst am fertigen `CorePlan` geprüft werden (Schritt 7b, buildPlan.test). */
-const ASSEMBLED: RuleKey[] = ["I21/week-meta", "I22/recovery-focus", "PLAN/duplicate-id"];
+/** Regeln, die erst am fertigen `CorePlan` geprüft werden (Schritt 7b, buildPlan.test). */
+const ASSEMBLED: RuleKey[] = ["I1/workouts-weeks", "I21/week-meta", "I22/recovery-focus", "PLAN/duplicate-id"];
 
 function layoutCtx(inputs: CoreInputs, layout: WeekLayout) {
   return {
@@ -436,6 +436,7 @@ describe("Invarianten-Prüfer (Schritt 7a)", () => {
     it("jede error-Regel auf Zahlen hat eine Toleranz; ohne Toleranz nur Struktur, Ja/Nein und ganze Zahlen (Tage, Anzahl)", () => {
       const withoutTolerance = [
         "I1/zero-km",
+        "I1/workouts-weeks",
         "I2/slot-kind",
         "I2/mlr-distance",
         "I2/shortened-not-to-long-run",

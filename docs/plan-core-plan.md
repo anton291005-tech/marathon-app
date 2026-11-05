@@ -285,6 +285,51 @@ Die App nimmt an, was der Kern liefern wird. Gleichzeitig wird der Nebenbefund z
 - **Abnahme:** Alle Invarianten grün, P1–P6 in den Bereichen.
   - Zusätzlich `docs/plan-core-profiles.md`: Vergleichstabelle P1–P6 gegen je einen Literaturplan (§13: Peak-km, LR-Max, LR ≥ 30 km, Q/Woche, Taper). Ist Grundlage fürs Spoho-Review.
   - Hinweis: `CI=true` schreibt keine neuen Snapshots. Die Snapshot-Dateien müssen mit eingecheckt werden.
+- **Umgesetzt (Branch `feat/plan-core-invariants`, zwei Teilcommits 7a/7b, nicht gemergt; Entscheidungen vom 2026-11-05):**
+  - **7a `src/planCore/invariants.ts`:** `checkPlan(SessionPlan, inputs) → { violations, errors, warnings }`. Ein Verstoß hat Code (I1–I22 oder `QMIN`/`BEGINNER`/`VOLUME`/`LAYOUT`/`PLAN`), Regel, Schwere, Woche, Tag, Ist/Soll, Einheit. `INVARIANT_RULES` (120 Regeln) legt die Schwere fest:
+    - **error:** Sicherheitsgrenze, verletzte Vorgabe des Nutzers oder für die App kaputter Plan. Dazu gehören I1, I2-Struktur (Art, ≥ 15 min, Hinweis-Missbrauch), I3, I5-Deckel, I6, I7, I8, I9 komplett, I12, I14, I15 (Abstände, letzte Tage), I16, I17, I18, I21, I22, Einsteiger mit I/R, Strukturfehler, doppelte IDs.
+    - **warning:** I2-Dauern, I4 inkl. Monotonie, I5-Entlastungsband, I10, I11, I13, Mindestgrößen der Q-Einheiten, weiche Rennwochen-Regeln, Konsistenz des Volumenplans.
+  - **Toleranz:** Jede error-Grenze auf Zahlen hat eine Toleranz (`INVARIANT_TOLERANCE`: 0,1 km, 0,5 Prozentpunkte, 1 min). Liegt die Überschreitung innerhalb, ist es warning, darüber error; Rundungsrauschen (1e-6 km bzw. 0,05 min) ist kein Verstoß. Ohne Toleranz bleiben nur Struktur-, Ja/Nein- und Ganzzahl-Regeln (Tage, Anzahl); ein Test hält die Liste fest.
+  - **Begründete Abweichungen:** Wo ein Hinweis des Kerns erklärt, warum eine Regel nicht greift, und seine Bedingung nachgerechnet stimmt, erscheint das als warning mit eigener Regel und `reasoned: true`. Hinweise, die selbst die Regel sind (Q2 der Entlastungswoche, Einsteiger, Taper-Long-Run, M-Block vor dem LR, Q1-Faktor), erscheinen nicht. Häufigkeit in 2 000 Property-Plänen (Seed 20261107), je Regel Meldungen und betroffene Pläne:
+
+    | Regel | Meldungen | Pläne |
+    |---|---|---|
+    | `I11/e-above-75-percent-long-run` | 8 130 | 603 |
+    | `I2/q-softened` (Q → E + Strides wegen Budget/Platz) | 5 552 | 1 203 |
+    | `I13/taper-q-excused` | 2 384 | 1 861 |
+    | `I2/e-shortened-to-fit-week` | 2 253 | 213 |
+    | `I5/min-week-km-raised` | 1 472 | 414 |
+    | `I2/e-shortened-to-long-run` | 1 335 | 217 |
+    | `VOLUME/week-km-raised` | 1 083 | 836 |
+    | `I2/mlr-as-e` | 886 | 156 |
+    | `I10/no-long-run-in-window` | 830 | 775 |
+    | `VOLUME/week-km-reduced` | 359 | 359 |
+    | `I13/taper-mean-excused` | 45 | 45 |
+    | `I9/long-run-raised-to-minimum` | 41 | 33 |
+
+    P1–P6: 0 errors und 0 unbegründete warnings. P3 hat gar keine Meldung; P1 hat 11 begründete, P2 6, P4 6, P5 3 und P6 2 (Snapshot in `invariants.test.ts.snap`).
+  - **Weitere Exporte:** `checkVolume`, `checkWeekLayout`, `checkPlanLayouts`, `taperMeanOf` und `toLogEntries` (für Logs nur Code, Regel, Woche und Schwere; kein Tag, keine Zahlen).
+  - **Abgelöste Prüfer:** `__fixtures__/layoutChecks.ts`, `__fixtures__/sessionChecks.ts` und `violations()` aus `volume.test.ts` sind darin aufgegangen; in volume.test bleibt nur die exakte Entlastungstiefe ohne Tragfähigkeit. Die Snapshot-Helfer stehen in `__fixtures__/compact.ts`.
+  - **Tests:**
+    - `invariants.property.test.ts` (ersetzt `sessions.property.test.ts`): 2 000 Pläne mit 0 errors und 0 unbegründeten warnings, I20 (jeder Plan zweimal gerechnet), Abdeckung der Hinweise.
+    - `invariants.test.ts`: Mutation je Regel; begründete Regeln in echten Plänen und ohne Hinweis als unbegründete Regel; Toleranz beidseitig für km, Anteil, Minuten und Untergrenze; P1–P6.
+  - **Abweichungen vom Entwurf:**
+    - (1) Das Entlastungsband (I5 recovery-*) ist warning statt error: Es ist keine Sicherheitsgrenze, der Deckel `I5/cap` bleibt error.
+    - (2) I16-Rennwochenzahl: Unter dem Spec-Minimum (Lauftage − 1) ist es error, nur die Abweichung von der genauen Zahl der Platzierung ist warning.
+  - **7b `src/planCore/buildPlan.ts`:** `assemblePlan(SessionPlan, inputs, rules) → CorePlan`, `buildPlan(inputs, rules, todayYmd)` und `buildCheckedPlan(...) → { plan, check }` (`checkPlan` + `checkAssembledPlan`).
+    - Eine Einheit je Plantag, Ruhetage als `rest`-Workouts.
+    - ID `pc-<ymd>-<kind>`; `dateIso` ist Mittag UTC.
+    - Woche: `startIso` Montag; `totalKm` als Summe wie in `deriveWeeksFromWorkouts`.
+    - Label „Woche N · Phase“, `dates` „8. Mär ff.“ ab dem ersten Plantag, `focus` je Phase, Rennwoche „Rennwoche – frisch an den Start“, Entlastung „Entlastungswoche – …“ mit `isRecoveryWeek`.
+    - `meta.core` mit den Eingaben in normalisierter Form (verfügbare Tage Mo–So); `meta.volumeNote` bei `peak-not-reached`.
+    - `rules` werden nur gespeichert.
+  - **`checkAssembledPlan(CorePlan, inputs)`:** I1 (Wochensumme; `workouts` = Workouts der Wochen; jedes Workout in der Woche seines Montags), I14, I21, I22, eindeutige IDs.
+  - **Tests 7b:**
+    - `buildPlan.test.ts`: P1–P6, Form, angebrochene Woche 1, `volumeNote`, I20, Mutation je Regel, 2 000 Pläne gebaut und geprüft.
+    - `src/__tests__/planCoreBuildPlanContract.test.ts`: P1–P6 und 200 Zufallspläne bestehen `normalizeTrainingPlan(plan)` deep-equal `plan`, `validateTrainingPlanV2Integrity` und `deriveDisplayPlan`.
+  - **Offen für später:**
+    - `dateIso` Mittag UTC landet unter `TZ=Pacific/Auckland` beim Gruppieren der App im falschen Wochentag; das ist der vorbestehende Zeitzonenpunkt `fix/timezone-tests`, nicht neu geprüft.
+    - Der Branch-Name weicht vom Plan ab (`feat/plan-core-assemble`); Inhalt wie hier.
 
 ### 8 · `feat/plan-rules-claude` — **später**, S–M (1–2 Tage), nach 1
 
@@ -324,7 +369,9 @@ Kern im Vercel-Handler hinter dem Schalter.
 
 - **Dateien:**
   - `api/onboarding/generate-plan-full.js:24-45` (bzw. die `.ts`-Funktion bei Variante A):
-    - `PLAN_CORE_MODE=on`: `buildPlan(inputs, EMPTY_RULES, todayYmd)` → `checkCorePlan`. Kein Claude-Aufruf. Mit Verstoß gibt es keinen Plan: Antwort 500 mit maschinenlesbarem Code, Verstoß-Codes im Log (ohne Nutzerinhalt); das Onboarding zeigt eine verständliche Meldung und bietet den lokalen vereinfachten Plan an (freigegeben).
+    - `PLAN_CORE_MODE=on`: `buildCheckedPlan(inputs, EMPTY_RULES, todayYmd)` (Schritt 7b). Kein Claude-Aufruf. Bei `check.errors > 0` gibt es keinen Kern-Plan; warnings verhindern nichts. Ins Log nur `toLogEntries(errors)` (Code, Regel, Woche; kein Tag, keine Zahlen).
+      - **Rückfall bei error (freigegeben 2026-11-05, bis Schritt 13):** der alte Generator (`api/_lib/phasedFullPlanGenerator.js` bzw. der deterministische Pfad), nicht der lokale vereinfachte Plan; der kommt ab Schritt 11 aus demselben Kern und hätte denselben Fehler. Jeder Rückfall erhöht einen Zähler (Log-Kennzahl `planCoreFallbacks` mit Codes, ohne Nutzerinhalt), Auswertung im Shadow-/On-Betrieb. Antwort an den Client wie heute `{ plan }`.
+      - Nur wenn auch der Rückfall scheitert: Antwort 500 mit maschinenlesbarem Code, z. B. `{ "error": "plan-core-invariant", "configVersion": "0.9.0", "errors": 6, "warnings": 2, "violations": [{ "code": "I9", "rule": "step", "wn": 2, "severity": "error" }, …] }`; das Onboarding zeigt eine verständliche Meldung.
     - `shadow`: Antwort wie heute; der Kern rechnet daneben und loggt nur Verstoß-Codes und Kennzahlen (Peak, LR-Max, Lauftage), keine Inhalte.
     - `off`: wie heute.
     - Fehlen die neuen Eingaben (alter Client), läuft der heutige Pfad.

@@ -96,3 +96,16 @@ export { planSessions } from "./planSessions";
 export type { SessionPlan, WeekNoteCode, WeekSessions } from "./planSessions";
 export { renderSession, SESSION_TYPE_OF_KIND } from "./text";
 export type { CoreStructuredSpec, SessionText } from "./text";
+export {
+  checkAssembledPlan,
+  checkPlan,
+  checkPlanLayouts,
+  checkVolume,
+  checkWeekLayout,
+  INVARIANT_RULES,
+  INVARIANT_TOLERANCE,
+  taperMeanOf,
+  toLogEntries,
+} from "./invariants";
+export type { CheckResult, InvariantCode, RuleDef, RuleKey, Severity, ToleranceUnit, Violation } from "./invariants";
+export { assemblePlan, buildCheckedPlan, buildPlan, RECOVERY_WEEK_FOCUS_DE } from "./buildPlan";
