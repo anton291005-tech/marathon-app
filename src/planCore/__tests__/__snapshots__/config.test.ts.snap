@@ -3,6 +3,17 @@
 exports[`planCore config Snapshot der Config: Änderungen am Review sind bewusst 1`] = `
 Object {
   "config": Object {
+    "distribute": Object {
+      "weights": Object {
+        "source": "E",
+        "spec": "§6",
+        "value": Object {
+          "E": 1,
+          "MLR": 2,
+          "REC": 0.8,
+        },
+      },
+    },
     "form": Object {
       "appZone": Object {
         "source": "E",
@@ -16,10 +27,26 @@ Object {
           "T": "Z4",
         },
       },
+      "beginnerEBandSecPerKm": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": Object {
+          "max": 30,
+          "min": 0,
+        },
+      },
       "beginnerEPaceSecPerKm": Object {
         "source": "E",
         "spec": "§3",
         "value": 420,
+      },
+      "eBandShares": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": Object {
+          "fast": 0.7,
+          "slow": 0.62,
+        },
       },
       "eShare": Object {
         "source": "E",
@@ -40,6 +67,11 @@ Object {
         "source": "E",
         "spec": "§3",
         "value": 0.974,
+      },
+      "paceBandSecPerKm": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": 5,
       },
       "rOffsetSecPerKm": Object {
         "source": "E",
@@ -171,6 +203,31 @@ Object {
       },
     },
     "intensity": Object {
+      "beginnerQ2AsE": Object {
+        "source": "E",
+        "spec": "§7.2",
+        "value": true,
+      },
+      "fewRunDaysUpTo": Object {
+        "source": "E",
+        "spec": "§6",
+        "value": 4,
+      },
+      "firstQualityBudgetShare": Object {
+        "source": "E",
+        "spec": "§6",
+        "value": 0.7,
+      },
+      "lightQualityFactor": Object {
+        "source": "E",
+        "spec": "§6",
+        "value": 0.5,
+      },
+      "q2AsEInRecoveryWeek": Object {
+        "source": "E",
+        "spec": "§6",
+        "value": true,
+      },
       "qualityShareHard": Object {
         "source": "E",
         "spec": "§6",
@@ -180,6 +237,16 @@ Object {
         "source": "L",
         "spec": "§6",
         "value": 0.2,
+      },
+      "qualityShareTargetFewDays": Object {
+        "source": "E",
+        "spec": "§6",
+        "value": 0.15,
+      },
+      "recoveryWeekQ1ScalesWithWeek": Object {
+        "source": "E",
+        "spec": "§6",
+        "value": true,
       },
     },
     "library": Object {
@@ -197,11 +264,28 @@ Object {
             "min": 25,
           },
         },
+        "minutesMaxFewDays": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": Object {
+            "distances": Array [
+              "hm",
+              "m",
+            ],
+            "minutes": 90,
+            "upToRunDays": 3,
+          },
+        },
         "minutesMaxSixDays": Object {
           "source": "E",
           "spec": "§7",
           "value": 90,
         },
+      },
+      "easyHardMinMinutes": Object {
+        "source": "E",
+        "spec": "§7",
+        "value": 15,
       },
       "i": Object {
         "maxKm": Object {
@@ -214,6 +298,11 @@ Object {
           "spec": "§7",
           "value": 0.08,
         },
+        "minReps": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 3,
+        },
         "repMinutes": Object {
           "source": "E",
           "spec": "§7",
@@ -221,6 +310,11 @@ Object {
             "max": 5,
             "min": 3,
           },
+        },
+        "repTargetMinutes": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 4,
         },
         "restToRepRatio": Object {
           "source": "E",
@@ -268,6 +362,21 @@ Object {
           "spec": "§7",
           "value": 110,
         },
+        "minKm": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 3,
+        },
+        "nearLongRunDays": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 2,
+        },
+        "nearLongRunMaxKm": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 10,
+        },
       },
       "mlr": Object {
         "fromPhase": Object {
@@ -311,6 +420,11 @@ Object {
             "10k",
           ],
         },
+        "longRepMinReps": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 6,
+        },
         "maxKm": Object {
           "source": "L",
           "spec": "§7",
@@ -321,12 +435,47 @@ Object {
           "spec": "§7",
           "value": 0.05,
         },
+        "minReps": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 4,
+        },
         "repMeters": Object {
           "source": "E",
           "spec": "§7",
           "value": Object {
             "max": 400,
             "min": 200,
+          },
+        },
+        "restToRepRatio": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 2,
+        },
+      },
+      "racePaceBlocks": Object {
+        "minReps": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 2,
+        },
+        "reps": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": Object {
+            "10k": Object {
+              "repKm": 1,
+              "restSec": 90,
+            },
+            "5k": Object {
+              "repKm": 0.6,
+              "restSec": 90,
+            },
+            "hm": Object {
+              "repKm": 2,
+              "restSec": 120,
+            },
           },
         },
       },
@@ -340,7 +489,17 @@ Object {
           },
         },
       },
+      "restJogSecPerKm": Object {
+        "source": "E",
+        "spec": "§7",
+        "value": 300,
+      },
       "strides": Object {
+        "meters": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 100,
+        },
         "reps": Object {
           "source": "E",
           "spec": "§7",
@@ -348,6 +507,16 @@ Object {
             "max": 8,
             "min": 4,
           },
+        },
+        "repsRaceWeek": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 4,
+        },
+        "repsStandard": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 6,
         },
         "seconds": Object {
           "source": "E",
@@ -384,6 +553,32 @@ Object {
           "spec": "§7",
           "value": 0.1,
         },
+        "minMinutes": Object {
+          "source": "E",
+          "spec": "§7",
+          "value": 10,
+        },
+      },
+      "warmupCooldownByWeekKm": Object {
+        "source": "E",
+        "spec": "§7",
+        "value": Array [
+          Object {
+            "cooldownKm": 1.5,
+            "upToWeekKm": 40,
+            "warmupKm": 1.5,
+          },
+          Object {
+            "cooldownKm": 1.5,
+            "upToWeekKm": 70,
+            "warmupKm": 2,
+          },
+          Object {
+            "cooldownKm": 2,
+            "upToWeekKm": 1000,
+            "warmupKm": 2.5,
+          },
+        ],
       },
       "warmupCooldownKm": Object {
         "source": "E",
@@ -489,6 +684,11 @@ Object {
           "max": 0.3,
           "min": 0.2,
         },
+      },
+      "recoveryReductionUsed": Object {
+        "source": "E",
+        "spec": "§7.1",
+        "value": 0.25,
       },
       "requiredEveryWeek": Object {
         "source": "E",
@@ -734,12 +934,25 @@ Object {
           },
         },
       },
+      "hmSpecificQ2": Object {
+        "source": "E",
+        "spec": "§7.2",
+        "value": Array [
+          "I",
+          "T",
+        ],
+      },
+      "longRunPlusMEveryNthWeek": Object {
+        "source": "E",
+        "spec": "§7.2",
+        "value": 2,
+      },
     },
     "raceWeek": Object {
       "fullRunDaysUpToRunDays": Object {
         "source": "E",
         "spec": "§8",
-        "value": 3,
+        "value": 6,
       },
       "lastDaysCount": Object {
         "source": "E",
@@ -775,6 +988,11 @@ Object {
         "source": "E",
         "spec": "§8",
         "value": 6,
+      },
+      "stridesDayBefore": Object {
+        "source": "E",
+        "spec": "§8",
+        "value": true,
       },
     },
     "scope": Object {
@@ -821,10 +1039,20 @@ Object {
         "spec": "§5.4",
         "value": 6,
       },
+      "longRunShareOfPeak": Object {
+        "source": "E",
+        "spec": "§5.4",
+        "value": 0.6,
+      },
       "minRunDaysBelowRunDays": Object {
         "source": "L",
         "spec": "§5.4",
         "value": 1,
+      },
+      "qualityKmFactor": Object {
+        "source": "E",
+        "spec": "§5.4",
+        "value": 0.6,
       },
       "qualitySessionsPerWeek": Object {
         "source": "L",
@@ -993,6 +1221,11 @@ Object {
           "spec": "§5.3",
           "value": "Entlastung",
         },
+        "maxReduction": Object {
+          "source": "E",
+          "spec": "§5.3",
+          "value": 0.3,
+        },
         "reduction": Object {
           "source": "P",
           "spec": "§5.3",
@@ -1097,6 +1330,6 @@ Object {
       },
     },
   },
-  "version": "0.6.2",
+  "version": "0.9.0",
 }
 `;

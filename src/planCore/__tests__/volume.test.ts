@@ -1,5 +1,6 @@
 import { CONFIG } from "../config";
 import { addDays, diffDays, mondayOf } from "../dates";
+import { PROFILES } from "../__fixtures__/profiles";
 import { isPlanCoreError } from "../phases";
 import { createRng } from "../random";
 import type { Distance, RunDays, Ymd } from "../types";
@@ -46,7 +47,11 @@ function violations(inputs: VolumeInputs, volume: PlanVolume): string[] {
   for (let i = 1; i < full.length; i += 1) {
     const previous = full[i - 1];
     if (pre[i].isRecoveryWeek) {
-      const depth = Math.max(Math.round(previous * (1 - recovery.reduction.value)), Math.ceil(previous / growth.twoWeekFactor.value - EPS));
+      // −20 % abgerundet (nie flacher, freigegeben 2026-11-05), bei winzigen Umfängen die I3-Untergrenze auf 0,1 km.
+      const depth = Math.max(
+        Math.floor(previous * (1 - recovery.reduction.value) + EPS),
+        Math.ceil((previous / growth.twoWeekFactor.value) * 10 - EPS) / 10,
+      );
       if (full[i] !== depth) out.push(`Entlastung w${i + 1}`);
       continue;
     }
@@ -301,6 +306,84 @@ describe("planCore volume (§5)", () => {
       const race = volume.weeks[volume.weeks.length - 1];
       expect(race.days).toBe(3);
       expect(race.raceWeekExtraKm).toBe(Math.round(volume.peakKm * 0.425 * (2 / 6)));
+    });
+  });
+
+  describe("Tragfähigkeit (capacity, freigegeben 2026-11-05)", () => {
+    const p3 = PROFILES.filter((p) => p.name === "P3")[0].inputs;
+
+    it("plant höchstens das Lieferbare, die Steigerung rechnet mit den gelieferten Werten, curveKm hält den Plan davor", () => {
+      const calls: number[] = [];
+      const volume = planVolume(p3, {
+        capacity: {
+          begin: () => {
+            calls.length = 0;
+            return {
+              deliver: (index: number, km: number) => {
+                calls.push(index);
+                return Math.min(km, 50);
+              },
+            };
+          },
+        },
+      });
+      const plain = planVolume(p3);
+      const problems = volume.weeks.filter(
+        (w, i) =>
+          w.fullWeekKm > 50 ||
+          w.curveKm < w.fullWeekKm ||
+          (i >= 2 && w.wn <= volume.peakWeek && w.fullWeekKm > Math.floor(1.3 * volume.weeks[i - 2].fullWeekKm)),
+      );
+      expect(problems).toEqual([]);
+      expect(volume.peakKm).toBe(50);
+      expect(volume.notes).toContainEqual({ code: "peak-not-reached", reason: "run-days", targetPeakKm: plain.targetPeakKm, reachedPeakKm: 50 });
+      // je Woche genau ein Aufruf, in Reihenfolge, Taper- und Rennwoche eingeschlossen
+      expect(calls).toEqual(volume.weeks.map((_, i) => i));
+      // Taper relativ zum gelieferten Peak
+      expect(volume.weeks[volume.weeks.length - 2].curveKm).toBe(Math.round(50 * 0.7));
+    });
+
+    /** P3 mit Tragfähigkeit `caps` (Index → km), sonst unbegrenzt. */
+    const cappedP3 = (caps: Record<number, number>) =>
+      planVolume(p3, { capacity: { begin: () => ({ deliver: (index: number, km: number) => Math.min(km, caps[index] ?? 1000) }) } });
+    /** Monoton (freigegeben 2026-11-05): keine Aufbauwoche kleiner als die Vorwoche, Entlastung −20 bis −30 %, Peak zuletzt. */
+    const monotoneProblems = (volume: PlanVolume): string[] => {
+      const pre = volume.weeks.filter((w) => w.wn <= volume.peakWeek);
+      const out: string[] = [];
+      pre.forEach((w, i) => {
+        if (i === 0) return;
+        const prev = pre[i - 1].fullWeekKm;
+        if (w.isRecoveryWeek && !(w.fullWeekKm >= 0.7 * prev - EPS && w.fullWeekKm <= 0.8 * prev + EPS)) out.push(`band w${w.wn}`);
+        if (!w.isRecoveryWeek && w.fullWeekKm < prev - EPS) out.push(`drop w${w.wn}`);
+      });
+      if (volume.peakKm !== pre[pre.length - 1].fullWeekKm) out.push("peak not last");
+      return out;
+    };
+
+    it("monotoner Verlauf: eine Delle senkt nur frühere Wochen, spätere wachsen weiter", () => {
+      // Woche 9 trägt nur 44 km (P3 ohne Tragfähigkeit: 59).
+      const volume = cappedP3({ 8: 44 });
+      expect(monotoneProblems(volume)).toEqual([]);
+      // Ausgenommen: Woche 1 (für den monotonen Verlauf gesenkt) und das Taper-Mittel.
+      const exempt = ["I13", "Woche 1"];
+      expect(violations(p3, volume).filter((code) => exempt.every((prefix) => code.indexOf(prefix) < 0))).toEqual([]);
+      volume.weeks.slice(0, 9).forEach((w) => expect([w.wn, w.fullWeekKm <= 44]).toEqual([w.wn, true]));
+      expect(volume.weeks[0].fullWeekKm).toBeLessThan(volume.weeks[0].curveKm);
+      expect(volume.peakKm).toBeGreaterThan(44);
+    });
+
+    it("Entlastung höchstens −30 % zur gelieferten Vorwoche: sonst wird die Woche davor gesenkt (und mit ihr die früheren)", () => {
+      // Entlastungswoche 4 trägt nur 30 km (P3 ohne Tragfähigkeit: Woche 3 = 53, Woche 4 = 42).
+      const volume = cappedP3({ 3: 30 });
+      expect(monotoneProblems(volume)).toEqual([]);
+      expect(volume.weeks[3].fullWeekKm).toBe(30);
+      expect(volume.weeks[2].fullWeekKm).toBeLessThanOrEqual(Math.floor((30 / 0.7) * 10) / 10);
+      // I3 (≤ 1,3 × Woche −2) hält die Woche 6 bei 1,3 × 30 = 39: tiefer als −23 % senkt die Entlastung so auch das Niveau danach.
+      expect(volume.weeks[5].fullWeekKm).toBeLessThanOrEqual(39);
+    });
+
+    it("ohne capacity ist curveKm = fullWeekKm", () => {
+      planVolume(p3).weeks.forEach((w) => expect(w.curveKm).toBe(w.fullWeekKm));
     });
   });
 

@@ -68,7 +68,7 @@ function deepFreeze<T>(node: T): T {
 }
 
 /** Erhöhen bei jeder Änderung eines Werts; steht später in `plan.meta.core.configVersion`. */
-export const CONFIG_VERSION = "0.6.2";
+export const CONFIG_VERSION = "0.9.0";
 
 export const CONFIG = deepFreeze({
   /** §0 Scope MVP */
@@ -138,6 +138,12 @@ export const CONFIG = deepFreeze({
       { REC: "Z1", E: "Z2", M: "Z3", T: "Z4", I: "Z5", R: "Z5+" },
       "§3",
     ),
+    /** E-Band im `pace`-Feld: Anteile an VO2max für schnell und langsam (Rechner-Werte, siehe `eShare`). Review-Punkt 27. */
+    eBandShares: E<{ fast: number; slow: number }>({ fast: 0.7, slow: 0.62 }, "§3"),
+    /** Band um M, T, I, R und Renntempo im `pace`-Feld, ± Sekunden je km. Review-Punkt 27. */
+    paceBandSecPerKm: E(5, "§3"),
+    /** Einsteiger-Modus: E-Band = E-Pace plus diesen Bereich, Sekunden je km (kein VDOT). Review-Punkt 27. */
+    beginnerEBandSecPerKm: E(range(0, 30), "§3"),
   },
 
   /** §4 Planlänge und Phasen */
@@ -202,8 +208,16 @@ export const CONFIG = deepFreeze({
     recovery: {
       /** Jede n-te Woche in Basis/Aufbau/Spezifisch (3:1). */
       everyNWeeks: P(4, "§5.3"),
-      /** Fester Abschlag zur Vorwoche; −20 % ist verträglich mit I3 (danach ist wieder das alte Niveau erreichbar). */
+      /**
+       * Fester Abschlag zur Vorwoche; −20 % ist verträglich mit I3 (danach ist wieder das alte Niveau erreichbar).
+       * Geplant wird abgerundet (nie flacher als −20 %, außer `minWeekKm` hebt die Woche an).
+       */
       reduction: P(0.2, "§5.3"),
+      /**
+       * Tiefster Abschlag zur gelieferten Vorwoche (freigegeben 2026-11-05): kürzt die Tragfähigkeit die Entlastungswoche
+       * tiefer, werden die Wochen davor gesenkt. Review-Punkt 35.
+       */
+      maxReduction: E(0.3, "§5.3"),
       /** Wort, an dem die App heute Entlastungswochen im `focus` erkennt. */
       focusKeyword: E("Entlastung", "§5.3"),
     },
@@ -226,6 +240,10 @@ export const CONFIG = deepFreeze({
     qualitySessionsPerWeek: L(1, "§5.4"),
     /** Lauftage im Taper mindestens `runDaysPerWeek` minus so viele. */
     minRunDaysBelowRunDays: L(1, "§5.4"),
+    /** Long Run in Taper-Wochen (bei HM/M genau 7 Tage vor dem Rennen) höchstens dieser Anteil des längsten Long Runs. Review-Punkt 20. */
+    longRunShareOfPeak: E(0.6, "§5.4"),
+    /** Q-Budget in Taper- und Rennwochen: dieser Anteil des normalen Budgets (verkürzte Qualitätseinheit). Review-Punkt 19. */
+    qualityKmFactor: E(0.6, "§5.4"),
   },
 
   /** §6 Wochenschablonen und Platzierung */
@@ -266,23 +284,81 @@ export const CONFIG = deepFreeze({
     qualityShareTarget: L(0.2, "§6"),
     /** Qualitäts-km harte Grenze. */
     qualityShareHard: E(0.25, "§6"),
+    /** Q-Budget-Ziel bei wenigen Lauftagen (bis `fewRunDaysUpTo`): weniger Härte, wenn 3 von 4 Läufen hart sind. Review-Punkt 19. */
+    qualityShareTargetFewDays: E(0.15, "§6"),
+    /** Bis zu so vielen Lauftagen gilt `qualityShareTargetFewDays`. Review-Punkt 19. */
+    fewRunDaysUpTo: E(4, "§6"),
+    /** Folgt nach der ersten Qualitätseinheit noch eine, bekommt die erste höchstens diesen Anteil des Budgets. Review-Punkt 19. */
+    firstQualityBudgetShare: E(0.7, "§6"),
+    /** Q1L (leichte Q1, 4 Tage Basis): dieser Anteil des Typ-Limits. Review-Punkt 30. */
+    lightQualityFactor: E(0.5, "§6"),
+    /** Q2 wird in der Entlastungswoche zu E + Strides (Review-Punkt 16 bleibt offen). */
+    q2AsEInRecoveryWeek: E(true, "§6"),
+    /** Einsteiger-Modus: Q2 (5–6 Lauftage) wird zu E + Strides (freigegeben). Review-Punkt 30. */
+    beginnerQ2AsE: E(true, "§7.2"),
+    /**
+     * Entlastungswoche: Q1 höchstens so groß wie in der Vorwoche mal den Faktor der Woche (Wochen-km ÷ Vorwoche;
+     * freigegeben 2026-11-05). Wirkt bei festen km-Grenzen (M ≤ 10 km vor dem Long Run, M ≤ 29 km/110 min, I ≤ 10 km,
+     * R ≤ 8 km); Anteilsgrenzen schrumpfen ohnehin mit der Woche. Review-Punkt 36.
+     */
+    recoveryWeekQ1ScalesWithWeek: E(true, "§6"),
+  },
+
+  /** Verteilung der Wochen-km auf E/REC/MLR (§6): Gewichte relativ zu einem E-Lauf. Review-Punkt 22. */
+  distribute: {
+    weights: E<Record<"E" | "REC" | "MLR", number>>({ E: 1, REC: 0.8, MLR: 2 }, "§6"),
   },
 
   /** §7 Einheiten-Bibliothek */
   library: {
     /** Ein-/Auslaufen je Seite in km; zählt zu den Einheiten-km, nicht zu den Qualitäts-km. */
     warmupCooldownKm: E(range(1.5, 3), "§7"),
+    /**
+     * Ein-/Auslaufen nach Wochen-km (ohne Rennen): bis `upToWeekKm` gilt die Zeile. Alle Werte liegen in
+     * `warmupCooldownKm`. Review-Punkt 23.
+     */
+    warmupCooldownByWeekKm: E<Array<{ upToWeekKm: number; warmupKm: number; cooldownKm: number }>>(
+      [
+        { upToWeekKm: 40, warmupKm: 1.5, cooldownKm: 1.5 },
+        { upToWeekKm: 70, warmupKm: 2, cooldownKm: 1.5 },
+        { upToWeekKm: 1000, warmupKm: 2.5, cooldownKm: 2 },
+      ],
+      "§7",
+    ),
+    /**
+     * Trabpausen in km = Pausensekunden / dieser Wert. Gleiche Annahme wie der App-Parser (src/sessionDistance.ts,
+     * `RECOVERY_JOG_PACE_SEC_PER_KM`), sonst weichen die geparsten km vom Kern ab (I1). Review-Punkt 30.
+     */
+    restJogSecPerKm: E(300, "§7"),
     strides: {
       reps: E(range(4, 8), "§7"),
       seconds: E(20, "§7"),
+      /** Anzeige "6 × 100 m Strides" (≈ 20 s); Strides zählen nicht zu den Wochen-km. Review-Punkt 25. */
+      meters: E(100, "§7"),
+      /** Strides im normalen Training und in der Rennwoche (beide in `reps`). Review-Punkt 25. */
+      repsStandard: E(6, "§7"),
+      repsRaceWeek: E(4, "§7"),
     },
     rec: {
       minutes: E(range(20, 45), "§7"),
     },
+    /**
+     * Harte Untergrenze jeder lockeren Einheit und des Long Runs (freigegeben 2026-11-05): E/REC dürfen unter ihre
+     * Mindestdauer fallen, wenn der Long Run kürzer ist (I11), aber nie unter diese Dauer. Liegt die Grenze des Long Runs
+     * darunter (sehr kurzer längster Lauf), wird er auf diese Dauer angehoben (Hinweis). Review-Punkt 34.
+     */
+    easyHardMinMinutes: E(15, "§7"),
     e: {
       minutes: E(range(25, 75), "§7"),
       /** Bei 6 Lauftagen bis zu dieser Dauer. */
       minutesMaxSixDays: E(90, "§7"),
+      /**
+       * Bei so wenigen Lauftagen (HM/M) bis 90 min: E übernimmt die Rolle des MLR (freigegeben 2026-11-05). Review-Punkt 33.
+       */
+      minutesMaxFewDays: E<{ upToRunDays: number; distances: Distance[]; minutes: number }>(
+        { upToRunDays: 3, distances: ["hm", "m"], minutes: 90 },
+        "§7",
+      ),
       maxShareOfLongRun: E(0.75, "§7"),
     },
     mlr: {
@@ -308,10 +384,18 @@ export const CONFIG = deepFreeze({
     m: {
       maxKm: L(29, "§7"),
       maxMinutes: L(110, "§7"),
+      /** Liegt eine M-Einheit höchstens `nearLongRunDays` Tage vor dem Long Run, ist der M-Block höchstens so lang. Review-Punkt 24. */
+      nearLongRunMaxKm: E(10, "§7"),
+      /** M-Block (M-Lauf und LR+M) mindestens so lang, sonst E + Strides bzw. Long Run ohne M (freigegeben 2026-11-05). Review-Punkt 31. */
+      minKm: E(3, "§7"),
+      /** Abstand in Tagen für `nearLongRunMaxKm` (freigegeben: "≤ 2 Tage vor dem LR"). Review-Punkt 24. */
+      nearLongRunDays: E(2, "§7"),
     },
     t: {
       /** Dauerlauf-Block höchstens so lange (Spec nennt keine Herkunft an dieser Zelle). */
       continuousMaxMinutes: E(20, "§7"),
+      /** T-Block (auch Renntempo HM/10k) mindestens so lange, sonst E + Strides (freigegeben 2026-11-05). Review-Punkt 31. */
+      minMinutes: E(10, "§7"),
       /** Cruise-Intervalle (Beispiel aus der Spec). */
       cruiseReps: E(range(3, 5), "§7"),
       cruiseRepKm: E(1.6, "§7"),
@@ -321,6 +405,9 @@ export const CONFIG = deepFreeze({
     },
     i: {
       repMinutes: E(range(3, 5), "§7"),
+      /** Zieldauer einer Wiederholung (in `repMinutes`); passen keine `minReps`, gilt `repMinutes.min`. Review-Punkt 26. */
+      repTargetMinutes: E(4, "§7"),
+      minReps: E(3, "§7"),
       /** Trabpause ≈ so lang wie die Wiederholung. */
       restToRepRatio: E(1, "§7"),
       maxShareOfWeek: L(0.08, "§7"),
@@ -328,9 +415,26 @@ export const CONFIG = deepFreeze({
     },
     r: {
       repMeters: E(range(200, 400), "§7"),
+      /** 400-m-Wiederholungen, sobald so viele davon passen, sonst 200 m (dazu `minReps`, `restToRepRatio`). Review-Punkt 26. */
+      longRepMinReps: E(6, "§7"),
+      minReps: E(4, "§7"),
+      /** "Volle Erholung": Pause = so viel × Dauer der Wiederholung. */
+      restToRepRatio: E(2, "§7"),
       maxShareOfWeek: L(0.05, "§7"),
       maxKm: L(8, "§7"),
       distances: E<Distance[]>(["5k", "10k"], "§7"),
+    },
+    /**
+     * Renntempo-Blöcke (§7.2: HM-Pace-Blöcke, kurzes 10k-/5k-Renntempo). HM und 10k zählen als T, 5k als I (Limits und
+     * Zone der Art). Review-Punkt 26.
+     */
+    racePaceBlocks: {
+      /** HM/10k (Art T); 5k (Art I) braucht `library.i.minReps` Wiederholungen der vollen Länge. */
+      reps: E<Readonly<Record<"5k" | "10k" | "hm", { repKm: number; restSec: number }>>>(
+        { "5k": { repKm: 0.6, restSec: 90 }, "10k": { repKm: 1, restSec: 90 }, hm: { repKm: 2, restSec: 120 } },
+        "§7",
+      ),
+      minReps: E(2, "§7"),
     },
   },
 
@@ -362,6 +466,8 @@ export const CONFIG = deepFreeze({
     requiredEveryWeek: E<Distance[]>(["hm", "m"], "§7.1"),
     /** Entlastungswoche: Long Run um so viel kürzer. */
     recoveryReduction: E(range(0.2, 0.3), "§7.1"),
+    /** Wert aus `recoveryReduction`, den der Kern nimmt (Mitte). Review-Punkt 30. */
+    recoveryReductionUsed: E(0.25, "§7.1"),
   },
 
   /** §7.2 Q-Typen je Phase und Distanz */
@@ -401,6 +507,10 @@ export const CONFIG = deepFreeze({
     beginnerBaseOnly: E<QualityToken[]>(["STRIDES"], "§7.2"),
     /** Einsteiger-Modus: im ganzen Plan nicht erlaubt. */
     beginnerForbidden: E<QualityToken[]>(["I", "R"], "§7.2"),
+    /** HM Spezifisch: Q2 wechselt wochenweise (kein doppelter Schwellenreiz neben den HM-Pace-Blöcken; freigegeben). Review-Punkt 30. */
+    hmSpecificQ2: E<QualityToken[]>(["I", "T"], "§7.2"),
+    /** Marathon Spezifisch: LR+M in jeder n-ten Nicht-Entlastungswoche der Phase (2., 4., …). Review-Punkt 30. */
+    longRunPlusMEveryNthWeek: E(2, "§7.2"),
   },
 
   /** §8 Rennwoche */
@@ -422,7 +532,13 @@ export const CONFIG = deepFreeze({
     maxRestDaysBeforeRace: E(2, "§8"),
     /** Höchstens so viele Ruhetage am Stück in der Rennwoche (weiche Regel, soweit `availableDays` und das Q es zulassen); gilt auch am Wochenanfang. */
     maxRestDaysInRow: E(2, "§8"),
-    /** Bis zu dieser Zahl Lauftage hat die Rennwoche so viele Läufe inkl. Rennen (sonst Lauftage − 1, §5.4); schließt die Lücke bei 3 Tagen. */
-    fullRunDaysUpToRunDays: E(3, "§8"),
+    /**
+     * Bis zu dieser Zahl Lauftage hat die Rennwoche so viele Läufe inkl. Rennen (sonst Lauftage − 1, §5.4). Seit Schritt 6
+     * für alle Lauftage (6): die Frequenz bleibt, damit das Rennwochen-Volumen in die 30-min-Grenze der letzten Tage passt.
+     * Review-Punkt 28.
+     */
+    fullRunDaysUpToRunDays: E(6, "§8"),
+    /** E-Lauf am Tag vor dem Rennen mit Strides (`library.strides.repsRaceWeek`). Review-Punkt 25. */
+    stridesDayBefore: E(true, "§8"),
   },
 });

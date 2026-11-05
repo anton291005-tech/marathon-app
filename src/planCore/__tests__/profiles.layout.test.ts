@@ -100,18 +100,19 @@ describe("Referenzprofile P1–P6: Wochenformen", () => {
     layouts.filter((l) => l.days.length === 7 && l.mode !== "race").forEach((l) => expect(l.runDayCount).toBe(3));
   });
 
-  it("Rennwoche: höchstens 2 Ruhetage direkt vor dem Rennen und am Stück, E an Renntag−2/−1 (Zeilen für die Freigabe)", () => {
+  it("Rennwoche: alle Lauftage, höchstens 2 Ruhetage direkt vor dem Rennen und am Stück, E an Renntag−2/−1 (Zeilen für die Freigabe)", () => {
     const lines: Record<string, string> = {};
     PROFILES.forEach((profile) => {
       const race = layoutOf(profile).layouts.slice(-1)[0];
       lines[profile.name] = race.days.map((d) => (d.slot === "REST" ? "–" : d.slot)).join(" ");
     });
     expect(lines).toEqual({
+      // Seit Schritt 6 alle Lauftage inklusive Rennen (fullRunDaysUpToRunDays = 6).
       P1: "– – Q1 – E – RACE",
-      P2: "– – Q1 – E – RACE",
-      P3: "– – Q1 – E E RACE",
-      P4: "– – Q1 – E – RACE",
-      P5: "E – Q1 – E E RACE",
+      P2: "– – Q1 – E E RACE",
+      P3: "E – – Q1 E E RACE",
+      P4: "– – Q1 – E E RACE",
+      P5: "E – Q1 E E E RACE",
       P6: "– – Q1 – E – RACE",
     });
   });

@@ -244,6 +244,44 @@ export function buildPaceProfile(inputs: PaceInputs, todayYmd: Ymd): PaceProfile
   };
 }
 
+/** Pace-Band in Sekunden je km: `fast` < `slow`. */
+export type PaceBand = { fast: number; slow: number };
+
+/** Bänder für das `pace`-Feld; `RACE` = Renn-/Zielpace der Plandistanz. Einsteiger: nur REC und E. */
+export type PaceBands = Partial<Record<PaceCode | "RACE", PaceBand>>;
+
+/**
+ * Bänder je Pace-Art (Spec §3, Review-Punkt 27): E aus den VO2-Anteilen `eBandShares` (schnell/langsam), REC = E plus
+ * `recPaceOffsetSecPerKm`, M/T/I/R und Renntempo ± `paceBandSecPerKm`. Im Einsteiger-Modus E = Standard-E plus
+ * `beginnerEBandSecPerKm`; T und M gibt es dort nur nach Gefühl.
+ */
+export function paceBands(profile: PaceProfile): PaceBands {
+  const { form } = CONFIG;
+  const rec = form.recPaceOffsetSecPerKm.value;
+  if (profile.mode === "beginner") {
+    const e = profile.paces.E;
+    return {
+      E: { fast: e + form.beginnerEBandSecPerKm.value.min, slow: e + form.beginnerEBandSecPerKm.value.max },
+      REC: { fast: e + rec.min, slow: e + rec.max },
+    };
+  }
+  const width = form.paceBandSecPerKm.value;
+  const around = (secPerKm: number): PaceBand => ({ fast: secPerKm - width, slow: secPerKm + width });
+  const e = profile.paces.E;
+  return {
+    E: {
+      fast: Math.min(e, Math.round(paceAtShare(profile.vdot, form.eBandShares.value.fast))),
+      slow: Math.max(e, Math.round(paceAtShare(profile.vdot, form.eBandShares.value.slow))),
+    },
+    REC: { fast: e + rec.min, slow: e + rec.max },
+    M: around(profile.paces.M),
+    T: around(profile.paces.T),
+    I: around(profile.paces.I),
+    R: around(profile.paces.R),
+    RACE: around(profile.racePace.secPerKm),
+  };
+}
+
 /** "m:ss" aus Sekunden je km. */
 export function formatPace(secPerKm: number): string {
   const total = Math.round(secPerKm);
