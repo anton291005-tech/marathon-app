@@ -119,6 +119,7 @@ import {
   switchPlanPreferences,
   writePlanPreferencesStore,
 } from "./onboarding/planOwnedPreferences";
+import { readPlanInputsFromPreferences } from "./onboarding/onboardingPlanInputs";
 import {
   MIGRATION_TO_SUPABASE_DONE_KEY,
   SESSION_LOGS_MIGRATION_DONE_KEY,
@@ -6706,6 +6707,7 @@ export default function AppMain(){
         <Onboarding
           onComplete={handleOnboardingComplete}
           userId={user?.id ?? null}
+          initialPlanInputs={readPlanInputsFromPreferences(preferences)}
           onCancel={onboardingForNewPlan || newPrepWizardOpen ? handleOnboardingCancel : undefined}
         />
       ) : null}

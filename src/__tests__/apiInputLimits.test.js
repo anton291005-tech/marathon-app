@@ -21,6 +21,8 @@ const { generateFullPlanByPhases } = require("../../api/_lib/phasedFullPlanGener
 const {
   validateCoachBody,
   validatePlanBody,
+  legacyPlanProfile,
+  PLAN_INPUT_KEYS,
   COACH_INPUT_MAX_CHARS,
   COACH_CONTEXT_MAX_BYTES,
   COACH_MAX_TURNS,
@@ -63,6 +65,17 @@ const baseProfile = () => ({
   planStartDate: "07.12.2026",
   planDurationDays: 125,
   userPreferences: ["Montag kein Training"],
+});
+
+/** Plan-Eingaben des neuen Wizards (Umbauplan Schritt 9). */
+const planInputs = () => ({
+  runDaysPerWeek: 4,
+  availableDays: ["Mo", "Mi", "Fr", "So"],
+  longRunDay: "So",
+  currentWeeklyKm: 35,
+  longestRecentRunKm: 12,
+  longestRecentRunKmIsDefault: true,
+  recentRace: { distanceKm: 21.1, timeSeconds: 6900, dateYmd: "2026-09-27", estimated: false },
 });
 
 describe("validateCoachBody", () => {
@@ -164,6 +177,75 @@ describe("validatePlanBody", () => {
   });
 });
 
+describe("validatePlanBody: Plan-Eingaben (Schritt 9)", () => {
+  const clean = (extra) => validatePlanBody({ profile: { ...baseProfile(), ...extra } }).payload.profile;
+
+  test("gültige Plan-Eingaben kommen durch; alter Client ohne Felder bekommt genau das alte Profil", () => {
+    expect(clean(planInputs())).toEqual({ ...baseProfile(), ...planInputs() });
+    expect(Object.keys(clean({})).sort()).toEqual(Object.keys(baseProfile()).sort());
+    expect(PLAN_INPUT_KEYS.slice().sort()).toEqual(Object.keys(planInputs()).sort());
+  });
+
+  test("Lauftage nur ganzzahlig 3–6", () => {
+    [2, 7, 4.5, "4", null].forEach((runDaysPerWeek) => {
+      expect(clean({ ...planInputs(), runDaysPerWeek })).not.toHaveProperty("runDaysPerWeek");
+    });
+    [3, 6].forEach((runDaysPerWeek) => expect(clean({ ...planInputs(), runDaysPerWeek }).runDaysPerWeek).toBe(runDaysPerWeek));
+  });
+
+  test("verfügbare Tage: sortiert Mo–So, Unbekanntes fällt weg, zu wenige Tage → Feld und Long-Run-Tag fallen weg", () => {
+    expect(clean({ ...planInputs(), availableDays: ["So", "Xx", "Mo", "Fr", "Mi", "Mo"] }).availableDays).toEqual(["Mo", "Mi", "Fr", "So"]);
+    const tooFew = clean({ ...planInputs(), availableDays: ["Mo", "So"] });
+    expect(tooFew).not.toHaveProperty("availableDays");
+    expect(tooFew).not.toHaveProperty("longRunDay");
+    expect(clean({ ...planInputs(), availableDays: "Mo" })).not.toHaveProperty("availableDays");
+  });
+
+  test("Long-Run-Tag nur, wenn er unter den verfügbaren Tagen ist", () => {
+    expect(clean({ ...planInputs(), longRunDay: "Sa" })).not.toHaveProperty("longRunDay");
+    expect(clean({ ...planInputs(), longRunDay: "Sunday" })).not.toHaveProperty("longRunDay");
+  });
+
+  test("Wochen-km 0–150, längster Lauf 0–45; die Standard-Markierung nur zusammen mit dem Wert", () => {
+    expect(clean({ ...planInputs(), currentWeeklyKm: 0 }).currentWeeklyKm).toBe(0);
+    expect(clean({ ...planInputs(), currentWeeklyKm: 150 }).currentWeeklyKm).toBe(150);
+    [151, -1, NaN, "35"].forEach((currentWeeklyKm) => {
+      expect(clean({ ...planInputs(), currentWeeklyKm })).not.toHaveProperty("currentWeeklyKm");
+    });
+    const noLongest = clean({ ...planInputs(), longestRecentRunKm: 46 });
+    expect(noLongest).not.toHaveProperty("longestRecentRunKm");
+    expect(noLongest).not.toHaveProperty("longestRecentRunKmIsDefault");
+    expect(clean({ ...planInputs(), longestRecentRunKmIsDefault: "ja" })).not.toHaveProperty("longestRecentRunKmIsDefault");
+  });
+
+  test("Rennergebnis: Distanz 1,5–42,2 km, Zeit > 0, Wettkampf mit Datum, Schätzung ohne; null bleibt null", () => {
+    const race = planInputs().recentRace;
+    expect(clean({ ...planInputs(), recentRace: null }).recentRace).toBeNull();
+    expect(clean({ ...planInputs(), recentRace: { ...race, estimated: true, dateYmd: "2026-09-27" } }).recentRace).toEqual({
+      ...race,
+      estimated: true,
+      dateYmd: null,
+    });
+    expect(clean({ ...planInputs(), recentRace: { ...race, timeSeconds: 6900.4, extra: "x" } }).recentRace).toEqual(race);
+    [
+      { ...race, distanceKm: 50 },
+      { ...race, distanceKm: 1 },
+      { ...race, timeSeconds: 0 },
+      { ...race, timeSeconds: 100000 },
+      { ...race, dateYmd: null },
+      { ...race, dateYmd: "27.09.2026" },
+      { ...race, estimated: "nein" },
+      "10 km in 45 min",
+    ].forEach((recentRace) => {
+      expect(clean({ ...planInputs(), recentRace })).not.toHaveProperty("recentRace");
+    });
+  });
+
+  test("legacyPlanProfile entfernt genau die Plan-Eingaben", () => {
+    expect(legacyPlanProfile({ ...baseProfile(), ...planInputs() })).toEqual(baseProfile());
+  });
+});
+
 describe("Limits an den Routen", () => {
   beforeEach(() => {
     process.env.REACT_APP_SUPABASE_URL = "https://example.supabase.co";
@@ -218,6 +300,13 @@ describe("Limits an den Routen", () => {
     expect(generateFullPlanByPhases.mock.calls[0][1]).toEqual(baseProfile());
   });
 
+  test("POST /api/onboarding/generate-plan-full: Plan-Eingaben erreichen den heutigen Generator nicht (Pfad unverändert bis Schritt 10)", async () => {
+    const res = mockRes();
+    await planFullRoute(post({ profile: { ...baseProfile(), ...planInputs() } }), res);
+    expect(res.statusCode).toBe(200);
+    expect(generateFullPlanByPhases.mock.calls[0][1]).toEqual(baseProfile());
+  });
+
   test("POST /api/onboarding/generate-plan-full: Fehlertext des Servers geht nicht an den Client", async () => {
     generateFullPlanByPhases.mockRejectedValue(new Error("Anthropic 401: invalid x-api-key sk-ant-…"));
     const res = mockRes();
@@ -234,6 +323,13 @@ describe("Limits an den Routen", () => {
 
     const res = mockRes();
     await planRoute(post({ profile: { ...baseProfile(), injected: "x" } }), res);
+    expect(res.statusCode).toBe(200);
+    expect(generatePlanStructureWithClaude).toHaveBeenCalledWith(baseProfile());
+  });
+
+  test("POST /api/onboarding/generate-plan: Plan-Eingaben gehen nicht an Claude (Struktur-Aufruf unverändert)", async () => {
+    const res = mockRes();
+    await planRoute(post({ profile: { ...baseProfile(), ...planInputs() } }), res);
     expect(res.statusCode).toBe(200);
     expect(generatePlanStructureWithClaude).toHaveBeenCalledWith(baseProfile());
   });

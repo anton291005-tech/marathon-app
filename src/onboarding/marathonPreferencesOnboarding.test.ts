@@ -1,5 +1,7 @@
 import {
+  DISTANCE_SHORTCUTS,
   buildOnboardingPreferencesPatch,
+  resolveDistanceSelection,
   formatOnboardingDateGerman,
   getNextMonday,
   needsOnboarding,
@@ -95,6 +97,49 @@ describe("resolvePlanStartDate", () => {
   });
 });
 
+describe("Distanzauswahl (nur die vier Distanzen des Plan-Kerns)", () => {
+  it("bietet 5 km, 10 km, Halbmarathon und Marathon an, je mit Kern-Distanz", () => {
+    expect(DISTANCE_SHORTCUTS.map((d) => [d.id, d.coreDistance])).toEqual([
+      ["5", "5k"],
+      ["10", "10k"],
+      ["half", "hm"],
+      ["marathon", "m"],
+    ]);
+  });
+
+  it("resolveDistanceSelection liefert Anzeige, km und Kern-Distanz; ohne Auswahl null", () => {
+    expect(resolveDistanceSelection("half")).toEqual({ label: "Halbmarathon (21,1 km)", km: 21.1, coreDistance: "hm" });
+    expect(resolveDistanceSelection(null)).toBeNull();
+  });
+});
+
+describe("buildOnboardingPreferencesPatch: Plan-Eingaben", () => {
+  it("speichert planInputs unverändert in den Preferences", () => {
+    const planInputs = {
+      runDaysPerWeek: 5 as const,
+      availableDays: ["Mo", "Di", "Do", "Sa", "So"] as ("Mo" | "Di" | "Do" | "Sa" | "So")[],
+      longRunDay: "Sa" as const,
+      currentWeeklyKm: 42.5,
+      longestRecentRunKm: 16,
+      recentRace: { distanceKm: 10, timeSeconds: 2700, dateYmd: null, estimated: true },
+    };
+    const patch = buildOnboardingPreferencesPatch({
+      raceDistanceLabel: "Halbmarathon (21,1 km)",
+      raceDistanceKm: 21.1,
+      raceGoal: "finish",
+      raceTargetTime: null,
+      raceName: null,
+      raceDate: "18.04.2027",
+      planStartDate: "09.11.2026",
+      weeklyKmRange: "40–60 km",
+      userPreferences: [],
+      planInputs,
+    });
+    expect(patch.planInputs).toEqual(planInputs);
+    expect(patch.weeklyKmRange).toBe("40–60 km");
+  });
+});
+
 describe("buildOnboardingPreferencesPatch", () => {
   it("sets targetTime with seconds for marathon goal time", () => {
     const patch = buildOnboardingPreferencesPatch({
@@ -107,6 +152,14 @@ describe("buildOnboardingPreferencesPatch", () => {
       planStartDate: "15.05.2026",
       weeklyKmRange: "40–60 km",
       userPreferences: [],
+      planInputs: {
+        runDaysPerWeek: 4,
+        availableDays: ["Mo", "Mi", "Fr", "So"],
+        longRunDay: "So",
+        currentWeeklyKm: 35,
+        longestRecentRunKm: null,
+        recentRace: null,
+      },
     });
     expect(patch.onboardingComplete).toBe(true);
     expect(patch.targetTime).toBe("3:30:00");
@@ -124,6 +177,14 @@ describe("buildOnboardingPreferencesPatch", () => {
       planStartDate: "15.05.2026",
       weeklyKmRange: "40–60 km",
       userPreferences: [],
+      planInputs: {
+        runDaysPerWeek: 4,
+        availableDays: ["Mo", "Mi", "Fr", "So"],
+        longRunDay: "So",
+        currentWeeklyKm: 35,
+        longestRecentRunKm: null,
+        recentRace: null,
+      },
     });
     expect(patch.targetTime).toBeNull();
     expect(patch.planStartDate).toBe("15.05.2026");

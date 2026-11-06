@@ -2,6 +2,7 @@ import type { StoredHealthRun } from "../../healthRuns";
 import type { SessionLog } from "../../marathonPrediction";
 import type { RecoveryDailyRow } from "../../recovery/recoveryTypes";
 import type { TrainingPlanV2 } from "../../planV2/types";
+import type { OnboardingPlanInputs } from "../../onboarding/onboardingPlanInputs";
 
 /**
  * Typed shapes for **`useAppCorePersistenceEffects` inputs**.
@@ -32,6 +33,8 @@ export type PersistedMarathonPreferences = Readonly<
     planStartDate: string | null;
     weeklyKmRange: string;
     userPreferences: readonly string[];
+    /** Plan-Eingaben des Wizards (Lauftage, Tage, Wochen-km, längster Lauf, Rennergebnis); plan-eigen. */
+    planInputs: OnboardingPlanInputs | null;
   }>
 >;
 

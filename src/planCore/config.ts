@@ -94,6 +94,20 @@ export const CONFIG = deepFreeze({
     /** Vorgabe für `longestRecentRunKm`: Anteil an `currentWeeklyKm`, mindestens `longestRecentRunFallbackMinKm`. */
     longestRecentRunFallbackShare: E(0.3, "§2"),
     longestRecentRunFallbackMinKm: E(5, "§2"),
+    /**
+     * Standardwert des Onboardings für `longestRecentRunKm`, wenn der Nutzer nichts angibt: nach Distanz und Lauftagen,
+     * immer > 0 (Spoho-Review-Punkt 39). Das Onboarding schickt ihn ausdrücklich mit; der Fallback oben greift nur,
+     * wenn die Angabe ganz fehlt (alte Daten, Tests).
+     */
+    longestRecentRunDefaultKm: E<ByDistance<ByRunDays<number>>>(
+      {
+        "5k": { 3: 5, 4: 6, 5: 7, 6: 8 },
+        "10k": { 3: 6, 4: 8, 5: 9, 6: 10 },
+        hm: { 3: 8, 4: 10, 5: 12, 6: 14 },
+        m: { 3: 10, 4: 12, 5: 14, 6: 16 },
+      },
+      "§2",
+    ),
     /** Vorgabe für den Long-Run-Tag, in dieser Reihenfolge. */
     defaultLongRunDays: E<Weekday[]>(["So", "Sa"], "§2"),
   },

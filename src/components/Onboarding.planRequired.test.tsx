@@ -4,6 +4,7 @@ import { Onboarding } from "./Onboarding";
 import { fetchClaudePlanStructure, fetchFullPlanFromClaude } from "../lib/ai/claudePlanService";
 import { validateTrainingPlanV2Integrity } from "../ai/validation/validateTrainingPlanV2Integrity";
 import { generateMarathonPlanV2ToRace } from "../lib/ai/coachPlanMutations";
+import { chooseDistance, enterRaceDate, goToSummary } from "../testSupport/onboardingWizard";
 
 jest.mock("../calendar/calendarImportService", () => ({
   calendarIsAvailable: jest.fn(() => false),
@@ -21,7 +22,6 @@ jest.mock("../lib/ai/coachPlanMutations", () => ({
   generateMarathonPlanV2ToRace: jest.fn(() => null),
 }));
 
-const RACE_DATE_LABEL = "Wann ist dein Rennen?";
 const FAKE_PLAN = { version: 2, weeks: [], workouts: [{ id: "w1-mo" }] };
 
 beforeEach(() => {
@@ -33,33 +33,18 @@ beforeEach(() => {
   (generateMarathonPlanV2ToRace as jest.Mock).mockReturnValue(null);
 });
 
-function goToStepTwo() {
-  fireEvent.click(screen.getByRole("button", { name: "10 km" }));
-  fireEvent.click(screen.getByRole("button", { name: "Weiter" }));
-  fireEvent.click(screen.getByRole("button", { name: "0–20 km" }));
-}
-
-/** Schritte 1–4 mit Renndatum, endet auf der Zusammenfassung (Schritt 5). */
-function goToSummary() {
-  goToStepTwo();
-  fireEvent.change(screen.getByLabelText(RACE_DATE_LABEL), { target: { value: "01.01.2099" } });
-  for (let i = 0; i < 3; i += 1) {
-    fireEvent.click(screen.getByRole("button", { name: "Weiter" }));
-  }
-}
-
 describe("Onboarding — Renndatum ist Pflicht", () => {
   it("ohne Renndatum: Hinweis sichtbar, Schritt 2 blockiert", () => {
     render(<Onboarding onComplete={jest.fn()} />);
-    goToStepTwo();
+    chooseDistance();
     expect(screen.getByText("Bitte Renndatum eingeben.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Weiter" })).toBeDisabled();
   });
 
   it("mit gültigem Renndatum: Hinweis weg, Schritt 2 frei", () => {
     render(<Onboarding onComplete={jest.fn()} />);
-    goToStepTwo();
-    fireEvent.change(screen.getByLabelText(RACE_DATE_LABEL), { target: { value: "01.01.2099" } });
+    chooseDistance();
+    enterRaceDate("01.01.2099");
     expect(screen.queryByText("Bitte Renndatum eingeben.")).toBeNull();
     expect(screen.getByRole("button", { name: "Weiter" })).toBeEnabled();
   });

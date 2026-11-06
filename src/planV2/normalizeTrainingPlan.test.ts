@@ -316,7 +316,6 @@ describe("normalizeTrainingPlan: kind und meta.core", () => {
       currentWeeklyKm: 35,
       recentRace: { distanceKm: 10, timeSeconds: 2700, dateYmd: null, estimated: true },
       goalTime: 12000,
-      freeText: "keine Intervalle",
     },
     rules: { avoidTypes: ["I"], maxWeeklyKm: 70, notes: "Knie" },
   };
@@ -342,6 +341,13 @@ describe("normalizeTrainingPlan: kind und meta.core", () => {
   it("meta.core bleibt erhalten", () => {
     const plan = normalizeTrainingPlan({ version: 2, workouts: [base], meta: { core } });
     expect(plan.meta?.core).toEqual(core);
+  });
+
+  it("freeText in meta.core.inputs fällt weg (Freitext bleibt nur in den Preferences)", () => {
+    const withFreeText = { ...core, inputs: { ...core.inputs, freeText: "keine Intervalle" } };
+    const plan = normalizeTrainingPlan({ version: 2, workouts: [base], meta: { core: withFreeText } });
+    expect(plan.meta?.core).toEqual(core);
+    expect(plan.meta?.core?.inputs).not.toHaveProperty("freeText");
   });
 
   it("unbekannte Felder in meta.core fallen weg", () => {

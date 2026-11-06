@@ -33,6 +33,11 @@ export function peakLongRunRange(distance: Distance, runDays: RunDays): Range {
   return longRun.peakKm.value[distance];
 }
 
+/** Standardwert des Onboardings, wenn der längste Lauf nicht angegeben ist (§2): nach Distanz und Lauftagen, immer > 0. */
+export function defaultLongestRecentRunKm(distance: Distance, runDays: RunDays): number {
+  return CONFIG.inputs.longestRecentRunDefaultKm.value[distance][runDays];
+}
+
 /** Längster Lauf der letzten 4 Wochen; Vorgabe nach §2. */
 export function longestRecentRunKm(inputs: Pick<CoreInputs, "longestRecentRunKm" | "currentWeeklyKm">): number {
   if (typeof inputs.longestRecentRunKm === "number" && Number.isFinite(inputs.longestRecentRunKm)) {

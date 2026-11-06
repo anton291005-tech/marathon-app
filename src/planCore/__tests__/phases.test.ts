@@ -1,6 +1,6 @@
 import { CONFIG } from "../config";
 import { addDays, diffDays, mondayOf, weekdayOf } from "../dates";
-import { isPlanCoreError, planPhases } from "../phases";
+import { earliestRaceDate, isPlanCoreError, planPhases } from "../phases";
 import type { PhaseInputs } from "../phases";
 import type { Distance, Ymd } from "../types";
 
@@ -131,5 +131,32 @@ describe("planCore phases (§4)", () => {
   it("ist deterministisch", () => {
     const inputs = inputsFor("hm", 13, "2027-05-19", 3);
     expect(planPhases(inputs)).toEqual(planPhases(inputs));
+  });
+
+  describe("earliestRaceDate", () => {
+    const DISTANCES: Distance[] = ["5k", "10k", "hm", "m"];
+
+    it("ist der erste Tag ohne plan-too-short, für jeden Wochentag des Starts", () => {
+      DISTANCES.forEach((distance) => {
+        for (let offset = 0; offset < 7; offset += 1) {
+          const startYmd = addDays("2026-11-09", offset);
+          const earliest = earliestRaceDate(distance, startYmd);
+          expect(weekdayOf(earliest)).toBe("Mo");
+          expect(codeOf(() => planPhases({ distance, startYmd, raceDate: earliest }))).toBeNull();
+          expect(codeOf(() => planPhases({ distance, startYmd, raceDate: addDays(earliest, -1) }))).toBe("plan-too-short");
+        }
+      });
+    });
+
+    it("Beispiel: 10k ab Mittwoch, 11.11.2026 → Montag, 7.12.2026 (5 Kalenderwochen)", () => {
+      expect(CONFIG.planLength.hardMinWeeks.value["10k"]).toBe(5);
+      expect(earliestRaceDate("10k", "2026-11-11")).toBe("2026-12-07");
+      expect(diffDays(earliestRaceDate("m", "2026-11-09"), "2026-11-09")).toBe(49);
+    });
+
+    it("lehnt ungültige Eingaben mit Code ab", () => {
+      expect(codeOf(() => earliestRaceDate("ultra" as Distance, "2026-11-09"))).toBe("invalid-input");
+      expect(codeOf(() => earliestRaceDate("m", "2026-02-30"))).toBe("invalid-input");
+    });
   });
 });

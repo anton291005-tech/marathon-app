@@ -1,6 +1,7 @@
 import { CONFIG } from "../config";
 import {
   advanceLongRun,
+  defaultLongestRecentRunKm,
   INITIAL_LONG_RUN_STATE,
   longestRecentRunKm,
   longRunLimitKm,
@@ -29,6 +30,24 @@ describe("planCore longRun (§7.1)", () => {
       expect(longestRecentRunKm({ currentWeeklyKm: 45 })).toBeCloseTo(13.5);
       expect(longestRecentRunKm({ currentWeeklyKm: 10 })).toBe(5);
       expect(longRunStartCapKm({ currentWeeklyKm: 45 })).toBe(15.5);
+    });
+
+    it("Standardwert des Onboardings für den längsten Lauf: nach Distanz und Lauftagen, immer > 0, steigend", () => {
+      expect(defaultLongestRecentRunKm("5k", 3)).toBe(5);
+      expect(defaultLongestRecentRunKm("hm", 5)).toBe(12);
+      expect(defaultLongestRecentRunKm("m", 6)).toBe(16);
+      const distances = ["5k", "10k", "hm", "m"] as const;
+      const runDays = [3, 4, 5, 6] as const;
+      const table = distances.map((distance) => runDays.map((days) => defaultLongestRecentRunKm(distance, days)));
+      const all = table.reduce<number[]>((acc, row) => acc.concat(row), []);
+      expect(Math.min(...all)).toBeGreaterThan(0);
+      expect(Math.max(...all)).toBeLessThanOrEqual(CONFIG.inputs.longestRecentRunKm.value.max);
+      // Mehr Lauftage bzw. längere Distanz → nie kleinerer Standardwert.
+      table.forEach((row) => expect(row).toEqual(row.slice().sort((a, b) => a - b)));
+      runDays.forEach((_, column) => {
+        const byDistance = table.map((row) => row[column]);
+        expect(byDistance).toEqual(byDistance.slice().sort((a, b) => a - b));
+      });
     });
 
     it("Anteil nach Lauftagen und 180 min bei E-Pace", () => {

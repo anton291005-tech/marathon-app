@@ -85,6 +85,15 @@ describe("buildIsolatedOnboardingPreferences", () => {
     expect(isolated).toMatchObject({ raceName: "Testplan Archiv-Flow", raceDistanceKm: 21.1, targetTime: null });
     expect("userPreferences" in isolated).toBe(false);
   });
+
+  it("planInputs kommen aus dem Wizard; die des alten Plans bleiben nie hängen", () => {
+    const oldInputs = { runDaysPerWeek: 6, availableDays: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"], longRunDay: "So", currentWeeklyKm: 80, longestRecentRunKm: 28, recentRace: null };
+    const newInputs = { runDaysPerWeek: 3, availableDays: ["Di", "Do", "So"], longRunDay: "So", currentWeeklyKm: 15, longestRecentRunKm: null, recentRace: null };
+    const current = { planInputs: oldInputs, maxHeartRateBpm: 191 } as Parameters<typeof buildIsolatedOnboardingPreferences>[1];
+    const base = { raceDistanceLabel: "10 km", raceDistanceKm: 10, raceGoal: "finish" as const, weeklyKmRange: "0–20 km" };
+    expect(buildIsolatedOnboardingPreferences({ ...base, planInputs: newInputs } as Parameters<typeof buildIsolatedOnboardingPreferences>[0], current).planInputs).toEqual(newInputs);
+    expect("planInputs" in buildIsolatedOnboardingPreferences(base, current)).toBe(false);
+  });
 });
 
 describe("detachSessionLogsFromPlan", () => {

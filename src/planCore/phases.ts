@@ -58,6 +58,16 @@ export function isDistance(value: unknown): value is Distance {
   return CONFIG.scope.distances.value.indexOf(value as Distance) >= 0;
 }
 
+/**
+ * Frühestes Renndatum, für das `planPhases` keinen Fehler `plan-too-short` wirft (§4): der Montag der Kalenderwoche,
+ * die `hardMinWeeks` Wochen ab der Startwoche zählt (die angebrochene Startwoche zählt voll).
+ */
+export function earliestRaceDate(distance: Distance, startYmd: Ymd): Ymd {
+  if (!isDistance(distance)) throw planCoreError("invalid-input", "distance");
+  if (!isYmd(startYmd)) throw planCoreError("invalid-input", "startYmd");
+  return addDays(mondayOf(startYmd), 7 * (CONFIG.planLength.hardMinWeeks.value[distance] - 1));
+}
+
 /** Wochen vor dem Taper auf Basis/Aufbau/Spitze (jede Phase mindestens eine Woche, sobald genug Restwochen da sind). */
 function splitRest(rest: number): { base: number; build: number; peak: number } {
   const { split, minWeeksPerPhase, minRestWeeksForAllPhases } = CONFIG.phases;

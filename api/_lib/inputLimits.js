@@ -94,8 +94,90 @@ function cleanText(value) {
 }
 
 /**
+ * Plan-Eingaben für den Plan-Kern (Spec §2, Umbauplan Schritt 9). Wertebereiche wie `src/planCore/config.ts`
+ * (`inputs.*`, `form.raceDistanceKm`). Ungültige Felder fallen einzeln weg statt den Request abzulehnen; ein alter
+ * Client ohne die Felder bekommt genau das Profil wie bisher (kein Schlüssel kommt dazu).
+ */
+const PLAN_WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const PLAN_RUN_DAYS_MIN = 3;
+const PLAN_RUN_DAYS_MAX = 6;
+const PLAN_WEEKLY_KM_MAX = 150;
+const PLAN_LONGEST_RUN_KM_MAX = 45;
+const PLAN_RECENT_RACE_KM_MIN = 1.5;
+const PLAN_RECENT_RACE_KM_MAX = 42.2;
+/** Länger als 24 h ist für 1,5–42,2 km kein Rennergebnis. */
+const PLAN_RECENT_RACE_MAX_SECONDS = 24 * 3600;
+
+function finiteInRange(value, min, max) {
+  return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
+}
+
+function cleanRecentRace(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  if (!finiteInRange(raw.distanceKm, PLAN_RECENT_RACE_KM_MIN, PLAN_RECENT_RACE_KM_MAX)) return null;
+  if (!finiteInRange(raw.timeSeconds, 1, PLAN_RECENT_RACE_MAX_SECONDS)) return null;
+  if (typeof raw.estimated !== "boolean") return null;
+  if (raw.estimated) {
+    return { distanceKm: raw.distanceKm, timeSeconds: Math.round(raw.timeSeconds), dateYmd: null, estimated: true };
+  }
+  if (typeof raw.dateYmd !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw.dateYmd)) return null;
+  return { distanceKm: raw.distanceKm, timeSeconds: Math.round(raw.timeSeconds), dateYmd: raw.dateYmd, estimated: false };
+}
+
+const PLAN_INPUT_KEYS = [
+  "runDaysPerWeek",
+  "availableDays",
+  "longRunDay",
+  "currentWeeklyKm",
+  "longestRecentRunKm",
+  "longestRecentRunKmIsDefault",
+  "recentRace",
+];
+
+/**
+ * Profil für den heutigen Generator: ohne die Plan-Eingaben. Der Struktur-Aufruf schickt das Profil als JSON an
+ * Claude; ohne diesen Schnitt würde sich der heutige Pfad durch die neuen Felder still ändern. Bis zum Umschalten
+ * (Umbauplan Schritt 10/12) liest nur der Plan-Kern die Plan-Eingaben.
+ */
+function legacyPlanProfile(profile) {
+  const out = { ...profile };
+  PLAN_INPUT_KEYS.forEach((key) => delete out[key]);
+  return out;
+}
+
+/** Nur gültige Plan-Eingaben; Tage in der Reihenfolge Mo–So, Long-Run-Tag nur, wenn er unter den verfügbaren Tagen ist. */
+function cleanPlanInputs(raw) {
+  const out = {};
+  if (Number.isInteger(raw.runDaysPerWeek) && finiteInRange(raw.runDaysPerWeek, PLAN_RUN_DAYS_MIN, PLAN_RUN_DAYS_MAX)) {
+    out.runDaysPerWeek = raw.runDaysPerWeek;
+  }
+  if (Array.isArray(raw.availableDays)) {
+    const days = PLAN_WEEKDAYS.filter((day) => raw.availableDays.indexOf(day) >= 0);
+    const enough = out.runDaysPerWeek === undefined ? days.length > 0 : days.length >= out.runDaysPerWeek;
+    if (enough) out.availableDays = days;
+  }
+  if (out.availableDays && typeof raw.longRunDay === "string" && out.availableDays.indexOf(raw.longRunDay) >= 0) {
+    out.longRunDay = raw.longRunDay;
+  }
+  if (finiteInRange(raw.currentWeeklyKm, 0, PLAN_WEEKLY_KM_MAX)) out.currentWeeklyKm = raw.currentWeeklyKm;
+  if (finiteInRange(raw.longestRecentRunKm, 0, PLAN_LONGEST_RUN_KM_MAX)) {
+    out.longestRecentRunKm = raw.longestRecentRunKm;
+    if (typeof raw.longestRecentRunKmIsDefault === "boolean") {
+      out.longestRecentRunKmIsDefault = raw.longestRecentRunKmIsDefault;
+    }
+  }
+  if (raw.recentRace === null) out.recentRace = null;
+  else {
+    const race = cleanRecentRace(raw.recentRace);
+    if (race) out.recentRace = race;
+  }
+  return out;
+}
+
+/**
  * Profil der Plan-Erzeugung: nur die Felder von `PlanGenerationProfile` (mehr liest der Server
- * nicht), Texte auf `PLAN_TEXT_MAX_CHARS` gekürzt, höchstens `PLAN_MAX_PREFERENCES` Wünsche.
+ * nicht), Texte auf `PLAN_TEXT_MAX_CHARS` gekürzt, höchstens `PLAN_MAX_PREFERENCES` Wünsche, Plan-Eingaben
+ * nur mit gültigen Werten (`cleanPlanInputs`).
  * Unbekannte Felder fallen weg. Zu lange Texte werden gekürzt statt abgelehnt, damit ein ausführlicher
  * Wunsch im Onboarding nicht die ganze Plan-Erzeugung kippt.
  *
@@ -130,6 +212,7 @@ function validatePlanBody(rawBody, options = {}) {
       .map(cleanText)
       .filter(Boolean)
       .slice(0, PLAN_MAX_PREFERENCES),
+    ...cleanPlanInputs(raw),
   };
 
   if (options.enforceMaxDuration) {
@@ -148,6 +231,8 @@ function validatePlanBody(rawBody, options = {}) {
 module.exports = {
   validateCoachBody,
   validatePlanBody,
+  legacyPlanProfile,
+  PLAN_INPUT_KEYS,
   parseJsonBody,
   COACH_INPUT_MAX_CHARS,
   COACH_CONTEXT_MAX_BYTES,
@@ -157,4 +242,6 @@ module.exports = {
   PLAN_TEXT_MAX_CHARS,
   PLAN_MAX_PREFERENCES,
   PLAN_MAX_DURATION_DAYS,
+  PLAN_WEEKLY_KM_MAX,
+  PLAN_LONGEST_RUN_KM_MAX,
 };

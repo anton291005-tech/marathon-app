@@ -1,6 +1,7 @@
 import "../i18n";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { Onboarding } from "./Onboarding";
+import { goToPreferences } from "../testSupport/onboardingWizard";
 
 jest.mock("../calendar/calendarImportService", () => ({
   calendarIsAvailable: jest.fn(() => false),
@@ -23,14 +24,9 @@ beforeEach(() => {
   (insertPresetBlocks as jest.Mock).mockResolvedValue({ ok: true, insertedCount: 5 });
 });
 
-/** Navigiert die Schritte 1–3 (Distanz wählen → Umfang wählen → Präferenzen). */
+/** Navigiert die Schritte 1–5 (Distanz → Rennen → Trainingswoche → Form → Präferenzen) bis zum Kalender-Schritt. */
 function fillStepsOneToThree(skipPreferencesViaLink: boolean) {
-  fireEvent.click(screen.getByRole("button", { name: "10 km" }));
-  fireEvent.click(screen.getByRole("button", { name: "Weiter" }));
-
-  fireEvent.click(screen.getByRole("button", { name: "0–20 km" }));
-  fireEvent.change(screen.getByLabelText("Wann ist dein Rennen?"), { target: { value: "01.01.2099" } });
-  fireEvent.click(screen.getByRole("button", { name: "Weiter" }));
+  goToPreferences();
 
   if (skipPreferencesViaLink) {
     fireEvent.click(screen.getByRole("button", { name: "Überspringen" }));
@@ -39,18 +35,18 @@ function fillStepsOneToThree(skipPreferencesViaLink: boolean) {
   }
 }
 
-describe("Onboarding — Schritt 4 (Kalender verbinden)", () => {
-  it("zeigt 5 Fortschritts-Segmente und erreicht den Kalender-Schritt über Weiter", () => {
+describe("Onboarding — Schritt 6 (Kalender verbinden)", () => {
+  it("zeigt 7 Fortschritts-Segmente und erreicht den Kalender-Schritt über Weiter", () => {
     render(<Onboarding onComplete={jest.fn()} userId={null} />);
 
-    expect(screen.getByLabelText("Schritt 1 von 5")).toBeInTheDocument();
+    expect(screen.getByLabelText("Schritt 1 von 7")).toBeInTheDocument();
 
     fillStepsOneToThree(false);
 
     expect(screen.getByRole("heading", { name: "Kalender verbinden" })).toBeInTheDocument();
   });
 
-  it("'Überspringen' in Schritt 3 landet auf dem Kalender-Schritt, nicht auf der Summary", () => {
+  it("'Überspringen' in Schritt 5 (Präferenzen) landet auf dem Kalender-Schritt, nicht auf der Summary", () => {
     render(<Onboarding onComplete={jest.fn()} userId={null} />);
 
     fillStepsOneToThree(true);
@@ -91,7 +87,7 @@ describe("Onboarding — Schritt 4 (Kalender verbinden)", () => {
     expect(insertPresetBlocks).not.toHaveBeenCalled();
   });
 
-  it("Weiter vom Kalender-Schritt erreicht die Summary (Schritt 5) mit Plan-erstellen-Button", () => {
+  it("Weiter vom Kalender-Schritt erreicht die Summary (Schritt 7) mit Plan-erstellen-Button", () => {
     render(<Onboarding onComplete={jest.fn()} userId={null} />);
     fillStepsOneToThree(false);
 

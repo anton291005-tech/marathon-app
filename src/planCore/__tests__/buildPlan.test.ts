@@ -65,6 +65,15 @@ describe("buildPlan (Schritt 7b)", () => {
     expect(assemblePlan(sessions, inputs, EMPTY_RULES).meta!.volumeNote).toEqual(note);
   });
 
+  it("freeText wird nicht in meta.core.inputs gespeichert; der Plan ist sonst identisch", () => {
+    const profile = PROFILES.filter((p) => p.name === "P4")[0];
+    const withText = buildPlan({ ...profile.inputs, freeText: "Knie schonen, keine Hügel" }, EMPTY_RULES, profile.todayYmd);
+    const without = buildPlan(profile.inputs, EMPTY_RULES, profile.todayYmd);
+    expect(withText.meta!.core.inputs).not.toHaveProperty("freeText");
+    expect(JSON.stringify(withText)).not.toContain("Knie schonen");
+    expect(withText).toEqual(without);
+  });
+
   it("I20: zweimal gebaut → identisch; Eingaben unverändert", () => {
     PROFILES.forEach((profile) => {
       const copy = clone(profile.inputs);

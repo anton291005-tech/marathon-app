@@ -183,6 +183,36 @@ Object {
           "Sa",
         ],
       },
+      "longestRecentRunDefaultKm": Object {
+        "source": "E",
+        "spec": "§2",
+        "value": Object {
+          "10k": Object {
+            "3": 6,
+            "4": 8,
+            "5": 9,
+            "6": 10,
+          },
+          "5k": Object {
+            "3": 5,
+            "4": 6,
+            "5": 7,
+            "6": 8,
+          },
+          "hm": Object {
+            "3": 8,
+            "4": 10,
+            "5": 12,
+            "6": 14,
+          },
+          "m": Object {
+            "3": 10,
+            "4": 12,
+            "5": 14,
+            "6": 16,
+          },
+        },
+      },
       "longestRecentRunFallbackMinKm": Object {
         "source": "E",
         "spec": "§2",

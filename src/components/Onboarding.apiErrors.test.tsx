@@ -4,6 +4,7 @@ import { Onboarding } from "./Onboarding";
 import { fetchClaudePlanStructure, fetchFullPlanFromClaude } from "../lib/ai/claudePlanService";
 import { validateTrainingPlanV2Integrity } from "../ai/validation/validateTrainingPlanV2Integrity";
 import { generateMarathonPlanV2ToRace } from "../lib/ai/coachPlanMutations";
+import { goToSummary } from "../testSupport/onboardingWizard";
 
 jest.mock("../calendar/calendarImportService", () => ({
   calendarIsAvailable: jest.fn(() => false),
@@ -21,7 +22,6 @@ jest.mock("../lib/ai/coachPlanMutations", () => ({
   generateMarathonPlanV2ToRace: jest.fn(),
 }));
 
-const RACE_DATE_LABEL = "Wann ist dein Rennen?";
 const FAKE_PLAN = { version: 2, weeks: [], workouts: [{ id: "w1-mo" }] };
 const LOCAL_PLAN = { version: 2, weeks: [], workouts: [{ id: "local-w1-mo" }] };
 
@@ -56,16 +56,10 @@ beforeEach(() => {
   jest.spyOn(console, "error").mockImplementation(() => {});
 });
 
-/** Schritte 1–4 mit Renndatum, endet auf der Zusammenfassung (Schritt 5); merkt sich den Speicherstand davor. */
+/** Schritte 1–6 mit Renndatum, endet auf der Zusammenfassung (Schritt 7); merkt sich den Speicherstand davor. */
 function renderAndFinish(onComplete: jest.Mock) {
   render(<Onboarding onComplete={onComplete} />);
-  fireEvent.click(screen.getByRole("button", { name: "10 km" }));
-  fireEvent.click(screen.getByRole("button", { name: "Weiter" }));
-  fireEvent.click(screen.getByRole("button", { name: "0–20 km" }));
-  fireEvent.change(screen.getByLabelText(RACE_DATE_LABEL), { target: { value: "01.01.2099" } });
-  for (let i = 0; i < 3; i += 1) {
-    fireEvent.click(screen.getByRole("button", { name: "Weiter" }));
-  }
+  goToSummary();
   storageBefore = storageSnapshot();
   fireEvent.click(screen.getByRole("button", { name: "Plan erstellen" }));
 }
