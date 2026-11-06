@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { PersistedMarathonPreferences } from "../app/runtime/runtimePersistenceTypes";
 import DateInputMasked, {
@@ -25,7 +25,6 @@ import { generateMarathonPlanV2ToRace } from "../lib/ai/coachPlanMutations";
 import type { PlanPatch } from "../lib/ai/types";
 import {
   DISTANCE_SHORTCUTS,
-  WEEKLY_KM_RANGES,
   buildOnboardingPreferencesPatch,
   formatGoalSummary,
   parseOnboardingRaceDate,
@@ -38,6 +37,28 @@ import {
   type RaceGoal,
 } from "../onboarding/marathonPreferencesOnboarding";
 import type { TrainingPlanV2 } from "../planV2/types";
+import { WEEKDAYS, type RunDays, type Weekday } from "../planCore";
+import {
+  LONGEST_RUN_KM_MAX,
+  RECENT_RACE_DISTANCES,
+  RUN_DAY_OPTIONS,
+  WEEKLY_KM_MAX,
+  defaultLongRunDay,
+  defaultRecentRaceSeconds,
+  formatRaceSeconds,
+  longestRunError,
+  parseKmInput,
+  raceDateTooEarlyMessage,
+  sortWeekdays,
+  standardLongestRunKm,
+  toProfilePlanInputs,
+  trainingWeekError,
+  weeklyKmError,
+  weeklyKmRangeFromKm,
+  ymdFromLocalDate,
+  type OnboardingPlanInputs,
+  type OnboardingRecentRace,
+} from "../onboarding/onboardingPlanInputs";
 import { calendarIsAvailable, calendarRequestReadAuthorization } from "../calendar/calendarImportService";
 import {
   isCalendarImportConnected,
@@ -58,7 +79,55 @@ const PREFERENCE_HINTS = [
   "z.B. Kein Training am Dienstag",
 ] as const;
 
-type OnboardingStep = 1 | 2 | 3 | 4 | 5;
+type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/** Reihenfolge der Wizard-Schritte (Umbauplan Schritt 9: Trainingswoche und Form kommen nach dem Rennen). */
+const STEP = {
+  distance: 1,
+  race: 2,
+  trainingWeek: 3,
+  form: 4,
+  preferences: 5,
+  calendar: 6,
+  summary: 7,
+} as const;
+const TOTAL_STEPS = STEP.summary;
+
+type RecentRaceMode = "none" | "race" | "estimate";
+
+const WEEKDAY_LONG_DE: Record<Weekday, string> = {
+  Mo: "Montag",
+  Di: "Dienstag",
+  Mi: "Mittwoch",
+  Do: "Donnerstag",
+  Fr: "Freitag",
+  Sa: "Samstag",
+  So: "Sonntag",
+};
+
+/** Untergrenze für das Datum des letzten Wettkampfs; ältere Rennen sind für die Form ohne Aussage. */
+const RECENT_RACE_MIN_DATE = new Date(2000, 0, 1);
+
+function secondsToPicker(totalSeconds: number): TimePickerValue {
+  const hours = Math.min(6, Math.floor(totalSeconds / 3600));
+  return { hours, minutes: Math.floor((totalSeconds % 3600) / 60), seconds: totalSeconds % 60 };
+}
+
+function pickerToSeconds(value: TimePickerValue): number {
+  return value.hours * 3600 + value.minutes * 60 + value.seconds;
+}
+
+/** `2026-10-12` → „12.10.2026“ (Format des Datumsfelds). */
+function germanDateFromYmd(ymd: string): string {
+  const [year, month, day] = ymd.split("-");
+  return `${day}.${month}.${year}`;
+}
+
+const formatKmDe = (km: number): string => String(km).replace(".", ",");
+
+function recentRaceLabel(km: number): string {
+  return RECENT_RACE_DISTANCES.filter((d) => d.km === km)[0]?.label ?? `${formatKmDe(km)} km`;
+}
 
 const inputStyle: CSSProperties = {
   width: "100%",
@@ -87,6 +156,49 @@ const sectionTitleStyle: CSSProperties = {
   letterSpacing: "-0.02em",
   color: "var(--text-primary)",
 };
+
+const fieldErrorStyle: CSSProperties = {
+  margin: "6px 0 0",
+  fontSize: 12,
+  color: "#f87171",
+  lineHeight: 1.4,
+};
+
+const fieldHintStyle: CSSProperties = {
+  margin: "6px 0 0",
+  fontSize: 12,
+  color: "var(--text-muted)",
+  lineHeight: 1.4,
+};
+
+const prefillNoticeStyle: CSSProperties = {
+  margin: "0 0 16px",
+  padding: "8px 12px",
+  fontSize: 12,
+  lineHeight: 1.4,
+  borderRadius: 10,
+  border: "1px solid rgba(59, 130, 246, 0.35)",
+  background: "rgba(59, 130, 246, 0.08)",
+  color: "var(--text-secondary)",
+};
+
+const summaryTermStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#7c8aa5",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+};
+
+function SummaryRow({ term, children }: { term: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt style={summaryTermStyle}>{term}</dt>
+      <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>{children}</dd>
+    </div>
+  );
+}
 
 const sectionSubtitleStyle: CSSProperties = {
   margin: "0 0 20px",
@@ -197,22 +309,51 @@ export type OnboardingProps = {
    * das Erst-Onboarding ist nicht abbrechbar.
    */
   onCancel?: () => void;
+  /**
+   * Plan-Eingaben des letzten Plans (`preferences.planInputs`): Bestandsnutzer bekommen Lauftage, Tage, Wochen-km,
+   * längsten Lauf und Rennergebnis vorausgefüllt (Entscheidung 2026-11-06). Ohne gespeicherte Werte leer.
+   */
+  initialPlanInputs?: Partial<OnboardingPlanInputs> | null;
 };
 
 const PLAN_GENERATION_FAILED_MESSAGE = "Plan konnte nicht erstellt werden. Bitte versuche es erneut.";
 
-export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingProps) {
+export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInputs = null }: OnboardingProps) {
   const { t } = useTranslation();
   const [step, setStep] = useState<OnboardingStep>(1);
   const [shortcutId, setShortcutId] = useState<DistanceShortcutId | null>(null);
-  const [customDistance, setCustomDistance] = useState("");
   const [raceGoal, setRaceGoal] = useState<RaceGoal>("finish");
   const [timePickerValue, setTimePickerValue] = useState<TimePickerValue>({
     hours: 3,
     minutes: 30,
     seconds: 0,
   });
-  const [weeklyKmRange, setWeeklyKmRange] = useState("");
+  // Schritt 3 (Trainingswoche) und 4 (Form), vorausgefüllt aus dem letzten Plan.
+  const [runDaysPerWeek, setRunDaysPerWeek] = useState<RunDays | null>(initialPlanInputs?.runDaysPerWeek ?? null);
+  const [availableDays, setAvailableDays] = useState<Weekday[]>(() =>
+    initialPlanInputs?.availableDays?.length ? sortWeekdays(initialPlanInputs.availableDays) : [...WEEKDAYS],
+  );
+  const [longRunDay, setLongRunDay] = useState<Weekday | null>(() => {
+    const days = initialPlanInputs?.availableDays?.length ? sortWeekdays(initialPlanInputs.availableDays) : [...WEEKDAYS];
+    const stored = initialPlanInputs?.longRunDay;
+    return stored && days.indexOf(stored) >= 0 ? stored : defaultLongRunDay(days);
+  });
+  const [weeklyKmText, setWeeklyKmText] = useState(
+    initialPlanInputs?.currentWeeklyKm != null ? formatKmDe(initialPlanInputs.currentWeeklyKm) : "",
+  );
+  const [longestRunText, setLongestRunText] = useState(
+    initialPlanInputs?.longestRecentRunKm != null ? formatKmDe(initialPlanInputs.longestRecentRunKm) : "",
+  );
+  const initialRace = initialPlanInputs?.recentRace ?? null;
+  const [recentRaceMode, setRecentRaceMode] = useState<RecentRaceMode>(
+    initialRace ? (initialRace.estimated ? "estimate" : "race") : "none",
+  );
+  const [recentRaceKm, setRecentRaceKm] = useState<number>(initialRace?.distanceKm ?? 10);
+  const [recentRaceTime, setRecentRaceTime] = useState<TimePickerValue>(() =>
+    secondsToPicker(initialRace?.timeSeconds ?? defaultRecentRaceSeconds(initialRace?.distanceKm ?? 10)),
+  );
+  const [recentRaceDate, setRecentRaceDate] = useState(initialRace?.dateYmd ? germanDateFromYmd(initialRace.dateYmd) : "");
+  const hasPrefill = initialPlanInputs != null && Object.keys(initialPlanInputs).length > 0;
   const [raceDate, setRaceDate] = useState("");
   const [raceName, setRaceName] = useState("");
   const [planStartChoice, setPlanStartChoice] = useState<PlanStartChoice>("today");
@@ -227,10 +368,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
   const [simplifiedPlanOffered, setSimplifiedPlanOffered] = useState(false);
   const isGenerating = planGenPhase === "loading" || planGenPhase === "success";
 
-  const distance = useMemo(
-    () => resolveDistanceSelection(shortcutId, customDistance),
-    [shortcutId, customDistance],
-  );
+  const distance = useMemo(() => resolveDistanceSelection(shortcutId), [shortcutId]);
 
   useEffect(() => {
     if (!distance || raceGoal !== "time") return;
@@ -267,19 +405,95 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
     if (err === "Datum muss nach dem früheren Datum liegen.") {
       return "Renndatum muss nach dem Trainingsstart liegen.";
     }
-    return err ?? "";
-  }, [raceDate, planStartResolved.date]);
+    if (err) return err;
+    // Harte Mindest-Planlänge des Plan-Kerns (§4): Meldung nennt das früheste mögliche Renndatum.
+    const raceDay = parseOnboardingRaceDate(raceDate);
+    if (distance && raceDay) {
+      return raceDateTooEarlyMessage(distance.coreDistance, start, raceDay) ?? "";
+    }
+    return "";
+  }, [raceDate, planStartResolved.date, distance]);
+
+  const trainingWeekProblem = trainingWeekError(runDaysPerWeek, availableDays, longRunDay);
+  const weeklyKmProblem = weeklyKmError(weeklyKmText);
+  const longestRunProblem = longestRunError(longestRunText);
+  const weeklyKm = weeklyKmProblem ? null : parseKmInput(weeklyKmText);
+  const longestRunKm = longestRunProblem ? null : parseKmInput(longestRunText);
+
+  const recentRaceTimeError = useMemo(() => {
+    if (recentRaceMode === "none") return null;
+    return pickerToSeconds(recentRaceTime) > 0 ? null : "Bitte deine Zeit wählen.";
+  }, [recentRaceMode, recentRaceTime]);
+
+  const recentRaceDateError = useMemo(() => {
+    if (recentRaceMode !== "race") return null;
+    if (!recentRaceDate.trim()) return "Bitte das Datum des Wettkampfs eingeben.";
+    if (!isCompleteMaskedDate(recentRaceDate)) return "Bitte vollständiges Datum eingeben (TT.MM.JJJJ).";
+    const parsed = parseOnboardingRaceDate(recentRaceDate);
+    if (!parsed) return "Ungültiges Datum.";
+    if (parsed.getTime() > startOfLocalDay(getAppNow()).getTime()) {
+      return "Der Wettkampf muss heute oder in der Vergangenheit liegen.";
+    }
+    if (parsed.getTime() < RECENT_RACE_MIN_DATE.getTime()) return "Ungültiges Datum.";
+    return null;
+  }, [recentRaceMode, recentRaceDate]);
+
+  const recentRace = useMemo((): OnboardingRecentRace | null => {
+    if (recentRaceMode === "none" || recentRaceTimeError || recentRaceDateError) return null;
+    const raceDay = recentRaceMode === "race" ? parseOnboardingRaceDate(recentRaceDate) : null;
+    return {
+      distanceKm: recentRaceKm,
+      timeSeconds: pickerToSeconds(recentRaceTime),
+      dateYmd: raceDay ? ymdFromLocalDate(raceDay) : null,
+      estimated: recentRaceMode === "estimate",
+    };
+  }, [recentRaceMode, recentRaceTimeError, recentRaceDateError, recentRaceDate, recentRaceKm, recentRaceTime]);
+
+  const planInputs = useMemo((): OnboardingPlanInputs | null => {
+    if (trainingWeekProblem || runDaysPerWeek === null || longRunDay === null) return null;
+    if (weeklyKm === null || longestRunProblem || recentRaceTimeError || recentRaceDateError) return null;
+    return {
+      runDaysPerWeek,
+      availableDays: sortWeekdays(availableDays),
+      longRunDay,
+      currentWeeklyKm: weeklyKm,
+      longestRecentRunKm: longestRunKm,
+      recentRace,
+    };
+  }, [
+    trainingWeekProblem,
+    runDaysPerWeek,
+    longRunDay,
+    weeklyKm,
+    longestRunProblem,
+    recentRaceTimeError,
+    recentRaceDateError,
+    availableDays,
+    longestRunKm,
+    recentRace,
+  ]);
 
   const step1Valid = distance != null;
   const step2Valid =
-    weeklyKmRange.trim().length > 0 &&
     (planStartChoice !== "custom" ||
       (planStartResolved.date != null && !planStartDateError)) &&
     !raceDateError &&
     isCompleteMaskedDate(raceDate);
+  const step3Valid = trainingWeekProblem === null;
+  const step4Valid = planInputs !== null;
+  const stepValid = (n: OnboardingStep): boolean =>
+    n === STEP.distance
+      ? step1Valid
+      : n === STEP.race
+        ? step2Valid
+        : n === STEP.trainingWeek
+          ? step3Valid
+          : n === STEP.form
+            ? step4Valid
+            : true;
 
   const summaryPayload = useMemo((): OnboardingSubmitPayload | null => {
-    if (!distance || !weeklyKmRange.trim()) return null;
+    if (!distance || !planInputs) return null;
     const normalizedTime =
       raceGoal === "time" ? formatTimePickerValue(timePickerValue) : null;
     return {
@@ -290,12 +504,13 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
       raceName: raceName.trim() || null,
       raceDate: raceDate.trim() || null,
       planStartDate: planStartResolved.planStartDate,
-      weeklyKmRange: weeklyKmRange.trim(),
+      weeklyKmRange: weeklyKmRangeFromKm(planInputs.currentWeeklyKm),
       userPreferences,
+      planInputs,
     };
   }, [
     distance,
-    weeklyKmRange,
+    planInputs,
     raceGoal,
     timePickerValue,
     raceName,
@@ -309,14 +524,38 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
     return userPreferences.join(", ");
   }, [userPreferences]);
 
-  const handleCustomDistanceChange = useCallback((value: string) => {
-    setCustomDistance(value);
-    if (value.trim()) setShortcutId(null);
-  }, []);
-
   const handleShortcutSelect = useCallback((id: DistanceShortcutId) => {
     setShortcutId(id);
-    setCustomDistance("");
+  }, []);
+
+  const toggleAvailableDay = useCallback(
+    (day: Weekday) => {
+      const next =
+        availableDays.indexOf(day) >= 0
+          ? availableDays.filter((d) => d !== day)
+          : sortWeekdays([...availableDays, day]);
+      setAvailableDays(next);
+      // Fällt der Long-Run-Tag weg, gilt die Vorgabe des Kerns: So, sonst Sa, sonst der letzte verfügbare Tag.
+      if (longRunDay === null || next.indexOf(longRunDay) < 0) setLongRunDay(defaultLongRunDay(next));
+    },
+    [availableDays, longRunDay],
+  );
+
+  const handleRecentRaceMode = useCallback(
+    (mode: RecentRaceMode) => {
+      setRecentRaceMode(mode);
+      // Schätzung nur für 5 km und 10 km (§2 Frage 4).
+      if (mode === "estimate" && !RECENT_RACE_DISTANCES.some((d) => d.km === recentRaceKm && d.estimateAllowed)) {
+        setRecentRaceKm(10);
+        setRecentRaceTime(secondsToPicker(defaultRecentRaceSeconds(10)));
+      }
+    },
+    [recentRaceKm],
+  );
+
+  const handleRecentRaceKm = useCallback((km: number) => {
+    setRecentRaceKm(km);
+    setRecentRaceTime(secondsToPicker(defaultRecentRaceSeconds(km)));
   }, []);
 
   const handlePreferenceChange = useCallback((index: number, value: string) => {
@@ -340,7 +579,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
   const handleSkipPreferences = useCallback(() => {
     setSkippedPreferences(true);
     setPreferenceInputs(["", ""]);
-    setStep(4);
+    setStep(STEP.calendar);
   }, []);
 
   const goBack = useCallback(() => {
@@ -348,7 +587,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
   }, []);
 
   const goNext = useCallback(() => {
-    setStep((s) => (s < 5 ? ((s + 1) as OnboardingStep) : s));
+    setStep((s) => (s < TOTAL_STEPS ? ((s + 1) as OnboardingStep) : s));
   }, []);
 
   // --- Schritt 4: Kalender verbinden (skippbar; Preset-Fallback für Deny/leer/Web) ---
@@ -468,6 +707,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
             planStartDate: summaryPayload.planStartDate ?? "",
             planDurationDays,
             userPreferences: userPreferences.filter(Boolean),
+            ...(distance ? toProfilePlanInputs(summaryPayload.planInputs, distance.coreDistance) : {}),
           };
 
           // Vor jedem Abbruch unten ist noch nichts verändert: Preferences, Patches und Logs fasst erst onComplete an.
@@ -572,7 +812,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
       setGenerateError(PLAN_GENERATION_FAILED_MESSAGE);
       setPlanGenPhase("error");
     }
-  }, [summaryPayload, isGenerating, onComplete, userPreferences]);
+  }, [summaryPayload, isGenerating, onComplete, userPreferences, distance]);
 
   const finishButtonLabel = isGenerating
     ? t("onboarding.generating")
@@ -631,9 +871,9 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
             gap: 6,
             marginBottom: 22,
           }}
-          aria-label={`Schritt ${step} von 5`}
+          aria-label={`Schritt ${step} von ${TOTAL_STEPS}`}
         >
-          {([1, 2, 3, 4, 5] as const).map((n) => (
+          {([1, 2, 3, 4, 5, 6, 7] as const).map((n) => (
             <div
               key={n}
               style={{
@@ -646,7 +886,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
           ))}
         </div>
 
-        {step === 1 ? (
+        {step === STEP.distance ? (
           <>
             <h2 style={sectionTitleStyle}>{t("onboarding.step1_title")}</h2>
             <p style={sectionSubtitleStyle}>{t("onboarding.step1_subtitle")}</p>
@@ -657,8 +897,9 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
                   key={sc.id}
                   type="button"
                   onClick={() => handleShortcutSelect(sc.id)}
+                  aria-pressed={shortcutId === sc.id}
                   style={{
-                    ...chipButtonStyle(shortcutId === sc.id && !customDistance.trim()),
+                    ...chipButtonStyle(shortcutId === sc.id),
                     flex: "1 1 45%",
                   }}
                 >
@@ -666,18 +907,6 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
                 </button>
               ))}
             </div>
-
-            <label htmlFor="onboard-custom-distance" style={labelStyle}>
-              {t("onboarding.custom_distance_label")}
-            </label>
-            <input
-              id="onboard-custom-distance"
-              type="text"
-              value={customDistance}
-              onChange={(e) => handleCustomDistanceChange(e.target.value)}
-              placeholder={t("onboarding.custom_distance_placeholder")}
-              style={{ ...inputStyle, marginBottom: distance ? 20 : 0 }}
-            />
 
             {distance ? (
               <div style={{ marginTop: 20 }}>
@@ -709,28 +938,10 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
           </>
         ) : null}
 
-        {step === 2 ? (
+        {step === STEP.race ? (
           <>
             <h2 style={sectionTitleStyle}>{t("onboarding.step2_title")}</h2>
             <p style={sectionSubtitleStyle}>{t("onboarding.step2_subtitle")}</p>
-
-            <div style={{ ...labelStyle, marginBottom: 8 }}>{t("onboarding.weekly_km_label")}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-              {WEEKLY_KM_RANGES.map((range) => (
-                <button
-                  key={range}
-                  type="button"
-                  onClick={() => setWeeklyKmRange(range)}
-                  style={{
-                    ...chipButtonStyle(weeklyKmRange === range),
-                    flex: "none",
-                    textAlign: "left",
-                  }}
-                >
-                  {range}
-                </button>
-              ))}
-            </div>
 
             <DateInputMasked
               id="onboard-race-date"
@@ -793,7 +1004,220 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
           </>
         ) : null}
 
-        {step === 3 ? (
+        {step === STEP.trainingWeek ? (
+          <>
+            <h2 style={sectionTitleStyle}>Deine Trainingswoche</h2>
+            <p style={sectionSubtitleStyle}>Wie oft und an welchen Tagen du laufen kannst.</p>
+            {hasPrefill ? <p style={prefillNoticeStyle}>Vorausgefüllt aus deinem letzten Plan — bitte kurz prüfen.</p> : null}
+
+            <div style={{ ...labelStyle, marginBottom: 8 }} id="onboard-run-days-label">
+              Wie viele Tage pro Woche willst du laufen?
+            </div>
+            <div
+              role="group"
+              aria-labelledby="onboard-run-days-label"
+              style={{ display: "flex", gap: 8, marginBottom: 20 }}
+            >
+              {RUN_DAY_OPTIONS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  aria-pressed={runDaysPerWeek === n}
+                  onClick={() => setRunDaysPerWeek(n)}
+                  style={chipButtonStyle(runDaysPerWeek === n)}
+                >
+                  {n} Tage
+                </button>
+              ))}
+            </div>
+
+            <div style={{ ...labelStyle, marginBottom: 8 }} id="onboard-available-days-label">
+              An welchen Tagen kannst du laufen?
+            </div>
+            <div
+              role="group"
+              aria-labelledby="onboard-available-days-label"
+              style={{ display: "flex", gap: 6, marginBottom: 6 }}
+            >
+              {WEEKDAYS.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  aria-pressed={availableDays.indexOf(day) >= 0}
+                  aria-label={`${WEEKDAY_LONG_DE[day]} verfügbar`}
+                  onClick={() => toggleAvailableDay(day)}
+                  style={{ ...chipButtonStyle(availableDays.indexOf(day) >= 0), padding: "10px 0" }}
+                >
+                  {day}
+                </button>
+              ))}
+            </div>
+            <p style={{ ...fieldHintStyle, margin: "0 0 20px" }}>
+              Wir verteilen deine Läufe auf diese Tage. Die übrigen Tage bleiben frei.
+            </p>
+
+            <div style={{ ...labelStyle, marginBottom: 8 }} id="onboard-long-run-day-label">
+              Wann passt dein langer Lauf am besten?
+            </div>
+            <div
+              role="group"
+              aria-labelledby="onboard-long-run-day-label"
+              style={{ display: "flex", flexWrap: "wrap", gap: 6 }}
+            >
+              {availableDays.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  aria-pressed={longRunDay === day}
+                  aria-label={`Long Run am ${WEEKDAY_LONG_DE[day]}`}
+                  onClick={() => setLongRunDay(day)}
+                  style={{ ...chipButtonStyle(longRunDay === day), flex: "0 0 auto", minWidth: 44 }}
+                >
+                  {day}
+                </button>
+              ))}
+            </div>
+
+            {trainingWeekProblem && runDaysPerWeek !== null ? (
+              <p style={fieldErrorStyle} role="alert">
+                {trainingWeekProblem}
+              </p>
+            ) : null}
+          </>
+        ) : null}
+
+        {step === STEP.form && distance && runDaysPerWeek !== null ? (
+          <>
+            <h2 style={sectionTitleStyle}>Deine aktuelle Form</h2>
+            <p style={sectionSubtitleStyle}>Damit dein Plan dort startet, wo du gerade stehst.</p>
+            {hasPrefill ? <p style={prefillNoticeStyle}>Vorausgefüllt aus deinem letzten Plan — bitte kurz prüfen.</p> : null}
+
+            <label htmlFor="onboard-weekly-km" style={labelStyle}>
+              Wie viele km läufst du pro Woche?
+            </label>
+            <div style={{ position: "relative" }}>
+              <input
+                id="onboard-weekly-km"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={weeklyKmText}
+                onChange={(e) => setWeeklyKmText(e.target.value)}
+                placeholder="z. B. 25"
+                aria-invalid={weeklyKmText.trim() && weeklyKmProblem ? true : undefined}
+                style={{ ...inputStyle, paddingRight: 44 }}
+              />
+              <span style={{ position: "absolute", right: 14, top: 12, fontSize: 15, color: "var(--text-muted)" }}>km</span>
+            </div>
+            {weeklyKmText.trim() && weeklyKmProblem ? (
+              <p style={fieldErrorStyle}>{weeklyKmProblem}</p>
+            ) : (
+              <p style={fieldHintStyle}>Durchschnitt der letzten 4 Wochen (0–{WEEKLY_KM_MAX}). 0, wenn du gerade anfängst.</p>
+            )}
+
+            <label htmlFor="onboard-longest-run" style={{ ...labelStyle, marginTop: 20 }}>
+              Dein längster Lauf in den letzten 4 Wochen (optional)
+            </label>
+            <div style={{ position: "relative" }}>
+              <input
+                id="onboard-longest-run"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={longestRunText}
+                onChange={(e) => setLongestRunText(e.target.value)}
+                placeholder={`z. B. ${standardLongestRunKm(distance.coreDistance, runDaysPerWeek)}`}
+                aria-invalid={longestRunProblem ? true : undefined}
+                style={{ ...inputStyle, paddingRight: 44 }}
+              />
+              <span style={{ position: "absolute", right: 14, top: 12, fontSize: 15, color: "var(--text-muted)" }}>km</span>
+            </div>
+            {longestRunProblem ? (
+              <p style={fieldErrorStyle}>{longestRunProblem}</p>
+            ) : (
+              <p style={fieldHintStyle}>
+                {longestRunText.trim()
+                  ? `Höchstens ${LONGEST_RUN_KM_MAX} km.`
+                  : `Leer lassen: Wir rechnen mit ${standardLongestRunKm(distance.coreDistance, runDaysPerWeek)} km.`}
+              </p>
+            )}
+
+            <div style={{ ...labelStyle, marginTop: 20, marginBottom: 8 }} id="onboard-recent-race-label">
+              Dein letztes Rennergebnis
+            </div>
+            <div
+              role="group"
+              aria-labelledby="onboard-recent-race-label"
+              style={{ display: "flex", gap: 8, marginBottom: recentRaceMode === "none" ? 6 : 14 }}
+            >
+              {(
+                [
+                  ["race", "Wettkampf"],
+                  ["estimate", "Schätzung"],
+                  ["none", "Keine Angabe"],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={recentRaceMode === mode}
+                  onClick={() => handleRecentRaceMode(mode)}
+                  style={chipButtonStyle(recentRaceMode === mode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {recentRaceMode === "none" ? (
+              <p style={fieldHintStyle}>
+                Ohne Ergebnis startet dein Plan im Einsteiger-Modus: lockere Läufe mit Richttempo, Tempoeinheiten nach Gefühl.
+              </p>
+            ) : (
+              <>
+                <div style={{ ...labelStyle, marginBottom: 8 }}>
+                  {recentRaceMode === "race" ? "Distanz" : "Für welche Distanz schätzt du deine Zeit?"}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+                  {RECENT_RACE_DISTANCES.filter((d) => recentRaceMode === "race" || d.estimateAllowed).map((d) => (
+                    <button
+                      key={d.km}
+                      type="button"
+                      aria-pressed={recentRaceKm === d.km}
+                      aria-label={`Rennergebnis ${d.label}`}
+                      onClick={() => handleRecentRaceKm(d.km)}
+                      style={{ ...chipButtonStyle(recentRaceKm === d.km), flex: "1 1 40%" }}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ ...labelStyle, marginBottom: 10 }}>
+                  {recentRaceMode === "race" ? "Deine Zeit" : "Geschätzte Zeit"}
+                </div>
+                <TimePicker value={recentRaceTime} onChange={setRecentRaceTime} />
+                {recentRaceTimeError ? <p style={fieldErrorStyle}>{recentRaceTimeError}</p> : null}
+                {recentRaceMode === "race" ? (
+                  <div style={{ marginTop: 14 }}>
+                    <DateInputMasked
+                      id="onboard-recent-race-date"
+                      label="Wann war der Wettkampf?"
+                      value={recentRaceDate}
+                      onChange={setRecentRaceDate}
+                      minDate={RECENT_RACE_MIN_DATE}
+                      error={recentRaceDate.trim() ? recentRaceDateError ?? "" : ""}
+                      style={{ marginBottom: 0 }}
+                    />
+                  </div>
+                ) : (
+                  <p style={fieldHintStyle}>So schnell, wie du die Distanz heute im Wettkampf laufen könntest.</p>
+                )}
+              </>
+            )}
+          </>
+        ) : null}
+
+        {step === STEP.preferences ? (
           <>
             <h2 style={sectionTitleStyle}>{t("onboarding.step3_title")}</h2>
             <p style={sectionSubtitleStyle}>
@@ -892,7 +1316,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
           </>
         ) : null}
 
-        {step === 4 ? (
+        {step === STEP.calendar ? (
           <>
             <h2 style={sectionTitleStyle}>Kalender verbinden</h2>
             <p style={sectionSubtitleStyle}>
@@ -1005,7 +1429,7 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
           </>
         ) : null}
 
-        {step === 5 && summaryPayload && distance ? (
+        {step === STEP.summary && summaryPayload && distance ? (
           <>
             <h2 style={sectionTitleStyle}>{t("onboarding.step4_title")}</h2>
             <p style={sectionSubtitleStyle}>{t("onboarding.step4_subtitle")}</p>
@@ -1020,125 +1444,33 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
                 lineHeight: 1.45,
               }}
             >
-              <div>
-                <dt
-                  style={{
-                    margin: 0,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#7c8aa5",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  Distanz
-                </dt>
-                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
-                  {summaryPayload.raceDistanceLabel}
-                </dd>
-              </div>
-              <div>
-                <dt
-                  style={{
-                    margin: 0,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#7c8aa5",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  Ziel
-                </dt>
-                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
-                  {formatGoalSummary(summaryPayload.raceGoal, summaryPayload.raceTargetTime)}
-                </dd>
-              </div>
-              <div>
-                <dt
-                  style={{
-                    margin: 0,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#7c8aa5",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  Wöchentlicher Umfang
-                </dt>
-                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
-                  {summaryPayload.weeklyKmRange}
-                </dd>
-              </div>
-              <div>
-                <dt
-                  style={{
-                    margin: 0,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#7c8aa5",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  Renndatum
-                </dt>
-                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
-                  {summaryPayload.raceDate || "—"}
-                </dd>
-              </div>
-              <div>
-                <dt
-                  style={{
-                    margin: 0,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#7c8aa5",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  Trainingsstart
-                </dt>
-                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
-                  {summaryPayload.planStartDate || "—"}
-                </dd>
-              </div>
-              <div>
-                <dt
-                  style={{
-                    margin: 0,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#7c8aa5",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  Rennen
-                </dt>
-                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
-                  {summaryPayload.raceName || "—"}
-                </dd>
-              </div>
-              <div>
-                <dt
-                  style={{
-                    margin: 0,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#7c8aa5",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                  }}
-                >
-                  Deine Präferenzen
-                </dt>
-                <dd style={{ margin: "4px 0 0", color: "var(--text-primary)" }}>
-                  {preferencesSummaryLabel}
-                </dd>
-              </div>
+              <SummaryRow term="Distanz">{summaryPayload.raceDistanceLabel}</SummaryRow>
+              <SummaryRow term="Ziel">
+                {formatGoalSummary(summaryPayload.raceGoal, summaryPayload.raceTargetTime)}
+              </SummaryRow>
+              <SummaryRow term="Renndatum">{summaryPayload.raceDate || "—"}</SummaryRow>
+              <SummaryRow term="Trainingsstart">{summaryPayload.planStartDate || "—"}</SummaryRow>
+              <SummaryRow term="Rennen">{summaryPayload.raceName || "—"}</SummaryRow>
+              <SummaryRow term="Lauftage">
+                {`${summaryPayload.planInputs.runDaysPerWeek} Tage pro Woche · ${summaryPayload.planInputs.availableDays.join(", ")}`}
+              </SummaryRow>
+              <SummaryRow term="Long Run">{WEEKDAY_LONG_DE[summaryPayload.planInputs.longRunDay]}</SummaryRow>
+              <SummaryRow term="Wöchentlicher Umfang">
+                {`${formatKmDe(summaryPayload.planInputs.currentWeeklyKm)} km`}
+              </SummaryRow>
+              <SummaryRow term="Längster Lauf (4 Wochen)">
+                {summaryPayload.planInputs.longestRecentRunKm !== null
+                  ? `${formatKmDe(summaryPayload.planInputs.longestRecentRunKm)} km`
+                  : `Keine Angabe (wir rechnen mit ${standardLongestRunKm(distance.coreDistance, summaryPayload.planInputs.runDaysPerWeek)} km)`}
+              </SummaryRow>
+              <SummaryRow term="Letztes Rennergebnis">
+                {summaryPayload.planInputs.recentRace === null
+                  ? "Keine Angabe (Einsteiger-Modus)"
+                  : summaryPayload.planInputs.recentRace.estimated
+                    ? `Schätzung: ${recentRaceLabel(summaryPayload.planInputs.recentRace.distanceKm)} in ${formatRaceSeconds(summaryPayload.planInputs.recentRace.timeSeconds)}`
+                    : `${recentRaceLabel(summaryPayload.planInputs.recentRace.distanceKm)} in ${formatRaceSeconds(summaryPayload.planInputs.recentRace.timeSeconds)} am ${germanDateFromYmd(summaryPayload.planInputs.recentRace.dateYmd ?? "")}`}
+              </SummaryRow>
+              <SummaryRow term="Deine Präferenzen">{preferencesSummaryLabel}</SummaryRow>
             </dl>
           </>
         ) : null}
@@ -1180,10 +1512,10 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
             </button>
           ) : null}
 
-          {step < 5 ? (
+          {step < TOTAL_STEPS ? (
             <button
               type="button"
-              disabled={step === 1 ? !step1Valid : step === 2 ? !step2Valid : false}
+              disabled={!stepValid(step)}
               onClick={goNext}
               style={{
                 flex: step > 1 ? 1.4 : 1,
@@ -1192,14 +1524,8 @@ export function Onboarding({ onComplete, userId = null, onCancel }: OnboardingPr
                 fontWeight: 700,
                 border: "none",
                 borderRadius: 14,
-                cursor:
-                  step === 1 && !step1Valid
-                    ? "not-allowed"
-                    : step === 2 && !step2Valid
-                      ? "not-allowed"
-                      : "pointer",
-                opacity:
-                  step === 1 && !step1Valid ? 0.5 : step === 2 && !step2Valid ? 0.5 : 1,
+                cursor: stepValid(step) ? "pointer" : "not-allowed",
+                opacity: stepValid(step) ? 1 : 0.5,
                 color: "#fff",
                 background: "linear-gradient(135deg, #10b981, #3b82f6)",
               }}

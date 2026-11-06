@@ -7,10 +7,21 @@ Reiner Plan, keine Code-Änderung. Zeilenangaben beziehen sich auf `main` @ `c1f
 
 1. **Freigegeben:** Server verweigert den Plan bei Regelverstoß (Codes loggen, im UI verständliche Meldung + lokaler vereinfachter Plan als Angebot). Chat-Aktion „Marathon-Plan erzeugen“ wird entfernt. Standard-E-Pace 7:00/km im Einsteiger-Modus (Herkunft `E`, Spoho-Review-Punkt). Eigener Zufallsgenerator statt `fast-check`. Bestandsnutzer werden nur beim nächsten Erstellen gefragt.
 2. **Schritt 8 (Claude → `PlanRules`) ist nicht mehr MVP.** Freitext wird wie heute gespeichert und nur vom Coach gelesen. Die Planerzeugung läuft im MVP **ohne Claude**: `buildPlan(inputs, EMPTY_RULES, todayYmd)`.
-3. **Shadow-Betrieb 2–3 Tage** statt einer Woche. Schalter `off/shadow/on` bleibt als Rückweg.
+3. **Shadow-Betrieb 2–3 Tage** statt einer Woche. Schalter `off/shadow/on` bleibt als Rückweg. *(v3: kein Production-Shadow, siehe Änderungen v3.)*
 4. **Schritt 0 ist nicht mehr MVP** (Begründung dort).
 5. **Schritt 1 beginnt mit einem Vercel-Test:** Kann `api/*.ts` direkt gebaut werden und `src/planCore` importieren? Beide Varianten sind unten beschrieben, die Entscheidung fällt im Schritt.
 6. **Abbildungstabelle** der Kern-Arten auf die 8 App-Typen mit allen betroffenen Stellen (Datei:Zeile). Daraus zwei neue kleine MVP-Punkte: Zonen nach `kind` (in Schritt 3) und der 28-km-Hinweis im Coach-Feedback (in Schritt 11).
+
+## Änderungen v3 (2026-11-06, Verdrahtung)
+
+1. **Reihenfolge:** Schritt 9 zuerst (Server und App brauchen die neuen Eingaben; der Server verwarf unbekannte Profilfelder). Die Teile von Schritt 11, die ohne Schritt 9 gingen (Chat-Aktion, 28-km-Schwelle, `kind` in der Auswertung, Titel „Marathontempo“), bleiben in Schritt 11.
+2. **Wizard nur 5k/10k/HM/M**, keine freie Distanz. **Renndatum unter der harten Untergrenze** (§4) lehnt der Wizard ab; die Meldung nennt das früheste mögliche Renndatum.
+3. **Rückfall bei error bis Schritt 13: alter Generator** (bestätigt). Der Button „Vereinfachten Plan nutzen“ bleibt bis Schritt 11. Entscheidung 3 unten ist entsprechend nachgezogen.
+4. **Kein Production-Shadow.** Der Schalter `off/shadow/on` bleibt (Rückweg, Preview). Abnahme von Schritt 10: Offline-Vergleich alt/neu (P1–P6 und Zufallsprofile, Kennzahlen) und Preview-Test mit `on`. Schritt 12 schaltet danach direkt auf `on`.
+5. **`freeText` nie im Plan:** nicht in `meta.core.inputs` (`buildPlan`) und beim Normalisieren entfernt; er bleibt nur in den Preferences.
+6. **Längster Lauf optional**, Standardwert nach Distanz und Lauftagen, immer > 0 (Spec §2, Review-Punkt 39).
+7. **Bestandsnutzer:** Der Wizard füllt die neuen Felder mit den Werten des letzten Plans vor (nur, wenn dieser Plan sie schon hat).
+8. **Spoho-Review und `docs/plan-core-profiles.md`:** nach Schritt 12, vor dem App-Store-Release.
 
 ## Leitplanken
 
@@ -333,7 +344,7 @@ Die App nimmt an, was der Kern liefern wird. Gleichzeitig wird der Nebenbefund z
   - **Offen für später:**
     - `dateIso` Mittag UTC landet unter `TZ=Pacific/Auckland` beim Gruppieren der App im falschen Wochentag; das ist der vorbestehende Zeitzonenpunkt `fix/timezone-tests`, nicht neu geprüft.
     - Der Branch-Name weicht vom Plan ab (`feat/plan-core-assemble`); Inhalt wie hier.
-    - `docs/plan-core-profiles.md` (Vergleich P1–P6 gegen je einen Literaturplan, Abnahme von Schritt 7 und Grundlage fürs Spoho-Review) fehlt noch: Die Werte der Literaturpläne (Daniels, Pfitzinger, Hansons) brauchen die Quellen und werden nicht aus dem Gedächtnis eingetragen.
+    - `docs/plan-core-profiles.md` (Vergleich P1–P6 gegen je einen Literaturplan, Abnahme von Schritt 7 und Grundlage fürs Spoho-Review) fehlt noch: Die Werte der Literaturpläne (Daniels, Pfitzinger, Hansons) brauchen die Quellen und werden nicht aus dem Gedächtnis eingetragen. **v3:** nach Schritt 12, vor dem App-Store-Release.
 
 ### 8 · `feat/plan-rules-claude` — **später**, S–M (1–2 Tage), nach 1
 
@@ -366,6 +377,14 @@ Die App nimmt an, was der Kern liefern wird. Gleichzeitig wird der Nebenbefund z
   - `Onboarding.*.test.tsx` erweitern: Pflichtfelder, Einsteiger-Modus ohne Rennergebnis, Ableitung der Spanne
   - `apiInputLimits.test.js`: neue Felder, Grenzen, Kürzung
 - **Abnahme:** Wizard auf iPhone 13 (Tastatur, Safe Areas, 390 px). Der Plan entsteht weiter über den heutigen Pfad.
+- **Umgesetzt (2026-11-06), Branch `feat/onboarding-plan-inputs`, nicht gemergt; Gerätetest auf dem iPhone 13 offen:**
+  - **Wizard (7 statt 5 Schritte):** 1 Distanz & Ziel (nur 5 km, 10 km, HM, M) → 2 Rennen (Renndatum mit Prüfung der Mindest-Planlänge, Start, Name) → **3 Trainingswoche** (Lauftage 3–6, verfügbare Tage Mo–So, alle vorausgewählt, Long-Run-Tag nur aus den verfügbaren, Vorgabe So/Sa/letzter wie `resolveLongRunDay`) → **4 Form** (Wochen-km als Zahl 0–150, längster Lauf optional 0–45 mit angezeigtem Standardwert, Rennergebnis „Wettkampf“ mit Distanz/Zeit/Datum, „Schätzung“ nur 5/10 km, „Keine Angabe“ = Einsteiger-Modus) → 5 Präferenzen → 6 Kalender → 7 Zusammenfassung mit allen neuen Angaben.
+  - **Dateien:** `src/onboarding/onboardingPlanInputs.ts` (neu: Typen, `weeklyKmRangeFromKm`, Prüfungen, `raceDateTooEarlyMessage`, `toProfilePlanInputs`, `readPlanInputsFromPreferences`), `src/components/Onboarding.tsx`, `src/onboarding/marathonPreferencesOnboarding.ts` (`DISTANCE_SHORTCUTS` ohne 15 km, mit `coreDistance`; `planInputs` in Payload und Preferences), `planOwnedPreferences.ts` und `onboardingPlanIsolation.ts` (`planInputs` plan-eigen), `runtimePersistenceTypes.ts`, `claudePlanService.ts` (`PlanGenerationProfile`), `src/AppMain.tsx` (`initialPlanInputs` aus den Preferences), `api/_lib/inputLimits.js` (`cleanPlanInputs`, `legacyPlanProfile`), beide Routen unter `api/onboarding/`.
+  - **Kern:** `earliestRaceDate(distance, startYmd)` (`phases.ts`), `defaultLongestRecentRunKm` + Config `inputs.longestRecentRunDefaultKm` (E, Review-Punkt 39), `buildPlan` speichert kein `freeText`, `normalizePlanCoreMeta` entfernt es. P1–P6 und Property-Pläne unverändert (der Kern-Fallback ohne Angabe bleibt 30 %/min. 5; das Onboarding schickt den Standardwert ausdrücklich mit). `CONFIG_VERSION` bleibt 0.9.0.
+  - **Profil an den Server** (zusätzlich, nur wenn gültig): `runDaysPerWeek`, `availableDays` (Mo–So), `longRunDay`, `currentWeeklyKm`, `longestRecentRunKm` (Angabe oder Standardwert), `longestRecentRunKmIsDefault`, `recentRace` (`{ distanceKm, timeSeconds, dateYmd|null, estimated }` oder `null`). Ungültige Werte fallen einzeln weg; ein alter Client bekommt genau das alte Profil.
+  - **Abweichung vom Plan (Befund beim Bauen):** Der Struktur-Aufruf des heutigen Pfads schickt das Profil komplett als JSON an Claude (`claudePlanGenerator.js` `callClaudeForStructure`). Damit der heutige Pfad unverändert bleibt, bekommen beide Routen das Profil ohne die Plan-Eingaben (`legacyPlanProfile`). **Schritt 10 muss dem Kern das volle Profil geben** und nur dem Rückfall das gekürzte.
+  - **Kompatibilität:** `weeklyKmRange` aus der Zahl, Obergrenze inklusive (20 → „0–20 km“, 20,1 → „20–40 km“, > 80 → „80+ km“); der alte Generator nimmt die Obergrenze als Deckel. Eigener Test gegen `parseWeeklyKmTarget`/`parseWeeklyKmRangeMax`.
+  - **Persistenz:** `planInputs` liegt wie die übrigen plan-eigenen Felder nur im localStorage (Supabase `profiles` hat nur 4 Spalten). Keine Migration. Folge: Auf einem neuen Gerät gibt es nichts vorzufüllen.
 
 ### 10 · `feat/plan-core-server` — **MVP**, M (1,5 Tage), nach 7 und 9
 
@@ -376,16 +395,19 @@ Kern im Vercel-Handler hinter dem Schalter.
     - `PLAN_CORE_MODE=on`: `buildCheckedPlan(inputs, EMPTY_RULES, todayYmd)` (Schritt 7b). Kein Claude-Aufruf. Bei `check.errors > 0` gibt es keinen Kern-Plan; warnings verhindern nichts. Ins Log nur `toLogEntries(errors)` (Code, Regel, Woche; kein Tag, keine Zahlen).
       - **Rückfall bei error (freigegeben 2026-11-05, bis Schritt 13):** der alte Generator (`api/_lib/phasedFullPlanGenerator.js` bzw. der deterministische Pfad), nicht der lokale vereinfachte Plan; der kommt ab Schritt 11 aus demselben Kern und hätte denselben Fehler. Jeder Rückfall erhöht einen Zähler (Log-Kennzahl `planCoreFallbacks` mit Codes, ohne Nutzerinhalt), Auswertung im Shadow-/On-Betrieb. Antwort an den Client wie heute `{ plan }`.
       - Nur wenn auch der Rückfall scheitert: Antwort 500 mit maschinenlesbarem Code, z. B. `{ "error": "plan-core-invariant", "configVersion": "0.9.0", "errors": 6, "warnings": 2, "violations": [{ "code": "I9", "rule": "step", "wn": 2, "severity": "error" }, …] }`; das Onboarding zeigt eine verständliche Meldung.
-    - `shadow`: Antwort wie heute; der Kern rechnet daneben und loggt nur Verstoß-Codes und Kennzahlen (Peak, LR-Max, Lauftage), keine Inhalte.
+    - `shadow`: Antwort wie heute; der Kern rechnet daneben und loggt nur Verstoß-Codes und Kennzahlen (Peak, LR-Max, Lauftage), keine Inhalte. **v3: nicht in Production**, nur als Schalter für Preview/Rückweg.
     - `off`: wie heute.
     - Fehlen die neuen Eingaben (alter Client), läuft der heutige Pfad.
+    - **Aus Schritt 9:** Die Route gibt dem heutigen Generator `legacyPlanProfile(profile)`; der Kern bekommt das volle Profil (Mapping Profil → `CoreInputs`, Datum `TT.MM.JJJJ` → YMD, `raceTargetTime` → `goalTime` in Sekunden).
   - Antwortformat `{ plan }` bleibt. `vercel.json` `maxDuration` erst nach dem Cutover senken.
   - Onboarding-UI: Fehlermeldung bei 500 mit Kern-Code + Button „Vereinfachten Plan nutzen“.
   - Keine Verdrahtung in `server/index.js` (Schritt 0 ist verschoben).
 - **Tests:**
   - `src/__tests__/generatePlanFullCore.test.js`: die drei Modi, alter Client ohne Felder, Verstoß → 500 mit Code, kein Anthropic-Aufruf im Modus `on`
   - `apiLogsNoUserContent.test.js` für den Shadow-Log
-- **Abnahme:** Auf einem Preview-Deploy mit `on` erzeugt das Onboarding einen Plan, die App zeigt ihn ohne UI-Änderung. Production bleibt auf `off`.
+- **Abnahme (v3, ersetzt Production-Shadow):**
+  1. **Offline-Vergleich alt/neu** (Jest oder Skript, ohne Claude): P1–P6 und Zufallsprofile als Wizard-Profil → Mapping → `buildCheckedPlan` und derselbe Eingabesatz → deterministischer alter Generator (`deterministicPlanGenerator.js`). Für beide dieselben Kennzahlen: Wochen, Peak-km, längster Long Run, Long Runs ≥ 30 km, Q je Woche, Taper-Reduktion; dazu Kern errors/warnings je Code. Kern 0 errors; Abweichungen zum alten Plan erklärbar.
+  2. **Preview-Deploy mit `on`:** Das Onboarding erzeugt einen Plan, die App zeigt ihn ohne UI-Änderung. Production bleibt auf `off`.
 
 ### 11 · `feat/plan-core-client` — **MVP**, M (2 Tage), nach 7 und 9
 
@@ -404,14 +426,14 @@ Client-Kopie ersetzen.
   - Onboarding-Test: vereinfachter Plan besteht `checkCorePlan`
 - **Abnahme:** Es gibt genau eine Generator-Implementierung im Client. Der vereinfachte Plan hat 0 Verstöße (heute 49).
 
-### 12 · `chore/plan-core-cutover` — **MVP**, S (½ Tag + 2–3 Tage Beobachtung), nach 10 und 11
+### 12 · `chore/plan-core-cutover` — **MVP**, S (½ Tag), nach 10 und 11
 
-- **Ablauf:**
-  1. `PLAN_CORE_MODE=shadow` in Production für **2–3 Tage** (v2). Shadow vergleicht nur mit dem alten Pfad, dessen Schwächen bekannt sind; die eigentliche Abnahme sind P1–P6, die Property-Tests und der iPhone-Test. Während Shadow selbst gezielt Pläne erzeugen (alle 6 Profile über das Onboarding), da es noch kaum echte Nutzer gibt.
-  2. Auswertung: 0 Verstöße, Kennzahlen plausibel.
-  3. iPhone-13-Test mit P1–P6-ähnlichen Eingaben.
-  4. `on`.
-  5. Roadmap und `CLAUDE.md` (Abschnitt „Zwei AI-Provider“) aktualisieren.
+- **Ablauf (v3, kein Production-Shadow):**
+  1. Voraussetzung: Abnahme von Schritt 10 (Offline-Vergleich alt/neu, Preview mit `on`) und Schritt 11.
+  2. iPhone-13-Test mit P1–P6-ähnlichen Eingaben auf einem Build gegen die Preview mit `on`.
+  3. `PLAN_CORE_MODE=on` in Production.
+  4. Roadmap und `CLAUDE.md` (Abschnitt „Zwei AI-Provider“) aktualisieren.
+  5. Danach, vor dem App-Store-Release: Spoho-Review anhand von `docs/plan-core-profiles.md`.
 - **Rückweg:** Schalter auf `off`, keine Datenmigration (bestehende Pläne bleiben, wie sie sind, Spec §15.3).
 - **Abnahme:** Neue Pläne in Production kommen aus dem Kern. Bestehende Pläne werden unverändert angezeigt.
 
@@ -463,7 +485,7 @@ Alten Pfad löschen, wenn der Schalter stabil auf `on` steht.
 | 9 | `feat/onboarding-plan-inputs` | ja | M–L (3 T) | 1 | ja, neue Fragen, alter Pfad |
 | 10 | `feat/plan-core-server` | ja | M (1,5 T) | 7, 9 | nein (Schalter `off`) |
 | 11 | `feat/plan-core-client` | ja | M (2–2,5 T, inkl. Coach-Feedback) | 7, 9 | ja, vereinfachter Plan besser |
-| 12 | `chore/plan-core-cutover` | ja | S (½ T + 2–3 T Shadow) | 10, 11 | ja, Umschalten |
+| 12 | `chore/plan-core-cutover` | ja | S (½ T, kein Production-Shadow) | 10, 11 | ja, Umschalten |
 | 0 | `chore/plan-api-local` | später | S | – | nein |
 | 8 | `feat/plan-rules-claude` | später | S–M | 1 | nein |
 | 13 | `chore/remove-legacy-plan-generator` | später | M | 12 | nein |
@@ -473,6 +495,7 @@ Alten Pfad löschen, wenn der Schalter stabil auf `on` steht.
 **Aufwand bis Cutover (v2):**
 - **Summe der Arbeit:** ca. 21–25 Arbeitstage + 2–3 Tage Shadow (v1: 22–28 inkl. einer Woche Shadow). Die Einsparung durch Schritt 0/8 und die kürzere Shadow-Phase liegt bei etwa 5–7 Tagen; Zonen-Fix und Coach-Feedback kosten etwa 1 Tag zurück.
 - **Kritischer Pfad:** 1 → 2 → 5 → 6 → 7 → 10 → 12 ≈ 15–19 Arbeitstage + Shadow.
+- **v3 (2026-11-06):** Ohne Production-Shadow entfallen die 2–3 Beobachtungstage; Schritt 10 bekommt dafür den Offline-Vergleich alt/neu.
 - **Realistisch nur mit Parallelarbeit:** 3, 4 und 9 laufen in eigenen Claude-Code-Sessions/Worktrees neben 2 und 5. Nacheinander abgearbeitet landet der Cutover bei der Summe, nicht beim kritischen Pfad.
 
 ```
@@ -482,17 +505,17 @@ Alten Pfad löschen, wenn der Schalter stabil auf `on` steht.
    └─ 9 ───────────────────────────┴─ 11 ─┘
 ```
 
-Das Spoho-Review kann nach Schritt 7 anhand von `docs/plan-core-profiles.md` laufen. Änderungen landen nur in `src/planCore/config.ts`. Danach `npm run build:plan-core`, Snapshots bewusst aktualisieren (`-u`) und die Bereichsprüfungen aus §13 anpassen, falls sich Abnahmekriterien ändern.
+Das Spoho-Review läuft (v3) nach Schritt 12 und vor dem App-Store-Release anhand von `docs/plan-core-profiles.md`. Änderungen landen nur in `src/planCore/config.ts`. Danach `npm run build:plan-core`, Snapshots bewusst aktualisieren (`-u`) und die Bereichsprüfungen aus §13 anpassen, falls sich Abnahmekriterien ändern.
 
 ## Entscheidungen (Stand v2, 2026-11-04)
 
 1. **Einbindung:** entschieden in Schritt 1 (2026-11-04) – **Variante A** (Vercel baut `api/*.ts` direkt, `src/planCore` wird importiert), mit `api/tsconfig.json` (`module: commonjs`, ohne `allowJs`). Ohne diese Datei läuft die Funktion nicht (ESM-Syntax im CJS-Laufzeitpfad). Variante B entfällt.
 2. **Art-Abbildung:** freigegeben – MVP mit `kind` + Abbildung auf die 8 App-Typen (Tabelle oben); Zonen nach `kind` (Schritt 3) und Coach-Feedback-Schwelle (Schritt 11) im MVP; echte neue Typen später.
-3. **Verstoß im Server-Pfad (`on`):** freigegeben – Plan verweigern (500 mit Code, Log ohne Nutzerinhalt), Onboarding zeigt verständliche Meldung und bietet den lokalen vereinfachten Plan an. Kein stiller Rückfall auf den alten Pfad.
+3. **Verstoß im Server-Pfad (`on`):** freigegeben – kein Kern-Plan bei error (Codes ins Log, ohne Nutzerinhalt). **Bis Schritt 13 Rückfall auf den alten Generator** (freigegeben 2026-11-05, bestätigt 2026-11-06), mit Zähler `planCoreFallbacks`. Erst wenn auch der Rückfall scheitert: 500 mit Code und verständliche Meldung im Onboarding. Der Button „Vereinfachten Plan nutzen“ bleibt bis Schritt 11 (danach kommt der vereinfachte Plan aus demselben Kern).
 4. **Chat-Aktion „Marathon-Plan erzeugen“:** freigegeben – im MVP entfernen.
 5. **Property-Tests:** freigegeben – eigener Zufallsgenerator mit Seed (`src/planCore/random.ts`).
 6. **Standard-Pace im Einsteiger-Modus:** freigegeben – 7:00/km als E-Pace, Herkunft `E`, Spoho-Review-Punkt.
-7. **Shadow-Dauer:** 2–3 Tage, Schalter bleibt als Rückweg.
-8. **Bestandsnutzer:** freigegeben – neue Fragen beim nächsten Erstellen eines Plans, keine Migration.
+7. **Shadow:** v3 (2026-11-06) – kein Production-Shadow. Abnahme über Offline-Vergleich alt/neu und Preview mit `on` (Schritt 10); der Schalter `off/shadow/on` bleibt als Rückweg.
+8. **Bestandsnutzer:** freigegeben – neue Fragen beim nächsten Erstellen eines Plans, keine Migration; v3: mit den Werten des letzten Plans vorausgefüllt, sofern vorhanden.
 9. **Claude in der Planerzeugung:** im MVP keiner. Freitext nur gespeichert/Coach (Schritt 8 später).
 10. **Lokaler API-Server (Schritt 0):** später; Server-Pfad wird auf Vercel-Preview im eingeloggten Chrome getestet.

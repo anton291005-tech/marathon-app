@@ -19,7 +19,7 @@ export {
   weekIndexOf,
   weekdayOf,
 } from "./dates";
-export { planPhases, isPlanCoreError, planCoreError } from "./phases";
+export { earliestRaceDate, planPhases, isPlanCoreError, planCoreError } from "./phases";
 export type { PhasePlan, PhaseWeek, PhaseInputs, PlanCoreError, PlanCoreErrorCode } from "./phases";
 export { planVolume } from "./volume";
 export type { PlanVolume, PlanVolumeNote, PlanVolumeWeek, VolumeInputs, VolumeOptions } from "./volume";
@@ -54,6 +54,7 @@ export { carryOf, layoutWeeks, NO_CARRY, placeWeek, resolveLongRunDay } from "./
 export type { LayoutCarry, LayoutDay, LayoutInputs, PlaceWeekInput, WeekLayout } from "./placement";
 export {
   advanceLongRun,
+  defaultLongestRecentRunKm,
   INITIAL_LONG_RUN_STATE,
   longestRecentRunKm,
   longRunLimitKm,

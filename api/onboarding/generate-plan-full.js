@@ -3,7 +3,7 @@
 const Anthropic = require("@anthropic-ai/sdk");
 const { handleCorsPreflight } = require("../_lib/cors");
 const { guardRequest, sendGuardFailure } = require("../_lib/apiGuard");
-const { validatePlanBody } = require("../_lib/inputLimits");
+const { validatePlanBody, legacyPlanProfile } = require("../_lib/inputLimits");
 const { generateFullPlanByPhases } = require("../_lib/phasedFullPlanGenerator");
 
 /**
@@ -26,7 +26,8 @@ module.exports = async function handler(req, res) {
       bucket: "plan_full",
     });
     if (!guard.ok) return sendGuardFailure(res, guard);
-    const { profile } = guard.payload;
+    // Bis Schritt 10 erzeugt nur der heutige Generator den Plan; er bekommt das Profil ohne die Plan-Eingaben.
+    const profile = legacyPlanProfile(guard.payload.profile);
 
     const key = process.env.ANTHROPIC_API_KEY?.trim();
     if (!key) return res.status(500).json({ error: "ANTHROPIC_API_KEY missing" });

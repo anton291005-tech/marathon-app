@@ -47,7 +47,10 @@ function datesLabel(ymd: Ymd): string {
 
 const dateIsoOf = (ymd: Ymd): string => `${ymd}T12:00:00.000Z`;
 
-/** Eingaben so, wie `normalizePlanCoreMeta` sie speichert (verfügbare Tage Mo–So, keine leeren optionalen Felder). */
+/**
+ * Eingaben so, wie `normalizePlanCoreMeta` sie speichert (verfügbare Tage Mo–So, keine leeren optionalen Felder).
+ * `freeText` wird nie gespeichert: er bleibt nur in den Preferences (Entscheidung 2026-11-06).
+ */
 function storedInputs(inputs: CoreInputs): CoreInputs {
   const out: CoreInputs = {
     distance: inputs.distance,
@@ -61,7 +64,6 @@ function storedInputs(inputs: CoreInputs): CoreInputs {
   if (inputs.longestRecentRunKm !== undefined) out.longestRecentRunKm = inputs.longestRecentRunKm;
   if (inputs.recentRace !== undefined) out.recentRace = inputs.recentRace;
   if (inputs.goalTime !== undefined) out.goalTime = inputs.goalTime;
-  if (inputs.freeText !== undefined) out.freeText = inputs.freeText;
   return out;
 }
 

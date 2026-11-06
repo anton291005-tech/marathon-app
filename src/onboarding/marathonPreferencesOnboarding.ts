@@ -1,31 +1,37 @@
 import type { PersistedMarathonPreferences } from "../app/runtime/runtimePersistenceTypes";
+import type { Distance } from "../planCore";
+import type { OnboardingPlanInputs } from "./onboardingPlanInputs";
 
 export type RaceGoal = "finish" | "time";
 
-export type DistanceShortcutId = "5" | "10" | "15" | "half" | "marathon";
+export type DistanceShortcutId = "5" | "10" | "half" | "marathon";
 
 export type DistanceShortcut = {
   id: DistanceShortcutId;
   label: string;
   displayLabel: string;
   km: number;
+  /** Distanz des Plan-Kerns (§0: nur 5k, 10k, HM, M). */
+  coreDistance: Distance;
 };
 
+/** Der Wizard bietet nur die vier Distanzen des Plan-Kerns an (Entscheidung 2026-11-06, keine freie Distanz mehr). */
 export const DISTANCE_SHORTCUTS: readonly DistanceShortcut[] = [
-  { id: "5", label: "5 km", displayLabel: "5 km", km: 5 },
-  { id: "10", label: "10 km", displayLabel: "10 km", km: 10 },
-  { id: "15", label: "15 km", displayLabel: "15 km", km: 15 },
+  { id: "5", label: "5 km", displayLabel: "5 km", km: 5, coreDistance: "5k" },
+  { id: "10", label: "10 km", displayLabel: "10 km", km: 10, coreDistance: "10k" },
   {
     id: "half",
     label: "Halbmarathon",
     displayLabel: "Halbmarathon (21,1 km)",
     km: 21.1,
+    coreDistance: "hm",
   },
   {
     id: "marathon",
     label: "Marathon",
     displayLabel: "Marathon (42,2 km)",
     km: 42.2,
+    coreDistance: "m",
   },
 ] as const;
 
@@ -105,16 +111,11 @@ export function normalizeRaceTargetTime(raw: string, marathonFormat: boolean): s
 
 export function resolveDistanceSelection(
   shortcutId: DistanceShortcutId | null,
-  customText: string,
-): { label: string; km: number | null } | null {
-  if (customText.trim()) {
-    const label = customText.trim();
-    return { label, km: parseRaceDistanceKm(label) };
-  }
+): { label: string; km: number; coreDistance: Distance } | null {
   if (!shortcutId) return null;
   const sc = DISTANCE_SHORTCUTS.find((d) => d.id === shortcutId);
   if (!sc) return null;
-  return { label: sc.displayLabel, km: sc.km };
+  return { label: sc.displayLabel, km: sc.km, coreDistance: sc.coreDistance };
 }
 
 export function formatGoalSummary(goal: RaceGoal, targetTime: string | null): string {
@@ -211,8 +212,10 @@ export type OnboardingSubmitPayload = {
   raceName: string | null;
   raceDate: string | null;
   planStartDate: string | null;
+  /** Abgeleitet aus `planInputs.currentWeeklyKm` (`weeklyKmRangeFromKm`), für den heutigen Pfad. */
   weeklyKmRange: string;
   userPreferences: string[];
+  planInputs: OnboardingPlanInputs;
 };
 
 export function buildOnboardingPreferencesPatch(
@@ -249,6 +252,7 @@ export function buildOnboardingPreferencesPatch(
     raceDate: payload.raceDate,
     planStartDate: payload.planStartDate,
     weeklyKmRange: payload.weeklyKmRange,
+    planInputs: payload.planInputs,
     ...(userPreferences.length ? { userPreferences } : {}),
     onboardingComplete: true,
     targetTime,

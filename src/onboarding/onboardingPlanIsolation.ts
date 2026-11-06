@@ -22,6 +22,7 @@ export function buildIsolatedOnboardingPreferences(
       raceDate: patch.raceDate ?? null,
       planStartDate: patch.planStartDate ?? null,
       weeklyKmRange: patch.weeklyKmRange,
+      ...(patch.planInputs ? { planInputs: patch.planInputs } : {}),
       ...(patch.userPreferences?.length ? { userPreferences: [...patch.userPreferences] } : {}),
       targetTime: patch.raceGoal === "finish" ? null : patch.targetTime ?? null,
     }),

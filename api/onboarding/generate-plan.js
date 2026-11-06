@@ -6,7 +6,7 @@ const {
 } = require("../_lib/claudePlanGenerator");
 const { handleCorsPreflight } = require("../_lib/cors");
 const { guardRequest, sendGuardFailure } = require("../_lib/apiGuard");
-const { validatePlanBody } = require("../_lib/inputLimits");
+const { validatePlanBody, legacyPlanProfile } = require("../_lib/inputLimits");
 
 /**
  * Vercel serverless function: POST /api/onboarding/generate-plan
@@ -25,7 +25,8 @@ module.exports = async function handler(req, res) {
   try {
     const guard = await guardRequest(req, { validate: validatePlanBody, bucket: "plan_structure" });
     if (!guard.ok) return sendGuardFailure(res, guard);
-    const { profile } = guard.payload;
+    // Der Struktur-Aufruf schickt das Profil als JSON an Claude: ohne die Plan-Eingaben bleibt er wie bisher.
+    const profile = legacyPlanProfile(guard.payload.profile);
 
     console.log("[API] POST /onboarding/generate-plan called");
 

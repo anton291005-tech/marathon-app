@@ -3,6 +3,7 @@ import { getAiConfig } from "./config";
 import type { AiPlanRules } from "./coachPlanMutations";
 import type { TrainingPlanV2 } from "../../planV2/types";
 import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
+import type { ProfilePlanInputs } from "../../onboarding/onboardingPlanInputs";
 
 /**
  * Strips Markdown code fences and extracts the outermost JSON object from a
@@ -68,6 +69,17 @@ export interface PlanGenerationProfile {
   planStartDate: string;
   planDurationDays: number;
   userPreferences: string[];
+  /**
+   * Plan-Eingaben für den Plan-Kern (Umbauplan Schritt 9/10). Der heutige Pfad liest sie nicht; fehlen sie (alter
+   * Client), läuft ab Schritt 10 der heutige Pfad.
+   */
+  runDaysPerWeek?: ProfilePlanInputs["runDaysPerWeek"];
+  availableDays?: ProfilePlanInputs["availableDays"];
+  longRunDay?: ProfilePlanInputs["longRunDay"];
+  currentWeeklyKm?: number;
+  longestRecentRunKm?: number;
+  longestRecentRunKmIsDefault?: boolean;
+  recentRace?: ProfilePlanInputs["recentRace"];
 }
 
 export interface FullPlanResult {

@@ -52,7 +52,10 @@ function normalizeRecentRace(raw: unknown): RecentRace | undefined {
   };
 }
 
-/** Pflichtfelder ungültig → `null` (kein halber Datensatz); optionale ungültige Felder fallen weg. */
+/**
+ * Pflichtfelder ungültig → `null` (kein halber Datensatz); optionale ungültige Felder fallen weg.
+ * `freeText` fällt immer weg: der Freitext bleibt nur in den Preferences, nie im Plan (Entscheidung 2026-11-06).
+ */
 function normalizeCoreInputs(raw: unknown): CoreInputs | null {
   if (!isRecord(raw)) return null;
   if (typeof raw.distance !== "string" || !DISTANCES.has(raw.distance)) return null;
@@ -75,7 +78,6 @@ function normalizeCoreInputs(raw: unknown): CoreInputs | null {
     ...(isNonNegative(raw.longestRecentRunKm) ? { longestRecentRunKm: raw.longestRecentRunKm } : {}),
     ...(recentRace ? { recentRace } : {}),
     ...(isPositive(raw.goalTime) ? { goalTime: raw.goalTime } : {}),
-    ...(typeof raw.freeText === "string" ? { freeText: raw.freeText } : {}),
   };
 }
 

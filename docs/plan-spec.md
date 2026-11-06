@@ -2,7 +2,7 @@
 
 > Zweck: Single Source of Truth für den deterministischen Plan-Kern. Jede Regel ist eine Zahl und damit ein Test.
 > Herkunft jeder Zahl ist markiert: **[L]** Literatur · **[P]** Praxis-Konsens (Daniels/Pfitzinger/Hansons-Pläne) · **[E]** eigene Setzung → muss ins Spoho-Review.
-> Status: Entwurf v0.9, 5.11.2026 (v0.3: 3.11.2026). Änderungen v0.9 (Schritt 6, Nachtrag 2 nach dem Review vom 5.11.2026): monotoner Volumenverlauf mit Tragfähigkeit, Entlastung −20 bis −30 % zur gelieferten Vorwoche (§5.3, I4/I5), Bezug des Long-Run-Anteils = Plan ohne Tragfähigkeit (§6, I9), E bei 3 Lauftagen HM/M bis 90 min und harte Untergrenze 15 min für E/REC/LR (§6, §7, I2/I9), Q1 der Entlastungswoche mit dem Faktor der Woche (§6, I12), Abnahme P2/P3 bestätigt (§13), Review-Punkte 29, 31–36 (§14); Runde 3 (5.11.2026): Aufbauwochen werden nicht mehr angehoben, E/REC dafür bis 15 min gekürzt (§5.3, §6, I2), Punkte 29, 34, 36 bestätigt, Punkt 37 (Kosten der Monotonie) neu. Änderungen v0.8 (Schritt 6, Nachtrag nach dem Review vom 5.11.2026): Tragfähigkeit der Wochen in `planVolume` (§5.3), Mindest-Wochen-km = Lauftage × E 25 min (§5.1), Long Run nie über seine Grenzen, E dafür bis zur Länge des Long Runs (§6, §7, I2/I9/I11), Mindestgrößen der Q-Einheiten (§7), Ziel des längsten Long Runs = Anteilsgrenze × Peak-Woche (§7.1), Abnahme P2/P3 (§13), Review-Punkte 21, 29, 31, 32 (§14). Änderungen v0.7 (Schritt 6, Einheiten): Rennwoche mit allen Lauftagen (§5.4, §6), Mindest-Wochen-km (§5.1), Q-Budget und Verteilung (§6), Long-Run-Ziel, -Plateau und Taper-Long-Run (§7.1), Q-Typ-Regeln, Renntempo-Arten und Einsteiger nach Minuten (§7.2), Strides am Vortag (§8), Wortlaut I9/I11/I13 (§12), P4/P6 Long-Run-Peak (§13), Review-Punkte 19–29 (§14). Änderungen v0.6 (Schritt 5, Wochenschablonen; nach dem P1–P6-Review ergänzt: Rennwoche ohne Ruhetage-Lücke direkt vor dem Rennen und höchstens 2 Ruhetage am Stück, bei ≤ 3 Lauftagen alle Läufe, §5.4/§6/§8): Hart-Annahme der Platzierung, MLR nie zwischen zwei harten Tagen, Taper- und Rennwochen-Schablone (§6), Sperrfenster für den Long Run vor dem Rennen (§8), Ausnahmen bei I10/I13, Wortlaut I6/I16 (§12), Review-Punkte 16–18 (§14). Änderungen v0.5 (Schritt 4, Form und Pace): §14 Punkte 14–15 (VDOT-30-Abweichung des Rechners, Herkunft der Pace-Anteile). Änderungen v0.4 (Schritt 2, Phasen und Wochenumfang): Entlastung fest −20 % (§5.3), Peak-Position im Korridor (§5.2), Geltungsbereich von I3–I5 (§12), Zusatz-Taper-Woche bei kurzer Rennwoche (§4), P1 auf 13–15 km (§13). Abgeglichen mit `docs/plan-architecture-inventory.md` (963f99e) und `docs/plan-spec-gap.md` (c12c630). Wo Code und Spec abweichen, gilt die Spec; Ausnahmen sind in §16 begründet.
+> Status: Entwurf v0.9, 5.11.2026 (v0.3: 3.11.2026). Nachtrag 6.11.2026 (Umbauplan Schritt 9, ohne Änderung der Pläne): Standardwert für den längsten Lauf nach Distanz und Lauftagen, Wizard nur 5k/10k/HM/M, Renndatum unter der Untergrenze abgelehnt, `freeText` nie im Plan (§2), Review-Punkt 39 (§14). Änderungen v0.9 (Schritt 6, Nachtrag 2 nach dem Review vom 5.11.2026): monotoner Volumenverlauf mit Tragfähigkeit, Entlastung −20 bis −30 % zur gelieferten Vorwoche (§5.3, I4/I5), Bezug des Long-Run-Anteils = Plan ohne Tragfähigkeit (§6, I9), E bei 3 Lauftagen HM/M bis 90 min und harte Untergrenze 15 min für E/REC/LR (§6, §7, I2/I9), Q1 der Entlastungswoche mit dem Faktor der Woche (§6, I12), Abnahme P2/P3 bestätigt (§13), Review-Punkte 29, 31–36 (§14); Runde 3 (5.11.2026): Aufbauwochen werden nicht mehr angehoben, E/REC dafür bis 15 min gekürzt (§5.3, §6, I2), Punkte 29, 34, 36 bestätigt, Punkt 37 (Kosten der Monotonie) neu. Änderungen v0.8 (Schritt 6, Nachtrag nach dem Review vom 5.11.2026): Tragfähigkeit der Wochen in `planVolume` (§5.3), Mindest-Wochen-km = Lauftage × E 25 min (§5.1), Long Run nie über seine Grenzen, E dafür bis zur Länge des Long Runs (§6, §7, I2/I9/I11), Mindestgrößen der Q-Einheiten (§7), Ziel des längsten Long Runs = Anteilsgrenze × Peak-Woche (§7.1), Abnahme P2/P3 (§13), Review-Punkte 21, 29, 31, 32 (§14). Änderungen v0.7 (Schritt 6, Einheiten): Rennwoche mit allen Lauftagen (§5.4, §6), Mindest-Wochen-km (§5.1), Q-Budget und Verteilung (§6), Long-Run-Ziel, -Plateau und Taper-Long-Run (§7.1), Q-Typ-Regeln, Renntempo-Arten und Einsteiger nach Minuten (§7.2), Strides am Vortag (§8), Wortlaut I9/I11/I13 (§12), P4/P6 Long-Run-Peak (§13), Review-Punkte 19–29 (§14). Änderungen v0.6 (Schritt 5, Wochenschablonen; nach dem P1–P6-Review ergänzt: Rennwoche ohne Ruhetage-Lücke direkt vor dem Rennen und höchstens 2 Ruhetage am Stück, bei ≤ 3 Lauftagen alle Läufe, §5.4/§6/§8): Hart-Annahme der Platzierung, MLR nie zwischen zwei harten Tagen, Taper- und Rennwochen-Schablone (§6), Sperrfenster für den Long Run vor dem Rennen (§8), Ausnahmen bei I10/I13, Wortlaut I6/I16 (§12), Review-Punkte 16–18 (§14). Änderungen v0.5 (Schritt 4, Form und Pace): §14 Punkte 14–15 (VDOT-30-Abweichung des Rechners, Herkunft der Pace-Anteile). Änderungen v0.4 (Schritt 2, Phasen und Wochenumfang): Entlastung fest −20 % (§5.3), Peak-Position im Korridor (§5.2), Geltungsbereich von I3–I5 (§12), Zusatz-Taper-Woche bei kurzer Rennwoche (§4), P1 auf 13–15 km (§13). Abgeglichen mit `docs/plan-architecture-inventory.md` (963f99e) und `docs/plan-spec-gap.md` (c12c630). Wo Code und Spec abweichen, gilt die Spec; Ausnahmen sind in §16 begründet.
 >
 > **Was der Umbau tatsächlich ersetzt:** Der Code rechnet Volumen, Taper, Peak, km-Verteilung, Long Runs, Bausteine, Texte und Zonen bereits selbst. Claude entscheidet heute nur die **Wochenform** (welcher Tag welcher Typ, Anzahl Läufe/harte Einheiten) und übersetzt Freitext. Neu zu bauen sind daher: deterministische Wochenschablonen (§6), Einheiten-Limits als Prüfung statt Reparatur (§7, §12) und eine Pace-Berechnung (§3), die es heute nicht gibt.
 
@@ -35,11 +35,11 @@
 | `availableDays` | ja | Teilmenge Mo–So, Anzahl ≥ `runDaysPerWeek` | alle |
 | `longRunDay` | nein | Wochentag aus `availableDays` (sonst Fehler `invalid-input`) | So, sonst Sa, sonst letzter verfügbarer Wochentag |
 | `currentWeeklyKm` | ja | 0–150 (Ø letzte 4 Wochen) | – |
-| `longestRecentRunKm` | nein | 0–45 (letzte 4 Wochen) | 30 % von `currentWeeklyKm`, min. 5 |
+| `longestRecentRunKm` | nein | 0–45 (letzte 4 Wochen) | Onboarding: Standardwert nach Distanz und Lauftagen (Tabelle unten, immer > 0), ausdrücklich mitgeschickt. Kern ohne Angabe (alte Daten, Tests): 30 % von `currentWeeklyKm`, min. 5 |
 | `recentRace` | nein | Distanz + Zeit + Datum | siehe §3 |
 | `goalTime` | nein | – | kein Zielpace-Training, nur Formpace |
 | `startYmd` | ja | heute bis `raceDate` − harte Untergrenze (§4) | heute (Onboarding: `planStartChoice`) |
-| `freeText` | nein | – | MVP: nur gespeichert, Coach liest; später → Claude-Regeln (§10) |
+| `freeText` | nein | – | MVP: nur in den Preferences gespeichert (nie im Plan, nicht in `meta.core`), Coach liest; später → Claude-Regeln (§10) |
 
 **Onboarding-Scope (laut Gap neu):** Heute fragt der Wizard nur eine Umfangs-Spanne ab; Lauftage, verfügbare Tage, Wochen-km, längster Lauf und Rennergebnis fehlen, im Profil steht nur eine Marathon-Bestzeit ohne Datum. Neu abzufragen:
 
@@ -49,7 +49,18 @@
 4. Letzter Wettkampf oder geschätzte 5k/10k-Zeit (Distanz, Zeit, Datum) – optional, sonst Einsteiger-Modus
 5. Längster Lauf der letzten 4 Wochen – optional, Fallback siehe Tabelle
 
-Bestehende Profile ohne diese Felder: beim nächsten Planerstellen nachfragen, nicht raten.
+Bestehende Profile ohne diese Felder: beim nächsten Planerstellen nachfragen, nicht raten. Hat der letzte Plan die Felder schon, füllt der Wizard sie damit vor (Entscheidung 6.11.2026).
+
+**Standardwert für den längsten Lauf** (Onboarding, wenn Frage 5 leer bleibt; `inputs.longestRecentRunDefaultKm`, [E], Review-Punkt 39), km:
+
+| Distanz | 3 Tage | 4 Tage | 5 Tage | 6 Tage |
+|---|---|---|---|---|
+| 5k | 5 | 6 | 7 | 8 |
+| 10k | 6 | 8 | 9 | 10 |
+| HM | 8 | 10 | 12 | 14 |
+| M | 10 | 12 | 14 | 16 |
+
+**Weitere Regeln im Wizard (6.11.2026):** nur die vier Distanzen 5k, 10k, HM, M (keine freie Distanz); Renndatum unter der harten Untergrenze (§4) wird abgelehnt, die Meldung nennt das früheste mögliche Renndatum (Montag der Kalenderwoche, die `hardMinWeeks` ab der Startwoche zählt; `earliestRaceDate`).
 
 ## 3. Form und Pace
 
@@ -374,6 +385,7 @@ Pro Profil zusätzlich: Vergleichsspalte mit einem passenden Literaturplan (Dani
     - Q1/Q1L: 1 083 Pläne (54 %); 4 063 von 21 549 Einheiten (19 %), davon 2 481 wegen des Budgets. Das passiert trotz der Regel „Q1 entfällt nicht wegen des Budgets“, weil der Mindestblock das Typ-Limit oder die harte 25-%-Grenze überschreitet. Am häufigsten bei 3–4 Tagen, 5k/10k, Aufbau und Spitze.
     - Q2: 460 Pläne (23 % aller Pläne, 35 % der 1 298 Pläne mit Q2); 1 489 von 8 796 Einheiten (17 %), überwiegend wegen des Budgets (383 Pläne, 104 wegen Platz). Am häufigsten in der Spitze bei M mit 4–6 Tagen.
     - Frage ans Review: Q-Budget (15 % bei 3–4 Tagen, 20 % sonst) oder Q-Mindestgrößen anpassen, oder ist die Abschwächung bei kleinen Wochen gewollt?
+39. Standardwert für den längsten Lauf (§2, [E], eingetragen 6.11.2026; `inputs.longestRecentRunDefaultKm`): Wenn das Onboarding keine Angabe bekommt, gilt eine Tabelle nach Distanz und Lauftagen (5k 5–8, 10k 6–10, HM 8–14, M 10–16 km), nicht mehr 30 % der Wochen-km. Der Wert setzt nur die Startgrenze des ersten Long Runs (längster Lauf + 2 km, §7.1); Anteil an der Woche, 180 min und Steigerung begrenzen weiter. Bei hohem Umfang (z. B. 70 km/Woche, M, 5 Tage: 14 statt 21 km) baut der Long Run dadurch langsamer auf, bei sehr kleinem Umfang liegt der Wert über 30 % der Woche. Frage ans Review: Tabelle so lassen, oder Wochen-km einbeziehen (z. B. Minimum aus Tabelle und 30 % der Woche, mindestens 5 km)?
 
 ## 15. Abgleich mit der Bestandsaufnahme
 
