@@ -341,14 +341,14 @@ describe("vercel.json", () => {
     expect(Object.keys(config.functions).sort()).toEqual([
       "api/account.js",
       "api/ai.js",
-      "api/onboarding/generate-plan-full.js",
+      "api/onboarding/generate-plan-full.ts",
       "api/onboarding/generate-plan.js",
       "api/strava/auth.js",
       "api/strava/callback.js",
     ]);
     for (const [file, settings] of Object.entries(config.functions)) {
       expect(fs.existsSync(path.resolve(__dirname, "../..", file))).toBe(true);
-      if (file !== "api/onboarding/generate-plan-full.js") expect(settings.maxDuration).toBeLessThanOrEqual(75);
+      if (file !== "api/onboarding/generate-plan-full.ts") expect(settings.maxDuration).toBeLessThanOrEqual(75);
     }
   });
 });

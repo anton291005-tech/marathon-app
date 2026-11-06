@@ -33,11 +33,16 @@ describe("Vercel-Funktionen", () => {
     expect(listFunctionFiles(API_DIR).sort()).toEqual([
       "account.js",
       "ai.js",
-      "onboarding/generate-plan-full.js",
+      "onboarding/generate-plan-full.ts",
       "onboarding/generate-plan.js",
       "strava/auth.js",
       "strava/callback.js",
     ]);
+  });
+
+  test("keine Route liegt doppelt als .js und .ts (Vercel würde beide bauen)", () => {
+    const routes = listFunctionFiles(API_DIR).map((file) => file.replace(/\.(js|ts)$/, ""));
+    expect(new Set(routes).size).toBe(routes.length);
   });
 
   test("der lokale Express-Server gibt kein Key-Fragment aus und hat keine daily-coach-Route", () => {
