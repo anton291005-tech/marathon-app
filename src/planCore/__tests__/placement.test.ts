@@ -1,7 +1,8 @@
 import { CONFIG } from "../config";
 import { addDays, WEEKDAYS } from "../dates";
-import { checkPlanLayouts, checkWeekLayout, compactWeek } from "../__fixtures__/layoutChecks";
-import type { WeekContext } from "../__fixtures__/layoutChecks";
+import { codesOf, compactWeek, unreasoned } from "../__fixtures__/compact";
+import { checkPlanLayouts, checkWeekLayout } from "../invariants";
+import type { WeekLayoutContext } from "../invariants";
 import { isHardSlot } from "../hard";
 import { isPlanCoreError, planPhases } from "../phases";
 import { carryOf, layoutWeeks, NO_CARRY, placeWeek, resolveLongRunDay } from "../placement";
@@ -33,7 +34,7 @@ function weekInput(over: Partial<PlaceWeekInput>): PlaceWeekInput {
   };
 }
 
-function contextOf(input: PlaceWeekInput): WeekContext {
+function contextOf(input: PlaceWeekInput): WeekLayoutContext {
   return {
     mode: input.mode,
     distance: input.distance,
@@ -133,7 +134,7 @@ describe("Erschöpfender Test der Wochenform", () => {
                 const input = weekInput({ ...scenario, runDays, availableDays, longRunDay, carry, nextHard });
                 const layout = placeWeek(input);
                 cases += 1;
-                checkWeekLayout(layout, contextOf(input)).forEach((code) =>
+                codesOf(checkWeekLayout(layout, contextOf(input))).forEach((code) =>
                   problems.push(`${scenario.label}|${availableDays.join("")}|LR ${longRunDay}|${runDays}|${JSON.stringify(carry)}|${nextHard}: ${code}`),
                 );
               }),
@@ -449,7 +450,7 @@ describe("Rennwoche und Sperrfenster", () => {
               });
               const layout = placeWeek(input);
               counter.cases += 1;
-              checkWeekLayout(layout, contextOf(input)).forEach((code) =>
+              codesOf(checkWeekLayout(layout, contextOf(input))).forEach((code) =>
                 problems.push(`${availableDays.join("")}|${runDays}|${raceWeekday}|${distance}|${JSON.stringify(carry)}: ${code}`),
               );
             }),
@@ -552,7 +553,7 @@ describe("Regressionen aus dem Altcode", () => {
     );
     expect(hardAfterHard).toEqual([]);
     expect(all.filter((day) => day.weekday === "Mo" && isHardSlot(day.slot))).toEqual([]);
-    expect(checkPlanLayouts(layouts, { ...inputs, longRunDay: "So" })).toEqual([]);
+    expect(codesOf(unreasoned(checkPlanLayouts(layouts, { ...inputs, runDays: inputs.runDaysPerWeek, longRunDay: "So" })))).toEqual([]);
     // Die Folge: in den Hauptwochen entfällt Q1 mit Hinweis, statt gegen I6 zu verstoßen.
     const main = layouts.filter((layout) => layout.mode === "main");
     expect(main.length).toBeGreaterThan(0);

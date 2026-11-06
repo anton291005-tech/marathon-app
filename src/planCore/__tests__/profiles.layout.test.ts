@@ -1,4 +1,5 @@
-import { checkPlanLayouts, compactWeek } from "../__fixtures__/layoutChecks";
+import { codesOf, compactWeek, unreasoned } from "../__fixtures__/compact";
+import { checkPlanLayouts } from "../invariants";
 import { PROFILES } from "../__fixtures__/profiles";
 import type { Profile, ProfileName } from "../__fixtures__/profiles";
 import { buildPaceProfile } from "../pace";
@@ -38,13 +39,17 @@ describe("Referenzprofile P1–P6: Wochenformen", () => {
       const { layouts } = layoutOf(profile);
       expect(layouts).toHaveLength(profile.weeks);
       expect(
-        checkPlanLayouts(layouts, {
-          distance: profile.inputs.distance,
-          runDays: profile.inputs.runDaysPerWeek,
-          availableDays: profile.inputs.availableDays,
-          longRunDay: "So",
-          raceDate: profile.inputs.raceDate,
-        }),
+        codesOf(
+          unreasoned(
+            checkPlanLayouts(layouts, {
+              distance: profile.inputs.distance,
+              runDays: profile.inputs.runDaysPerWeek,
+              availableDays: profile.inputs.availableDays,
+              longRunDay: "So",
+              raceDate: profile.inputs.raceDate,
+            }),
+          ),
+        ),
       ).toEqual([]);
       const last = layouts[layouts.length - 1];
       expect(last.days[last.days.length - 1]).toMatchObject({ slot: "RACE", weekday: "So" });

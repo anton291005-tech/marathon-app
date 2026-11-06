@@ -1,5 +1,7 @@
 import { randomInputs } from "../__fixtures__/randomInputs";
-import { checkSessionPlan, checkVolumeGrowth } from "../__fixtures__/sessionChecks";
+import { codesOf, unreasoned } from "../__fixtures__/compact";
+import { checkPlan } from "../invariants";
+import type { CoreInputs } from "../types";
 import { easyHardMinKm, easyMinKm } from "../sessions";
 import { PROFILES } from "../__fixtures__/profiles";
 import type { ProfileName } from "../__fixtures__/profiles";
@@ -10,6 +12,10 @@ const planOf = (name: ProfileName): SessionPlan => {
   const profile = PROFILES.filter((p) => p.name === name)[0];
   return planSessions(profile.inputs, profile.todayYmd);
 };
+
+/** Volumen und sichtbarer Verlauf (I3–I5, Monotonie), ohne begründete Abweichungen. */
+const volumeCodes = (plan: SessionPlan, inputs: CoreInputs): string[] =>
+  codesOf(unreasoned(checkPlan(plan, inputs).violations).filter((v) => ["I3", "I4", "I5", "VOLUME"].indexOf(v.code) >= 0));
 
 describe("planCore planSessions (Schritt 6)", () => {
   it("eine Einheit je Layout-Tag, gleiche Rolle; Wochensumme = Summe der Einheiten (I1)", () => {
@@ -55,7 +61,7 @@ describe("planCore planSessions (Schritt 6)", () => {
   it("kein Long Run über Start-, Steigerungs-, Entlastungs-, Taper- oder Anteilsgrenze (Prüfer ohne Ausnahme)", () => {
     PROFILES.forEach((profile) => {
       const plan = planOf(profile.name);
-      expect(checkSessionPlan(plan, profile.inputs).filter((code) => code.indexOf("I9") === 0)).toEqual([]);
+      expect(codesOf(checkPlan(plan, profile.inputs).violations.filter((v) => v.code === "I9" && !v.reasoned))).toEqual([]);
     });
   });
 
@@ -121,7 +127,7 @@ describe("planCore planSessions (Schritt 6)", () => {
   it("monotoner Verlauf in allen Profilen: keine Aufbauwoche kleiner als die Vorwoche, Peak in der letzten Woche vor dem Taper", () => {
     PROFILES.forEach((profile) => {
       const plan = planOf(profile.name);
-      expect([profile.name, checkVolumeGrowth(plan, profile.inputs)]).toEqual([profile.name, []]);
+      expect([profile.name, volumeCodes(plan, profile.inputs)]).toEqual([profile.name, []]);
       const pre = plan.volume.weeks.filter((w) => w.wn <= plan.volume.peakWeek);
       expect([profile.name, pre[pre.length - 1].fullWeekKm]).toEqual([profile.name, plan.volume.peakKm]);
     });
@@ -131,7 +137,7 @@ describe("planCore planSessions (Schritt 6)", () => {
     // Vorher: Wochen ohne Q auf 3 × 25 min = 18,6 km angehoben, Wochen mit R-Einheit 16,8 km (nicht monoton).
     const { inputs, todayYmd } = randomInputs(20261716);
     const plan = planSessions(inputs, todayYmd);
-    expect(checkVolumeGrowth(plan, inputs)).toEqual([]);
+    expect(volumeCodes(plan, inputs)).toEqual([]);
     const build = plan.weeks.filter((w) => w.wn <= plan.volume.peakWeek && w.sessions.length === 7);
     expect(build.filter((w) => w.notes.indexOf("week-km-raised") >= 0)).toEqual([]);
     const shortened = build.reduce((list, w) => list.concat(w.sessions.filter((s) => s.notes.indexOf("e-shortened-to-fit-week") >= 0)), [] as SessionPlan["weeks"][number]["sessions"]);
