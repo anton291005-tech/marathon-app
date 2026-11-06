@@ -1452,7 +1452,7 @@ export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInp
               <SummaryRow term="Trainingsstart">{summaryPayload.planStartDate || "—"}</SummaryRow>
               <SummaryRow term="Rennen">{summaryPayload.raceName || "—"}</SummaryRow>
               <SummaryRow term="Lauftage">
-                {`${summaryPayload.planInputs.runDaysPerWeek} Tage pro Woche · ${summaryPayload.planInputs.availableDays.join(", ")}`}
+                {`${summaryPayload.planInputs.runDaysPerWeek} Tage pro Woche · verfügbar: ${summaryPayload.planInputs.availableDays.join(", ")}`}
               </SummaryRow>
               <SummaryRow term="Long Run">{WEEKDAY_LONG_DE[summaryPayload.planInputs.longRunDay]}</SummaryRow>
               <SummaryRow term="Wöchentlicher Umfang">

@@ -206,7 +206,7 @@ describe("Onboarding: Plan-Eingaben bis zum Server und in die Preferences", () =
     clickNext();
 
     expect(screen.getByRole("heading", { name: "Fast geschafft" })).toBeInTheDocument();
-    expect(screen.getByText("5 Tage pro Woche · Mo, Di, Do, Fr, Sa, So")).toBeInTheDocument();
+    expect(screen.getByText("5 Tage pro Woche · verfügbar: Mo, Di, Do, Fr, Sa, So")).toBeInTheDocument();
     expect(screen.getByText("Samstag")).toBeInTheDocument();
     expect(screen.getByText("35,5 km")).toBeInTheDocument();
     expect(screen.getByText("Keine Angabe (wir rechnen mit 12 km)")).toBeInTheDocument();
