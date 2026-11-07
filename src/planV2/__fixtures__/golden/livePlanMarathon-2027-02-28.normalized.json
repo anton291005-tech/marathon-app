@@ -2075,7 +2075,7 @@
      "structured": null
     }
    ],
-   "totalKm": 96.00000000000001,
+   "totalKm": 96,
    "meta": {
     "wn": 6,
     "phase": "base",
@@ -3015,7 +3015,7 @@
      "structured": null
     }
    ],
-   "totalKm": 111.89999999999999,
+   "totalKm": 111.9,
    "meta": {
     "wn": 15,
     "phase": "base",

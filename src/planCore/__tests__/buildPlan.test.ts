@@ -65,6 +65,29 @@ describe("buildPlan (Schritt 7b)", () => {
     expect(assemblePlan(sessions, inputs, EMPTY_RULES).meta!.volumeNote).toEqual(note);
   });
 
+  it("alle week.totalKm und workout.km haben höchstens eine Nachkommastelle (P1–P6 und 2 000 Zufallspläne)", () => {
+    const tenth = (km: number) => Math.round(km * 10) / 10;
+    const cases = PROFILES.map((p) => ({ inputs: p.inputs, todayYmd: p.todayYmd }));
+    for (let seed = 20261107; seed < 20261107 + 2000; seed += 1) cases.push(randomInputs(seed));
+    const bad: string[] = [];
+    cases.forEach(({ inputs, todayYmd }, index) => {
+      const plan = buildPlan(inputs, EMPTY_RULES, todayYmd);
+      plan.weeks.forEach((week) => {
+        if (week.totalKm !== tenth(week.totalKm)) bad.push(`${index}/W${week.meta.wn}: totalKm ${week.totalKm}`);
+        week.workouts.forEach((w) => {
+          if (w.km !== tenth(w.km)) bad.push(`${index}/${w.id}: km ${w.km}`);
+        });
+      });
+    });
+    expect(bad).toEqual([]);
+  });
+
+  it("P5-Rennwoche: totalKm 83,2 statt Gleitkomma-Rauschen", () => {
+    const profile = PROFILES.filter((p) => p.name === "P5")[0];
+    const plan = buildPlan(profile.inputs, EMPTY_RULES, profile.todayYmd);
+    expect(plan.weeks[plan.weeks.length - 1].totalKm).toBe(83.2);
+  });
+
   it("freeText wird nicht in meta.core.inputs gespeichert; der Plan ist sonst identisch", () => {
     const profile = PROFILES.filter((p) => p.name === "P4")[0];
     const withText = buildPlan({ ...profile.inputs, freeText: "Knie schonen, keine Hügel" }, EMPTY_RULES, profile.todayYmd);

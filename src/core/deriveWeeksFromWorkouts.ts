@@ -66,6 +66,8 @@ export function deriveWeeksFromWorkouts(
   const weeks = Array.from(weeksMap.values()).sort((a, b) => a.startIso.localeCompare(b.startIso));
   for (const week of weeks) {
     week.workouts.sort((a, b) => a.dateIso.localeCompare(b.dateIso));
+    // Gleitkomma-Rauschen der Summe weg (z. B. 83.20000000000002 → 83.2); gleiche Regel wie `buildPlan` im Plan-Kern.
+    week.totalKm = Math.round(week.totalKm * 10) / 10;
   }
   return weeks;
 }
