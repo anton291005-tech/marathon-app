@@ -208,7 +208,15 @@ export function berlinWallClockYmd(now = getAppNow()) {
   return now.toLocaleDateString("en-CA", { timeZone: "Europe/Berlin" });
 }
 
-function sessionDateLabelToYmd(label, year = 2026) {
+/**
+ * Kalendertag einer Plan-Session als YYYY-MM-DD. `dateIso` (trägt das echte Jahr) hat Vorrang; nur ohne
+ * `dateIso` (Altpläne) wird das Label („3. Jan“) mit `year` gelesen. Das Label allein verliert das Jahr:
+ * bei Plänen über Neujahr ergäbe es sonst falsche Daten.
+ */
+function sessionDateLabelToYmd(session, year = 2026) {
+  const iso = typeof session?.dateIso === "string" ? /^(\d{4}-\d{2}-\d{2})/.exec(session.dateIso) : null;
+  if (iso) return iso[1];
+  const label = session?.date;
   if (!label) return null;
   const match = label.match(/(\d{1,2})\.\s*([A-Za-zÄÖÜäöü]+)/);
   if (!match) return null;
@@ -225,7 +233,7 @@ export function planEarliestSessionYmd(plan, year = 2026) {
   let min = null;
   for (const week of safePlanWeeks(plan)) {
     for (const s of week.s ?? []) {
-      const ymd = sessionDateLabelToYmd(s.date, year);
+      const ymd = sessionDateLabelToYmd(s, year);
       if (!ymd) continue;
       if (!min || ymd < min) min = ymd;
     }
