@@ -146,20 +146,6 @@ function hrZonesIntent(text: string): boolean {
   );
 }
 
-/**
- * Feste Antwort auf „Erstelle mir einen Marathon-Plan“ (Entscheidung 2026-11-07). Im Live-Chat greift die
- * Server-Kopie in `api/_lib/coachNewPlanRequest.js` (vor Claude); Text muss identisch bleiben (Test).
- */
-export const NEW_PLAN_VIA_SETTINGS_MESSAGE =
-  "Einen neuen Trainingsplan erstellst du unter **Einstellungen → Training → Neuer Trainingsplan**. Dort fragt dich der Assistent nach Rennen, Lauftagen und deiner aktuellen Form und baut den Plan daraus. Hier im Chat erstelle ich keinen Plan, ich passe deinen bestehenden an.";
-
-function marathonPlanCreateIntent(text: string): boolean {
-  return (
-    has(text, "marathon") &&
-    (has(text, "plan", "erstell", "aufbau", "trainingsplan") || /\d{1,2}\.\s*september/.test(text))
-  );
-}
-
 function progressIntent(text: string): boolean {
   return (
     ((has(text, "wie lauft") || has(text, "wie laeuft")) && has(text, "training")) ||
@@ -654,11 +640,6 @@ export function tryDeterministicCoachResponse(userInput: string, context: AiCont
       `Annahme: «nächste Woche» = folgende Kalenderwoche nach dieser. Ich erhöhe die Laufkilometer dort um ca. ${volPct}% (übernommene Einheiten im Entwurf; neue WKZ-Summe grob über ${Math.round(sumKm)} km geplant vs. höher proportioniert je Einheit). Bitte bestätigen.`,
       patches.slice(0, 10).map((p) => `${p.sessionId}: ${p.changes.title || "Einheit"}`),
     );
-  }
-
-  // Pläne entstehen nur im Wizard (Plan-Kern, Umbauplan Schritt 11); der Chat erzeugt keinen Plan mehr.
-  if (marathonPlanCreateIntent(text)) {
-    return { mode: "coach", message: NEW_PLAN_VIA_SETTINGS_MESSAGE };
   }
 
   if (missedYesterdayIntent(text)) {

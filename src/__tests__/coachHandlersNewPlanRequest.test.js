@@ -11,7 +11,8 @@ process.env.ANTHROPIC_API_KEY = "test-key-coachHandlers-new-plan-spec";
 const Anthropic = require("@anthropic-ai/sdk");
 const { handleAiCoach } = require("../../api/_lib/coachHandlers");
 const { NEW_PLAN_VIA_SETTINGS_MESSAGE, isNewPlanRequest } = require("../../api/_lib/coachNewPlanRequest");
-const clientResponses = require("../lib/ai/coachDeterministicResponses");
+const fs = require("fs");
+const path = require("path");
 
 const weeks = [
   {
@@ -89,9 +90,23 @@ describe("Chat: Plan-Wunsch → feste Antwort", () => {
     expect(res.body.message).not.toBe(NEW_PLAN_VIA_SETTINGS_MESSAGE);
   });
 
-  it("Text identisch mit der Client-Konstante", () => {
-    expect(NEW_PLAN_VIA_SETTINGS_MESSAGE).toBe(clientResponses.NEW_PLAN_VIA_SETTINGS_MESSAGE);
+  it("Text: Ziel-Screen, 5/5-Fall und Planzahl stimmen mit der App überein", () => {
+    const read = (rel) => fs.readFileSync(path.join(__dirname, "..", "..", rel), "utf8");
+    const max = Number(/MAX_ACTIVE_PLANS\s*=\s*(\d+)/.exec(read("src/lib/supabase/services/trainingPlanService.ts"))[1]);
+    const switcher = read("src/components/PlanSwitcher.tsx");
+    // Button und Listenüberschrift existieren unter genau diesen Namen; bei max. Plänen ist der Button gesperrt.
+    expect(switcher).toContain("+ Neuer Trainingsplan");
+    expect(switcher).toContain("Meine Trainingspläne");
+    expect(switcher).toMatch(/disabled=\{atMax\}/);
     expect(NEW_PLAN_VIA_SETTINGS_MESSAGE).toContain("Einstellungen → Training → Neuer Trainingsplan");
+    expect(NEW_PLAN_VIA_SETTINGS_MESSAGE).toContain(`bis zu ${max} Pläne`);
+    expect(NEW_PLAN_VIA_SETTINGS_MESSAGE).toContain("Meine Trainingspläne");
+    expect(NEW_PLAN_VIA_SETTINGS_MESSAGE).toContain("lösche dann");
+  });
+
+  it("es gibt keine zweite Erkennung mehr (Client-Variante gelöscht)", () => {
+    const client = fs.readFileSync(path.join(__dirname, "..", "lib", "ai", "coachDeterministicResponses.ts"), "utf8");
+    expect(client).not.toMatch(/marathonPlanCreateIntent|NEW_PLAN_VIA_SETTINGS_MESSAGE/);
   });
 });
 
@@ -113,6 +128,19 @@ describe("isNewPlanRequest", () => {
     "Ich brauche einen neuen Plan",
     "Mach mir einen Halbmarathon-Plan",
     "Generiere einen 10k-Plan für mich",
+    "Ich habe am 14. September einen Marathon. Erstelle mir einen Plan ab heute.",
+    "Ich möchte einen Plan für einen Halbmarathon",
+    "Erstelle mir einen Plan für den Marathon in 16 Wochen",
+    "Bau mir einen Marathon-Trainingsplan",
+    "Ich will einen Marathon-Plan",
+    "Schreib mir einen 10k-Plan",
+    "Erstelle mir einen Plan für die Marathonvorbereitung",
+    "Kannst du mir einen Marathon Trainingsplan schreiben",
+    "Ich bräuchte einen neuen Trainingsplan",
+    "Gib mir einen Marathonplan",
+    "Mein Marathon ist am Sonntag in 12 Wochen, erstelle mir einen Marathon-Plan ab heute",
+    "Kannst du mir einen Trainingsplan machen?",
+    "ERSTELLE MIR BITTE EINEN NEUEN MARATHONPLAN!!!",
   ])("erkennt: %s", (text) => {
     expect(isNewPlanRequest(norm(text))).toBe(true);
   });
@@ -121,12 +149,33 @@ describe("isNewPlanRequest", () => {
     "Passe meinen Marathon-Plan an",
     "Mach meinen Plan leichter",
     "Ist mein Marathonplan zu hart?",
+    "Erstelle mir einen Plan für heute",
     "Erstelle mir einen Plan für morgen",
     "Erstelle mir einen Plan für nächste Woche",
     "Mach mir einen Krafttrainingsplan",
     "Erstelle mir einen Ernährungsplan für den Marathon",
     "Bau einen Ruhetag in meinen Plan",
     "Wie geht es weiter?",
+    "Bau mir einen Trainingsplan für Montag",
+    "Mach mir einen Trainingsplan für Sonntag",
+    "Mach mir einen Trainingsplan für Montag bis Freitag",
+    "Ich brauche einen Trainingsplan für die nächsten drei Tage",
+    "Mach mir einen Plan für die letzten 2 Wochen vor dem Marathon",
+    "Ich will einen Plan für die letzte Woche vor dem Marathon",
+    "Ich brauche einen Plan für die Woche nach dem Marathon",
+    "Erstelle mir einen Marathon-Plan für die Woche nach dem Rennen",
+    "Mach mir einen Plan für Montag",
+    "Schreib mir einen Plan für Dienstag",
+    "Bau mir einen Plan für den Rest der Woche",
+    "Kannst du mir einen Plan für die nächsten 3 Tage machen",
+    "Ich möchte einen neuen Plan für 2 Wochen Urlaub",
+    "Ich will wissen ob ein Plan mit 4 Läufen besser ist",
+    "Ich will wissen, ob ein Marathon-Plan mit 4 Läufen besser ist",
+    "Ich brauche einen Plan B für den Regen",
+    "Erstelle mir einen Reha-Plan",
+    "Was steht heute in meinem Plan?",
+    "Wie sieht mein Plan aus?",
+    "Warum ist der Plan so hart?",
   ])("lässt durch: %s", (text) => {
     expect(isNewPlanRequest(norm(text))).toBe(false);
   });

@@ -1,5 +1,4 @@
 import {
-  NEW_PLAN_VIA_SETTINGS_MESSAGE,
   tryDeterministicCoachResponse,
   extractRelativeDaysUntilRaceGerman,
   normalizeCoachText,
@@ -97,19 +96,6 @@ describe("tryDeterministicCoachResponse — 10 user scenarios", () => {
     const ctx = ctxFor(plan, new Date("2026-05-05T08:00:00").toISOString());
     const res = tryDeterministicCoachResponse("Ich will naechste Woche mehr trainieren. Erhoehe das Volumen um 15%.", ctx);
     expect(res?.action?.type).toBe("boost_next_week_volume");
-  });
-
-  test("6 Marathon-Plan erstellen: keine Aktion mehr, feste Antwort mit Verweis auf den Wizard", () => {
-    const plan = makePlan([]);
-    const ctx = ctxFor(plan, new Date("2026-05-03T08:00:00").toISOString());
-    ["Ich habe am 14. September einen Marathon. Erstelle mir einen Plan ab heute.", "Erstelle mir einen Marathon-Plan"].forEach(
-      (text) => {
-        const res = tryDeterministicCoachResponse(text, ctx);
-        expect(res).toEqual({ mode: "coach", message: NEW_PLAN_VIA_SETTINGS_MESSAGE });
-        expect(res?.action).toBeUndefined();
-      },
-    );
-    expect(NEW_PLAN_VIA_SETTINGS_MESSAGE).toContain("Einstellungen → Training → Neuer Trainingsplan");
   });
 
   test("8 taper with explicit keyword", () => {
