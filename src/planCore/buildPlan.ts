@@ -3,7 +3,7 @@
  *
  * Form so, dass `normalizeTrainingPlan` den Plan unverändert lässt (Vertragstest):
  * - eine Einheit je Plantag, Ruhetage als `rest`-Workouts; ID `pc-<ymd>-<kind>`; `dateIso` = Mittag UTC des Plantags
- * - Woche: `startIso` = Montag, `totalKm` = Summe der Lauf-km in Tagesreihenfolge (wie `deriveWeeksFromWorkouts`)
+ * - Woche: `startIso` = Montag, `totalKm` = Summe der Lauf-km auf 0,1 km gerundet (wie `deriveWeeksFromWorkouts`)
  * - Meta: `wn`, `phase`, Label „Woche N · Phase“ (wie `api/_lib/deterministicPlanGenerator.js`), `dates` „8. Mär ff.“
  *   (erster Plantag der Woche), `focus` je Phase; Entlastung: `isRecoveryWeek` und „Entlastung…“ im `focus` (I22)
  * - `meta.core`: Config-Version, Eingaben (verfügbare Tage in der Reihenfolge Mo–So), Regeln; `meta.volumeNote` bei
@@ -86,11 +86,12 @@ export function assemblePlan(plan: SessionPlan, inputs: CoreInputs, rules: PlanR
         structured: text.structured,
       };
     });
-    // Wie `deriveWeeksFromWorkouts`: Lauf-km in Tagesreihenfolge aufsummiert (ohne Rundung).
+    // Wie `deriveWeeksFromWorkouts`: Lauf-km in Tagesreihenfolge aufsummiert, auf 0,1 km gerundet (sonst 83.20000000000002).
     let totalKm = 0;
     workouts.forEach((w) => {
       if (w.sport !== "rest" && w.km) totalKm += w.km;
     });
+    totalKm = Math.round(totalKm * 10) / 10;
     const isRace = week.mode === "race";
     const meta: CoreWeekMeta = {
       wn: week.wn,
