@@ -146,7 +146,10 @@ function hrZonesIntent(text: string): boolean {
   );
 }
 
-/** Feste Antwort auf „Erstelle mir einen Marathon-Plan“ (Entscheidung 2026-11-07). */
+/**
+ * Feste Antwort auf „Erstelle mir einen Marathon-Plan“ (Entscheidung 2026-11-07). Im Live-Chat greift die
+ * Server-Kopie in `api/_lib/coachNewPlanRequest.js` (vor Claude); Text muss identisch bleiben (Test).
+ */
 export const NEW_PLAN_VIA_SETTINGS_MESSAGE =
   "Einen neuen Trainingsplan erstellst du unter **Einstellungen → Training → Neuer Trainingsplan**. Dort fragt dich der Assistent nach Rennen, Lauftagen und deiner aktuellen Form und baut den Plan daraus. Hier im Chat erstelle ich keinen Plan, ich passe deinen bestehenden an.";
 

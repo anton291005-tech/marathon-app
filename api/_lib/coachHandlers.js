@@ -15,6 +15,7 @@ const OpenAI = require("openai");
 const Anthropic = require("@anthropic-ai/sdk");
 const { pickCoachHealthRunFields } = require("./coachHealthRunFields");
 const { extractJson } = require("./extractJson");
+const { NEW_PLAN_VIA_SETTINGS_MESSAGE, isNewPlanRequest } = require("./coachNewPlanRequest");
 // Deliberately use a local copy so this directory is fully self-contained.
 // Do NOT change this back to "../../server/aiSchema" — that file is not always
 // committed to git and would cause a MODULE_NOT_FOUND error on Vercel.
@@ -1265,6 +1266,11 @@ async function handleAiCoach(rawBody) {
       status: 200,
       body: { mode: "coach", message: override.message, override: true },
     };
+  }
+
+  // Layer 2: Plan-Wunsch → feste Antwort (Wizard), vor Claude und unabhängig vom Planzustand.
+  if (isNewPlanRequest(normalizeText(bareUser))) {
+    return { status: 200, body: { mode: "coach", message: NEW_PLAN_VIA_SETTINGS_MESSAGE } };
   }
 
   if (!anthropicApiKey) {
