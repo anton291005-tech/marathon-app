@@ -10,16 +10,16 @@ npm run start:full     # frontend + API concurrently — needed to exercise the 
 npm test               # jest (react-scripts test), interactive watch mode
 CI=true npm test       # single non-interactive run (use this, not plain `npm test`, for one-shot verification)
 npm test -- MyFile     # run a single test file/pattern (react-scripts test filters by path/name)
-npm run build          # production build → dist/ (BUILD_PATH=dist, required for Vercel + Capacitor)
+npm run build          # production build → dist/ (BUILD_PATH=dist, required for Vercel + Capacitor); macht KEIN cap sync, ios/ bleibt unverändert
 ```
 
 iOS (Capacitor — native shell loads bundled `dist/`, never a remote URL):
 ```bash
 npm run deploy:ios     # cap sync ios + open Xcode workspace
 npm run ios            # CI build + cap sync + open Xcode (skips ESLint)
-npm run build:ios-safe # clean rebuild + verify-web-build guard
+npm run build:ios-safe # clean rebuild + cap sync ios + verify-web-build guard
 ```
-After any `npm run build`, `npx cap sync ios` must run before the Xcode rebuild — the WebView reads only the bundled assets.
+After any `npm run build`, `npx cap sync ios` must run before the Xcode rebuild — the WebView reads only the bundled assets. `npm run build` does no `cap sync` anymore (`postbuild` syncs only with `CAP_SYNC=1`); the iOS scripts (`ios`, `cap:sync`, `cap:ios`, `build:ios-safe`/`ios:prod`, `deploy:ios`) call `npx cap sync ios` explicitly.
 
 ### Change-discipline scripts (`scripts/`)
 
@@ -89,7 +89,8 @@ Schritte 1–3 sind vor TestFlight freigegeben: 1) Gerüst (Profilkarte, 6 Berei
 - Diagnose-first (keine Code-Änderung ohne vorherige Diagnose) → Fix-Vorschlag → `CI=false npm run build` → erst dann committen.
 - Ein Auftrag pro Session/Branch, nicht mehrere Baustellen parallel — vermeidet Merge-Chaos.
 - Completion-String am Ende jeder abgeschlossenen Aufgabe.
-- Nach jedem Fix: `git add -A && git commit`, danach **git push nicht vergessen** — das wurde in der Vergangenheit öfter vergessen.
+- Nach jedem Fix: committen, danach **git push nicht vergessen** — das wurde in der Vergangenheit öfter vergessen.
+- `git add <Pfade>` statt `git add -A`; vor jedem Commit `git status --short` prüfen (`ios/` gehört nur absichtlich in einen Commit).
 - Kein Merge zu `main` ohne explizite Freigabe.
 
 ## Live-Test-Setup
