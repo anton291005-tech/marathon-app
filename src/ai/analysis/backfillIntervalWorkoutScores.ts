@@ -1,5 +1,6 @@
 import { getAppNow } from "../../core/time/timeSystem";
 import { plannedHrRangeForSessionType } from "../../trainingIntelligence/hrZones";
+import type { CoreKind } from "../../planCore";
 import { isSessionLogDone } from "../../appSmartFeatures";
 import type { IntervalIntensitySnapshot, StoredHealthRun } from "../../healthRuns";
 import { getStoredHealthRunCanonicalType } from "../../healthRuns";
@@ -14,7 +15,7 @@ const INTERVAL_TITLE_KEYWORDS =
 
 export type BackfillIntervalWorkoutScoresArgs = {
   healthRuns: StoredHealthRun[];
-  planSessions: Array<{ id: string; date: string; type: string; title: string; pace?: string | null; km?: number }>;
+  planSessions: Array<{ id: string; date: string; type: string; kind?: CoreKind; title: string; pace?: string | null; km?: number }>;
   logs: Record<string, unknown>;
   maxHeartRateBpm?: number | null;
 };
@@ -126,7 +127,8 @@ function buildAnalyzeInputs(args: {
       : null;
 
   const actualHrBpm = numOrNull(health.avgHeartRateBpm) ?? null;
-  const plannedHr = plannedHrRangeForSessionType(session.type, maxHeartRateBpm);
+  // Intervall-Einheiten sind nie `easy`: die Entlastungswoche ändert hier keine Zone, nur `kind` (Plan-Kern).
+  const plannedHr = plannedHrRangeForSessionType(session.type, maxHeartRateBpm, session.kind);
 
   return {
     workout: {

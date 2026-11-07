@@ -8,6 +8,7 @@ import {
   resolveStructuredWorkoutSpecForSession,
 } from "../sessionDistance";
 import type { PlanSession } from "../marathonPrediction";
+import type { CoreKind } from "../planCore";
 import {
   getPostWorkoutPlannedHr,
   plannedHrRangeForSessionType,
@@ -336,6 +337,8 @@ type ConclusionPlanSession = {
   id: string;
   date: string;
   type: string;
+  /** Einheiten-Art des Plan-Kerns; steuert die Pulszone wie auf der Karte. */
+  kind?: CoreKind;
   title: string;
   pace?: string | null;
   desc?: string | null;
@@ -350,6 +353,7 @@ export function buildLogOnlyConclusion(
   session: ConclusionPlanSession,
   log: Record<string, any> | null | undefined,
   maxHeartRateBpm?: number | null,
+  options: { recoveryWeek?: boolean } = {},
 ): PostWorkoutSummary | null {
   if (!session || !isSessionLogDone(log)) return null;
   const ar = log?.assignedRun;
@@ -383,7 +387,11 @@ export function buildLogOnlyConclusion(
     }
   })();
   const plannedPace = parsePlannedPaceRangeSecPerKm(session.pace ?? null);
-  const plannedHrFields = getPostWorkoutPlannedHr({ type: session.type }, maxHeartRateBpm ?? null);
+  const plannedHrFields = getPostWorkoutPlannedHr(
+    { type: session.type, kind: session.kind },
+    maxHeartRateBpm ?? null,
+    { recoveryWeek: options.recoveryWeek },
+  );
 
   const hasActual = actualDistanceKm != null || paceSecPerKm != null || hrBpm != null;
   const adherence = hasActual
@@ -432,7 +440,9 @@ export function buildLogOnlyConclusion(
 
 type HookArgs = {
   activeView: string;
-  planSessions: Array<{ id: string; date: string; type: string; title: string; pace?: string | null; desc?: string | null; km?: number }>;
+  planSessions: Array<{ id: string; date: string; type: string; kind?: CoreKind; title: string; pace?: string | null; desc?: string | null; km?: number }>;
+  /** IDs der Einheiten in Entlastungswochen: `easy` dort Zone 1 wie auf der Karte. */
+  recoveryWeekSessionIds?: ReadonlySet<string>;
   logs: Record<string, any>;
   healthRuns: StoredHealthRun[];
   maxHeartRateBpm?: number | null;
@@ -508,6 +518,8 @@ export function usePostWorkoutSummary(args: HookArgs): {
         const plannedHr = plannedHrRangeForSessionType(
           s.type,
           resolveMaxHeartRateBpm(args.maxHeartRateBpm),
+          s.kind,
+          args.recoveryWeekSessionIds?.has(s.id) === true,
         );
         const expectedHr = expectedHrFromRange(plannedHr);
 
@@ -566,7 +578,7 @@ export function usePostWorkoutSummary(args: HookArgs): {
       list.sort((a, b) => String(a.date).localeCompare(String(b.date)));
       return list;
     },
-    [args.logs, args.maxHeartRateBpm, args.planSessions, healthById],
+    [args.logs, args.maxHeartRateBpm, args.planSessions, args.recoveryWeekSessionIds, healthById],
   );
 
   const computeLatestEligibleWorkoutIdForDayKey = useCallback((dayKey: string): string | null => {
@@ -591,6 +603,8 @@ export function usePostWorkoutSummary(args: HookArgs): {
   const computeSummaryForWorkoutId = useCallback(
     (workoutId: string, dayKey: string): PostWorkoutSummary | null => {
       const effectiveMaxHeartRateBpm = resolveMaxHeartRateBpm(args.maxHeartRateBpm);
+      const kindOfSession = (sessionId: string): CoreKind | undefined =>
+        (args.planSessions || []).find((ps) => ps.id === sessionId)?.kind;
 
       const entries = (args.planSessions || [])
         .map((s) => {
@@ -650,7 +664,9 @@ export function usePostWorkoutSummary(args: HookArgs): {
           }
         })();
         const plannedPace = parsePlannedPaceRangeSecPerKm(s.pace ?? null);
-        const plannedHrFields = getPostWorkoutPlannedHr({ type: s.type }, effectiveMaxHeartRateBpm);
+        const plannedHrFields = getPostWorkoutPlannedHr({ type: s.type, kind: s.kind }, effectiveMaxHeartRateBpm, {
+          recoveryWeek: args.recoveryWeekSessionIds?.has(s.id) === true,
+        });
 
         return {
           workoutId,
@@ -771,7 +787,11 @@ export function usePostWorkoutSummary(args: HookArgs): {
           maxHeartRateBpm: effectiveMaxHeartRateBpm,
           planned: {
             ...baseCore.planned,
-            ...getPostWorkoutPlannedHr({ type: baseCore.session.type }, effectiveMaxHeartRateBpm),
+            ...getPostWorkoutPlannedHr(
+              { type: baseCore.session.type, kind: kindOfSession(baseCore.session.id) },
+              effectiveMaxHeartRateBpm,
+              { recoveryWeek: args.recoveryWeekSessionIds?.has(baseCore.session.id) === true },
+            ),
           },
         };
         // eslint-disable-next-line no-console
@@ -1099,8 +1119,9 @@ export function usePostWorkoutSummary(args: HookArgs): {
       });
 
       const plannedHrResolved = getPostWorkoutPlannedHr(
-        { type: baseCore.session.type },
+        { type: baseCore.session.type, kind: kindOfSession(baseCore.session.id) },
         effectiveMaxHeartRateBpm,
+        { recoveryWeek: args.recoveryWeekSessionIds?.has(baseCore.session.id) === true },
       );
 
       // eslint-disable-next-line no-console
@@ -1139,7 +1160,16 @@ export function usePostWorkoutSummary(args: HookArgs): {
         intervalDisplay: intervalDisplayOut,
       };
     },
-    [aiEnabled, args.logs, args.maxHeartRateBpm, args.planSessions, args.recoveryPoints, buildTrendHistory, healthById],
+    [
+      aiEnabled,
+      args.logs,
+      args.maxHeartRateBpm,
+      args.planSessions,
+      args.recoveryPoints,
+      args.recoveryWeekSessionIds,
+      buildTrendHistory,
+      healthById,
+    ],
   );
 
   const loadState = useCallback((): PostWorkoutState => {
@@ -1284,9 +1314,11 @@ export function usePostWorkoutSummary(args: HookArgs): {
         const full = computeSummaryForWorkoutId(runId, toLocalDayKey(end));
         if (full && full.session.id === sessionId) return { ...full, source: "health" };
       }
-      return buildLogOnlyConclusion(session, log, resolveMaxHeartRateBpm(args.maxHeartRateBpm));
+      return buildLogOnlyConclusion(session, log, resolveMaxHeartRateBpm(args.maxHeartRateBpm), {
+        recoveryWeek: args.recoveryWeekSessionIds?.has(session.id) === true,
+      });
     },
-    [args.logs, args.maxHeartRateBpm, args.planSessions, computeSummaryForWorkoutId, healthById],
+    [args.logs, args.maxHeartRateBpm, args.planSessions, args.recoveryWeekSessionIds, computeSummaryForWorkoutId, healthById],
   );
 
   return {

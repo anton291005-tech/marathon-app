@@ -15,7 +15,6 @@ export const ALLOWED_AI_ACTION_TYPES: readonly AiActionType[] = [
   "boost_next_week_volume",
   "taper_before_race",
   "integrate_missed_workout",
-  "replace_training_plan_generated",
   "update_user_preferences",
   "swap_training_days",
 ] as const;

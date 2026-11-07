@@ -10,9 +10,8 @@
  * Logs enthalten nie Nutzerinhalte: keine Daten, keine Texte, nur Codes, Feldnamen, Zähler und Kennzahlen.
  */
 
-import { CONFIG_VERSION, EMPTY_RULES, buildCheckedPlan, isPlanCoreError, toLogEntries } from "../../src/planCore";
-import type { CorePlan, Ymd } from "../../src/planCore";
-import { profileToCoreInputs, type MappingFailure, type MappingNote, type PlanProfile } from "./planCoreMapping";
+import { CONFIG_VERSION, EMPTY_RULES, buildCheckedPlan, isPlanCoreError, profileToCoreInputs, toLogEntries } from "../../src/planCore";
+import type { CorePlan, MappingFailure, MappingNote, PlanProfile, Ymd } from "../../src/planCore";
 import { planMetrics, type PlanMetrics } from "./planMetrics";
 
 export type PlanCoreMode = "off" | "shadow" | "on";

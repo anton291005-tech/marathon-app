@@ -114,13 +114,20 @@ export function getHrRangeForZone(
   return { min: Math.round(band.lo * mh), max: Math.round(band.hi * mh) };
 }
 
-/** Geplante bpm-Spanne einer Einheit für die Auswertung nach dem Training (Max-HF über 80 bpm nötig). */
+/**
+ * Geplante bpm-Spanne einer Einheit für die Auswertung nach dem Training (Max-HF über 80 bpm nötig).
+ * `recoveryWeek` wie auf der Karte: nur für `easy` in einer Entlastungswoche (dann Zone 1).
+ */
 export function plannedHrRangeForSessionType(
   sessionType: string,
   maxHrBpm?: number | null,
   kind?: CoreKind | null,
+  recoveryWeek = false,
 ): { min: number; max: number } | null {
-  return getHrRangeForZone(zoneLabelForSession(sessionType, kind), validMaxHr(maxHrBpm, 80));
+  return getHrRangeForZone(
+    zoneLabelForSession(sessionType, kind, sessionType === "easy" && recoveryWeek),
+    validMaxHr(maxHrBpm, 80),
+  );
 }
 
 /** Anzeige der geplanten Pulsvorgabe: bpm-Spanne aus der Max-HF des Nutzers, sonst nur die Zone. */

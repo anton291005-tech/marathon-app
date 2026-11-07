@@ -9,5 +9,4 @@ export {
   buildMissedWorkoutPatches,
   buildRemoveAllBikePatches,
   buildTaperWindowPatches,
-  generateMarathonPlanV2ToRace,
 } from "./coachPlanMutations";

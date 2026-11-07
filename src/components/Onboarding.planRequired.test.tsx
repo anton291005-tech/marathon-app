@@ -1,9 +1,9 @@
 import "../i18n";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Onboarding } from "./Onboarding";
-import { fetchClaudePlanStructure, fetchFullPlanFromClaude } from "../lib/ai/claudePlanService";
+import { fetchFullPlanFromClaude } from "../lib/ai/claudePlanService";
 import { validateTrainingPlanV2Integrity } from "../ai/validation/validateTrainingPlanV2Integrity";
-import { generateMarathonPlanV2ToRace } from "../lib/ai/coachPlanMutations";
+import { buildLocalCorePlan } from "../onboarding/localCorePlan";
 import { chooseDistance, enterRaceDate, goToSummary } from "../testSupport/onboardingWizard";
 
 jest.mock("../calendar/calendarImportService", () => ({
@@ -12,25 +12,20 @@ jest.mock("../calendar/calendarImportService", () => ({
 }));
 jest.mock("../lib/ai/claudePlanService", () => ({
   fetchFullPlanFromClaude: jest.fn(),
-  fetchClaudePlanStructure: jest.fn(),
 }));
 jest.mock("../ai/validation/validateTrainingPlanV2Integrity", () => ({
   validateTrainingPlanV2Integrity: jest.fn(() => true),
 }));
-jest.mock("../lib/ai/coachPlanMutations", () => ({
-  ...jest.requireActual("../lib/ai/coachPlanMutations"),
-  generateMarathonPlanV2ToRace: jest.fn(() => null),
-}));
+jest.mock("../onboarding/localCorePlan", () => ({ buildLocalCorePlan: jest.fn() }));
 
 const FAKE_PLAN = { version: 2, weeks: [], workouts: [{ id: "w1-mo" }] };
 
 beforeEach(() => {
   localStorage.clear();
   (fetchFullPlanFromClaude as jest.Mock).mockReset();
-  (fetchClaudePlanStructure as jest.Mock).mockReset();
   // CRA setzt Mock-Implementierungen vor jedem Test zurück (resetMocks) — hier neu setzen.
   (validateTrainingPlanV2Integrity as jest.Mock).mockReturnValue(true);
-  (generateMarathonPlanV2ToRace as jest.Mock).mockReturnValue(null);
+  (buildLocalCorePlan as jest.Mock).mockReturnValue({ status: "unavailable", reason: "inputs-missing" });
 });
 
 describe("Onboarding — Renndatum ist Pflicht", () => {
@@ -53,7 +48,6 @@ describe("Onboarding — Renndatum ist Pflicht", () => {
 describe("Onboarding — Abschluss nur mit Plan", () => {
   it("kein Plan erzeugt: Fehlerphase mit „Erneut versuchen“, kein onComplete, keine Erfolgsanzeige", async () => {
     (fetchFullPlanFromClaude as jest.Mock).mockResolvedValue({ plan: null, error: "HTTP 500" });
-    (fetchClaudePlanStructure as jest.Mock).mockResolvedValue({ structure: null, analysis: "" });
     const onComplete = jest.fn();
     render(<Onboarding onComplete={onComplete} />);
     goToSummary();
@@ -95,6 +89,6 @@ describe("Onboarding — Abschluss nur mit Plan", () => {
       [],
       "10 km – 01.01.2099",
     );
-    expect(fetchClaudePlanStructure).not.toHaveBeenCalled();
+    expect(buildLocalCorePlan).not.toHaveBeenCalled();
   });
 });

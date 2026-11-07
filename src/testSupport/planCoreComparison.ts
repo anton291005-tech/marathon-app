@@ -7,12 +7,11 @@
  * `scripts/planCoreCompare.ts`.
  */
 
-import { EMPTY_RULES, buildCheckedPlan, diffDays, weekdayOf } from "../planCore";
+import { EMPTY_RULES, buildCheckedPlan, diffDays, profileToCoreInputs, weekdayOf } from "../planCore";
 import type { CoreInputs, Weekday } from "../planCore";
 import { PROFILES } from "../planCore/__fixtures__/profiles";
 import { randomInputs } from "../planCore/__fixtures__/randomInputs";
 import { weeklyKmRangeFromKm } from "../onboarding/onboardingPlanInputs";
-import { profileToCoreInputs } from "../../api/_lib/planCoreMapping";
 import { planMetrics, type PlanMetrics } from "../../api/_lib/planMetrics";
 
 const legacyGenerator = require("../../api/_lib/deterministicPlanGenerator");

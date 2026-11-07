@@ -1,7 +1,7 @@
 import "../i18n";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Onboarding } from "./Onboarding";
-import { fetchClaudePlanStructure, fetchFullPlanFromClaude } from "../lib/ai/claudePlanService";
+import { fetchFullPlanFromClaude } from "../lib/ai/claudePlanService";
 import { validateTrainingPlanV2Integrity } from "../ai/validation/validateTrainingPlanV2Integrity";
 import { freezeTimeForTests } from "../core/time/timeSystem";
 import type { OnboardingPlanInputs } from "../onboarding/onboardingPlanInputs";
@@ -20,7 +20,6 @@ jest.mock("../calendar/calendarImportService", () => ({
 }));
 jest.mock("../lib/ai/claudePlanService", () => ({
   fetchFullPlanFromClaude: jest.fn(),
-  fetchClaudePlanStructure: jest.fn(),
 }));
 jest.mock("../ai/validation/validateTrainingPlanV2Integrity", () => ({
   validateTrainingPlanV2Integrity: jest.fn(() => true),
@@ -47,7 +46,6 @@ beforeEach(() => {
   // Montag, 9.11.2026 — „Heute“ ist Trainingsstart.
   freezeTimeForTests(new Date(2026, 10, 9, 10, 0, 0));
   (fetchFullPlanFromClaude as jest.Mock).mockReset();
-  (fetchClaudePlanStructure as jest.Mock).mockReset();
   (validateTrainingPlanV2Integrity as jest.Mock).mockReturnValue(true);
   jest.spyOn(console, "log").mockImplementation(() => {});
 });

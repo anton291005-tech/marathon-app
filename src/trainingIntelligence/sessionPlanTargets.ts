@@ -134,6 +134,11 @@ export function plannedPaceMidMinPerKm(session: PlanSession): number | null {
   return Math.round(((r.min + r.max) / 2) * 100) / 100;
 }
 
+/** Entlastungswoche, erkannt am Fokus-Text der Woche (wie die Trainingsziel-Karte). */
+export function isRecoveryPlanWeek(week?: PlanWeek): boolean {
+  return isRecoveryWeek(week);
+}
+
 function isRecoveryWeek(week?: PlanWeek): boolean {
   if (!week?.focus) return false;
   const f = week.focus.toLowerCase();
@@ -149,15 +154,23 @@ function hrPctBandForSession(
   return zone ? HR_ZONE_PCT_BANDS[zone] : null;
 }
 
-/** Post-workout card: planned HR band + zone label from session type and optional HFmax. */
+/**
+ * Post-workout card: planned HR band + zone label, gleich wie die Trainingsziel-Karte: Zone aus `kind` (Plan-Kern),
+ * sonst aus dem Typ; `easy` in einer Entlastungswoche Zone 1.
+ */
 export function getPostWorkoutPlannedHr(
   session: Pick<PlanSession, "type" | "kind">,
   maxHrBpm?: number | null,
+  options: { recoveryWeek?: boolean } = {},
 ): { hrBpm: { min: number; max: number } | null; hrZoneLabel: string | null } {
-  const stub = { type: session.type, kind: session.kind } as PlanSession;
+  const recoveryWeek = options.recoveryWeek === true;
+  const label =
+    session.type === "rest" || session.type === "strength"
+      ? null
+      : zoneLabelForSession(session.type, session.kind, session.type === "easy" && recoveryWeek);
   return {
-    hrBpm: plannedHrRangeForSessionType(session.type, maxHrBpm, session.kind),
-    hrZoneLabel: getSessionHrZoneShort(stub),
+    hrBpm: plannedHrRangeForSessionType(session.type, maxHrBpm, session.kind, recoveryWeek),
+    hrZoneLabel: label,
   };
 }
 

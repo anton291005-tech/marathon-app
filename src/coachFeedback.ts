@@ -12,10 +12,32 @@ export type ConsistencyStats = {
   sessionStreak: number;
 };
 
+/** Obergrenze der Long-Run-Schwelle für den Marathon-Hinweis (marathonrelevantes Volumen). */
+const MARATHON_LONG_RUN_HINT_KM = 28;
+
+/**
+ * Schwelle für den Long-Run-Hinweis: höchstens 28 km, aber nie mehr als der längste geplante Long Run des ganzen Plans
+ * (Plan-Kern Schritt 11). `null` = kein Hinweis: keine Marathon-Vorbereitung oder kein Long Run im Plan.
+ */
+export function longRunHintThresholdKm(plan: PlanWeek[], raceDistanceKm: number | null | undefined): number | null {
+  if (typeof raceDistanceKm !== "number" || raceDistanceKm < 42) return null;
+  let longest = 0;
+  plan.forEach((week) =>
+    (week.s ?? []).forEach((session) => {
+      if (session.type === "long" && typeof session.km === "number") longest = Math.max(longest, session.km);
+    }),
+  );
+  return longest > 0 ? Math.min(MARATHON_LONG_RUN_HINT_KM, longest) : null;
+}
+
+const formatKmDe = (km: number): string => String(Math.round(km * 10) / 10).replace(".", ",");
+
 export function getCoachFeedback(args: {
   plan: PlanWeek[];
   logs: Record<string, SessionLog>;
   consistencyStats: ConsistencyStats;
+  /** Renndistanz der Vorbereitung (Preferences); der Long-Run-Hinweis gilt nur für den Marathon. */
+  raceDistanceKm?: number | null;
   now?: Date;
 }): string[] {
   const now = args.now ?? getAppNow();
@@ -26,20 +48,24 @@ export function getCoachFeedback(args: {
     (e) => e.session.type !== "rest" && isScheduledOnOrBeforeToday(e.date, now)
   );
 
-  // Long Runs ≥ 28 km im Fenster (marathonrelevantes Volumen)
-  const long28Planned = pastTrainable.some((e) => e.session.type === "long" && e.session.km >= 28);
-  const long28Done = pastTrainable.filter(
-    (e) => e.session.type === "long" && e.session.km >= 28 && isSessionLogDone(e.log)
-  ).length;
-  if (long28Planned && long28Done === 0) {
-    hints.push("Dir fehlt aktuell ein abgeschlossener Long Run ab 28 km im 42-Tage-Fenster.");
-  } else if (!long28Planned && pastTrainable.some((e) => e.session.type === "long")) {
-    const maxLong = Math.max(
-      0,
-      ...pastTrainable.filter((e) => e.session.type === "long").map((e) => e.session.km || 0)
-    );
-    if (maxLong > 0 && maxLong < 28 && long28Done === 0) {
-      hints.push("Deine Long Runs liegen noch unter 28 km — für die Marathonbasis lohnt sich mehr Distanz.");
+  // Long Runs ab der Schwelle im Fenster: nur beim Marathon, Schwelle aus dem Plan (höchstens 28 km).
+  const longThreshold = longRunHintThresholdKm(args.plan, args.raceDistanceKm);
+  if (longThreshold !== null) {
+    const longPlanned = pastTrainable.some((e) => e.session.type === "long" && e.session.km >= longThreshold);
+    const longDone = pastTrainable.filter(
+      (e) => e.session.type === "long" && e.session.km >= longThreshold && isSessionLogDone(e.log)
+    ).length;
+    const label = formatKmDe(longThreshold);
+    if (longPlanned && longDone === 0) {
+      hints.push(`Dir fehlt aktuell ein abgeschlossener Long Run ab ${label} km im 42-Tage-Fenster.`);
+    } else if (!longPlanned && pastTrainable.some((e) => e.session.type === "long")) {
+      const maxLong = Math.max(
+        0,
+        ...pastTrainable.filter((e) => e.session.type === "long").map((e) => e.session.km || 0)
+      );
+      if (maxLong > 0 && maxLong < longThreshold && longDone === 0) {
+        hints.push(`Deine Long Runs liegen noch unter ${label} km — für die Marathonbasis lohnt sich mehr Distanz.`);
+      }
     }
   }
 

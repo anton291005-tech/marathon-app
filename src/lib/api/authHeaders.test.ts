@@ -1,7 +1,7 @@
 import { getApiAuthHeaders } from "./authHeaders";
 import { supabase } from "../supabase/client";
 import { runCoachAgent } from "../ai/coachAgent";
-import { fetchClaudePlanStructure, fetchFullPlanFromClaude, type PlanGenerationProfile } from "../ai/claudePlanService";
+import { fetchFullPlanFromClaude, type PlanGenerationProfile } from "../ai/claudePlanService";
 
 jest.mock("../supabase/client", () => ({ supabase: { auth: { getSession: jest.fn() } } }));
 
@@ -84,13 +84,6 @@ describe("Client sendet das Token an die eigenen Endpunkte", () => {
     });
     const result = await runCoachAgent("Hallo", { recoveryDomain: { domainKind: "initial" } });
     expect(JSON.stringify(result)).toContain("Limit für Coach-Anfragen erreicht");
-  });
-
-  test("fetchClaudePlanStructure → POST /api/onboarding/generate-plan", async () => {
-    await fetchClaudePlanStructure(profile);
-    expect(headersOfCall(fetchMock, "/api/onboarding/generate-plan")).toMatchObject({
-      Authorization: "Bearer aaa.bbb.ccc",
-    });
   });
 
   test("fetchFullPlanFromClaude → POST /api/onboarding/generate-plan-full", async () => {

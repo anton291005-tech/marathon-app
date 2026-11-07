@@ -283,6 +283,7 @@ import {
   formatPaceMinPerKmLabel,
   getHrRangeForZone,
   getSessionHrZoneShort,
+  isRecoveryPlanWeek,
   parsePlannedPaceRangeMinPerKm,
 } from "./trainingIntelligence/sessionPlanTargets";
 import { computeTrainingProgressPct } from "./selectors/trainingProgress";
@@ -2373,6 +2374,16 @@ export default function AppMain(){
 
   const displayPlan = useDisplayPlanFromTrainingState(trainingPlanV2, aiPlanPatches);
   const ALL_SESSIONS = displayPlan.flatMap((week) => getWeekSessionList(week));
+  /** Einheiten in Entlastungswochen: die Auswertung nach dem Training zeigt für `easy` dieselbe Zone wie die Karte. */
+  const recoveryWeekSessionIds = useMemo(
+    () =>
+      new Set(
+        displayPlan
+          .filter((week) => isRecoveryPlanWeek(week))
+          .flatMap((week) => getWeekSessionList(week).map((session) => session.id)),
+      ),
+    [displayPlan],
+  );
   const ACTIVE_SESSIONS = ALL_SESSIONS.filter((session) => session.type !== "rest");
   const DISPLAY_PLAN_RUNNING_SESSIONS = ACTIVE_SESSIONS.filter(
     (session) => session.type !== "strength" && session.type !== "bike",
@@ -3190,7 +3201,13 @@ export default function AppMain(){
     homeRecoveryRhr7dDisplay,
   ]);
   const consistencyStats = getConsistencyStats(displayPlan, logs, appNow);
-  const coachHints = getCoachFeedback({ plan: displayPlan, logs, consistencyStats, now: appNow });
+  const coachHints = getCoachFeedback({
+    plan: displayPlan,
+    logs,
+    consistencyStats,
+    raceDistanceKm: preferences.raceDistanceKm ?? null,
+    now: appNow,
+  });
   const weekAnalysis = w ? analyzeWeek(w, logs, appNow, healthRunById) : {
     plannedKm: 0,
     actualKm: 0,
@@ -3706,6 +3723,7 @@ export default function AppMain(){
   const postWorkoutSummary = usePostWorkoutSummary({
     activeView,
     planSessions: ACTIVE_SESSIONS,
+    recoveryWeekSessionIds,
     logs,
     healthRuns,
     maxHeartRateBpm: postWorkoutMaxHeartRateBpm,
