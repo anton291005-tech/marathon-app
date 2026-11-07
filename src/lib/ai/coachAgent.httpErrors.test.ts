@@ -1,6 +1,6 @@
 import { runCoachAgent } from "./coachAgent";
 import { AGENT_WEAK_MESSAGE } from "./agentFallback";
-import { fetchClaudePlanStructure, fetchFullPlanFromClaude, type PlanGenerationProfile } from "./claudePlanService";
+import { fetchFullPlanFromClaude, type PlanGenerationProfile } from "./claudePlanService";
 import { supabase } from "../supabase/client";
 
 jest.mock("../supabase/client", () => ({ supabase: { auth: { getSession: jest.fn() } } }));
@@ -91,7 +91,12 @@ describe("runCoachAgent — HTTP-Fehler werden benannt statt hinter der Standard
 describe("Plan-Requests geben den HTTP-Status weiter", () => {
   test("fetchFullPlanFromClaude: 401 mit status", async () => {
     respondWith(401, { error: "Invalid or expired session" });
-    await expect(fetchFullPlanFromClaude(profile)).resolves.toEqual({ plan: null, error: "HTTP 401", status: 401 });
+    await expect(fetchFullPlanFromClaude(profile)).resolves.toEqual({
+      plan: null,
+      error: "HTTP 401",
+      status: 401,
+      errorCode: "Invalid or expired session",
+    });
   });
 
   test("fetchFullPlanFromClaude: 429 mit Wartezeit aus dem Retry-After-Header", async () => {
@@ -100,6 +105,7 @@ describe("Plan-Requests geben den HTTP-Status weiter", () => {
       plan: null,
       error: "HTTP 429",
       status: 429,
+      errorCode: "Rate limit exceeded",
       retryAfterSeconds: 7200,
     });
   });
@@ -115,21 +121,18 @@ describe("Plan-Requests geben den HTTP-Status weiter", () => {
     expect(result).toEqual({ plan: null, error: "Failed to fetch" });
   });
 
-  test("fetchClaudePlanStructure: 400 und 429 mit status", async () => {
-    respondWith(400, { error: "Plan duration exceeds 52 weeks" });
-    await expect(fetchClaudePlanStructure(profile)).resolves.toMatchObject({ structure: null, status: 400 });
-    respondWith(429, { error: "Rate limit exceeded", retryAfterSeconds: 900 });
-    await expect(fetchClaudePlanStructure(profile)).resolves.toMatchObject({
-      structure: null,
-      status: 429,
-      retryAfterSeconds: 900,
+  test("fetchFullPlanFromClaude: 500 mit Kern-Code aus dem Body (plan-core-invariant)", async () => {
+    respondWith(500, { error: "plan-core-invariant", configVersion: "0.9.0", errors: 1, warnings: 0, violations: [] });
+    await expect(fetchFullPlanFromClaude(profile)).resolves.toEqual({
+      plan: null,
+      error: "HTTP 500",
+      status: 500,
+      errorCode: "plan-core-invariant",
     });
   });
 
-  test("fetchClaudePlanStructure: Netzwerkfehler ohne status", async () => {
-    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
-    const result = await fetchClaudePlanStructure(profile);
-    expect(result.structure).toBeNull();
-    expect(result.status).toBeUndefined();
+  test("fetchFullPlanFromClaude: Fehlerseite ohne JSON → kein errorCode", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 502, headers: { get: () => null }, text: async () => "<html>Bad Gateway</html>" });
+    await expect(fetchFullPlanFromClaude(profile)).resolves.toEqual({ plan: null, error: "HTTP 502", status: 502 });
   });
 });

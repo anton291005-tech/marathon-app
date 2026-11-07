@@ -1,4 +1,9 @@
-import { tryDeterministicCoachResponse, extractRelativeDaysUntilRaceGerman, normalizeCoachText } from "./coachDeterministicResponses";
+import {
+  NEW_PLAN_VIA_SETTINGS_MESSAGE,
+  tryDeterministicCoachResponse,
+  extractRelativeDaysUntilRaceGerman,
+  normalizeCoachText,
+} from "./coachDeterministicResponses";
 import type { AiContext } from "./types";
 import { getRecoveryDomainState } from "../../recovery/recoveryDomainState";
 import type { PlanWeek } from "../../marathonPrediction";
@@ -9,8 +14,6 @@ import {
 } from "../../recovery/recoveryStorage";
 import { toAiPlanWeeks } from "./planToAi";
 import { buildRecoverySummaryFromDomain } from "./recoverySummary";
-import { generateMarathonPlanV2ToRace } from "./coachPlanMutations";
-import { validateTrainingPlanV2Integrity } from "../../ai/validation/validateTrainingPlanV2Integrity";
 
 function makePlan(datesessions: Array<{ date: string; day: string; id: string; type: string; title: string; km: number }>) {
   return [
@@ -96,16 +99,17 @@ describe("tryDeterministicCoachResponse — 10 user scenarios", () => {
     expect(res?.action?.type).toBe("boost_next_week_volume");
   });
 
-  test("6 generate marathon plan to Sept 14 (integrity)", () => {
+  test("6 Marathon-Plan erstellen: keine Aktion mehr, feste Antwort mit Verweis auf den Wizard", () => {
     const plan = makePlan([]);
     const ctx = ctxFor(plan, new Date("2026-05-03T08:00:00").toISOString());
-    const res = tryDeterministicCoachResponse(
-      "Ich habe am 14. September einen Marathon. Erstelle mir einen Plan ab heute.",
-      ctx,
+    ["Ich habe am 14. September einen Marathon. Erstelle mir einen Plan ab heute.", "Erstelle mir einen Marathon-Plan"].forEach(
+      (text) => {
+        const res = tryDeterministicCoachResponse(text, ctx);
+        expect(res).toEqual({ mode: "coach", message: NEW_PLAN_VIA_SETTINGS_MESSAGE });
+        expect(res?.action).toBeUndefined();
+      },
     );
-    expect(res?.action?.type).toBe("replace_training_plan_generated");
-    const draft = generateMarathonPlanV2ToRace(new Date(ctx.todayIso), new Date(2026, 8, 14));
-    expect(validateTrainingPlanV2Integrity(draft)).toBe(true);
+    expect(NEW_PLAN_VIA_SETTINGS_MESSAGE).toContain("Einstellungen → Training → Neuer Trainingsplan");
   });
 
   test("8 taper with explicit keyword", () => {

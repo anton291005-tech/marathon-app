@@ -55,23 +55,24 @@ export type PlanGenerationLoadingScreenProps = {
   weekCount: number;
   phase: PlanGenerationPhase;
   errorMessage?: string | null;
-  onRetry: () => void;
+  /** Überschrift im Fehlerzustand; Standard „Etwas ist schiefgelaufen“. */
+  errorTitle?: string | null;
+  /** Nur im Fehlerzustand: erneut versuchen (ohne Handler kein Button, z. B. wenn Wiederholen nichts ändert). */
+  onRetry?: () => void;
+  /** Nur im Fehlerzustand: zurück in den Wizard, um die Angaben zu ändern (ohne Handler kein Button). */
+  onEditInputs?: () => void;
   /** Nur im Fehlerzustand: Wizard verlassen, ohne etwas zu ändern (ohne Handler kein Button). */
   onCancel?: () => void;
-  /**
-   * Nur im Fehlerzustand: bietet statt des KI-Plans ausdrücklich einen vereinfachten Plan an.
-   * Ohne Handler kein Angebot.
-   */
-  onUseSimplifiedPlan?: () => void;
 };
 
 export function PlanGenerationLoadingScreen({
   weekCount,
   phase,
   errorMessage,
+  errorTitle,
   onRetry,
+  onEditInputs,
   onCancel,
-  onUseSimplifiedPlan,
 }: PlanGenerationLoadingScreenProps) {
   const estimatedSeconds = estimatePlanGenerationSeconds(weekCount);
   const [percent, setPercent] = useState(0);
@@ -170,7 +171,7 @@ export function PlanGenerationLoadingScreen({
                 color: "var(--text-primary)",
               }}
             >
-              Etwas ist schiefgelaufen
+              {errorTitle ?? "Etwas ist schiefgelaufen"}
             </h2>
             <p
               style={{
@@ -183,54 +184,44 @@ export function PlanGenerationLoadingScreen({
               {errorMessage ??
                 "Dein Trainingsplan konnte nicht erstellt werden. Das kann an einer instabilen Verbindung liegen."}
             </p>
-            <button
-              type="button"
-              onClick={onRetry}
-              style={{
-                width: "100%",
-                padding: "14px 16px",
-                fontSize: 15,
-                fontWeight: 700,
-                border: "none",
-                borderRadius: 14,
-                cursor: "pointer",
-                color: "#fff",
-                background: "linear-gradient(135deg, #10b981, #3b82f6)",
-              }}
-            >
-              Erneut versuchen
-            </button>
-            {onUseSimplifiedPlan ? (
-              <>
-                <p
-                  style={{
-                    margin: "16px 0 10px",
-                    fontSize: 12,
-                    color: "var(--text-secondary)",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  Du kannst stattdessen mit einem vereinfachten Plan starten. Er folgt einem festen Schema und
-                  ist nicht individuell vom Coach ausgearbeitet.
-                </p>
-                <button
-                  type="button"
-                  onClick={onUseSimplifiedPlan}
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    borderRadius: 14,
-                    border: "1px solid rgba(148, 163, 184, 0.2)",
-                    background: "transparent",
-                    color: "var(--text-primary)",
-                    cursor: "pointer",
-                  }}
-                >
-                  Vereinfachten Plan verwenden
-                </button>
-              </>
+            {onEditInputs ? (
+              <button
+                type="button"
+                onClick={onEditInputs}
+                style={{
+                  width: "100%",
+                  padding: "14px 16px",
+                  fontSize: 15,
+                  fontWeight: 700,
+                  border: "none",
+                  borderRadius: 14,
+                  cursor: "pointer",
+                  color: "#fff",
+                  background: "linear-gradient(135deg, #10b981, #3b82f6)",
+                }}
+              >
+                Angaben ändern
+              </button>
+            ) : null}
+            {onRetry ? (
+              <button
+                type="button"
+                onClick={onRetry}
+                style={{
+                  width: "100%",
+                  marginTop: onEditInputs ? 10 : 0,
+                  padding: "14px 16px",
+                  fontSize: 15,
+                  fontWeight: 700,
+                  border: "none",
+                  borderRadius: 14,
+                  cursor: "pointer",
+                  color: "#fff",
+                  background: "linear-gradient(135deg, #10b981, #3b82f6)",
+                }}
+              >
+                Erneut versuchen
+              </button>
             ) : null}
             {onCancel ? (
               <button

@@ -110,3 +110,5 @@ export {
 } from "./invariants";
 export type { CheckResult, InvariantCode, RuleDef, RuleKey, Severity, ToleranceUnit, Violation } from "./invariants";
 export { assemblePlan, buildCheckedPlan, buildPlan, RECOVERY_WEEK_FOCUS_DE } from "./buildPlan";
+export { coreDistanceOfKm, germanDateToYmd, goalSecondsOf, profileToCoreInputs } from "./profileInputs";
+export type { MappingFailure, MappingNote, MappingResult, PlanProfile } from "./profileInputs";

@@ -6,7 +6,6 @@ import {
   computeTrainableWholePlanProgressPct,
   flattenTrainableSessionsFromPlan,
 } from "../../lib/training/progressCalculation";
-import { validateTrainingPlanV2Integrity } from "../../ai/validation/validateTrainingPlanV2Integrity";
 import type { StoredHealthRun } from "../../healthRuns";
 import type { PlanWeek } from "../../marathonPrediction";
 import type { AiAssistantResponse, AiContext, AiPlanSession, SessionType } from "./types";
@@ -19,7 +18,6 @@ import {
   buildTaperWindowPatches,
   findMissedYesterdaySession,
   findRaceAnchorIsoFromContext,
-  generateMarathonPlanV2ToRace,
   isoDateLocalNoon,
 } from "./coachPlanMutations";
 import {
@@ -41,11 +39,6 @@ export function normalizeCoachText(input: string): string {
 
 function has(text: string, ...words: string[]): boolean {
   return words.some((w) => text.includes(w));
-}
-
-function extractDefaultYear(isoToday: string): number {
-  const d = new Date(isoToday);
-  return Number.isFinite(d.getFullYear()) ? d.getFullYear() : 2026;
 }
 
 function detectNoRunningWeekCount(text: string): number | null {
@@ -72,40 +65,6 @@ function detectVolumePct(text: string): number | null {
   const m = /(\d{1,2})\s*%/.exec(t);
   if (m) return Math.min(40, Math.max(5, Number(m[1])));
   return 15;
-}
-
-function parseRaceDateGerman(text: string, defaultYear: number): Date | null {
-  const months: Array<{ re: RegExp; idx: number }> = [
-    { re: /\bjanuar\b/i, idx: 0 },
-    { re: /\bfeb(r|ruar)?\b/i, idx: 1 },
-    { re: /\bm(a|ae)rz\b|\bmarz\b/i, idx: 2 },
-    { re: /\bapril\b/i, idx: 3 },
-    { re: /\bmai\b/i, idx: 4 },
-    { re: /\bjuni\b/i, idx: 5 },
-    { re: /\bjuli\b/i, idx: 6 },
-    { re: /\baugust\b/i, idx: 7 },
-    { re: /\bseptember\b|\bsep\.?\b/i, idx: 8 },
-    { re: /\boktober\b|\bokt\.?\b/i, idx: 9 },
-    { re: /\bnovember\b/i, idx: 10 },
-    { re: /\bdezember\b/i, idx: 11 },
-  ];
-
-  let dayNum: number | null = null;
-  const dotted = /\b(\d{1,2})\.(?:\s*|$|[a-zä])/.exec(text);
-  const spaced = /\b(\d{1,2})\s+(?=[a-zä])/.exec(text);
-  if (dotted) dayNum = Number(dotted[1]);
-  else if (spaced) dayNum = Number(spaced[1]);
-
-  let monthIdx: number | null = null;
-  for (const mo of months) {
-    if (mo.re.test(text)) {
-      monthIdx = mo.idx;
-      break;
-    }
-  }
-
-  if (dayNum === null || monthIdx === null || dayNum < 1 || dayNum > 31) return null;
-  return new Date(defaultYear, monthIdx, dayNum);
 }
 
 export function stripBikeIntent(text: string): boolean {
@@ -186,6 +145,10 @@ function hrZonesIntent(text: string): boolean {
     !has(text, "ernahr", "essen")
   );
 }
+
+/** Feste Antwort auf „Erstelle mir einen Marathon-Plan“ (Entscheidung 2026-11-07). */
+export const NEW_PLAN_VIA_SETTINGS_MESSAGE =
+  "Einen neuen Trainingsplan erstellst du unter **Einstellungen → Training → Neuer Trainingsplan**. Dort fragt dich der Assistent nach Rennen, Lauftagen und deiner aktuellen Form und baut den Plan daraus. Hier im Chat erstelle ich keinen Plan, ich passe deinen bestehenden an.";
 
 function marathonPlanCreateIntent(text: string): boolean {
   return (
@@ -485,8 +448,6 @@ export function tryDeterministicCoachResponse(userInput: string, context: AiCont
   const taperFirst = tryTaperDeterministicResponse(text, context);
   if (taperFirst) return taperFirst;
 
-  const year = extractDefaultYear(context.todayIso);
-
   // Symptom/illness/fatigue handling (uses full message + last turns).
   // Never invent symptoms; if unsure, ask exactly one clarifying question.
   const symptom = classifySymptoms({ message: userInput, turns: context.conversationTurns });
@@ -692,27 +653,9 @@ export function tryDeterministicCoachResponse(userInput: string, context: AiCont
     );
   }
 
+  // Pläne entstehen nur im Wizard (Plan-Kern, Umbauplan Schritt 11); der Chat erzeugt keinen Plan mehr.
   if (marathonPlanCreateIntent(text)) {
-    const race = parseRaceDateGerman(text, year);
-    if (!race) {
-      return { mode: "coach", message: "Bitte gib den Marathon-Termin mit Tag und Monat an (z. B. «14. September»). Ich habe nichts geändert." };
-    }
-    const today = new Date(context.todayIso);
-    const draft = generateMarathonPlanV2ToRace(today, race);
-    if (!validateTrainingPlanV2Integrity(draft)) {
-      return {
-        mode: "coach",
-        message:
-          "Beim automatischen Marathon-Plan ist ein Integritätsfehler aufgetreten — der Entwurf wurde nicht übernommen. " +
-          "Versuche denselben Befehl mit einem klaren Datum (Tag + Monat) erneut, oder passe den bestehenden Plan Schritt für Schritt im **Woche**-Tab an. Wenn das wieder fehlschlägt: App neu laden und beschreib mir kurz dein gewünschtes Renn-Datum — ich formuliere dir dann einen konkreten manuellen Planaufbau ohne Generator.",
-      };
-    }
-    return actionWithItems(
-      "replace_training_plan_generated",
-      { raceIso: race.toISOString(), weeks: draft.weeks?.length ?? 0 },
-      `Annahmen: Marathon am ${race.toLocaleDateString("de-DE")}; strukturierter Plan Basis→Build→Taper automatisch gefüllt. Bestätigung ersetzt deinen bestehenden Plan (Patch-Überlagerungen werden geleert).`,
-      [`Neue Wochen: ${draft.weeks?.length ?? 0}`, `Session-Zeilen: ${draft.workouts?.length ?? 0}`],
-    );
+    return { mode: "coach", message: NEW_PLAN_VIA_SETTINGS_MESSAGE };
   }
 
   if (missedYesterdayIntent(text)) {

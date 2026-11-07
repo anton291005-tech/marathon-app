@@ -10,18 +10,14 @@ import TimePicker, {
   getDefaultTimePickerForDistance,
   type TimePickerValue,
 } from "./TimePicker";
-import { getAppNow } from "../core/time/timeSystem";
+import { getAppNow, getAppTodayYmd } from "../core/time/timeSystem";
 import {
   PlanGenerationLoadingScreen,
   PLAN_GENERATION_SUCCESS_ANIMATION_MS,
 } from "./PlanGenerationLoadingScreen";
-import {
-  fetchClaudePlanStructure,
-  fetchFullPlanFromClaude,
-  type PlanGenerationProfile,
-} from "../lib/ai/claudePlanService";
+import { fetchFullPlanFromClaude, type PlanGenerationProfile } from "../lib/ai/claudePlanService";
 import { validateTrainingPlanV2Integrity } from "../ai/validation/validateTrainingPlanV2Integrity";
-import { generateMarathonPlanV2ToRace } from "../lib/ai/coachPlanMutations";
+import { buildLocalCorePlan } from "../onboarding/localCorePlan";
 import type { PlanPatch } from "../lib/ai/types";
 import {
   DISTANCE_SHORTCUTS,
@@ -227,46 +223,6 @@ function collectUserPreferences(inputs: string[]): string[] {
   return inputs.map((p) => p.trim()).filter(Boolean);
 }
 
-/** Erkennt Ruhetag-Präferenzen aus Freitext (Onboarding Step 3). */
-export function parseRestDayFromPreferences(prefs: string[]): number | undefined {
-  const text = prefs.join(" ").toLowerCase();
-
-  const restIndicators = [
-    "kein training",
-    "kein laufen",
-    "kein sport",
-    "ruhetag",
-    "rest day",
-    "rest",
-    "frei",
-    "pause",
-    "trainingsfreier",
-  ];
-
-  const hasRestContext = restIndicators.some((indicator) => {
-    if (indicator === "frei" || indicator === "rest" || indicator === "pause") {
-      return new RegExp(`\\b${indicator}\\b`).test(text);
-    }
-    return text.includes(indicator);
-  });
-  if (!hasRestContext) return undefined;
-
-  const days = [
-    { keywords: ["montag", "monday"], dow: 1 },
-    { keywords: ["dienstag", "tuesday"], dow: 2 },
-    { keywords: ["mittwoch", "wednesday"], dow: 3 },
-    { keywords: ["donnerstag", "thursday"], dow: 4 },
-    { keywords: ["freitag", "friday"], dow: 5 },
-    { keywords: ["samstag", "saturday"], dow: 6 },
-    { keywords: ["sonntag", "sunday"], dow: 0 },
-  ];
-
-  for (const day of days) {
-    if (day.keywords.some((k) => text.includes(k))) return day.dow;
-  }
-  return undefined;
-}
-
 const PLAN_MAX_DURATION_DAYS = 52 * 7;
 
 /**
@@ -318,6 +274,11 @@ export type OnboardingProps = {
 
 const PLAN_GENERATION_FAILED_MESSAGE = "Plan konnte nicht erstellt werden. Bitte versuche es erneut.";
 
+/** Der Plan-Kern lehnt die Angaben ab (Server `plan-core-invariant` oder lokal): Wiederholen ändert nichts. */
+export const PLAN_INPUTS_REJECTED_TITLE = "Plan so nicht möglich";
+export const PLAN_INPUTS_REJECTED_MESSAGE =
+  "Mit diesen Angaben können wir keinen sicheren Plan erstellen. Prüfe Renndatum, Lauftage und Wochen-km und versuche es noch einmal.";
+
 export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInputs = null }: OnboardingProps) {
   const { t } = useTranslation();
   const [step, setStep] = useState<OnboardingStep>(1);
@@ -365,7 +326,8 @@ export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInp
   );
   const [planGenWeekCount, setPlanGenWeekCount] = useState(12);
   const [generateError, setGenerateError] = useState<string | null>(null);
-  const [simplifiedPlanOffered, setSimplifiedPlanOffered] = useState(false);
+  /** `inputs`: Angaben ändern statt erneut versuchen (der Kern lehnt die Eingaben ab). */
+  const [generateErrorKind, setGenerateErrorKind] = useState<"retry" | "inputs">("retry");
   const isGenerating = planGenPhase === "loading" || planGenPhase === "success";
 
   const distance = useMemo(() => resolveDistanceSelection(shortcutId), [shortcutId]);
@@ -668,12 +630,17 @@ export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInp
     [calendarBusy, userId],
   );
 
-  const handleFinish = useCallback(async (useSimplifiedPlan = false) => {
+  const handleFinish = useCallback(async () => {
     if (!summaryPayload || isGenerating) return;
 
     setGenerateError(null);
-    setSimplifiedPlanOffered(false);
+    setGenerateErrorKind("retry");
     setPlanGenPhase("loading");
+    const rejectInputs = () => {
+      setGenerateError(PLAN_INPUTS_REJECTED_MESSAGE);
+      setGenerateErrorKind("inputs");
+      setPlanGenPhase("error");
+    };
 
     try {
       // eslint-disable-next-line no-console
@@ -711,72 +678,45 @@ export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInp
           };
 
           // Vor jedem Abbruch unten ist noch nichts verändert: Preferences, Patches und Logs fasst erst onComplete an.
-          const fullResult = useSimplifiedPlan ? null : await fetchFullPlanFromClaude(profile);
+          const fullResult = await fetchFullPlanFromClaude(profile);
           const fullPlan =
-            fullResult?.plan && validateTrainingPlanV2Integrity(fullResult.plan) ? fullResult.plan : null;
-
-          if (fullResult && !fullPlan) {
-            // eslint-disable-next-line no-console
-            console.error("[Onboarding] Option A failed:", fullResult.error, fullResult.status);
-            const blockingMessage = planApiBlockingMessage(fullResult, planDurationDays);
-            // Netzwerkfehler/5xx: kein stiller Ersatzplan — der vereinfachte Plan wird nur angeboten.
-            setGenerateError(
-              blockingMessage ?? "Plan konnte nicht erstellt werden. Bitte versuche es erneut.",
-            );
-            setSimplifiedPlanOffered(blockingMessage === null);
-            setPlanGenPhase("error");
-            return;
-          }
+            fullResult.plan && validateTrainingPlanV2Integrity(fullResult.plan) ? fullResult.plan : null;
 
           if (fullPlan) {
             plan = fullPlan;
-            patches = [];
           } else {
-            const claudeResult = await fetchClaudePlanStructure(profile);
-            const structureBlockingMessage = planApiBlockingMessage(claudeResult, planDurationDays);
-            if (structureBlockingMessage) {
-              setGenerateError(structureBlockingMessage);
+            // eslint-disable-next-line no-console
+            console.error("[Onboarding] Server-Plan nicht verfügbar:", fullResult.error, fullResult.status);
+            // Anmeldung, Tageslimit, abgelehnte Eingabe: ein lokaler Plan würde das nur verdecken.
+            const blockingMessage = planApiBlockingMessage(fullResult, planDurationDays);
+            if (blockingMessage) {
+              setGenerateError(blockingMessage);
               setPlanGenPhase("error");
               return;
             }
-            const structure = claudeResult.structure;
-            const rules = structure?.rules;
-            const hasStructure =
-              structure != null &&
-              Array.isArray(structure.phases) &&
-              structure.phases.length > 0 &&
-              rules != null &&
-              typeof rules === "object";
-            // eslint-disable-next-line no-console
-            console.log("[Onboarding] Claude structure before generateMarathonPlanV2ToRace:", {
-              hasStructure,
-              phaseCount: structure?.phases?.length ?? 0,
-              phaseNames: structure?.phases?.map((p) => p.name) ?? [],
-              rulesRestDays: rules?.restDays ?? null,
-              rulesLongRunDay: rules?.longRunDay,
-              rulesIntervalDay: rules?.intervalDay,
-              rulesTempoDay: rules?.tempoDay,
-              rulesStrengthDays: rules?.strengthDays ?? null,
-              rulesBikeDays: rules?.bikeDays ?? null,
-            });
-            if (!hasStructure) {
-              // eslint-disable-next-line no-console
-              console.warn(
-                "[Onboarding] Claude structure missing or empty — fallback plan may ignore preferences",
-              );
+            // Der Kern hat auf dem Server einen Verstoß gemeldet: lokal käme derselbe heraus.
+            if (fullResult.errorCode === "plan-core-invariant") {
+              rejectInputs();
+              return;
             }
-            plan = generateMarathonPlanV2ToRace(
-              startDay,
-              raceDay,
-              summaryPayload.raceGoal,
-              summaryPayload.raceDistanceKm,
-              summaryPayload.weeklyKmRange,
-              rules?.restDays?.length ? undefined : parseRestDayFromPreferences(userPreferences),
-              rules ?? undefined,
-              structure?.phases,
-            );
-            patches = [];
+            // Netzwerkfehler, Timeout, 5xx: derselbe Kern lokal, ohne Nachfrage (Entscheidung 2026-11-07).
+            const local = buildLocalCorePlan({ ...profile }, getAppTodayYmd());
+            if (local.status === "rejected") {
+              rejectInputs();
+              return;
+            }
+            if (local.status === "unavailable") {
+              // eslint-disable-next-line no-console
+              console.error("[Onboarding] lokaler Plan nicht möglich:", local.reason);
+              setGenerateError(PLAN_GENERATION_FAILED_MESSAGE);
+              setPlanGenPhase("error");
+              return;
+            }
+            // eslint-disable-next-line no-console
+            console.warn("[Onboarding] lokaler Kern-Plan statt Server-Plan, warnings:", local.warnings);
+            plan = local.plan;
           }
+          patches = [];
         }
       }
 
@@ -826,8 +766,18 @@ export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInp
         weekCount={planGenWeekCount}
         phase={planGenPhase}
         errorMessage={generateError}
-        onRetry={() => void handleFinish()}
-        onUseSimplifiedPlan={simplifiedPlanOffered ? () => void handleFinish(true) : undefined}
+        errorTitle={generateErrorKind === "inputs" ? PLAN_INPUTS_REJECTED_TITLE : null}
+        onRetry={generateErrorKind === "inputs" ? undefined : () => void handleFinish()}
+        onEditInputs={
+          generateErrorKind === "inputs"
+            ? () => {
+                setGenerateError(null);
+                setGenerateErrorKind("retry");
+                setPlanGenPhase("idle");
+                setStep(STEP.race);
+              }
+            : undefined
+        }
         onCancel={onCancel}
       />
     );

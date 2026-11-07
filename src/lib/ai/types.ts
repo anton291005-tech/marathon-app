@@ -22,7 +22,6 @@ export type AiActionType =
   | "boost_next_week_volume"
   | "taper_before_race"
   | "integrate_missed_workout"
-  | "replace_training_plan_generated"
   | "update_user_preferences"
   | "swap_training_days"
   | "reassign_session_to_calendar"
