@@ -1,29 +1,15 @@
 import type { TrainingPlanV2, WorkoutV2, Intensity } from "../../planV2/types";
+import { diffDays, mondayOf } from "../../planCore";
+import { sessionYmd } from "../../core/time/sessionDate";
+import { easyPaceOfPlan, isEasyWorkout, isHardWorkout, isLongRunWorkout } from "./hardWorkout";
 import { allow, axis, joinReasons, warn, type ValidationResult } from "./validationResult";
 import type { ValidationContext } from "./validationContext";
 
-function startOfIsoWeekMonday(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(12, 0, 0, 0);
-  const day = d.getDay(); // 0=Sun..6=Sat
-  const offset = (day + 6) % 7; // Mon->0, Sun->6
-  d.setDate(d.getDate() - offset);
-  return d;
+function isRestWorkout(w: WorkoutV2): boolean {
+  return w.sport === "rest" || w.sessionType === "rest";
 }
 
-function ymd(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function dayDiff(aIso: string, bIso: string): number {
-  const a = new Date(aIso);
-  const b = new Date(bIso);
-  if (!Number.isFinite(a.getTime()) || !Number.isFinite(b.getTime())) return 999;
-  const da = new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime();
-  const db = new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime();
-  return Math.round((db - da) / (24 * 60 * 60 * 1000));
-}
-
+/** Grobe Belastungsstufe für Anzeige und Umwandlung; „hart“ im Sinn der Validatoren ist `isHardWorkout`, nicht `"high"`. */
 export function inferIntensity(w: WorkoutV2): Intensity {
   if (w.intensity) return w.intensity;
   if (w.sessionType === "interval" || w.sessionType === "tempo" || w.sessionType === "race") return "high";
@@ -31,24 +17,37 @@ export function inferIntensity(w: WorkoutV2): Intensity {
   return "low";
 }
 
-function groupByWeek(workouts: WorkoutV2[]): Map<string, WorkoutV2[]> {
-  const map = new Map<string, WorkoutV2[]>();
-  for (const w of workouts) {
-    const d = new Date(w.dateIso);
-    if (!Number.isFinite(d.getTime())) continue;
-    const key = ymd(startOfIsoWeekMonday(d));
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(w);
-  }
-  return map;
+/**
+ * Nicht locker, aber nicht zwingend hart (z. B. kurzer Long Run): weder Kern-Art E/REC/MLR/Ruhe noch ausdrücklich
+ * `intensity: "low"`. Die gesetzte Intensität bleibt maßgeblich, damit Altpläne ihre bisherige Einstufung behalten.
+ */
+function isDemanding(w: WorkoutV2): boolean {
+  return !isEasyWorkout(w) && inferIntensity(w) !== "low";
 }
 
+type DatedWorkout = { workout: WorkoutV2; ymd: string; hard: boolean };
+
 /**
- * Micro-structure validation for physiological spacing inside each calendar week.
- * Deterministic only; runs after structural rebuild.
+ * Micro-structure validation for physiological spacing (Warnungen bei Nutzer-Änderungen, blockiert nie).
+ * „Hart“ ist die Kern-Definition (`isHardSession`, Spec §1). Die Paare werden über den ganzen Plan gebildet, nicht je
+ * Kalenderwoche, damit auch Sonntag → Montag der Folgewoche (und der Jahreswechsel) geprüft wird. Der Tag kommt aus
+ * `dateIso`, nie aus einem Label. Deterministic only; runs after structural rebuild.
  */
 export function validateMicroStructure(plan: TrainingPlanV2, context: ValidationContext): ValidationResult {
-  const weeks = groupByWeek(plan.workouts || []);
+  const easyPace = easyPaceOfPlan(plan);
+  const dated: DatedWorkout[] = [];
+  for (const workout of plan.workouts || []) {
+    const ymd = sessionYmd(workout);
+    if (ymd) dated.push({ workout, ymd, hard: isHardWorkout(workout, easyPace) });
+  }
+  dated.sort((a, b) => a.ymd.localeCompare(b.ymd) || a.workout.dateIso.localeCompare(b.workout.dateIso));
+
+  const weeks = new Map<string, DatedWorkout[]>();
+  for (const item of dated) {
+    const key = mondayOf(item.ymd);
+    if (!weeks.has(key)) weeks.set(key, []);
+    weeks.get(key)!.push(item);
+  }
 
   const warnItems: Array<{ reason: string; severity: number }> = [];
 
@@ -61,77 +60,56 @@ export function validateMicroStructure(plan: TrainingPlanV2, context: Validation
     warnItems.push({ reason, severity });
   }
 
-  function isRestWorkout(w: WorkoutV2): boolean {
-    return w.sport === "rest" || w.sessionType === "rest";
-  }
-
-  const weekEntries = Array.from(weeks.entries());
-  for (let wi = 0; wi < weekEntries.length; wi += 1) {
-    const weekKey = weekEntries[wi][0];
-    const workouts = weekEntries[wi][1];
-    const sorted = [...workouts].sort((a, b) => a.dateIso.localeCompare(b.dateIso));
-
-    // Warning checks (week-level)
-    const hasRest = sorted.some((w) => w.sport === "rest" || w.sessionType === "rest");
+  // Week-level warning: no rest day.
+  for (const items of Array.from(weeks.values())) {
+    const hasRest = items.some(({ workout: w }) => w.sport === "rest" || w.sessionType === "rest");
     if (!hasRest) {
       const sev = isTaper ? 65 : isPeak ? 55 : 35;
       pushWarn("Warnung: Diese Woche hat keinen Ruhetag.", sev);
     }
+  }
 
-    // Hard sessions density warning: 3 high sessions in 4 days
-    const highs = sorted
-      .filter((w) => inferIntensity(w) === "high")
-      .map((w) => w.dateIso)
-      .sort();
-    for (let i = 0; i < highs.length; i++) {
-      const start = highs[i];
-      const end = highs[i + 2];
-      if (!end) continue;
-      const diff = dayDiff(start, end);
-      if (diff >= 0 && diff <= 3) {
-        const sev = isTaper ? 85 : isPeak ? 80 : 60;
-        pushWarn("Warnung: Drei intensive Einheiten in vier Tagen erhöhen das Verletzungsrisiko.", sev);
-        break;
-      }
+  // Hard sessions density warning: 3 hard sessions in 4 days (über Wochengrenzen).
+  const hardDays = dated.filter((d) => d.hard).map((d) => d.ymd);
+  for (let i = 0; i + 2 < hardDays.length; i++) {
+    const diff = diffDays(hardDays[i + 2], hardDays[i]);
+    if (diff >= 0 && diff <= 3) {
+      const sev = isTaper ? 85 : isPeak ? 80 : 60;
+      pushWarn("Warnung: Drei intensive Einheiten in vier Tagen erhöhen das Verletzungsrisiko.", sev);
+      break;
+    }
+  }
+
+  for (let i = 0; i + 1 < dated.length; i++) {
+    const curr = dated[i];
+    const next = dated[i + 1];
+    const gap = diffDays(next.ymd, curr.ymd);
+
+    // RULE 1: no back-to-back hard sessions on adjacent days (or same day), also Sunday → Monday — warn only.
+    if (curr.hard && next.hard && gap <= 1) {
+      return warn({ micro: axis(95, "Back-to-back intensity: zwei intensive Einheiten hintereinander.") });
     }
 
-    for (let i = 0; i < sorted.length; i++) {
-      const curr = sorted[i];
-      const next = sorted[i + 1];
-      if (!next) continue;
-
-      const currInt = inferIntensity(curr);
-      const nextInt = inferIntensity(next);
-      const diffDays = dayDiff(curr.dateIso, next.dateIso);
-
-      // RULE 1: no back-to-back high intensity on adjacent days (or same day) — warn only; athlete decides.
-      if (currInt === "high" && nextInt === "high" && diffDays <= 1) {
-        return warn({ micro: axis(95, "Back-to-back intensity: zwei intensive Einheiten hintereinander.") });
+    // RULE 1b: recovery after a hard session (phase-dependent): next day should be easy.
+    if (curr.hard && gap === 1 && isDemanding(next.workout)) {
+      if (isTaper) {
+        return warn({
+          micro: axis(95, "Taper: nach intensiver Einheit am Folgetag nur Erholung/locker sinnvoll."),
+        });
       }
+      const sev = isPeak ? 80 : isBase ? 40 : 55;
+      pushWarn("Warnung: Nach einer intensiven Einheit ist ein Erholungstag am nächsten Tag empfehlenswert.", sev);
+    }
 
-      // RULE 1b: recovery after high session (phase-dependent)
-      if (currInt === "high" && diffDays === 1 && nextInt !== "low") {
-        if (isTaper) {
-          return warn({
-            micro: axis(95, "Taper: nach intensiver Einheit am Folgetag nur Erholung/locker sinnvoll."),
-          });
-        }
-        const sev = isPeak ? 80 : isBase ? 40 : 55;
-        pushWarn("Warnung: Nach einer intensiven Einheit ist ein Erholungstag am nächsten Tag empfehlenswert.", sev);
-      }
-
-      // RULE 2: long run spacing (phase-dependent)
-      if (curr.sessionType === "long") {
-        if (diffDays < 2 && !isRestWorkout(next)) {
-          // In taper/peak: tighter spacing → warn by default (athlete may still confirm swaps).
-          if (isTaper || isPeak) {
-            if (nextInt !== "low") return warn({ micro: axis(92, "Long Run stacking: benötigt mindestens 2 Tage Abstand.") });
-          } else {
-            if (nextInt === "high")
-              return warn({ micro: axis(92, "Long Run: benötigt mindestens 2 Tage Abstand zu einer intensiven Einheit.") });
-            if (nextInt === "medium") pushWarn("Warnung: Nach einem Long Run sind 2 lockere Tage oft sinnvoll.", 70);
-          }
-        }
+    // RULE 2: long run spacing (phase-dependent)
+    if (isLongRunWorkout(curr.workout) && gap < 2 && !isRestWorkout(next.workout)) {
+      // In taper/peak: tighter spacing → warn by default (athlete may still confirm swaps).
+      if (isTaper || isPeak) {
+        if (isDemanding(next.workout)) return warn({ micro: axis(92, "Long Run stacking: benötigt mindestens 2 Tage Abstand.") });
+      } else {
+        if (next.hard)
+          return warn({ micro: axis(92, "Long Run: benötigt mindestens 2 Tage Abstand zu einer intensiven Einheit.") });
+        if (isDemanding(next.workout)) pushWarn("Warnung: Nach einem Long Run sind 2 lockere Tage oft sinnvoll.", 70);
       }
     }
   }

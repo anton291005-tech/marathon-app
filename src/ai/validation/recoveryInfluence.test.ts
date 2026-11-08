@@ -25,28 +25,16 @@ function ctxWithRecovery(args: { avgRecovery: number; avgConfidence: number }): 
   };
 }
 
-describe("probabilistic recovery influence (swap decision layer)", () => {
-  // Non-zone2-equivalent swap to ensure the decision layer runs.
+describe("recovery context (Recovery-Achse im Swap entfallen, Spec §15.5 (3))", () => {
   const a: WorkoutV2 = { id: "a", dateIso: new Date("2026-05-01T12:00:00.000Z").toISOString(), sport: "run", sessionType: "interval", title: "A", km: 10 };
   const b: WorkoutV2 = { id: "b", dateIso: new Date("2026-05-03T12:00:00.000Z").toISOString(), sport: "run", sessionType: "easy", title: "B", km: 10 };
 
   const before = planWith([a, b]);
   const after = planWith([b, a]);
 
-  test("same recovery, different confidence => different adaptation strength", () => {
-    const hi = validateSwap({ source: a, target: b, before, after, validationContext: ctxWithRecovery({ avgRecovery: 30, avgConfidence: 1.0 }) });
-    const lo = validateSwap({ source: a, target: b, before, after, validationContext: ctxWithRecovery({ avgRecovery: 30, avgConfidence: 0.1 }) });
-    expect((hi.axes.recovery?.score ?? 0)).toBeGreaterThan((lo.axes.recovery?.score ?? 0));
-  });
-
-  test("low confidence still affects decision (not zeroed out)", () => {
-    const low = validateSwap({ source: a, target: b, before, after, validationContext: ctxWithRecovery({ avgRecovery: 30, avgConfidence: 0.0 }) });
-    expect((low.axes.recovery?.score ?? 0)).toBeGreaterThan(35); // baseline is ~35; fatigued should still push higher
-  });
-
-  test("high confidence amplifies plan adjustments", () => {
-    const hi = validateSwap({ source: a, target: b, before, after, validationContext: ctxWithRecovery({ avgRecovery: 30, avgConfidence: 1.0 }) });
-    expect((hi.axes.recovery?.score ?? 0)).toBeGreaterThanOrEqual(50);
+  test("validateSwap liefert keine Recovery-Achse mehr, auch bei starker Ermüdung", () => {
+    const res = validateSwap({ source: a, target: b, before, after, validationContext: ctxWithRecovery({ avgRecovery: 20, avgConfidence: 1.0 }) });
+    expect(res.axes.recovery).toBeUndefined();
   });
 
   test("buildValidationContext never produces undefined recovery flow", () => {
