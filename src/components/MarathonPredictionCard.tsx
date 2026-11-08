@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { MarathonPredictionResult } from "../marathonPrediction";
+import { forecastTitle } from "../raceDistance";
 import SurfaceCard from "./SurfaceCard";
 
 type Variant = "compact" | "full";
@@ -7,6 +8,8 @@ type Variant = "compact" | "full";
 type Props = {
   variant: Variant;
   prediction: MarathonPredictionResult;
+  /** Renndistanz des aktiven Plans (Titel); ohne Angabe neutraler Titel „Prognose". */
+  raceDistanceKm?: number | null;
   /** Eingestellte Zielzeit (Anzeige) */
   targetTimeLabel?: string;
   /** z. B. aus Formprognose / Readiness */
@@ -26,6 +29,7 @@ const verdictColor: Record<string, string> = {
 export default function MarathonPredictionCard({
   variant,
   prediction,
+  raceDistanceKm,
   targetTimeLabel,
   confidenceLabel,
   coachHints = [],
@@ -34,7 +38,7 @@ export default function MarathonPredictionCard({
   const isFull = variant === "full";
   const titleSize = isFull ? 12 : 11;
   const timeSize = isFull ? 40 : 32;
-  const sub3 = prediction.sub3ProbabilityPercent ?? 0;
+  const sub3 = prediction.sub3ProbabilityPercent;
 
   return (
     <SurfaceCard
@@ -56,7 +60,7 @@ export default function MarathonPredictionCard({
           textAlign: "center",
         }}
       >
-        Marathon-Prognose
+        {forecastTitle(raceDistanceKm)}
       </div>
 
       {targetTimeLabel ? (
@@ -105,7 +109,7 @@ export default function MarathonPredictionCard({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: isFull ? "1fr 1fr" : "1fr 1fr",
+              gridTemplateColumns: sub3 != null ? "1fr 1fr" : "1fr",
               gap: isFull ? 14 : 12,
               marginBottom: isFull ? 16 : 12,
             }}
@@ -133,38 +137,40 @@ export default function MarathonPredictionCard({
                 {prediction.consistencyScore ?? "—"}
               </div>
             </div>
-            <div
-              style={{
-                background: "rgba(9,11,26,0.88)",
-                borderRadius: 14,
-                padding: "12px 10px",
-                border: "1px solid rgba(148,163,184,0.12)",
-              }}
-            >
+            {sub3 != null ? (
               <div
                 style={{
-                  fontSize: 10,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  color: "#64748b",
-                  fontWeight: 700,
+                  background: "rgba(9,11,26,0.88)",
+                  borderRadius: 14,
+                  padding: "12px 10px",
+                  border: "1px solid rgba(148,163,184,0.12)",
                 }}
               >
-                Sub-3
-              </div>
-              <div style={{ fontSize: isFull ? 22 : 20, fontWeight: 800, color: "#e2e8f0", marginTop: 4 }}>{sub3}%</div>
-              <div style={{ marginTop: 8, height: 8, borderRadius: 999, background: "rgba(15,23,42,0.9)", overflow: "hidden" }}>
                 <div
                   style={{
-                    height: "100%",
-                    width: `${Math.min(100, Math.max(0, sub3))}%`,
-                    borderRadius: 999,
-                    background: "linear-gradient(90deg,#059669,#34d399)",
-                    transition: "width .35s ease",
+                    fontSize: 10,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    color: "#64748b",
+                    fontWeight: 700,
                   }}
-                />
+                >
+                  Sub-3
+                </div>
+                <div style={{ fontSize: isFull ? 22 : 20, fontWeight: 800, color: "#e2e8f0", marginTop: 4 }}>{sub3}%</div>
+                <div style={{ marginTop: 8, height: 8, borderRadius: 999, background: "rgba(15,23,42,0.9)", overflow: "hidden" }}>
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${Math.min(100, Math.max(0, sub3))}%`,
+                      borderRadius: 999,
+                      background: "linear-gradient(90deg,#059669,#34d399)",
+                      transition: "width .35s ease",
+                    }}
+                  />
+                </div>
               </div>
-            </div>
+            ) : null}
           </div>
 
           {isFull && prediction.sub250ProbabilityPercent != null ? (
