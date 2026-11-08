@@ -6,6 +6,10 @@ import {
 } from "./assignSessionToBestCapacityDay";
 import type { AiPlanWeek, AiPlanSession, SessionType } from "../../lib/ai/types";
 import type { DayCapacityScore } from "../../scheduling/capacityScore";
+import { pinAppClock } from "../../testSupport/pinAppClock";
+
+// Label-only-Fixtures ("10. Aug") brauchen ein festes Jahr; siehe pinAppClock.
+pinAppClock("2026-11-08T12:00:00+01:00");
 
 type DaySpec = { id: string; type: SessionType; date: string; day: string };
 
@@ -35,7 +39,7 @@ function capacity(dateIso: string, score: number): DayCapacityScore {
   };
 }
 
-// Montag 10. Aug 2026 .. Sonntag 16. Aug 2026 (parseSessionDateLabel defaults to Jahr 2026)
+// Montag 10. Aug 2026 .. Sonntag 16. Aug 2026 (Label-only-Fixtures ohne dateIso; Jahr 2026 kommt aus der gepinnten App-Uhr)
 const BASE_WEEK: DaySpec[] = [
   { id: "s-mon", type: "interval", date: "10. Aug", day: "Montag" },
   { id: "s-tue", type: "easy", date: "11. Aug", day: "Dienstag" },

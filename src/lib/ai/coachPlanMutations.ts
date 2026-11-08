@@ -2,13 +2,13 @@
  * Structured mutations for AI Coach confirmations (patch overlay). Pläne erzeugt nur noch der Plan-Kern (`src/planCore`,
  * Umbauplan Schritt 11); der frühere Client-Generator `generateMarathonPlanV2ToRace` ist entfernt.
  */
-import { parseSessionDateLabel } from "../../appSmartFeatures";
+import { sessionDate } from "../../core/time/sessionDate";
 import type { AiContext, AiPlanSession, PlanPatch } from "./types";
 
 const RUNNING_TYPES = new Set(["easy", "interval", "tempo", "long", "race"]);
 
 function getSessionDate(session: AiPlanSession): Date | null {
-  return parseSessionDateLabel(session.date);
+  return sessionDate(session);
 }
 
 function startOfLocalDay(from: Date): Date {

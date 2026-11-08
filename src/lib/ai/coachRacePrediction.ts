@@ -2,8 +2,8 @@ import {
   berlinWallClockYmd,
   calendarDaysBetweenYmd,
   isSessionLogDone,
-  parseSessionDateLabel,
 } from "../../appSmartFeatures";
+import { sessionYmd } from "../../core/time/sessionDate";
 import type { StoredHealthRun } from "../../healthRuns";
 import { getStoredHealthRunCanonicalType, storedHealthRunDistanceKmNumeric } from "../../healthRuns";
 import type { PlanSession, PlanWeek, SessionLog } from "../../marathonPrediction";
@@ -117,9 +117,8 @@ export function computeWeekPlanCompletionPercent(context: AiContext, now: Date =
   for (const w of context.plan as PlanWeek[]) {
     for (const s of w.s ?? []) {
       if (s.type === "rest") continue;
-      const dt = parseSessionDateLabel(s.date, year);
-      if (!dt) continue;
-      const ymd = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      const ymd = sessionYmd(s, year);
+      if (!ymd) continue;
       if (ymd < weekStart || ymd > weekEnd) continue;
       if (ymd > todayYmd) continue;
       due += 1;
@@ -232,9 +231,8 @@ function collectSamples(
 
   for (const w of context.plan as PlanWeek[]) {
     for (const s of w.s ?? []) {
-      const dt = parseSessionDateLabel(s.date, year);
-      if (!dt) continue;
-      const ymd = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      const ymd = sessionYmd(s, year);
+      if (!ymd) continue;
       if (ymd > todayYmd) continue;
       const daysBack = calendarDaysBetweenYmd(ymd, todayYmd);
       if (!Number.isFinite(daysBack) || daysBack < 0 || daysBack > maxWindowDays) continue;

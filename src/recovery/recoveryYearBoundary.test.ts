@@ -3,6 +3,10 @@ import { computeHomeRecoveryScoreBreakdown } from "./homeRecoveryScore";
 import { buildPlanWeekToDateMap } from "./recoveryScoringEngine";
 import { buildRecoveryWeekRollups } from "./recoveryRollupBuilder";
 import { buildDailyTrainingLoadByDate } from "./trainingDailyLoad";
+import { pinAppClock } from "../testSupport/pinAppClock";
+
+// Label-only-Fixtures ("10. Aug") brauchen ein festes Jahr; siehe pinAppClock.
+pinAppClock("2026-11-08T12:00:00+01:00");
 
 /**
  * Die Recovery-Kette las den Kalendertag einer Session aus dem Anzeige-Label

@@ -74,7 +74,7 @@ describe("Altplan ohne dateIso: Label mit planYear, wie bisher", () => {
   ];
 
   test("früheste Session aus dem Label mit planYear 2026", () => {
-    expect(planEarliestSessionYmd(altPlan)).toBe("2026-11-02");
+    expect(planEarliestSessionYmd(altPlan, 2026)).toBe("2026-11-02");
     expect(planEarliestSessionYmd(altPlan, 2027)).toBe("2027-11-02");
   });
 

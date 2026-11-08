@@ -27,7 +27,7 @@ jest.mock("./assignSessionToBestCapacityDay", () => {
 });
 
 // Sperre für Kalender-Tausch: erledigte, übersprungene und vergangene Sessions sind weder Quelle noch Ziel.
-// Fixtures wie in den Nachbar-Tests: Montag 10. Aug .. Sonntag 16. Aug 2026 (parseSessionDateLabel: Jahr 2026).
+// Fixtures wie in den Nachbar-Tests: Montag 10. Aug .. Sonntag 16. Aug 2026 (Label-only, Jahr 2026 aus der gepinnten App-Uhr).
 
 type DaySpec = { id: string; type: SessionType; date: string; day: string };
 
@@ -80,6 +80,8 @@ function overloadedDay(dayOfWeek: number): RecurringScheduleBlock {
   };
 }
 
+// Label-only-Fixtures ("10. Aug") brauchen ein festes Jahr; Tests pinnen bei Bedarf selbst enger.
+beforeEach(() => freezeTimeForTests(new Date("2026-11-08T12:00:00+01:00")));
 afterEach(() => freezeTimeForTests(null));
 
 describe("buildLockedSessionIds", () => {

@@ -119,6 +119,60 @@
             {
               "selector": "CallExpression[callee.object.name='Date'][callee.property.name='now']",
               "message": "Use getAppNowEpochMs() from src/core/time/timeSystem.ts."
+            },
+            {
+              "selector": "ImportSpecifier[imported.name='parseSessionDateLabel']",
+              "message": "parseSessionDateLabel is legacy (label + year). Derive a session's calendar day with sessionDate()/sessionYmd() from src/core/time/sessionDate.ts: session.dateIso is the source of truth."
+            },
+            {
+              "selector": "CallExpression[callee.name='parseSessionDateLabel']",
+              "message": "Do not derive a date from a session label plus a year. Use sessionDate(session)/sessionYmd(session) from src/core/time/sessionDate.ts (session.dateIso first)."
+            },
+            {
+              "selector": "CallExpression[callee.name=/^(sessionYmd|sessionDate|labelToYmd)$/][arguments.1.type='Literal']",
+              "message": "No fixed year for the session-label fallback. Pass a year derived from an injected clock/anchor, or omit it (defaults to the app clock)."
+            }
+          ]
+        }
+      },
+      {
+        "files": [
+          "src/planV2/normalizeTrainingPlan.ts",
+          "src/planV2/fromBasePlan.ts",
+          "src/App.tsx"
+        ],
+        "rules": {
+          "no-restricted-syntax": [
+            "error",
+            {
+              "selector": "NewExpression[callee.name='Date'][arguments.length=0]",
+              "message": "Use getAppNow() from src/core/time/timeSystem.ts (forbidden: new Date() without arguments outside timeSystem)."
+            },
+            {
+              "selector": "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+              "message": "Use getAppNowEpochMs() from src/core/time/timeSystem.ts."
+            },
+            {
+              "selector": "CallExpression[callee.name=/^(sessionYmd|sessionDate|labelToYmd)$/][arguments.1.type='Literal']",
+              "message": "No fixed year for the session-label fallback. Pass a year derived from an injected clock/anchor, or omit it (defaults to the app clock)."
+            }
+          ]
+        }
+      },
+      {
+        "files": [
+          "src/core/time/sessionDate.ts"
+        ],
+        "rules": {
+          "no-restricted-syntax": [
+            "error",
+            {
+              "selector": "NewExpression[callee.name='Date'][arguments.length=0]",
+              "message": "Use getAppNow() from src/core/time/timeSystem.ts (forbidden: new Date() without arguments outside timeSystem)."
+            },
+            {
+              "selector": "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+              "message": "Use getAppNowEpochMs() from src/core/time/timeSystem.ts."
             }
           ]
         }

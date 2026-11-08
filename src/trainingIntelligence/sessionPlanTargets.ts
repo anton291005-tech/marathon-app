@@ -4,7 +4,8 @@
 
 import type { PlanSession, PlanWeek, SessionLog } from "../marathonPrediction";
 import { getDisplayPlannedDistanceKm, getSessionPlannedDistanceKm } from "../sessionDistance";
-import { isSessionLogDone, parseSessionDateLabel } from "../appSmartFeatures";
+import { isSessionLogDone } from "../appSmartFeatures";
+import { sessionDate } from "../core/time/sessionDate";
 import type { StoredHealthRun } from "../healthRuns";
 import { storedHealthRunDistanceKmNumeric } from "../healthRuns";
 import { parsePlannedPaceMinPerKm } from "./evaluateRun";
@@ -93,7 +94,7 @@ export function getHomeCoachAssessmentFixedCopy(args: {
 }
 
 function sessionTime(session: PlanSession): number {
-  const d = parseSessionDateLabel(session.date);
+  const d = sessionDate(session);
   return d ? d.getTime() : 0;
 }
 

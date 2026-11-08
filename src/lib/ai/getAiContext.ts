@@ -1,4 +1,4 @@
-import { parseSessionDateLabel } from "../../appSmartFeatures";
+import { sessionDate } from "../../core/time/sessionDate";
 import type { StoredHealthRun } from "../../healthRuns";
 import type { RecoveryDomainState } from "../../recovery/recoveryDomainState";
 import type { AiCoachConversationTurn, AiContext, AiPlanSession, AiPlanWeek } from "./types";
@@ -23,7 +23,7 @@ type BuildAiContextArgs = {
 };
 
 function inNext14Days(session: AiPlanSession, now: Date): boolean {
-  const date = parseSessionDateLabel(session.date);
+  const date = sessionDate(session);
   if (!date) return false;
   const diffMs = date.getTime() - now.getTime();
   const diffDays = diffMs / (24 * 60 * 60 * 1000);
@@ -34,7 +34,7 @@ function findRaceDateIso(plan: AiPlanWeek[]): string | null {
   const races = plan
     .flatMap((week) => week.s ?? [])
     .filter((session) => session.type === "race")
-    .map((session) => parseSessionDateLabel(session.date))
+    .map((session) => sessionDate(session))
     .filter((date): date is Date => !!date)
     .sort((a, b) => a.getTime() - b.getTime());
   return races.length ? races[races.length - 1].toISOString() : null;
@@ -89,10 +89,10 @@ export function toRemoteCoachPayload(context: AiContext) {
   };
 }
 
-export function sortAiPlanSessionsByCalendar<T extends { date: string; id: string }>(sessions: T[]): T[] {
+export function sortAiPlanSessionsByCalendar<T extends { date: string; dateIso?: string; id: string }>(sessions: T[]): T[] {
   return [...sessions].sort((a, b) => {
-    const da = parseSessionDateLabel(a.date)?.getTime() ?? 0;
-    const db = parseSessionDateLabel(b.date)?.getTime() ?? 0;
+    const da = sessionDate(a)?.getTime() ?? 0;
+    const db = sessionDate(b)?.getTime() ?? 0;
     if (da !== db) return da - db;
     return a.id.localeCompare(b.id);
   });

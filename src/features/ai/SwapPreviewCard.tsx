@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { parseSessionDateLabel } from "../../appSmartFeatures";
+import { sessionDate } from "../../core/time/sessionDate";
 import { getAppNow } from "../../core/time/timeSystem";
 
 type Props = {
@@ -30,9 +30,14 @@ function startOfLocalDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-export function rowHeadingForSessionDateLabel(dateLabel: string | undefined, coachRef: Date): string {
+/** Zeilenüberschrift ("Heute", "Mo 7. Nov", …); der Kalendertag kommt aus `dateIso`, das Label ist nur Anzeigetext. */
+export function rowHeadingForSession(
+  session: { date?: string | null; dateIso?: string | null } | null | undefined,
+  coachRef: Date,
+): string {
+  const dateLabel = session?.date;
   if (!dateLabel) return "Einheit";
-  const d = parseSessionDateLabel(dateLabel);
+  const d = sessionDate(session);
   if (!d) return "Einheit";
   const sd = startOfLocalDay(d);
   const rd = startOfLocalDay(coachRef);
@@ -161,12 +166,12 @@ export function SwapPreviewCard({
   }, [coachTodayIso]);
 
   const rowSourceHeading = useMemo(
-    () => rowHeadingForSessionDateLabel(source?.date, coachRef),
-    [source?.date, coachRef],
+    () => rowHeadingForSession(source, coachRef),
+    [source, coachRef],
   );
   const rowTargetHeading = useMemo(
-    () => rowHeadingForSessionDateLabel(target?.date, coachRef),
-    [target?.date, coachRef],
+    () => rowHeadingForSession(target, coachRef),
+    [target, coachRef],
   );
   const relativeSummaryLine = useMemo(() => {
     const a = summarizeSessionLine(source);

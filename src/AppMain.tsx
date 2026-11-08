@@ -34,7 +34,6 @@ import {
   getShareSummary,
   getTodayNextSession,
   isSessionLogDone,
-  parseSessionDateLabel,
   parseTargetTimeToSeconds,
   resolveCurrentPlanWeekIndex,
   safeParseJSON,
@@ -313,6 +312,7 @@ import {
   getAppNowEpochMs,
   getAppTodayYmd,
 } from "./core/time/timeSystem";
+import { sessionDate } from "./core/time/sessionDate";
 import {
   devMarkOncePerFrame,
   monitorMetricSource,
@@ -646,8 +646,8 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
 const BASE_PLAN = LEGACY_EMBEDDED_PLAN_WEEKS;
 /**
  * Jahr, das die Labels von LEGACY_EMBEDDED_PLAN_WEEKS meinen ("6. Apr" …
- * "27. Sep", dates-Zeilen sagen 2026). Explizit, damit der Demoplan nicht mehr
- * vom 2026-Default in parseSessionDateLabel abhängt.
+ * "27. Sep", dates-Zeilen sagen 2026). Explizit, damit der Demoplan nicht von
+ * einem Default-Jahr abhängt (es gibt keins mehr, siehe sessionDate).
  */
 const LEGACY_EMBEDDED_PLAN_YEAR = 2026;
 
@@ -912,7 +912,7 @@ export function resolveHalfMarathonRaceSignal({ activeSessions, logs, healthRunB
   const actualDurationSec =
     typeof ar?.duration === "number" && ar.duration > 0 ? ar.duration : health?.duration;
 
-  const raceDate = parseSessionDateLabel(race.date);
+  const raceDate = sessionDate(race);
   const halfMarathonRaceDaysAgo = raceDate
     ? calendarDaysBetweenYmd(berlinWallClockYmd(raceDate), berlinWallClockYmd(now))
     : null;
@@ -1133,7 +1133,7 @@ function sumLoggedKmCalendarWeek(plan, logs, healthById, anchorDate, weekOffset)
   for (const week of plan || []) {
     for (const s of getWeekSessionList(week)) {
       if (s.type === "rest") continue;
-      const dt = parseSessionDateLabel(s.date, anchorDate.getFullYear());
+      const dt = sessionDate(s, anchorDate.getFullYear());
       if (!dt || !Number.isFinite(dt.getTime())) continue;
       const dayMs = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
       if (dayMs < startMs || dayMs >= endExclusiveMs) continue;
@@ -1156,7 +1156,7 @@ function longRunPaceLastFourWeeksSnapshot(plan, logs, healthById, nowDate) {
     for (const s of getWeekSessionList(week)) {
       if (s.type !== "long") continue;
       if (!(getSessionPlannedDistanceKm(s) >= LONG_MIN_KM)) continue;
-      const d = parseSessionDateLabel(s.date, yearGuess);
+      const d = sessionDate(s, yearGuess);
       if (!d || !Number.isFinite(d.getTime())) continue;
       const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(
         2,
@@ -2632,7 +2632,7 @@ export default function AppMain(){
     if(targetScreen === "week"){
       const now = getAppNow();
       const todaySession = displayPlan.find((week)=>getWeekSessionList(week).some((session)=>{
-        const parsed = parseSessionDateLabel(session.date);
+        const parsed = sessionDate(session);
         if(!parsed)return false;
         const normalized = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -3262,7 +3262,7 @@ export default function AppMain(){
   const modalShowMoreDetailsToggle = modalShowWorkoutStructure || modalFuelingHints.length > 0;
   const todayNextSession = decisionTodayNextSession;
   const firstTrainingSession = ACTIVE_SESSIONS[0] || null;
-  const firstTrainingDate = firstTrainingSession ? parseSessionDateLabel(firstTrainingSession.date) : null;
+  const firstTrainingDate = firstTrainingSession ? sessionDate(firstTrainingSession) : null;
   const today = appNow;
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const firstTrainingStart = firstTrainingDate ? new Date(firstTrainingDate.getFullYear(), firstTrainingDate.getMonth(), firstTrainingDate.getDate()) : null;

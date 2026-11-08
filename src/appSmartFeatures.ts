@@ -1,23 +1,9 @@
 // @ts-nocheck
 
 import { getAppNow } from "./core/time/timeSystem";
+import { labelToYmd, sessionDate, sessionYmd } from "./core/time/sessionDate";
 import { calculatePlanAwareStreak } from "./trainingIntelligence/streak";
 import { pluralDe } from "./utils/pluralDe";
-
-const MONTHS = {
-  Jan: 0,
-  Feb: 1,
-  Mar: 2,
-  Apr: 3,
-  Mai: 4,
-  Jun: 5,
-  Jul: 6,
-  Aug: 7,
-  Sep: 8,
-  Okt: 9,
-  Nov: 10,
-  Dez: 11,
-};
 
 export function safeParseJSON(value, fallback){
   if(!value)return fallback;
@@ -35,14 +21,17 @@ export function parseTargetTimeToSeconds(value){
   return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
 }
 
-export function parseSessionDateLabel(label, year = 2026){
-  if(!label)return null;
-  const match = label.match(/(\d{1,2})\.\s*([A-Za-zÄÖÜäöü]+)/);
-  if(!match)return null;
-  const day = Number(match[1]);
-  const month = MONTHS[match[2]];
-  if(Number.isNaN(day) || month === undefined)return null;
-  return new Date(year, month, day, 12, 0, 0, 0);
+/**
+ * LEGACY — liest ein Label ("14. Mär") mit einem **explizit übergebenen** Jahr. Es gibt kein Default-Jahr
+ * mehr; ohne gültiges `year` kommt `null`. Für Plan-Sessions nie verwenden: dort ist `sessionDate(session)`
+ * aus `core/time/sessionDate` richtig (`dateIso` zuerst). Erlaubt ist das nur, wo das Jahr aus einem Anker
+ * folgt (`planV2/legacyYearAnchor`) — siehe die Ausnahmeliste der ESLint-Regel in `package.json`.
+ */
+export function parseSessionDateLabel(label, year){
+  const ymd = labelToYmd(label, year);
+  if(!ymd)return null;
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(y, m - 1, d, 12, 0, 0, 0);
 }
 
 export function normalizeCalendarDay(d){
@@ -76,10 +65,11 @@ export function safePlanWeekLabel(week, fallback = "Keine Planwoche") {
 
 export function sessionsScheduledOnCalendarDay(plan, dayStart){
   const key = normalizeCalendarDay(dayStart).getTime();
+  const fallbackYear = normalizeCalendarDay(dayStart).getFullYear();
   const out = [];
   for(const week of safePlanWeeks(plan)){
     for (const session of week.s ?? []) {
-      const pd = parseSessionDateLabel(session.date);
+      const pd = sessionDate(session, fallbackYear);
       if(!pd)continue;
       if(normalizeCalendarDay(pd).getTime() === key){
         out.push(session);
@@ -92,9 +82,10 @@ export function sessionsScheduledOnCalendarDay(plan, dayStart){
 /** Plan-Woche, die den Kalendertag enthält (Trainingstag), sonst null */
 export function findPlanWeekContainingDate(plan, dayStart){
   const t = normalizeCalendarDay(dayStart).getTime();
+  const fallbackYear = normalizeCalendarDay(dayStart).getFullYear();
   for(const week of safePlanWeeks(plan)){
     for (const session of week.s ?? []) {
-      const pd = parseSessionDateLabel(session.date);
+      const pd = sessionDate(session, fallbackYear);
       if(!pd)continue;
       if(normalizeCalendarDay(pd).getTime() === t){
         return week;
@@ -136,7 +127,7 @@ export function getCalendarTrainingStreak(plan, logs, now = getAppNow()) {
 export function getTodayNextSession(planSessions, logs, now = getAppNow()){
   const todayKey = now.toDateString();
   const datedSessions = planSessions
-    .map((session) => ({ session, date: parseSessionDateLabel(session.date) }))
+    .map((session) => ({ session, date: sessionDate(session, now.getFullYear()) }))
     .filter((item) => item.date);
 
   const todaySession = datedSessions.find((item) => item.date.toDateString() === todayKey);
@@ -209,31 +200,14 @@ export function berlinWallClockYmd(now = getAppNow()) {
 }
 
 /**
- * Kalendertag einer Plan-Session als YYYY-MM-DD. `dateIso` (trägt das echte Jahr) hat Vorrang; nur ohne
- * `dateIso` (Altpläne) wird das Label („3. Jan“) mit `year` gelesen. Das Label allein verliert das Jahr:
- * bei Plänen über Neujahr ergäbe es sonst falsche Daten.
+ * Frühestes Session-Datum im Plan (YYYY-MM-DD), für Plan-Start-Anchor. Kalendertag je Session aus
+ * `dateIso` (echtes Jahr); `year` ist nur der Notnagel für Altpläne ohne `dateIso` (Label verliert das Jahr).
  */
-function sessionDateLabelToYmd(session, year = 2026) {
-  const iso = typeof session?.dateIso === "string" ? /^(\d{4}-\d{2}-\d{2})/.exec(session.dateIso) : null;
-  if (iso) return iso[1];
-  const label = session?.date;
-  if (!label) return null;
-  const match = label.match(/(\d{1,2})\.\s*([A-Za-zÄÖÜäöü]+)/);
-  if (!match) return null;
-  const day = Number(match[1]);
-  const month = MONTHS[match[2]];
-  if (!Number.isFinite(day) || month === undefined) return null;
-  const m = String(month + 1).padStart(2, "0");
-  const d = String(day).padStart(2, "0");
-  return `${year}-${m}-${d}`;
-}
-
-/** Frühestes Session-Datum im Plan (YYYY-MM-DD), für Plan-Start-Anchor */
-export function planEarliestSessionYmd(plan, year = 2026) {
+export function planEarliestSessionYmd(plan, year) {
   let min = null;
   for (const week of safePlanWeeks(plan)) {
     for (const s of week.s ?? []) {
-      const ymd = sessionDateLabelToYmd(s, year);
+      const ymd = sessionYmd(s, year);
       if (!ymd) continue;
       if (!min || ymd < min) min = ymd;
     }
@@ -255,10 +229,10 @@ export function calendarDaysBetweenYmd(startYmd, endYmd) {
  * 0-basierter PLAN-Index für „aktuelle Trainingswoche“ relativ zum Planbeginn.
  * Woche 1 = die ersten 7 Kalendertage ab frühestem Session-Datum (Europe/Berlin „heute“).
  */
-export function resolveCurrentPlanWeekIndex(plan, now = getAppNow(), planYear = 2026) {
+export function resolveCurrentPlanWeekIndex(plan, now = getAppNow(), planYear) {
   const weeks = safePlanWeeks(plan);
   if (!weeks.length) return 0;
-  const startYmd = planEarliestSessionYmd(weeks, planYear);
+  const startYmd = planEarliestSessionYmd(weeks, planYear ?? now.getFullYear());
   if (!startYmd) return 0;
   const todayYmd = berlinWallClockYmd(now);
   const days = calendarDaysBetweenYmd(startYmd, todayYmd);

@@ -1,4 +1,4 @@
-import { parseSessionDateLabel } from "../../appSmartFeatures";
+import { isReadableSessionLabel } from "../../core/time/sessionDate";
 import type { AiPlanWeek } from "../../lib/ai/types";
 
 export function validatePlanIntegrity(plan: AiPlanWeek[]): boolean {
@@ -14,7 +14,7 @@ export function validatePlanIntegrity(plan: AiPlanWeek[]): boolean {
 
       if (typeof session.day !== "string" || !session.day.trim()) return false;
       if (typeof session.date !== "string" || !session.date.trim()) return false;
-      if (!parseSessionDateLabel(session.date)) return false;
+      if (!isReadableSessionLabel(session.date)) return false;
     }
   }
 
