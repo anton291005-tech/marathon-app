@@ -27,7 +27,7 @@ export function trainableSessionToYmd(session: PlanSession, year?: number): stri
 export function countPastTrainableSessions(sessions: PlanSession[], todayYmd: string, year?: number): number {
   let n = 0;
   for (const s of sessions) {
-    const ymd = trainableSessionToYmd(s, year);
+    const ymd = trainableSessionToYmd(s, year ?? (Number.parseInt(todayYmd.slice(0, 4), 10) || undefined));
     if (ymd && ymd <= todayYmd) n += 1;
   }
   return n;

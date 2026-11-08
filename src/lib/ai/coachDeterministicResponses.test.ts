@@ -13,6 +13,10 @@ import {
 } from "../../recovery/recoveryStorage";
 import { toAiPlanWeeks } from "./planToAi";
 import { buildRecoverySummaryFromDomain } from "./recoverySummary";
+import { pinAppClock } from "../../testSupport/pinAppClock";
+
+// Label-only-Fixtures ("10. Aug") brauchen ein festes Jahr; siehe pinAppClock.
+pinAppClock("2026-11-08T12:00:00+01:00");
 
 function makePlan(datesessions: Array<{ date: string; day: string; id: string; type: string; title: string; km: number }>) {
   return [

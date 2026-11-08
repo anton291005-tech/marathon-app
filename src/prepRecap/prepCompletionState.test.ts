@@ -10,6 +10,10 @@ import {
   raceNameFromPlanName,
   resolveRaceName,
 } from "./prepCompletionState";
+import { pinAppClock } from "../testSupport/pinAppClock";
+
+// Label-only-Fixtures ("10. Aug") brauchen ein festes Jahr; siehe pinAppClock.
+pinAppClock("2026-11-08T12:00:00+01:00");
 
 function session(id: string, dateIso: string | undefined, type: string, extra: Partial<PlanSession> = {}): PlanSession {
   const [, m, d] = (dateIso ?? "2026-09-27").split("-").map(Number);

@@ -1,6 +1,10 @@
 import { buildPlanWeekToDateMap, computeDailyRecoverySeries } from "./recoveryScoringEngine";
 import type { PlanWeek, SessionLog } from "../marathonPrediction";
 import type { RecoveryDailyRow } from "./recoveryTypes";
+import { pinAppClock } from "../testSupport/pinAppClock";
+
+// Label-only-Fixtures ("10. Aug") brauchen ein festes Jahr; siehe pinAppClock.
+pinAppClock("2026-11-08T12:00:00+01:00");
 
 function variance(nums: number[]): number {
   if (nums.length === 0) return 0;

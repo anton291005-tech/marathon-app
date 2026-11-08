@@ -38,6 +38,11 @@ export type PlanAdherenceScoreResult = {
   dueTotal: number;
 };
 
+function yearOfYmd(ymd: string): number | undefined {
+  const year = Number.parseInt(ymd.slice(0, 4), 10);
+  return Number.isFinite(year) ? year : undefined;
+}
+
 /** `year` ist nur der Notnagel für Altpläne ohne `dateIso`; sonst zählt `session.dateIso`. */
 function sessionDateToYmd(s: PlanSession, year?: number): string | null {
   return sessionYmd(s, year);
@@ -56,7 +61,7 @@ function isYmdDueBy(ymd: string | null, todayYmd: string): boolean {
  * in AppMain) — damit es genau eine Definition von „bis heute fällig" gibt und nicht zwei.
  */
 export function isSessionDueByYmd(s: PlanSession, todayYmd: string, year?: number): boolean {
-  return isYmdDueBy(sessionDateToYmd(s, year), todayYmd);
+  return isYmdDueBy(sessionDateToYmd(s, year ?? yearOfYmd(todayYmd)), todayYmd);
 }
 
 const adhereRolling = { value: 8 };
@@ -174,7 +179,7 @@ function buildTrainingHistoryFromPlan(args: {
   for (const week of args.plan) {
     for (const s of week.s ?? []) {
       if (s.type === "rest") continue;
-      const ymd = sessionDateToYmd(s);
+      const ymd = sessionDateToYmd(s, args.now.getFullYear());
       if (ymd === null || !isYmdDueBy(ymd, todayYmd)) continue;
 
       const log = args.logs[s.id];

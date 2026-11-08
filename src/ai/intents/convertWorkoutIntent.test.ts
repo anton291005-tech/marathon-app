@@ -12,6 +12,10 @@ import {
 } from "../../recovery/recoveryStorage";
 import { buildRecoverySummaryFromDomain } from "../../lib/ai/recoverySummary";
 import type { TrainingPlanV2 } from "../../planV2/types";
+import { pinAppClock } from "../../testSupport/pinAppClock";
+
+// Label-only-Fixtures ("10. Aug") brauchen ein festes Jahr; siehe pinAppClock.
+pinAppClock("2026-11-08T12:00:00+01:00");
 
 function coachCtx(planRows: PlanWeek[], todayYmd: string, planV2?: TrainingPlanV2): AiContext {
   const logs = {};

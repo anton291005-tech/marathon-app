@@ -646,8 +646,8 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
 const BASE_PLAN = LEGACY_EMBEDDED_PLAN_WEEKS;
 /**
  * Jahr, das die Labels von LEGACY_EMBEDDED_PLAN_WEEKS meinen ("6. Apr" …
- * "27. Sep", dates-Zeilen sagen 2026). Explizit, damit der Demoplan nicht mehr
- * vom 2026-Default in parseSessionDateLabel abhängt.
+ * "27. Sep", dates-Zeilen sagen 2026). Explizit, damit der Demoplan nicht von
+ * einem Default-Jahr abhängt (es gibt keins mehr, siehe sessionDate).
  */
 const LEGACY_EMBEDDED_PLAN_YEAR = 2026;
 

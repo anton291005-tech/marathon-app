@@ -1,6 +1,10 @@
 import { validateWeekReassignmentBatch } from "./validateWeekReassignmentBatch";
 import type { WeekCalendarReassignmentProposal } from "./proposeWeekCalendarReassignments";
 import type { AiPlanWeek, AiPlanSession, SessionType } from "../../lib/ai/types";
+import { pinAppClock } from "../../testSupport/pinAppClock";
+
+// Label-only-Fixtures ("10. Aug") brauchen ein festes Jahr; siehe pinAppClock.
+pinAppClock("2026-11-08T12:00:00+01:00");
 
 type DaySpec = { id: string; type: SessionType; date: string; day: string };
 
@@ -16,7 +20,7 @@ function buildWeek(specs: DaySpec[]): AiPlanWeek {
   return { wn: 1, phase: "Base", label: "Woche 1", dates: "10.-16. Aug", km: 40, s };
 }
 
-// Montag 10. Aug 2026 .. Sonntag 16. Aug 2026 (parseSessionDateLabel defaults to Jahr 2026) — gleiches
+// Montag 10. Aug 2026 .. Sonntag 16. Aug 2026 (Label-only-Fixtures ohne dateIso; Jahr 2026 kommt aus der gepinnten App-Uhr) — gleiches
 // Muster wie assignSessionToBestCapacityDay.test.ts, für konsistente Fixtures.
 const BASE_WEEK: DaySpec[] = [
   { id: "s-mon", type: "interval", date: "10. Aug", day: "Montag" },

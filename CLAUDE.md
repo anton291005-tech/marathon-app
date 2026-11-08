@@ -48,6 +48,9 @@ An optional stricter-than-default commit pipeline exists but is not git-hook-enf
 ### One authoritative clock
 `src/core/time/timeSystem.ts` is the only file allowed to call bare `new Date()` or `Date.now()` — enforced by an ESLint `no-restricted-syntax` rule (`package.json` `eslintConfig`) over all other `src/**/*.{ts,tsx}`. Use `getAppNow()` / `getAppNowEpochMs()` / `getAppTodayYmd()` everywhere else; the frame-based cache means all reads within one render share the same instant. Tests pin time with `freezeTimeForTests(date)`.
 
+### Session dates come from `dateIso`, never from label + year
+A session label ("28. Feb") carries no year; deriving a date from it plus a fixed or default year (2026, `now.getFullYear()`) breaks plans across New Year. Use `sessionDate(session)` / `sessionYmd(session)` from `src/core/time/sessionDate.ts` (server mirror: `api/_lib/sessionDate.js`, parity-tested): they read `session.dateIso` first and use the label only for legacy sessions without `dateIso`. An ESLint rule (`no-restricted-syntax`, `package.json`) forbids `parseSessionDateLabel` and literal fallback years; the exceptions (legacy year anchor in `planV2/normalizeTrainingPlan.ts`, `planV2/fromBasePlan.ts`, dead `App.tsx`, the helper itself) are listed as separate `overrides`. Tests with label-only fixtures must pin the clock (`src/testSupport/pinAppClock.ts`).
+
 ### `src/auxiliary/**` is quarantined
 An ESLint `no-restricted-imports` rule blocks any `src/**/*.{ts,tsx}` file (outside `src/auxiliary` itself) from importing `**/auxiliary/**` — experimental modules there (e.g. `dailyDecision`) must not leak into SSOT-facing code.
 
