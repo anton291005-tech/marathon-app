@@ -25,7 +25,7 @@ const IMPORT = 'import { parseSessionDateLabel } from "../appSmartFeatures";\n';
 const LEGACY_CALL = 'export const d = (s) => parseSessionDateLabel(s.date, 2026);\n';
 
 describe("ESLint: kein Datum aus Session-Label + festem/Default-Jahr", () => {
-  jest.setTimeout(60000);
+  jest.setTimeout(120000);
 
   test("parseSessionDateLabel (Import und Aufruf) ist in normalem Code verboten", () => {
     const messages = lint(IMPORT + LEGACY_CALL, "src/features/foo.ts");

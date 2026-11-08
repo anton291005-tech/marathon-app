@@ -64,7 +64,7 @@ describe("Coach-Kontext (Server) über den Jahreswechsel", () => {
   });
 
   test("02.01.2027: last7Days sind 26.12.–01.01., next14Days 02.01.–16.01. (jeweils mit echtem dateIso)", async () => {
-    const { cached } = await sentContext(baseContext("2027-01-02T07:00:00.000Z", buildWeeks()));
+    const { cached } = await sentContext(baseContext("2027-01-02T12:00:00.000Z", buildWeeks()));
     const last7 = cached.trainingPlan.last7Days.map((s) => s.dateIso);
     const next14 = cached.trainingPlan.next14Days.map((s) => s.dateIso);
     expect(last7[0]).toBe("2026-12-26");
@@ -75,7 +75,7 @@ describe("Coach-Kontext (Server) über den Jahreswechsel", () => {
   });
 
   test("28.12.2026: next14Days laufen über Neujahr (Januar-Sessions sind Zukunft, nicht 2026-Vergangenheit)", async () => {
-    const { cached, dynamic } = await sentContext(baseContext("2026-12-28T07:00:00.000Z", buildWeeks()));
+    const { cached, dynamic } = await sentContext(baseContext("2026-12-28T12:00:00.000Z", buildWeeks()));
     const next14 = cached.trainingPlan.next14Days.map((s) => s.dateIso);
     expect(next14[0]).toBe("2026-12-28");
     expect(next14).toContain("2027-01-05");
@@ -84,7 +84,7 @@ describe("Coach-Kontext (Server) über den Jahreswechsel", () => {
   });
 
   test("Aktuelle Woche und Ø-Wochenkilometer am 02.01.2027 kommen aus dem richtigen Jahr", async () => {
-    const { cached } = await sentContext(baseContext("2027-01-02T07:00:00.000Z", buildWeeks()));
+    const { cached } = await sentContext(baseContext("2027-01-02T12:00:00.000Z", buildWeeks()));
     // Woche 9 (02.01.–08.01.2027) ist noch „Aufbau"; ab Woche 11 „Spezifisch".
     expect(cached.trainingPlan.planSummary.currentPhase).toBe("Aufbau");
     // Restwochen ab 02.01.2027: Wochen 9–17 = 9 Wochen à 56 km (nicht alle 17 Wochen).
@@ -92,7 +92,7 @@ describe("Coach-Kontext (Server) über den Jahreswechsel", () => {
   });
 
   test("Altplan ohne dateIso: Notnagel ist das Jahr von heute (unverändert), ohne Absturz", async () => {
-    const { cached } = await sentContext(baseContext("2026-11-08T07:00:00.000Z", buildWeeks({ withDateIso: false })));
+    const { cached } = await sentContext(baseContext("2026-11-08T12:00:00.000Z", buildWeeks({ withDateIso: false })));
     const next14 = cached.trainingPlan.next14Days;
     expect(next14.length).toBeGreaterThan(0);
     expect(next14[0].dateIso).toBeUndefined();

@@ -37,6 +37,8 @@ import {
   workoutToStored,
 } from "./healthRuns";
 
+/** Dieser tote Prototyp (nur von App.test.tsx geladen) meint mit seinen Labels das Jahr 2026 — explizit, kein Default. */
+const LEGACY_PROTOTYPE_PLAN_YEAR = 2026;
 const APPLE_HEALTH_CONNECTED_KEY = "marathonAppleHealthConnected";
 /** iOS HealthKit read types (native plugin accepts strings; "workouts" is special-cased in Swift). */
 const APPLE_HEALTH_READ_TYPES = ["workouts", "distance", "heartRate", "calories"];
@@ -1292,7 +1294,7 @@ export default function App(){
     if(targetScreen === "week"){
       const now = new Date();
       const todaySession = PLAN.find((week)=>week.s.some((session)=>{
-        const parsed = parseSessionDateLabel(session.date);
+        const parsed = parseSessionDateLabel(session.date, LEGACY_PROTOTYPE_PLAN_YEAR);
         if(!parsed)return false;
         const normalized = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1423,7 +1425,7 @@ export default function App(){
   const todayMidnight = new Date();
   todayMidnight.setHours(0, 0, 0, 0);
   const decisionMissedRecent = ACTIVE_SESSIONS.filter((session) => {
-    const d = parseSessionDateLabel(session.date);
+    const d = parseSessionDateLabel(session.date, LEGACY_PROTOTYPE_PLAN_YEAR);
     if (!d) return false;
     const sd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     if (sd < sevenDaysAgo || sd > todayMidnight) return false;
@@ -1442,7 +1444,7 @@ export default function App(){
   const currentPhaseIndex = PHASE_ORDER.indexOf(w.phase);
   const currentPhaseProgress = Math.round(((currentPhaseIndex + 1) / PHASE_ORDER.length) * 100);
   const phaseStatus = pct >= currentPhaseProgress + 10 ? "Voraus" : pct >= currentPhaseProgress - 10 ? "Im Plan" : "Aufholen";
-  const nextKeyDate = nextKeySession ? parseSessionDateLabel(nextKeySession.date) : null;
+  const nextKeyDate = nextKeySession ? parseSessionDateLabel(nextKeySession.date, LEGACY_PROTOTYPE_PLAN_YEAR) : null;
   const daysToNextKeySession = nextKeyDate
     ? Math.ceil((new Date(nextKeyDate.getFullYear(), nextKeyDate.getMonth(), nextKeyDate.getDate()).getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24))
     : null;
@@ -1519,7 +1521,7 @@ export default function App(){
   const visibleOverviewPhases = overviewPhaseFilter === "all" ? Object.keys(PI) : [overviewPhaseFilter];
   const todayNextSession = getTodayNextSession(ACTIVE_SESSIONS, logs, appNow);
   const firstTrainingSession = ACTIVE_SESSIONS[0] || null;
-  const firstTrainingDate = firstTrainingSession ? parseSessionDateLabel(firstTrainingSession.date) : null;
+  const firstTrainingDate = firstTrainingSession ? parseSessionDateLabel(firstTrainingSession.date, LEGACY_PROTOTYPE_PLAN_YEAR) : null;
   const today = appNow;
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const firstTrainingStart = firstTrainingDate ? new Date(firstTrainingDate.getFullYear(), firstTrainingDate.getMonth(), firstTrainingDate.getDate()) : null;
