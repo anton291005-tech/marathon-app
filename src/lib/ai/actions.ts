@@ -1,4 +1,4 @@
-import { parseSessionDateLabel } from "../../appSmartFeatures";
+import { sessionDate } from "../../core/time/sessionDate";
 import { pluralDe } from "../../utils/pluralDe";
 import {
   buildBoostNextWeekVolumePatches,
@@ -21,20 +21,9 @@ const HARD_TYPES = new Set(["interval", "tempo", "race"]);
 const DE_WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const DE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
-const YMD_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-/**
- * Kalendertag einer Session. Bevorzugt `dateIso` (echtes Jahr aus der SSOT); das Label `date`
- * ("14. Mär") trägt kein Jahr und zwingt `parseSessionDateLabel` zum Raten, was über einen
- * Jahreswechsel falsch sortiert. Label-Pfad bleibt Fallback für Legacy-Sessions ohne `dateIso`.
- */
+/** Kalendertag einer Session: `dateIso` (echtes Jahr aus der SSOT), Label nur als Fallback für Altpläne. */
 function getSessionDate(session: AiPlanSession): Date | null {
-  const iso = session.dateIso;
-  if (typeof iso === "string" && YMD_PATTERN.test(iso)) {
-    const [y, m, d] = iso.split("-").map((part) => Number.parseInt(part, 10));
-    return new Date(y, m - 1, d, 12, 0, 0, 0);
-  }
-  return parseSessionDateLabel(session.date);
+  return sessionDate(session);
 }
 
 function toLocalYmd(date: Date): string {
@@ -388,7 +377,7 @@ function reconcilePatchedDateIso(
   if (changes.date === undefined || changes.dateIso !== undefined) return changes;
 
   const anchor = getSessionDate(session);
-  const label = parseSessionDateLabel(changes.date);
+  const label = sessionDate({ date: changes.date }, anchor?.getFullYear());
   // Ohne Anker oder ohne parsebares Label lässt sich kein Jahr bestimmen — dann lieber gar kein
   // dateIso als ein falsches; die Consumer fallen auf den (protokollierten) Label-Pfad zurück.
   if (!anchor || !label) return { ...changes, dateIso: undefined };

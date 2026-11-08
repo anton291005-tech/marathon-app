@@ -5,7 +5,7 @@
  * - C: «mit»-Halbsegmente + Typ-Filtern statt blind erste Zeile pro Tag.
  */
 
-import { parseSessionDateLabel } from "../../appSmartFeatures";
+import { sessionDate } from "../../core/time/sessionDate";
 import type { AiPlanSession, AiPlanWeek } from "../../lib/ai/types";
 import { getAppNow } from "../../core/time/timeSystem";
 
@@ -125,7 +125,7 @@ function inferTwoDistinctRelativeCalendarDays(norm: string, today: Date): { earl
 function sessionsOnLocalCalendarDay(plan: AiPlanWeek[], day: Date): AiPlanSession[] {
   const target = startOfLocalDay(day).getTime();
   return plan.flatMap((w) => w.s).filter((s) => {
-    const sd = parseSessionDateLabel(s.date);
+    const sd = sessionDate(s);
     if (!sd) return false;
     return startOfLocalDay(sd).getTime() === target;
   });
@@ -597,9 +597,9 @@ function scoreSession(session: AiPlanSession, raw: string, goal: "source" | "tar
   const today = ctx.today;
   let score = 0;
 
-  const sessionDate = parseSessionDateLabel(session.date);
-  if (!sessionDate) return -999;
-  const sessionDay = startOfLocalDay(sessionDate);
+  const sessionCalendarDate = sessionDate(session);
+  if (!sessionCalendarDate) return -999;
+  const sessionDay = startOfLocalDay(sessionCalendarDate);
 
   if (ctx.weekWindow && !inWeekWindow(sessionDay, ctx.weekWindow)) {
     const allowTodaySourceOutsideWindow =

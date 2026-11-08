@@ -19,7 +19,14 @@ export type CoachRuntimeSnapshot = {
     weeks: number;
     sessionsTotal: number;
     raceDateIso: string | null;
-    nextSessions: ReadonlyArray<{ readonly date: string; readonly title: string; readonly type: string; readonly km: number }>;
+    nextSessions: ReadonlyArray<{
+      readonly date: string;
+      /** Kalendertag mit Jahr (YYYY-MM-DD); das Label `date` trägt kein Jahr. */
+      readonly dateIso: string | null;
+      readonly title: string;
+      readonly type: string;
+      readonly km: number;
+    }>;
   };
   adherence: {
     score: number;

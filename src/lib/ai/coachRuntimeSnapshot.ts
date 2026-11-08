@@ -1,4 +1,5 @@
-import { parseSessionDateLabel, isSessionLogDone } from "../../appSmartFeatures";
+import { isSessionLogDone } from "../../appSmartFeatures";
+import { sessionDate, sessionYmd } from "../../core/time/sessionDate";
 import { computePlanAdherenceScore } from "../../coach/adherenceScore";
 import type { StoredHealthRun } from "../../healthRuns";
 import { storedHealthRunDistanceKmNumeric, storedHealthRunIsRunning } from "../../healthRuns";
@@ -13,22 +14,23 @@ function dayStart(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-function nextSessionsFromPlan(plan: AiPlanWeek[], now: Date, limit: number): Array<{ date: string; title: string; type: string; km: number }> {
+function nextSessionsFromPlan(plan: AiPlanWeek[], now: Date, limit: number): CoachRuntimeSnapshot["planSummary"]["nextSessions"] {
   const today = dayStart(now);
   const all: AiPlanSession[] = plan.flatMap((w) => w.s);
   const upcoming = all
     .filter((s) => {
-      const dt = parseSessionDateLabel(s.date);
+      const dt = sessionDate(s);
       return dt && dayStart(dt) >= today && s.type !== "rest";
     })
     .sort((a, b) => {
-      const da = parseSessionDateLabel(a.date)?.getTime() ?? 0;
-      const db = parseSessionDateLabel(b.date)?.getTime() ?? 0;
+      const da = sessionDate(a)?.getTime() ?? 0;
+      const db = sessionDate(b)?.getTime() ?? 0;
       return da - db;
     })
     .slice(0, limit);
   return upcoming.map((s) => ({
     date: `${s.day} ${s.date}`,
+    dateIso: sessionYmd(s),
     title: s.title,
     type: s.type,
     km: typeof s.km === "number" ? s.km : 0,
@@ -55,7 +57,7 @@ export function buildCoachRuntimeSnapshot(args: {
   let completedPlanSessions = 0;
   const flat = plan.flatMap((w) => w.s);
   for (const s of flat) {
-    const dt = parseSessionDateLabel(s.date);
+    const dt = sessionDate(s);
     if (!dt || s.type === "rest") continue;
     const sd = dayStart(dt);
     if (sd < tMin || sd > t0) continue;

@@ -64,6 +64,14 @@ export function labelToYmd(label: unknown, year: number): string | null {
   return `${year}-${pad2(month0 + 1)}-${pad2(day)}`;
 }
 
+/**
+ * Ist das Label ("28. Feb") als Tag+Monat lesbar? Reine Formatprobe ohne Jahr-Aussage — das Schaltjahr
+ * als Probe-Jahr lässt auch "29. Feb" gelten.
+ */
+export function isReadableSessionLabel(label: unknown): boolean {
+  return labelToYmd(label, 2024) !== null;
+}
+
 /** `dateIso` als YYYY-MM-DD, falls vorhanden und ein echtes Datum (akzeptiert auch volle ISO-Strings). */
 export function dateIsoToYmd(dateIso: unknown): string | null {
   if (typeof dateIso !== "string") return null;
