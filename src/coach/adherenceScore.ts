@@ -4,11 +4,8 @@
  * Reine Business-Logik — keine React-/UI-Abhängigkeiten.
  */
 
-import {
-  berlinWallClockYmd,
-  isSessionLogDone,
-  parseSessionDateLabel,
-} from "../appSmartFeatures";
+import { berlinWallClockYmd, isSessionLogDone } from "../appSmartFeatures";
+import { sessionYmd } from "../core/time/sessionDate";
 import { getAppNow } from "../core/time/timeSystem";
 import { getPlannedKmEquiv } from "../marathonPrediction";
 import type { PlanSession, PlanWeek, SessionLog } from "../marathonPrediction";
@@ -41,10 +38,9 @@ export type PlanAdherenceScoreResult = {
   dueTotal: number;
 };
 
-function sessionDateToYmd(s: PlanSession, year = 2026): string | null {
-  const d = parseSessionDateLabel(s.date, year);
-  if (!d) return null;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** `year` ist nur der Notnagel für Altpläne ohne `dateIso`; sonst zählt `session.dateIso`. */
+function sessionDateToYmd(s: PlanSession, year?: number): string | null {
+  return sessionYmd(s, year);
 }
 
 /**
@@ -59,7 +55,7 @@ function isYmdDueBy(ymd: string | null, todayYmd: string): boolean {
  * Dieselbe Fälligkeitsregel für Aufrufer, die nur die Session haben (z. B. die Readiness-Berechnung
  * in AppMain) — damit es genau eine Definition von „bis heute fällig" gibt und nicht zwei.
  */
-export function isSessionDueByYmd(s: PlanSession, todayYmd: string, year = 2026): boolean {
+export function isSessionDueByYmd(s: PlanSession, todayYmd: string, year?: number): boolean {
   return isYmdDueBy(sessionDateToYmd(s, year), todayYmd);
 }
 

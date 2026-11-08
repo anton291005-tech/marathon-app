@@ -3,7 +3,8 @@
  * Pure functions — no UI, no API, no plan mutation.
  */
 
-import { isSessionLogDone, normalizeCalendarDay, parseSessionDateLabel } from "./appSmartFeatures";
+import { isSessionLogDone } from "./appSmartFeatures";
+import { sessionYmd } from "./core/time/sessionDate";
 import { getAppNow } from "./core/time/timeSystem";
 import type { PlanSession, PlanWeek, SessionLog } from "./marathonPrediction";
 
@@ -29,13 +30,7 @@ export type CompletedRunSnapshot = {
 };
 
 function planSessionLocalYmd(session: PlanSession): string | null {
-  const pd = parseSessionDateLabel(session.date);
-  if (!pd) return null;
-  const x = normalizeCalendarDay(pd);
-  const y = x.getFullYear();
-  const m = String(x.getMonth() + 1).padStart(2, "0");
-  const d = String(x.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return sessionYmd(session);
 }
 
 function runCompletionSortTime(log: SessionLog): number {

@@ -3,7 +3,7 @@
  * Nur Lesen / Heuristik — keine Log-Mutation. Nutzt dieselbe Session-Typ-Logik wie matchRunToPlannedSession.
  */
 
-import { normalizeCalendarDay, parseSessionDateLabel } from "../appSmartFeatures";
+import { sessionYmd } from "../core/time/sessionDate";
 import type { PlanSession } from "../marathonPrediction";
 import type { StoredHealthRun } from "../healthRuns";
 import { normalizeAppleHealthRun } from "../trainingIntelligence/normalizeAppleHealthRun";
@@ -14,13 +14,7 @@ import { classifyWorkoutType } from "./workoutTypeClassifier";
 const RUNNING_TYPES = new Set(["easy", "long", "interval", "tempo", "race"]);
 
 function sessionLocalYmd(session: PlanSession): string | null {
-  const pd = parseSessionDateLabel(session.date);
-  if (!pd) return null;
-  const x = normalizeCalendarDay(pd);
-  const y = x.getFullYear();
-  const m = String(x.getMonth() + 1).padStart(2, "0");
-  const d = String(x.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return sessionYmd(session);
 }
 
 function localYmdFromRunStart(iso: string): string | null {
