@@ -7,8 +7,8 @@ import {
   berlinWallClockYmd,
   calendarDaysBetweenYmd,
   isSessionLogDone,
-  parseSessionDateLabel,
 } from "./appSmartFeatures";
+import { sessionDate, sessionYmd } from "./core/time/sessionDate";
 import { getAppNow } from "./core/time/timeSystem";
 import type { StoredHealthRun } from "./healthRuns";
 import {
@@ -174,9 +174,8 @@ function collectPaceRunSamples(
   for (const week of plan) {
     for (const session of week.s ?? []) {
       if (!isRunningSession(session)) continue;
-      const dt = parseSessionDateLabel(session.date, year);
-      if (!dt) continue;
-      const ymd = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      const ymd = sessionYmd(session, year);
+      if (!ymd) continue;
       if (ymd > todayYmd) continue;
       const daysBack = calendarDaysBetweenYmd(ymd, todayYmd);
       if (!Number.isFinite(daysBack) || daysBack < 0 || daysBack > PACE_LOOKBACK_DAYS) continue;
@@ -221,9 +220,8 @@ function findRaceAnchor(
   for (const week of plan) {
     for (const session of week.s ?? []) {
       if (session.type !== "race") continue;
-      const dt = parseSessionDateLabel(session.date, year);
-      if (!dt) continue;
-      const ymd = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      const ymd = sessionYmd(session, year);
+      if (!ymd) continue;
       if (ymd > todayYmd) continue;
       const daysBack = calendarDaysBetweenYmd(ymd, todayYmd);
       if (!Number.isFinite(daysBack) || daysBack < 0 || daysBack > RACE_ANCHOR_WINDOW_DAYS) continue;
@@ -260,9 +258,8 @@ function computeMaxLongRunKm(
   for (const week of plan) {
     for (const session of week.s ?? []) {
       if (session.type !== "long") continue;
-      const dt = parseSessionDateLabel(session.date, year);
-      if (!dt) continue;
-      const ymd = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      const ymd = sessionYmd(session, year);
+      if (!ymd) continue;
       if (ymd > todayYmd) continue;
       const log = logs[session.id];
       if (!isSessionLogDone(log)) continue;
@@ -299,7 +296,7 @@ function computeWeeklyVolumeAdherence(
   for (const week of plan) {
     for (const session of week.s ?? []) {
       if (!isRunningSession(session)) continue;
-      const dt = parseSessionDateLabel(session.date, year);
+      const dt = sessionDate(session, year);
       if (!dt) continue;
       const dayMs = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
       if (dayMs < startMs || dayMs >= endMs) continue;
