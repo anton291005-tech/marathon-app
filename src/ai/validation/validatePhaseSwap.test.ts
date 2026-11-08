@@ -47,21 +47,29 @@ describe("validatePhaseSwap", () => {
     expect((res.axes.structural?.score ?? 0)).toBeGreaterThan(0);
   });
 
-  test("long run -> base is warning (overrideable)", () => {
+  test("long run -> base no longer warns (Regel entfallen, Spec §15.5 (3))", () => {
     const m = weekPhaseMapFixture();
     const source = w("s", new Date("2026-05-07T12:00:00.000Z").toISOString(), "long"); // build week
     const target = w("t", new Date("2026-04-30T12:00:00.000Z").toISOString(), "easy"); // base week
     const res = validatePhaseSwap(source, target, { weekPhaseMap: m, validationContext: vctx });
-    expect(res.axes.structural?.score).toBeGreaterThan(0);
+    expect(res.status).toBe("allow");
+    expect(res.axes.structural).toBeUndefined();
   });
 
-  test("peak -> peak gives warning only", () => {
+  test("peak -> peak no longer warns (Peak-Kompression entfallen, Spec §15.5 (3))", () => {
     const m = weekPhaseMapFixture();
     const source = w("s", new Date("2026-08-06T12:00:00.000Z").toISOString(), "tempo"); // peak week
     const target = w("t", new Date("2026-08-08T12:00:00.000Z").toISOString(), "easy"); // same peak week
     const res = validatePhaseSwap(source, target, { weekPhaseMap: m, validationContext: vctx });
-    expect(res.status).toBe("warn");
-    expect(typeof res.axes.structural?.reason).toBe("string");
+    expect(res.status).toBe("allow");
+  });
+
+  test("kind M below the M-km threshold is not hard: M -> taper is not warned", () => {
+    const m = weekPhaseMapFixture();
+    const source = { ...w("s", new Date("2026-05-07T12:00:00.000Z").toISOString(), "tempo"), kind: "M" as const };
+    const target = w("t", new Date("2026-09-10T12:00:00.000Z").toISOString(), "easy");
+    const res = validatePhaseSwap(source, target, { weekPhaseMap: m, validationContext: vctx });
+    expect(res.status).toBe("allow");
   });
 
   test("normal swap is allowed", () => {
