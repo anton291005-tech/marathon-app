@@ -108,4 +108,26 @@ describe("Server-Logs ohne Nutzerinhalte", () => {
     expect(diagnostics).toBeDefined();
     expectCleanLogs();
   });
+
+  test("Plan-Kern (Schritt 10): Logzeile ohne Freitext, ohne Daten, ohne Rennergebnis", () => {
+    const { attemptCorePlan, logPlanCore } = require("../../api/_lib/planCoreRoute");
+    const coreProfile = {
+      ...profile(),
+      raceDistanceKm: 42.2,
+      raceDate: "14.03.2027",
+      planStartDate: "23.11.2026",
+      runDaysPerWeek: 4,
+      availableDays: ["Mo", "Mi", "Fr", "So"],
+      longRunDay: "So",
+      currentWeeklyKm: 35,
+      longestRecentRunKm: 12,
+      recentRace: { distanceKm: 21.1, timeSeconds: 6913, dateYmd: "2026-10-12", estimated: false },
+    };
+    const attempt = attemptCorePlan(coreProfile, "2026-11-10");
+    expect(attempt.status).toBe("ok");
+    logPlanCore("shadow", "shadow", attempt.log, { status: attempt.status });
+    expectCleanLogs();
+    const all = logged.join("\n");
+    ["14.03.2027", "2027-03-14", "2026-11-23", "2026-10-12", "6913", "3:30:00"].forEach((value) => expect(all).not.toContain(value));
+  });
 });

@@ -3,6 +3,10 @@ import {
   getPerformancePrediction,
   resolveHalfMarathonRaceSignal,
 } from "./AppMain";
+import { pinAppClock } from "./testSupport/pinAppClock";
+
+// Label-only-Fixtures ("10. Aug") brauchen ein festes Jahr; siehe pinAppClock.
+pinAppClock("2026-11-08T12:00:00+01:00");
 
 describe("getPerformancePrediction", () => {
   const baseArgs = {

@@ -31,6 +31,14 @@ const wizardB = buildOnboardingPreferencesPatch({
   planStartDate: "03.10.2026",
   weeklyKmRange: "20–40 km",
   userPreferences: [],
+  planInputs: {
+    runDaysPerWeek: 4,
+    availableDays: ["Mo", "Mi", "Fr", "So"],
+    longRunDay: "So",
+    currentWeeklyKm: 35,
+    longestRecentRunKm: null,
+    recentRace: null,
+  },
 });
 
 /** Wizard-Abschluss wie in AppMain: alten Plan merken, Preferences ersetzen, neuen Plan als Besitzer. */
@@ -76,6 +84,25 @@ describe("plan-eigene Preferences", () => {
       to: { planId: "plan-b", describesPreferences: false },
     });
     expect(backOnB.preferences).toMatchObject({ raceGoal: "finish", targetTime: null, raceDistanceKm: 21.1, maxHeartRateBpm: 191 });
+  });
+
+  it("planInputs gehören zum Plan: Wizard B setzt sie, zurück auf A (ohne gespeicherte Eingaben) sind sie weg, wieder B → zurück", () => {
+    const afterWizard = runWizard(prefsA, "plan-a", "plan-b");
+    expect(afterWizard.preferences.planInputs).toEqual(wizardB.planInputs);
+
+    const backOnA = switchPlanPreferences({
+      ...afterWizard,
+      from: { planId: "plan-b", describesPreferences: true },
+      to: { planId: "plan-a", describesPreferences: false },
+    });
+    expect("planInputs" in backOnA.preferences).toBe(false);
+
+    const backOnB = switchPlanPreferences({
+      ...backOnA,
+      from: { planId: "plan-a", describesPreferences: true },
+      to: { planId: "plan-b", describesPreferences: false },
+    });
+    expect(backOnB.preferences.planInputs).toEqual(wizardB.planInputs);
   });
 
   it("übernimmt eine nach dem Wizard geänderte Zielzeit des verlassenen Plans", () => {

@@ -1,0 +1,18 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Invarianten über zufällige Pläne (Seed 20261107, 2000 Fälle) checkPlan: 0 errors, 0 warnings außer begründeten Abweichungen; I20 (zweimal gerechnet, identisch) 1`] = `
+Array [
+  "I10/no-long-run-in-window",
+  "I11/e-above-75-percent-long-run",
+  "I13/taper-mean-excused",
+  "I13/taper-q-excused",
+  "I2/e-shortened-to-fit-week",
+  "I2/e-shortened-to-long-run",
+  "I2/mlr-as-e",
+  "I2/q-softened",
+  "I5/min-week-km-raised",
+  "I9/long-run-raised-to-minimum",
+  "VOLUME/week-km-raised",
+  "VOLUME/week-km-reduced",
+]
+`;

@@ -3,7 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { ICON_SIZE_S, ICON_STROKE } from "../../ui/icons";
 import { getAppNow } from "../../core/time/timeSystem";
 import type { AiAssistantAction } from "../../lib/ai/types";
-import { rowHeadingForSessionDateLabel } from "./SwapPreviewCard";
+import { rowHeadingForSession } from "./SwapPreviewCard";
 
 type Props = {
   before: any;
@@ -73,10 +73,10 @@ export function ReplaceWorkoutPreviewCard({
   }, [coachTodayIso]);
 
   const rowBefore = useMemo(
-    () => rowHeadingForSessionDateLabel(before?.date, coachRef),
-    [before?.date, coachRef],
+    () => rowHeadingForSession(before, coachRef),
+    [before, coachRef],
   );
-  const rowAfter = useMemo(() => rowHeadingForSessionDateLabel(after?.date, coachRef), [after?.date, coachRef]);
+  const rowAfter = useMemo(() => rowHeadingForSession(after, coachRef), [after, coachRef]);
 
   const lowConf = confidence === "low" ? " Zuordnung ist unsicher — bitte kurz prüfen." : "";
 

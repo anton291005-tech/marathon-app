@@ -19,6 +19,7 @@ export const PLAN_OWNED_PREFERENCE_KEYS = [
   "raceDate",
   "planStartDate",
   "weeklyKmRange",
+  "planInputs",
   "userPreferences",
   "targetTime",
 ] as const;

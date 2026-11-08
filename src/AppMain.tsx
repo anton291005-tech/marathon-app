@@ -34,7 +34,6 @@ import {
   getShareSummary,
   getTodayNextSession,
   isSessionLogDone,
-  parseSessionDateLabel,
   parseTargetTimeToSeconds,
   resolveCurrentPlanWeekIndex,
   safeParseJSON,
@@ -118,6 +117,7 @@ import {
   switchPlanPreferences,
   writePlanPreferencesStore,
 } from "./onboarding/planOwnedPreferences";
+import { readPlanInputsFromPreferences } from "./onboarding/onboardingPlanInputs";
 import {
   MIGRATION_TO_SUPABASE_DONE_KEY,
   SESSION_LOGS_MIGRATION_DONE_KEY,
@@ -231,7 +231,7 @@ import {
   mergeWithLogsOutsidePlanScope,
   scopeSessionLogsToPlan,
 } from "./sessionLogs/scopeSessionLogsToPlan";
-import { trainingPhaseColor, type TrainingPhase } from "./planV2/trainingPhase";
+import { trainingPhaseColor, trainingPhaseLabelDe, type TrainingPhase } from "./planV2/trainingPhase";
 import {
   getStoredHealthRunCanonicalType,
   loadHealthRunsFromStorage,
@@ -289,6 +289,7 @@ import {
   formatPaceMinPerKmLabel,
   getHrRangeForZone,
   getSessionHrZoneShort,
+  isRecoveryPlanWeek,
   parsePlannedPaceRangeMinPerKm,
 } from "./trainingIntelligence/sessionPlanTargets";
 import { computeTrainingProgressPct } from "./selectors/trainingProgress";
@@ -310,6 +311,7 @@ import {
   getAppNowEpochMs,
   getAppTodayYmd,
 } from "./core/time/timeSystem";
+import { sessionDate } from "./core/time/sessionDate";
 import {
   devMarkOncePerFrame,
   monitorMetricSource,
@@ -335,10 +337,10 @@ const PI = {
   SPEC:  { label:"Wettkampfspez.",  col:"#f59e0b", bg:"rgba(245,158,11,0.12)" },
   TAPER: { label:"Taper",  col:"#a855f7", bg:"rgba(168,85,247,0.12)" },
   // Canonical 4-phase keys from trainingPhase.ts — used by newly generated plans
-  base:  { label:"Grundlage", col:trainingPhaseColor("base"),  bg:"rgba(16,185,129,0.12)" },
-  build: { label:"Aufbau",  col:trainingPhaseColor("build"), bg:"rgba(59,130,246,0.12)" },
-  peak:  { label:"Spitze", col:trainingPhaseColor("peak"),  bg:"rgba(239,68,68,0.12)" },
-  taper: { label:"Taper",  col:trainingPhaseColor("taper"), bg:"rgba(168,85,247,0.12)" },
+  base:  { label:trainingPhaseLabelDe("base"),              col:trainingPhaseColor("base"),  bg:"rgba(16,185,129,0.12)" },
+  build: { label:trainingPhaseLabelDe("build"),             col:trainingPhaseColor("build"), bg:"rgba(59,130,246,0.12)" },
+  peak:  { label:trainingPhaseLabelDe("peak"),              col:trainingPhaseColor("peak"),  bg:"rgba(239,68,68,0.12)" },
+  taper: { label:trainingPhaseLabelDe("taper"),             col:trainingPhaseColor("taper"), bg:"rgba(168,85,247,0.12)" },
 };
 const DEFAULT_VIEW = "home";
 /** Tab-Bar: Icons und Beschriftungen sind fest (docs/design-system/components.md, „TabBar"). */
@@ -639,8 +641,8 @@ const LEGACY_EMBEDDED_PLAN_WEEKS=[
 const BASE_PLAN = LEGACY_EMBEDDED_PLAN_WEEKS;
 /**
  * Jahr, das die Labels von LEGACY_EMBEDDED_PLAN_WEEKS meinen ("6. Apr" …
- * "27. Sep", dates-Zeilen sagen 2026). Explizit, damit der Demoplan nicht mehr
- * vom 2026-Default in parseSessionDateLabel abhängt.
+ * "27. Sep", dates-Zeilen sagen 2026). Explizit, damit der Demoplan nicht von
+ * einem Default-Jahr abhängt (es gibt keins mehr, siehe sessionDate).
  */
 const LEGACY_EMBEDDED_PLAN_YEAR = 2026;
 
@@ -862,7 +864,7 @@ export function resolveHalfMarathonRaceSignal({ activeSessions, logs, healthRunB
   const actualDurationSec =
     typeof ar?.duration === "number" && ar.duration > 0 ? ar.duration : health?.duration;
 
-  const raceDate = parseSessionDateLabel(race.date);
+  const raceDate = sessionDate(race);
   const halfMarathonRaceDaysAgo = raceDate
     ? calendarDaysBetweenYmd(berlinWallClockYmd(raceDate), berlinWallClockYmd(now))
     : null;
@@ -1032,7 +1034,7 @@ function sumLoggedKmCalendarWeek(plan, logs, healthById, anchorDate, weekOffset)
   for (const week of plan || []) {
     for (const s of getWeekSessionList(week)) {
       if (s.type === "rest") continue;
-      const dt = parseSessionDateLabel(s.date, anchorDate.getFullYear());
+      const dt = sessionDate(s, anchorDate.getFullYear());
       if (!dt || !Number.isFinite(dt.getTime())) continue;
       const dayMs = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
       if (dayMs < startMs || dayMs >= endExclusiveMs) continue;
@@ -1055,7 +1057,7 @@ function longRunPaceLastFourWeeksSnapshot(plan, logs, healthById, nowDate) {
     for (const s of getWeekSessionList(week)) {
       if (s.type !== "long") continue;
       if (!(getSessionPlannedDistanceKm(s) >= LONG_MIN_KM)) continue;
-      const d = parseSessionDateLabel(s.date, yearGuess);
+      const d = sessionDate(s, yearGuess);
       if (!d || !Number.isFinite(d.getTime())) continue;
       const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(
         2,
@@ -2293,6 +2295,16 @@ export default function AppMain(){
 
   const displayPlan = useDisplayPlanFromTrainingState(trainingPlanV2, aiPlanPatches);
   const ALL_SESSIONS = displayPlan.flatMap((week) => getWeekSessionList(week));
+  /** Einheiten in Entlastungswochen: die Auswertung nach dem Training zeigt für `easy` dieselbe Zone wie die Karte. */
+  const recoveryWeekSessionIds = useMemo(
+    () =>
+      new Set(
+        displayPlan
+          .filter((week) => isRecoveryPlanWeek(week))
+          .flatMap((week) => getWeekSessionList(week).map((session) => session.id)),
+      ),
+    [displayPlan],
+  );
   const ACTIVE_SESSIONS = ALL_SESSIONS.filter((session) => session.type !== "rest");
   const DISPLAY_PLAN_RUNNING_SESSIONS = ACTIVE_SESSIONS.filter(
     (session) => session.type !== "strength" && session.type !== "bike",
@@ -2537,7 +2549,7 @@ export default function AppMain(){
     if(targetScreen === "week"){
       const now = getAppNow();
       const todaySession = displayPlan.find((week)=>getWeekSessionList(week).some((session)=>{
-        const parsed = parseSessionDateLabel(session.date);
+        const parsed = sessionDate(session);
         if(!parsed)return false;
         const normalized = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -3106,7 +3118,13 @@ export default function AppMain(){
     homeRecoveryRhr7dDisplay,
   ]);
   const consistencyStats = getConsistencyStats(displayPlan, logs, appNow);
-  const coachHints = getCoachFeedback({ plan: displayPlan, logs, consistencyStats, now: appNow });
+  const coachHints = getCoachFeedback({
+    plan: displayPlan,
+    logs,
+    consistencyStats,
+    raceDistanceKm: preferences.raceDistanceKm ?? null,
+    now: appNow,
+  });
   const weekAnalysis = w ? analyzeWeek(w, logs, appNow, healthRunById) : {
     plannedKm: 0,
     actualKm: 0,
@@ -3168,7 +3186,7 @@ export default function AppMain(){
       : null;
   const todayNextSession = decisionTodayNextSession;
   const firstTrainingSession = ACTIVE_SESSIONS[0] || null;
-  const firstTrainingDate = firstTrainingSession ? parseSessionDateLabel(firstTrainingSession.date) : null;
+  const firstTrainingDate = firstTrainingSession ? sessionDate(firstTrainingSession) : null;
   const today = appNow;
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const firstTrainingStart = firstTrainingDate ? new Date(firstTrainingDate.getFullYear(), firstTrainingDate.getMonth(), firstTrainingDate.getDate()) : null;
@@ -3675,6 +3693,7 @@ export default function AppMain(){
   const postWorkoutSummary = usePostWorkoutSummary({
     activeView,
     planSessions: ACTIVE_SESSIONS,
+    recoveryWeekSessionIds,
     logs,
     healthRuns,
     maxHeartRateBpm: postWorkoutMaxHeartRateBpm,
@@ -4315,8 +4334,8 @@ export default function AppMain(){
                   const log=logs[session.id];
                   const status = getSessionStatus(log);
                   const isRest = session.type === "rest";
-                  const sessionDate = parseSessionDateLabel(session.date);
-                  const isToday = !!sessionDate && sessionDate.toDateString() === appNow.toDateString();
+                  const sessionDay = sessionDate(session);
+                  const isToday = !!sessionDay && sessionDay.toDateString() === appNow.toDateString();
                   const plannedKm = getDisplayPlannedDistanceKm(session);
                   const milestoneLabels = getSessionMilestones(session, w, milestoneMeta).map((milestone) => milestone.label).join(" · ");
                   // Ist-km nur nennen, wenn gemessen/eingetragen — getLoggedKm fällt sonst auf die Plan-Distanz zurück.
@@ -4335,7 +4354,7 @@ export default function AppMain(){
                     <WeekDayRow
                       key={session.id}
                       dayLabel={session.day}
-                      dayNumber={sessionDate ? sessionDate.getDate() : null}
+                      dayNumber={sessionDay ? sessionDay.getDate() : null}
                       type={session.type}
                       title={session.title}
                       subtitle={subtitle}
@@ -5447,6 +5466,7 @@ export default function AppMain(){
         <Onboarding
           onComplete={handleOnboardingComplete}
           userId={user?.id ?? null}
+          initialPlanInputs={readPlanInputsFromPreferences(preferences)}
           onCancel={onboardingForNewPlan || newPrepWizardOpen ? handleOnboardingCancel : undefined}
         />
       ) : null}

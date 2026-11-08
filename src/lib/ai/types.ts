@@ -1,4 +1,5 @@
 import type { StoredHealthRun } from "../../healthRuns";
+import type { CoreKind } from "../../planCore";
 import type { TrainingPlanV2 } from "../../planV2/types";
 import type { RecoveryDomainState } from "../../recovery/recoveryDomainState";
 import type { RecoverySummary } from "./recoverySummary";
@@ -21,7 +22,6 @@ export type AiActionType =
   | "boost_next_week_volume"
   | "taper_before_race"
   | "integrate_missed_workout"
-  | "replace_training_plan_generated"
   | "update_user_preferences"
   | "swap_training_days"
   | "reassign_session_to_calendar"
@@ -48,6 +48,8 @@ export type AiPlanSession = {
   km: number;
   desc?: string | null;
   pace?: string | null;
+  /** Einheiten-Art des Plan-Kerns (`WorkoutV2.kind`); fehlt bei Altplänen. */
+  kind?: CoreKind;
 };
 
 export type AiPlanWeek = {

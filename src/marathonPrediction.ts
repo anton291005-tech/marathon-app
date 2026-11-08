@@ -3,8 +3,10 @@
  * Heuristisch stabil — keine VDOT-/Wissenschafts-Präzision.
  */
 
-import { isSessionLogDone, parseSessionDateLabel } from "./appSmartFeatures";
+import { isSessionLogDone } from "./appSmartFeatures";
+import { sessionDate } from "./core/time/sessionDate";
 import { getAppNow } from "./core/time/timeSystem";
+import type { CoreKind } from "./planCore";
 import { getSessionPlannedDistanceKm, type StructuredWorkoutSpec } from "./sessionDistance";
 
 export type { StructuredWorkoutSpec, ParsedWorkoutFromDesc, PlannedDistanceResolution, PlannedDistanceSource } from "./sessionDistance";
@@ -47,6 +49,8 @@ export type PlanSession = {
   pace?: string | null;
   /** Optional explicit recipe; overrides desc parsing when present. */
   structured?: StructuredWorkoutSpec | null;
+  /** Einheiten-Art des Plan-Kerns (`WorkoutV2.kind`); steuert die Pulszone. Fehlt bei Altplänen. */
+  kind?: CoreKind;
 };
 
 export type PlanWeek = {
@@ -267,7 +271,7 @@ export function getTrainingWindowData(
 
   for (const week of plan) {
     for (const session of week.s ?? []) {
-      const d = parseSessionDateLabel(session.date);
+      const d = sessionDate(session, now.getFullYear());
       if (!d || d < start || d > end) continue;
       out.push({
         session,

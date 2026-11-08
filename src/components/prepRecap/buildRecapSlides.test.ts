@@ -57,7 +57,7 @@ describe("buildRecapSlides", () => {
     expect(byId(slides, "sessions")!.subline).toBe("91 % deines Plans umgesetzt.");
     expect(byId(slides, "longRuns")!.subline).toBe("Dein längster Trainingslauf: 32,4 km.");
     expect(byId(slides, "strongestWeek")!.headline).toBe("Kilometer in Woche 13");
-    expect(byId(slides, "phases")!.phases!.map((p) => p.label)).toEqual(["Base", "Build", "Peak", "Taper"]);
+    expect(byId(slides, "phases")!.phases!.map((p) => p.label)).toEqual(["Grundlage", "Aufbau", "Spitze", "Taper"]);
     expect(byId(slides, "body")!.body).toEqual([
       { label: "Schlaf", first: "7,1 h", last: "7,4 h" },
       { label: "HRV", first: "52 ms", last: "58 ms" },
@@ -307,7 +307,7 @@ describe("buildRecapSlides", () => {
       });
       const phases = byId(slides, "phases")!;
       expect(phases.headline).toBe("3 Phasen, ein Ziel.");
-      expect(phases.phases!.map((p) => p.label)).toEqual(["Base", "Build", "Taper"]);
+      expect(phases.phases!.map((p) => p.label)).toEqual(["Grundlage", "Aufbau", "Taper"]);
     });
   });
 });

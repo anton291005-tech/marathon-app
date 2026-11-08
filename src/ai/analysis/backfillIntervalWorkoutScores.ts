@@ -1,4 +1,6 @@
 import { getAppNow } from "../../core/time/timeSystem";
+import { plannedHrRangeForSessionType } from "../../trainingIntelligence/hrZones";
+import type { CoreKind } from "../../planCore";
 import { isSessionLogDone } from "../../appSmartFeatures";
 import type { IntervalIntensitySnapshot, StoredHealthRun } from "../../healthRuns";
 import { getStoredHealthRunCanonicalType } from "../../healthRuns";
@@ -13,7 +15,7 @@ const INTERVAL_TITLE_KEYWORDS =
 
 export type BackfillIntervalWorkoutScoresArgs = {
   healthRuns: StoredHealthRun[];
-  planSessions: Array<{ id: string; date: string; type: string; title: string; pace?: string | null; km?: number }>;
+  planSessions: Array<{ id: string; date: string; type: string; kind?: CoreKind; title: string; pace?: string | null; km?: number }>;
   logs: Record<string, unknown>;
   maxHeartRateBpm?: number | null;
 };
@@ -31,21 +33,6 @@ export type BackfillIntervalWorkoutScoresResult = {
 function numOrNull(v: unknown): number | null {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
-}
-
-function plannedHrRangeForSessionType(
-  sessionType: string,
-  maxHrBpm: number | null | undefined,
-): { min: number; max: number } | null {
-  const mh = typeof maxHrBpm === "number" && Number.isFinite(maxHrBpm) && maxHrBpm > 80 ? maxHrBpm : null;
-  if (!mh) return null;
-  const t = String(sessionType || "").toLowerCase();
-  if (t === "easy" || t === "long") return { min: Math.round(mh * 0.65), max: Math.round(mh * 0.78) };
-  if (t === "tempo") return { min: Math.round(mh * 0.82), max: Math.round(mh * 0.9) };
-  if (t === "interval") return { min: Math.round(mh * 0.88), max: Math.round(mh * 0.95) };
-  if (t === "race") return { min: Math.round(mh * 0.9), max: Math.round(mh * 0.97) };
-  if (t === "bike") return { min: Math.round(mh * 0.6), max: Math.round(mh * 0.78) };
-  return null;
 }
 
 function expectedHrFromRange(range: { min: number; max: number } | null): number | null {
@@ -140,7 +127,8 @@ function buildAnalyzeInputs(args: {
       : null;
 
   const actualHrBpm = numOrNull(health.avgHeartRateBpm) ?? null;
-  const plannedHr = plannedHrRangeForSessionType(session.type, maxHeartRateBpm);
+  // Intervall-Einheiten sind nie `easy`: die Entlastungswoche ändert hier keine Zone, nur `kind` (Plan-Kern).
+  const plannedHr = plannedHrRangeForSessionType(session.type, maxHeartRateBpm, session.kind);
 
   return {
     workout: {

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { rowHeadingForSessionDateLabel } from "./SwapPreviewCard";
+import { rowHeadingForSession } from "./SwapPreviewCard";
 import { getAppNow } from "../../core/time/timeSystem";
 
 type Props = {
@@ -11,7 +11,7 @@ type Props = {
 };
 
 function labelForSession(s: any, coachRef: Date): string {
-  const heading = rowHeadingForSessionDateLabel(s?.date, coachRef);
+  const heading = rowHeadingForSession(s, coachRef);
   const title = typeof s?.title === "string" ? s.title : "Einheit";
   const km =
     typeof s?.km === "number" && s.km > 0 ? `${s.km} km` : s?.type === "rest" ? "Ruhetag" : "";

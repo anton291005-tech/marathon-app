@@ -50,7 +50,7 @@
     "start:api": "node server/index.js",
     "start:full": "concurrently \"npm run start:api\" \"npm start\"",
     "build": "CI=false BUILD_PATH=dist react-scripts build",
-    "postbuild": "node -e \"if (!process.env.VERCEL) { require('child_process').execSync('npx cap sync', {stdio:'inherit'}); }\"",
+    "postbuild": "node -e \"if (process.env.CAP_SYNC === '1') { require('child_process').execSync('npx cap sync', {stdio:'inherit'}); }\"",
     "build:verify": "npm run build && node -e \"require('fs').existsSync('dist/index.html') || (console.error('Missing dist/index.html after build.'), process.exit(1))\"",
     "verify:build": "node scripts/checkBuild.js",
     "verify:transaction": "node scripts/featureTransaction.js",
@@ -58,10 +58,10 @@
     "verify:diff": "node scripts/checkDiffSize.js",
     "verify:strict": "npm run verify:transaction && npm run verify:atomic && npm run verify:diff && node scripts/enforceBuildAndTest.js",
     "commit:transaction": "npm run verify:strict && node scripts/commitTransaction.js",
-    "build:ios-safe": "rm -rf dist build && npm run build && node scripts/verify-web-build.js",
+    "build:ios-safe": "rm -rf dist build && npm run build && npx cap sync ios && node scripts/verify-web-build.js",
     "verify:cap-web": "node scripts/verify-web-build.js",
-    "cap:sync": "npm run build && npm run verify:cap-web",
-    "cap:ios": "npm run build && npm run verify:cap-web && npx cap open ios",
+    "cap:sync": "npm run build && npx cap sync ios && npm run verify:cap-web",
+    "cap:ios": "npm run build && npx cap sync ios && npm run verify:cap-web && npx cap open ios",
     "ios": "CI=false DISABLE_ESLINT_PLUGIN=true npm run build && npx cap sync ios && npx cap open ios",
     "ios:prod": "npm run build:ios-safe && npx cap open ios",
     "deploy:ios": "npx cap sync ios && open ios/App/App.xcworkspace",
@@ -119,6 +119,115 @@
             {
               "selector": "CallExpression[callee.object.name='Date'][callee.property.name='now']",
               "message": "Use getAppNowEpochMs() from src/core/time/timeSystem.ts."
+            },
+            {
+              "selector": "ImportSpecifier[imported.name='parseSessionDateLabel']",
+              "message": "parseSessionDateLabel is legacy (label + year). Derive a session's calendar day with sessionDate()/sessionYmd() from src/core/time/sessionDate.ts: session.dateIso is the source of truth."
+            },
+            {
+              "selector": "CallExpression[callee.name='parseSessionDateLabel']",
+              "message": "Do not derive a date from a session label plus a year. Use sessionDate(session)/sessionYmd(session) from src/core/time/sessionDate.ts (session.dateIso first)."
+            },
+            {
+              "selector": "CallExpression[callee.name=/^(sessionYmd|sessionDate|labelToYmd)$/][arguments.1.type='Literal']",
+              "message": "No fixed year for the session-label fallback. Pass a year derived from an injected clock/anchor, or omit it (defaults to the app clock)."
+            }
+          ]
+        }
+      },
+      {
+        "files": [
+          "src/planV2/normalizeTrainingPlan.ts",
+          "src/planV2/fromBasePlan.ts",
+          "src/App.tsx"
+        ],
+        "rules": {
+          "no-restricted-syntax": [
+            "error",
+            {
+              "selector": "NewExpression[callee.name='Date'][arguments.length=0]",
+              "message": "Use getAppNow() from src/core/time/timeSystem.ts (forbidden: new Date() without arguments outside timeSystem)."
+            },
+            {
+              "selector": "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+              "message": "Use getAppNowEpochMs() from src/core/time/timeSystem.ts."
+            },
+            {
+              "selector": "CallExpression[callee.name=/^(sessionYmd|sessionDate|labelToYmd)$/][arguments.1.type='Literal']",
+              "message": "No fixed year for the session-label fallback. Pass a year derived from an injected clock/anchor, or omit it (defaults to the app clock)."
+            }
+          ]
+        }
+      },
+      {
+        "files": [
+          "src/core/time/sessionDate.ts"
+        ],
+        "rules": {
+          "no-restricted-syntax": [
+            "error",
+            {
+              "selector": "NewExpression[callee.name='Date'][arguments.length=0]",
+              "message": "Use getAppNow() from src/core/time/timeSystem.ts (forbidden: new Date() without arguments outside timeSystem)."
+            },
+            {
+              "selector": "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+              "message": "Use getAppNowEpochMs() from src/core/time/timeSystem.ts."
+            }
+          ]
+        }
+      },
+      {
+        "files": [
+          "src/planCore/**/*.ts"
+        ],
+        "excludedFiles": [
+          "src/planCore/**/__tests__/**",
+          "src/planCore/**/__fixtures__/**",
+          "src/planCore/**/*.test.ts"
+        ],
+        "rules": {
+          "no-restricted-imports": [
+            "error",
+            {
+              "patterns": [
+                {
+                  "group": [
+                    "**/auxiliary/**",
+                    "**/auxiliary/*"
+                  ],
+                  "message": "SSOT-facing code must not import quarantined experimental modules under src/auxiliary."
+                },
+                {
+                  "group": [
+                    "/[a-zA-Z@_]*",
+                    "../**"
+                  ],
+                  "message": "src/planCore darf nur Dateien aus demselben Ordner importieren (./…): kein React, kein Node, kein Supabase, nichts aus anderen src-Ordnern."
+                }
+              ]
+            }
+          ],
+          "no-restricted-globals": [
+            "error",
+            "window",
+            "document",
+            "localStorage",
+            "sessionStorage",
+            "process",
+            "require",
+            "fetch",
+            "Buffer",
+            "setTimeout",
+            "setInterval",
+            "console"
+          ],
+          "no-restricted-properties": [
+            "error",
+            {
+              "object": "Math",
+              "property": "random",
+              "message": "Der Plan-Kern ist deterministisch (I20): kein Math.random."
             }
           ]
         }

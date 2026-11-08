@@ -1,62 +1,12 @@
 import { getApiAuthHeaders } from "../api/authHeaders";
 import { getAiConfig } from "./config";
-import type { AiPlanRules } from "./coachPlanMutations";
 import type { TrainingPlanV2 } from "../../planV2/types";
 import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
-
-/**
- * Strips Markdown code fences and extracts the outermost JSON object from a
- * string. Needed because some environments / proxies may wrap the API response
- * in HTML or add fence characters.
- */
-function extractJson(raw: string): string {
-  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) return fenceMatch[1].trim();
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start !== -1 && end !== -1) return raw.slice(start, end + 1);
-  return raw.trim();
-}
+import type { ProfilePlanInputs } from "../../onboarding/onboardingPlanInputs";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export interface ClaudeRulesResult {
-  rules: AiPlanRules | null;
-  analysis: string;
-}
-
-/** @deprecated kept for backward compat */
-export interface ClaudePlanResult {
-  plan: TrainingPlanV2 | null;
-  analysis: string;
-}
-
-export interface ClaudePhase {
-  name: string;
-  weeks: number;
-  label: string;
-  focus: string;
-}
-
-export interface ClaudePlanStructure {
-  analysis: string;
-  phases: ClaudePhase[];
-  sessionNames: Record<string, string[]>;
-  /** Maps directly onto AiPlanRules (with optional extra field recoveryWeekEvery). */
-  rules: AiPlanRules & { recoveryWeekEvery?: number };
-}
-
-export interface ClaudePlanStructureResult {
-  structure: ClaudePlanStructure | null;
-  analysis: string;
-  error?: string;
-  /** HTTP-Status, sobald der Server geantwortet hat; fehlt bei Netzwerkfehler/Timeout. */
-  status?: number;
-  /** Nur bei 429, wenn der Server eine Wartezeit liefert. */
-  retryAfterSeconds?: number;
-}
 
 export interface PlanGenerationProfile {
   raceDistanceKm: number | null;
@@ -68,11 +18,27 @@ export interface PlanGenerationProfile {
   planStartDate: string;
   planDurationDays: number;
   userPreferences: string[];
+  /**
+   * Plan-Eingaben für den Plan-Kern (Umbauplan Schritt 9/10). Der heutige Pfad liest sie nicht; fehlen sie (alter
+   * Client), läuft ab Schritt 10 der heutige Pfad.
+   */
+  runDaysPerWeek?: ProfilePlanInputs["runDaysPerWeek"];
+  availableDays?: ProfilePlanInputs["availableDays"];
+  longRunDay?: ProfilePlanInputs["longRunDay"];
+  currentWeeklyKm?: number;
+  longestRecentRunKm?: number;
+  longestRecentRunKmIsDefault?: boolean;
+  recentRace?: ProfilePlanInputs["recentRace"];
 }
 
 export interface FullPlanResult {
   plan: TrainingPlanV2 | null;
   error?: string;
+  /**
+   * Maschinenlesbarer Fehlercode aus dem Body einer Fehlerantwort, z. B. `plan-core-invariant` (Server Schritt 10:
+   * der Plan-Kern hat einen Verstoß gemeldet und auch der Rückfall ist gescheitert).
+   */
+  errorCode?: string;
   /** HTTP-Status, sobald der Server geantwortet hat; fehlt bei Netzwerkfehler/Timeout. */
   status?: number;
   /** Nur bei 429, wenn der Server eine Wartezeit liefert. */
@@ -87,20 +53,10 @@ const DEFAULT_PLAN_API_BASE = "https://marathon-app-alpha.vercel.app";
 
 /** Client abort for Option A — must exceed Vercel maxDuration (240s) so the server responds first. */
 const FULL_PLAN_CLIENT_TIMEOUT_MS = 280000;
-const STRUCTURE_PLAN_CLIENT_TIMEOUT_MS = 45000;
 
 function getPlanApiBaseUrl(): string {
   const config = getAiConfig();
   return config.apiBaseUrl?.replace(/\/$/, "") || DEFAULT_PLAN_API_BASE;
-}
-
-class PlanApiHttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly retryAfterSeconds?: number,
-  ) {
-    super(`HTTP ${status}`);
-  }
 }
 
 /** Wartezeit einer 429-Antwort: `Retry-After`-Header, sonst `retryAfterSeconds`/`retry_after` im Body. */
@@ -121,36 +77,18 @@ function readRetryAfterSeconds(res: Response, rawText: string): number | undefin
   return undefined;
 }
 
-async function postGeneratePlan(profile: PlanGenerationProfile, timeoutMs: number): Promise<string> {
-  const authHeaders = await getApiAuthHeaders();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  const base = getPlanApiBaseUrl();
-
-  const res = await fetch(`${base}/api/onboarding/generate-plan`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders },
-    body: JSON.stringify({ profile }),
-    signal: controller.signal,
-  });
-  clearTimeout(timeoutId);
-
-  const rawText = await res.text();
-
-  if (!res.ok) {
-    // eslint-disable-next-line no-console
-    console.error("[claude-client] HTTP error:", res.status, rawText.slice(0, 500));
-    throw new PlanApiHttpError(res.status, readRetryAfterSeconds(res, rawText));
+/** `error` aus einem JSON-Fehlerbody, sonst `undefined` (HTML-Fehlerseite, leerer Body). */
+function readErrorCode(rawText: string): string | undefined {
+  try {
+    const body = JSON.parse(rawText) as { error?: unknown } | null;
+    return typeof body?.error === "string" && body.error ? body.error : undefined;
+  } catch {
+    return undefined;
   }
-
-  // eslint-disable-next-line no-console
-  console.log("[claude-client] raw response (first 500 chars):", rawText.slice(0, 500));
-
-  return rawText;
 }
 
 // ---------------------------------------------------------------------------
-// fetchFullPlanFromClaude  (Option A — full plan from Claude)
+// fetchFullPlanFromClaude: POST /api/onboarding/generate-plan-full (Plan-Kern oder heutiger Generator, siehe Server)
 // ---------------------------------------------------------------------------
 
 export async function fetchFullPlanFromClaude(
@@ -183,10 +121,12 @@ export async function fetchFullPlanFromClaude(
         // eslint-disable-next-line no-console
         console.error("[claudePlanService] raw response on failure:", rawText);
         const retryAfterSeconds = readRetryAfterSeconds(res, rawText);
+        const errorCode = readErrorCode(rawText);
         return {
           plan: null,
           error: `HTTP ${res.status}`,
           status: res.status,
+          ...(errorCode ? { errorCode } : {}),
           ...(retryAfterSeconds != null ? { retryAfterSeconds } : {}),
         };
       }
@@ -221,117 +161,5 @@ export async function fetchFullPlanFromClaude(
     // eslint-disable-next-line no-console
     console.error("[claude-client] fetchFullPlanFromClaude error:", msg);
     return { plan: null, error: msg };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// fetchClaudePlanStructure  (primary, hybrid approach)
-// ---------------------------------------------------------------------------
-
-/**
- * Requests a compact plan structure from Claude (phases + sessionNames + rules).
- * The caller uses the deterministic generator to build the full plan and then
- * overlays Claude's personalised names and phase labels.
- */
-export async function fetchClaudePlanStructure(
-  profile: PlanGenerationProfile,
-): Promise<ClaudePlanStructureResult> {
-  // eslint-disable-next-line no-console
-  console.log("[claude-client] requesting plan structure...");
-
-  try {
-    const rawText = await postGeneratePlan(profile, STRUCTURE_PLAN_CLIENT_TIMEOUT_MS);
-    const cleaned = extractJson(rawText);
-    const data = JSON.parse(cleaned) as { structure?: ClaudePlanStructure | null; analysis?: string };
-
-    const structure = data.structure ?? null;
-    // eslint-disable-next-line no-console
-    console.log("[claude-client] structure received, phases:", structure?.phases?.length ?? 0);
-
-    return {
-      structure,
-      analysis: data.analysis ?? structure?.analysis ?? "",
-      status: 200,
-    };
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error("[claude-client] fetchClaudePlanStructure error:", err);
-    const error = err instanceof Error ? err.message : "unknown";
-    if (err instanceof PlanApiHttpError) {
-      return {
-        structure: null,
-        analysis: "",
-        error,
-        status: err.status,
-        ...(err.retryAfterSeconds != null ? { retryAfterSeconds: err.retryAfterSeconds } : {}),
-      };
-    }
-    return { structure: null, analysis: "", error };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Legacy / deprecated
-// ---------------------------------------------------------------------------
-
-/** @deprecated Use fetchClaudePlanStructure instead. */
-export async function fetchClaudePlanRules(
-  profile: PlanGenerationProfile,
-): Promise<ClaudeRulesResult> {
-  // eslint-disable-next-line no-console
-  console.log("[claude-client] requesting plan rules...");
-
-  try {
-    const rawText = await postGeneratePlan(profile, STRUCTURE_PLAN_CLIENT_TIMEOUT_MS);
-    const cleaned = extractJson(rawText);
-    const data = JSON.parse(cleaned) as {
-      structure?: ClaudePlanStructure | null;
-      rules?: AiPlanRules | null;
-      analysis?: string;
-    };
-
-    const structure = data.structure ?? null;
-    const rules = structure?.rules ?? data.rules ?? null;
-    // eslint-disable-next-line no-console
-    console.log(
-      "[claude-client] structure received, phases:",
-      structure?.phases?.length ?? 0,
-      "rules:",
-      JSON.stringify(rules),
-    );
-
-    return {
-      rules,
-      analysis: data.analysis ?? structure?.analysis ?? "",
-    };
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error("[claude-client] error:", err);
-    return { rules: null, analysis: "" };
-  }
-}
-
-/** @deprecated Use fetchClaudePlanStructure instead. */
-export async function fetchClaudePlan(
-  profile: PlanGenerationProfile,
-): Promise<ClaudePlanResult> {
-  // eslint-disable-next-line no-console
-  console.log("[claude-client] requesting full plan (deprecated path)...");
-
-  try {
-    const rawText = await postGeneratePlan(profile, 60000);
-    const cleaned = extractJson(rawText);
-    const data = JSON.parse(cleaned) as { plan?: TrainingPlanV2 | null; analysis?: string };
-    // eslint-disable-next-line no-console
-    console.log("[claude-client] plan received, workouts:", data.plan?.workouts?.length ?? 0);
-
-    return {
-      plan: data.plan ?? null,
-      analysis: data.analysis ?? "",
-    };
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error("[claude-client] error:", err);
-    return { plan: null, analysis: "" };
   }
 }

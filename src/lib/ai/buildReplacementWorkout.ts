@@ -1,14 +1,9 @@
-import { parseSessionDateLabel } from "../../appSmartFeatures";
+import { sessionDate, sessionYmd } from "../../core/time/sessionDate";
 import type { ReplaceWorkoutExtraction } from "../../ai/intents/extractReplaceWorkoutIntent";
 import type { AiPlanSession, AiPlanWeek, SessionType } from "./types";
 
 export function calendarIsoFromSession(session: AiPlanSession): string | null {
-  const d = parseSessionDateLabel(session.date);
-  if (!d || !Number.isFinite(d.getTime())) return null;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return sessionYmd(session);
 }
 
 export function findClosestSessionByType(
@@ -25,8 +20,8 @@ export function findClosestSessionByType(
 
   /** Prefer next future session, then nearest past (not absolute distance). */
   candidates.sort((a, b) => {
-    const da = parseSessionDateLabel(a.date)?.getTime() ?? 0;
-    const db = parseSessionDateLabel(b.date)?.getTime() ?? 0;
+    const da = sessionDate(a)?.getTime() ?? 0;
+    const db = sessionDate(b)?.getTime() ?? 0;
     const aFuture = da >= refMs;
     const bFuture = db >= refMs;
     if (aFuture !== bFuture) return aFuture ? -1 : 1;

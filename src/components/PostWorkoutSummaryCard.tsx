@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import type { PostWorkoutHrPresentation, PostWorkoutSummary } from "../hooks/usePostWorkoutSummary";
 import { normalizePostWorkoutSummary } from "../hooks/usePostWorkoutSummary";
-import { ZONE_BPM } from "../trainingIntelligence/zoneBpmDisplay";
+import { formatPlannedHrZoneDisplay } from "../trainingIntelligence/zoneBpmDisplay";
 import { shouldUseIntervalScoring } from "../utils/workoutEvaluationGuards";
 import { compareHR, comparePace } from "../lib/training/compareActualToPlanned";
 import { fmtBikePlannedDuration } from "../utils/bikeDurationParser";
@@ -451,10 +451,7 @@ export function PostWorkoutSummaryCard(props: {
     summary.actual.hrBpm > 0
       ? summary.actual.hrBpm
       : null);
-  const plannedHrDisplay =
-    ZONE_BPM[summary.planned.hrZoneLabel as string] ??
-    summary.planned.hrZoneLabel ??
-    "–";
+  const plannedHrDisplay = formatPlannedHrZoneDisplay(summary.planned.hrZoneLabel, summary.planned.hrBpm ?? null);
 
   const hrDeltaExtra =
     summary.hrPresentation?.kind === "loading" ||

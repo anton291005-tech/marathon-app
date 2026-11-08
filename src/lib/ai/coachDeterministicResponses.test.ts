@@ -1,4 +1,8 @@
-import { tryDeterministicCoachResponse, extractRelativeDaysUntilRaceGerman, normalizeCoachText } from "./coachDeterministicResponses";
+import {
+  tryDeterministicCoachResponse,
+  extractRelativeDaysUntilRaceGerman,
+  normalizeCoachText,
+} from "./coachDeterministicResponses";
 import type { AiContext } from "./types";
 import { getRecoveryDomainState } from "../../recovery/recoveryDomainState";
 import type { PlanWeek } from "../../marathonPrediction";
@@ -9,8 +13,10 @@ import {
 } from "../../recovery/recoveryStorage";
 import { toAiPlanWeeks } from "./planToAi";
 import { buildRecoverySummaryFromDomain } from "./recoverySummary";
-import { generateMarathonPlanV2ToRace } from "./coachPlanMutations";
-import { validateTrainingPlanV2Integrity } from "../../ai/validation/validateTrainingPlanV2Integrity";
+import { pinAppClock } from "../../testSupport/pinAppClock";
+
+// Label-only-Fixtures ("10. Aug") brauchen ein festes Jahr; siehe pinAppClock.
+pinAppClock("2026-11-08T12:00:00+01:00");
 
 function makePlan(datesessions: Array<{ date: string; day: string; id: string; type: string; title: string; km: number }>) {
   return [
@@ -94,18 +100,6 @@ describe("tryDeterministicCoachResponse — 10 user scenarios", () => {
     const ctx = ctxFor(plan, new Date("2026-05-05T08:00:00").toISOString());
     const res = tryDeterministicCoachResponse("Ich will naechste Woche mehr trainieren. Erhoehe das Volumen um 15%.", ctx);
     expect(res?.action?.type).toBe("boost_next_week_volume");
-  });
-
-  test("6 generate marathon plan to Sept 14 (integrity)", () => {
-    const plan = makePlan([]);
-    const ctx = ctxFor(plan, new Date("2026-05-03T08:00:00").toISOString());
-    const res = tryDeterministicCoachResponse(
-      "Ich habe am 14. September einen Marathon. Erstelle mir einen Plan ab heute.",
-      ctx,
-    );
-    expect(res?.action?.type).toBe("replace_training_plan_generated");
-    const draft = generateMarathonPlanV2ToRace(new Date(ctx.todayIso), new Date(2026, 8, 14));
-    expect(validateTrainingPlanV2Integrity(draft)).toBe(true);
   });
 
   test("8 taper with explicit keyword", () => {

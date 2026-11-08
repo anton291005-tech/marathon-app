@@ -1,3 +1,5 @@
+import { FALLBACK_MAX_HR_BPM, getHrRangeForZone } from "../trainingIntelligence/hrZones";
+
 export type MetricStatus = "green" | "yellow" | "red" | "na";
 
 export type PlanAdherenceInputs = {
@@ -243,9 +245,10 @@ function timeRangeStatus(actualSec: number | null, plannedSec: number | null): M
 export function computePlanAdherenceScore(inputs: PlanAdherenceInputs): PlanAdherenceScoreResult {
   // Bike-spezifischer Score-Pfad: HR 60% + Zeit 40%
   if (inputs.sessionType === "bike" || inputs.sport === "bike") {
-    // Fallback A: kein HFmax gesetzt → generische Zone-2-Range (120–150 bpm) verwenden
-    const plannedHrMin = inputs.plannedHrBpm?.min ?? 120;
-    const plannedHrMax = inputs.plannedHrBpm?.max ?? 150;
+    // Fallback A: kein HFmax gesetzt → Zone-2-Range aus der gemeinsamen Zonentabelle mit angenommener Max-HF
+    const fallbackZone2 = getHrRangeForZone("Zone 2", FALLBACK_MAX_HR_BPM)!;
+    const plannedHrMin = inputs.plannedHrBpm?.min ?? fallbackZone2.min;
+    const plannedHrMax = inputs.plannedHrBpm?.max ?? fallbackZone2.max;
     const hasHr = inputs.actualHrBpm != null;
     const hasTime =
       inputs.actualDurationSec != null &&

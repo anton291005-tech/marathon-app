@@ -2,7 +2,8 @@
  * Build set of local dates (YYYY-MM-DD) with at least one completed non-rest session.
  */
 
-import { isSessionLogDone, normalizeCalendarDay, parseSessionDateLabel } from "../appSmartFeatures";
+import { isSessionLogDone, normalizeCalendarDay } from "../appSmartFeatures";
+import { sessionDate } from "../core/time/sessionDate";
 import type { PlanWeek } from "../marathonPrediction";
 
 function formatLocalYmdFromDate(d: Date): string {
@@ -23,7 +24,7 @@ export function buildCompletedTrainingLocalDates(
     for (const s of week.s ?? []) {
       if (s.type === "rest") continue;
       if (!isSessionLogDone(logs[s.id])) continue;
-      const pd = parseSessionDateLabel(s.date);
+      const pd = sessionDate(s);
       if (!pd) continue;
       set.add(formatLocalYmdFromDate(pd));
     }

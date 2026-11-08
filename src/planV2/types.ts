@@ -1,3 +1,5 @@
+import type { CoreInputs, CoreKind, PlanRules } from "../planCore";
+
 export type WorkoutSport = "run" | "bike" | "rest" | "strength" | "swim";
 export type Intensity = "low" | "medium" | "high";
 
@@ -15,6 +17,8 @@ export type WorkoutV2 = {
   desc?: string | null;
   pace?: string | null;
   structured?: any | null;
+  /** Interne Einheiten-Art des Plan-Kerns (REC, E, M, T …); fehlt bei Plänen, die nicht aus dem Kern stammen. */
+  kind?: CoreKind;
 };
 
 export type WeekV2 = {
@@ -32,9 +36,31 @@ export type WeekV2 = {
   };
 };
 
+/** Hinweis der Planerzeugung: die Spitze wurde nicht erreicht (10-%-Grenze oder zu wenige Lauftage). */
+export type PlanVolumeNoteV2 = {
+  code: "peak-not-reached";
+  reason: "growth" | "run-days";
+  targetPeakKm: number;
+  reachedPeakKm: number;
+};
+
+/** Wie der Plan entstanden ist (Plan-Kern): Config-Version, Eingaben und Regeln. */
+export type PlanCoreMetaV2 = {
+  configVersion: string;
+  inputs: CoreInputs;
+  rules: PlanRules;
+};
+
+export type TrainingPlanMetaV2 = {
+  volumeNote?: PlanVolumeNoteV2;
+  core?: PlanCoreMetaV2;
+};
+
 export type TrainingPlanV2 = {
   version: 2;
   workouts: WorkoutV2[];
   weeks: WeekV2[];
+  /** Optional, nur von der Planerzeugung gesetzt (für spätere Anzeige). */
+  meta?: TrainingPlanMetaV2;
 };
 

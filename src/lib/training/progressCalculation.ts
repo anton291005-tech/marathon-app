@@ -1,7 +1,5 @@
-import { parseSessionDateLabel } from "../../appSmartFeatures";
+import { sessionYmd } from "../../core/time/sessionDate";
 import type { PlanSession, SessionLog } from "../../marathonPrediction";
-
-const DEFAULT_PLAN_YEAR = 2026;
 
 /**
  * Für Plan-Fortschritt (Ring / Gesamtvorbereitung): true nur bei echter Erledigung
@@ -20,18 +18,16 @@ export function flattenTrainableSessionsFromPlan(plan: Array<{ s: PlanSession[] 
   return plan.flatMap((w) => w.s).filter((s) => s.type !== "rest");
 }
 
-/** YYYY-MM-DD für Vergleiche (Europe/Berlin vs. Datumslabel erfolgt bereits über gemeinsamen Plan-Jahres-Anker). */
-export function trainableSessionToYmd(session: PlanSession, year = DEFAULT_PLAN_YEAR): string | null {
-  const d = parseSessionDateLabel(session.date, year);
-  if (!d) return null;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** YYYY-MM-DD für Vergleiche. `year` ist nur der Notnagel für Altpläne ohne `dateIso`. */
+export function trainableSessionToYmd(session: PlanSession, year?: number): string | null {
+  return sessionYmd(session, year);
 }
 
 /** Anzahl Trainings-Sessions mit Plan-Datum ≤ `todayYmd` (gleiche Logik wie bisher Confidence-Aufbau). */
-export function countPastTrainableSessions(sessions: PlanSession[], todayYmd: string, year = DEFAULT_PLAN_YEAR): number {
+export function countPastTrainableSessions(sessions: PlanSession[], todayYmd: string, year?: number): number {
   let n = 0;
   for (const s of sessions) {
-    const ymd = trainableSessionToYmd(s, year);
+    const ymd = trainableSessionToYmd(s, year ?? (Number.parseInt(todayYmd.slice(0, 4), 10) || undefined));
     if (ymd && ymd <= todayYmd) n += 1;
   }
   return n;

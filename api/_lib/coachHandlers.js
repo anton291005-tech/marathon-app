@@ -15,6 +15,8 @@ const OpenAI = require("openai");
 const Anthropic = require("@anthropic-ai/sdk");
 const { pickCoachHealthRunFields } = require("./coachHealthRunFields");
 const { extractJson } = require("./extractJson");
+const { sessionDate, dateIsoToYmd } = require("./sessionDate");
+const { NEW_PLAN_VIA_SETTINGS_MESSAGE, isNewPlanRequest } = require("./coachNewPlanRequest");
 // Deliberately use a local copy so this directory is fully self-contained.
 // Do NOT change this back to "../../server/aiSchema" — that file is not always
 // committed to git and would cause a MODULE_NOT_FOUND error on Vercel.
@@ -538,31 +540,6 @@ function parseModelJson(response) {
 
 // ─── System prompt & user payload ────────────────────────────────────────────
 
-const SESSION_DATE_MONTHS = {
-  Jan: 0,
-  Feb: 1,
-  Mar: 2,
-  Apr: 3,
-  Mai: 4,
-  Jun: 5,
-  Jul: 6,
-  Aug: 7,
-  Sep: 8,
-  Okt: 9,
-  Nov: 10,
-  Dez: 11,
-};
-
-function parseSessionDateLabel(label, year) {
-  if (typeof label !== "string" || !label.trim()) return null;
-  const match = label.match(/(\d{1,2})\.\s*([A-Za-zÄÖÜäöü]+)/);
-  if (!match) return null;
-  const day = Number(match[1]);
-  const month = SESSION_DATE_MONTHS[match[2]];
-  if (Number.isNaN(day) || month === undefined) return null;
-  return new Date(year, month, day, 12, 0, 0, 0);
-}
-
 function normalizeCalendarDay(d) {
   const x = d instanceof Date ? d : new Date(d);
   return new Date(x.getFullYear(), x.getMonth(), x.getDate());
@@ -577,6 +554,8 @@ function collectIncomingPlanWeeks(context) {
 function toCoachSessionObject(session) {
   return {
     date: session?.date ?? "",
+    // Das Label trägt kein Jahr; der Coach bekommt den echten Kalendertag mit (Plan über Neujahr).
+    ...(dateIsoToYmd(session?.dateIso) ? { dateIso: dateIsoToYmd(session.dateIso) } : {}),
     weekday: session?.day ?? "",
     title: session?.title ?? "",
     km: typeof session?.km === "number" ? session.km : 0,
@@ -591,7 +570,7 @@ function findCurrentPlanWeek(weeks, today, year) {
   let anyParsed = false;
   for (const week of weeks) {
     for (const session of Array.isArray(week?.s) ? week.s : []) {
-      const parsed = parseSessionDateLabel(session?.date, year);
+      const parsed = sessionDate(session, year);
       if (!parsed) continue;
       anyParsed = true;
       const diffMs = normalizeCalendarDay(parsed).getTime() - today.getTime();
@@ -691,7 +670,7 @@ function buildPrepRecapWeeks(weeks) {
 function computeAvgWeeklyKmRemaining(weeks, today, year) {
   const remainingWeeks = weeks.filter((week) =>
     (Array.isArray(week?.s) ? week.s : []).some((session) => {
-      const parsed = parseSessionDateLabel(session?.date, year);
+      const parsed = sessionDate(session, year);
       return parsed && normalizeCalendarDay(parsed).getTime() >= today.getTime();
     }),
   );
@@ -734,7 +713,7 @@ function buildTrimmedTrainingPlan(context) {
 
   const datedSessions = weeks.flatMap((week) =>
     (Array.isArray(week?.s) ? week.s : []).map((session) => {
-      const parsed = parseSessionDateLabel(session?.date, year);
+      const parsed = sessionDate(session, year);
       return {
         session,
         parsed,
@@ -1265,6 +1244,11 @@ async function handleAiCoach(rawBody) {
       status: 200,
       body: { mode: "coach", message: override.message, override: true },
     };
+  }
+
+  // Layer 2: Plan-Wunsch → feste Antwort (Wizard), vor Claude und unabhängig vom Planzustand.
+  if (isNewPlanRequest(normalizeText(bareUser))) {
+    return { status: 200, body: { mode: "coach", message: NEW_PLAN_VIA_SETTINGS_MESSAGE } };
   }
 
   if (!anthropicApiKey) {

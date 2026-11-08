@@ -1,6 +1,10 @@
 import type { AiPlanWeek } from "../../lib/ai/types";
 import { parseIntent } from "./parseIntent";
 import { resolveSwap } from "./resolveSwap";
+import { pinAppClock } from "../../testSupport/pinAppClock";
+
+// Label-only-Fixtures ("10. Aug") brauchen ein festes Jahr; siehe pinAppClock.
+pinAppClock("2026-11-08T12:00:00+01:00");
 
 const MAY_5 = new Date(2026, 4, 5, 12, 0, 0); // Di — matches plan fixture below
 

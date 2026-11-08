@@ -2,7 +2,8 @@
  * Wochen-Fazit und Kennzahlen für eine Plan-Woche (datenbasiert).
  */
 
-import { isSessionLogDone, parseSessionDateLabel } from "./appSmartFeatures";
+import { isSessionLogDone } from "./appSmartFeatures";
+import { sessionDate } from "./core/time/sessionDate";
 import { getStoredHealthRunCanonicalType, type StoredHealthRun } from "./healthRuns";
 import type { PlanWeek, SessionLog, PlanSession } from "./marathonPrediction";
 import { getAppNow } from "./core/time/timeSystem";
@@ -34,7 +35,7 @@ function weekDateBounds(week: PlanWeek): { first: Date | null; last: Date | null
   let first: Date | null = null;
   let last: Date | null = null;
   for (const s of week.s ?? []) {
-    const d = parseSessionDateLabel(s.date);
+    const d = sessionDate(s);
     if (!d) continue;
     if (!first || d < first) first = d;
     if (!last || d > last) last = d;

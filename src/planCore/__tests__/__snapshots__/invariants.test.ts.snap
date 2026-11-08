@@ -1,0 +1,45 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Invarianten-Prüfer (Schritt 7a) P1–P6: 0 errors, 0 warnings außer begründeten Abweichungen; die begründeten sind festgeschrieben 1`] = `
+Object {
+  "P1": Array [
+    "I5/min-week-km-raised W4",
+    "I11/e-above-75-percent-long-run W1",
+    "I11/e-above-75-percent-long-run W1",
+    "I11/e-above-75-percent-long-run W2",
+    "I11/e-above-75-percent-long-run W2",
+    "I2/q-softened W4",
+    "I11/e-above-75-percent-long-run W4",
+    "I11/e-above-75-percent-long-run W4",
+    "I2/q-softened W5",
+    "I2/q-softened W6",
+    "I13/taper-q-excused W8",
+  ],
+  "P2": Array [
+    "I2/q-softened W3",
+    "I2/q-softened W4",
+    "I2/q-softened W5",
+    "I2/q-softened W6",
+    "I2/q-softened W10",
+    "I13/taper-q-excused W10",
+  ],
+  "P3": Array [],
+  "P4": Array [
+    "I2/q-softened W4",
+    "I2/q-softened W6",
+    "I2/q-softened W7",
+    "I2/q-softened W9",
+    "I2/q-softened W10",
+    "I2/q-softened W13",
+  ],
+  "P5": Array [
+    "I2/mlr-as-e W8",
+    "I2/q-softened W14",
+    "I2/q-softened W16",
+  ],
+  "P6": Array [
+    "I2/q-softened W18",
+    "I13/taper-q-excused W18",
+  ],
+}
+`;
