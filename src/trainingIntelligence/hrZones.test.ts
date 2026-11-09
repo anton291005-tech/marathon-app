@@ -12,7 +12,7 @@ describe("zoneLabelForSession ohne kind = zoneLabelForSessionType", () => {
 
   it("Aufrufer ohne kind liefern wie vorher", () => {
     for (const type of TYPES) {
-      for (const week of [undefined, { focus: "Entlastungswoche" } as never]) {
+      for (const week of [undefined, { isRecoveryWeek: true } as never]) {
         const session = { type } as never;
         expect(getSessionHrZoneShort(session, week)).toBe(
           type === "rest" || type === "strength" ? null : zoneLabelForSessionType(type, type === "easy" && !!week),

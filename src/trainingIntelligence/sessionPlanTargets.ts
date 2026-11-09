@@ -135,15 +135,9 @@ export function plannedPaceMidMinPerKm(session: PlanSession): number | null {
   return Math.round(((r.min + r.max) / 2) * 100) / 100;
 }
 
-/** Entlastungswoche, erkannt am Fokus-Text der Woche (wie die Trainingsziel-Karte). */
+/** Entlastungswoche laut Flag der Woche (`PlanWeek.isRecoveryWeek`); Altpläne bekommen es beim Einlesen nachgezogen. */
 export function isRecoveryPlanWeek(week?: PlanWeek): boolean {
-  return isRecoveryWeek(week);
-}
-
-function isRecoveryWeek(week?: PlanWeek): boolean {
-  if (!week?.focus) return false;
-  const f = week.focus.toLowerCase();
-  return f.includes("entlastung") || f.includes("recovery");
+  return week?.isRecoveryWeek === true;
 }
 
 /** %HRmax band [low, high] for deviation mid = average */
@@ -151,7 +145,7 @@ function hrPctBandForSession(
   session: Pick<PlanSession, "type" | "kind">,
   week?: PlanWeek,
 ): { lo: number; hi: number } | null {
-  const zone = zoneLabelForSession(session.type, session.kind, session.type === "easy" && isRecoveryWeek(week));
+  const zone = zoneLabelForSession(session.type, session.kind, session.type === "easy" && isRecoveryPlanWeek(week));
   return zone ? HR_ZONE_PCT_BANDS[zone] : null;
 }
 
@@ -185,7 +179,7 @@ export function hrZoneMidBpm(session: PlanSession, maxHr: number, week?: PlanWee
 /** Kurzform für eingeklappte Trainingsziele (z. B. „Zone 2“). */
 export function getSessionHrZoneShort(session: PlanSession, week?: PlanWeek): string | null {
   if (session.type === "rest" || session.type === "strength") return null;
-  return zoneLabelForSession(session.type, session.kind, session.type === "easy" && isRecoveryWeek(week));
+  return zoneLabelForSession(session.type, session.kind, session.type === "easy" && isRecoveryPlanWeek(week));
 }
 
 /**
@@ -231,7 +225,7 @@ export function getSessionTargetLines(
 
   const mh =
     typeof maxHrBpm === "number" && Number.isFinite(maxHrBpm) && maxHrBpm > 0 ? maxHrBpm : undefined;
-  const easyRecovery = session.type === "easy" && isRecoveryWeek(week);
+  const easyRecovery = session.type === "easy" && isRecoveryPlanWeek(week);
 
   /** Rendert „Zone X (min–max bpm, lo–hi% HFmax)“ — bpm und Prozentbänder kommen ausschließlich aus hrZones.ts. */
   const zoneBandLabel = (zoneLabel: keyof typeof HR_ZONE_PCT_BANDS): string => {

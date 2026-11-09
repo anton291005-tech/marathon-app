@@ -70,6 +70,7 @@ export function normalizePlanWeekToAi(week: PlanWeek): AiPlanWeek {
     dates: typeof week?.dates === "string" ? week.dates : "",
     km: typeof week?.km === "number" && Number.isFinite(week.km) ? week.km : 0,
     focus: week?.focus,
+    ...(week?.isRecoveryWeek === true ? { isRecoveryWeek: true } : {}),
     s: sessions,
   };
   const km = reconcileWeekPlannedKmForAi(safeWeek);
@@ -80,6 +81,7 @@ export function normalizePlanWeekToAi(week: PlanWeek): AiPlanWeek {
     dates: safeWeek.dates ?? "",
     km,
     focus: safeWeek.focus,
+    ...(safeWeek.isRecoveryWeek ? { isRecoveryWeek: true } : {}),
     s: sessions,
   };
 }

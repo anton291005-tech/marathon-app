@@ -64,6 +64,7 @@ export function toPlanWeeks(plan: TrainingPlanV2): PlanWeek[] {
       dates: meta.dates,
       km: week.totalKm,
       focus: meta.focus,
+      ...(week.meta?.isRecoveryWeek === true ? { isRecoveryWeek: true } : {}),
       s: sessions,
     };
   });

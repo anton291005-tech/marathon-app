@@ -59,6 +59,8 @@ export type AiPlanWeek = {
   dates: string;
   km: number;
   focus?: string;
+  /** Entlastungswoche (`PlanWeek.isRecoveryWeek`); geht durch die Anzeige-Pipeline bis `isRecoveryPlanWeek`. */
+  isRecoveryWeek?: boolean;
   s: AiPlanSession[];
 };
 

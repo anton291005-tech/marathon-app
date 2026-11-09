@@ -24,13 +24,16 @@ const CASES: Array<[string, CoreKind | undefined]> = [
   ["interval", undefined],
 ];
 
-const recoveryWeek = { wn: 4, phase: "base", km: 30, focus: RECOVERY_WEEK_FOCUS_DE, s: [] } as unknown as PlanWeek;
+const recoveryWeek = { wn: 4, phase: "base", km: 30, focus: RECOVERY_WEEK_FOCUS_DE, isRecoveryWeek: true, s: [] } as unknown as PlanWeek;
 const normalWeek = { wn: 3, phase: "base", km: 36, focus: "Aerobe Basis aufbauen", s: [] } as unknown as PlanWeek;
 
 describe("Zone in der Auswertung = Zone auf der Karte", () => {
-  it("erkennt die Entlastungswoche des Plan-Kerns am Fokus", () => {
+  it("erkennt die Entlastungswoche des Plan-Kerns am Flag, nicht am Fokus-Text", () => {
     expect(isRecoveryPlanWeek(recoveryWeek)).toBe(true);
     expect(isRecoveryPlanWeek(normalWeek)).toBe(false);
+    // Text allein reicht nicht mehr: Altpläne bekommen das Flag beim Einlesen (normalizeTrainingPlan).
+    expect(isRecoveryPlanWeek({ ...recoveryWeek, isRecoveryWeek: undefined })).toBe(false);
+    expect(isRecoveryPlanWeek(undefined)).toBe(false);
   });
 
   test.each(CASES)("%s / kind %s, mit und ohne Entlastungswoche", (type, kind) => {

@@ -235,7 +235,12 @@ export function normalizeWeekMeta(
   const label = cleanPlanText(base.label) || `Woche ${wn} · ${phaseLabel}`;
   const dates = typeof base.dates === "string" ? base.dates : "";
   const focus = cleanPlanText(base.focus) || undefined;
-  const isRecoveryWeek = base.isRecoveryWeek === true;
+  // Altpläne (vor dem Plan-Kern) tragen kein Flag, nur den Fokus-Text: hier einmal nachziehen, danach liest die App nur das Flag.
+  // Ein ausdrückliches false bleibt erhalten, sonst würde der Backfill beim nächsten Lesen doch am Text greifen (Idempotenz).
+  const isRecoveryWeek =
+    typeof base.isRecoveryWeek === "boolean"
+      ? base.isRecoveryWeek
+      : LEGACY_RECOVERY_FOCUS.test(focus ?? "");
 
   return {
     wn,
@@ -243,9 +248,12 @@ export function normalizeWeekMeta(
     label,
     dates,
     ...(focus ? { focus } : {}),
-    ...(isRecoveryWeek ? { isRecoveryWeek } : {}),
+    ...(isRecoveryWeek || typeof base.isRecoveryWeek === "boolean" ? { isRecoveryWeek } : {}),
   };
 }
+
+/** Fokus-Wörter, an denen Altpläne Entlastungswochen kennzeichneten (nur noch für den Backfill). */
+const LEGACY_RECOVERY_FOCUS = /entlastung|recovery/i;
 
 function weekMetaFromRawWeek(week: Record<string, unknown>, weekIndex: number): WeekV2["meta"] {
   const nested = isRecord(week.meta) ? week.meta : {};

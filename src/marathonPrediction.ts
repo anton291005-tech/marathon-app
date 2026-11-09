@@ -60,6 +60,8 @@ export type PlanWeek = {
   dates?: string;
   km: number;
   focus?: string;
+  /** Entlastungswoche (`WeekV2.meta.isRecoveryWeek`); Quelle der Wahrheit statt des Fokus-Texts. */
+  isRecoveryWeek?: boolean;
   s: PlanSession[];
 };
 

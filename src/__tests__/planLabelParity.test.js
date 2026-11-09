@@ -31,7 +31,7 @@ describe("Zone je Einheitentyp: Server = Client", () => {
     expect(hr.zoneLabelForSessionType(z.type, z.recovery)).toBe(z.zone);
     expect(server.zoneForSession(z.type, z.recovery) ?? null).toBe(z.zone);
     if (z.type !== "rest" && z.type !== "strength" && z.type !== "bike") {
-      const week = z.recovery ? { focus: server.RECOVERY_WEEK_FOCUS } : undefined;
+      const week = z.recovery ? { focus: server.RECOVERY_WEEK_FOCUS, isRecoveryWeek: true } : undefined;
       expect(targets.getSessionHrZoneShort({ type: z.type }, week)).toBe(z.zone);
     }
   });
