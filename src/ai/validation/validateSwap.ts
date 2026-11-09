@@ -1,30 +1,18 @@
 import type { WorkoutV2, TrainingPlanV2 } from "../../planV2/types";
 import type { WeekPhaseMeta } from "../../core/getWorkoutPhase";
-import { aggregateAxes, allow, axis, increaseAxisScore, maxAxisScore, type ValidationResult } from "./validationResult";
+import { aggregateAxes, allow, increaseAxisScore, maxAxisScore, type ValidationResult } from "./validationResult";
 import { validateLoadShift } from "./validateLoadShift";
+import { addDays } from "../../planCore";
+import { sessionYmd } from "../../core/time/sessionDate";
+import { coreKindOf, easyPaceOfPlan, isHardWorkout, isLongRunWorkout } from "./hardWorkout";
 import { validateMicroStructure, inferIntensity } from "./validateMicroStructure";
 import { validatePhaseSwap } from "./validatePhaseSwap";
 import type { ValidationContext } from "./validationContext";
 
-function localDayKey(dateIso: string): string {
-  const d = new Date(dateIso);
-  if (!Number.isFinite(d.getTime())) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function addCalendarDaysKey(key: string, deltaDays: number): string {
-  const [y0, mo0, d0] = key.split("-").map(Number);
-  const dt = new Date(y0, mo0 - 1, d0 + deltaDays);
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-}
-
-function workoutsByLocalDay(workouts: WorkoutV2[] | undefined): Map<string, WorkoutV2> {
+function workoutsByDay(workouts: WorkoutV2[] | undefined): Map<string, WorkoutV2> {
   const m = new Map<string, WorkoutV2>();
   for (const w of workouts || []) {
-    const k = localDayKey(w.dateIso);
+    const k = sessionYmd(w);
     if (!k || m.has(k)) continue;
     m.set(k, w);
   }
@@ -35,18 +23,9 @@ function isRestWorkoutPlan(w: WorkoutV2): boolean {
   return w.sport === "rest" || w.sessionType === "rest";
 }
 
-function isAthleteLongRun(w: WorkoutV2): boolean {
-  if (isRestWorkoutPlan(w) || w.sport === "bike") return false;
-  if (w.sessionType === "long" || w.sessionType === "long_run") return true;
-  return typeof w.km === "number" && Number.isFinite(w.km) && w.km >= 15;
-}
-
 function isIntervalOrTempoOnly(w: WorkoutV2): boolean {
-  return w.sessionType === "interval" || w.sessionType === "tempo";
-}
-
-function inferHighIntensity(w: WorkoutV2): boolean {
-  return inferIntensity(w) === "high";
+  const kind = coreKindOf(w);
+  return kind === "I" || kind === "T" || kind === "R" || kind === "M";
 }
 
 /**
@@ -61,26 +40,28 @@ export function buildSwapAthleteFacingWarnings(opts: { before: TrainingPlanV2; a
     "Hinweis: Nach dem Tausch liegt zwischen zwei intensiven Einheiten kein Ruhetag mehr wie zuvor im Plan. Du kannst den Tausch trotzdem durchführen.";
 
   const out: string[] = [];
-  const afterBy = workoutsByLocalDay(opts.after.workouts);
+  const easyPace = easyPaceOfPlan(opts.after) ?? easyPaceOfPlan(opts.before);
+  const isHard = (w: WorkoutV2) => isHardWorkout(w, easyPace);
+  const afterBy = workoutsByDay(opts.after.workouts);
 
   for (const k of Array.from(afterBy.keys()).sort()) {
-    const nextK = addCalendarDaysKey(k, 1);
+    const nextK = addDays(k, 1);
     if (!afterBy.has(nextK)) continue;
     const a = afterBy.get(k)!;
     const b = afterBy.get(nextK)!;
-    if (isAthleteLongRun(a) && isIntervalOrTempoOnly(b)) out.push(msgLongBeforeInterval);
-    if (inferHighIntensity(a) && inferHighIntensity(b)) out.push(msgBackToBackHard);
+    if (isLongRunWorkout(a) && isIntervalOrTempoOnly(b)) out.push(msgLongBeforeInterval);
+    if (isHard(a) && isHard(b)) out.push(msgBackToBackHard);
   }
 
-  const beforeBy = workoutsByLocalDay(opts.before.workouts);
+  const beforeBy = workoutsByDay(opts.before.workouts);
   for (const k1 of Array.from(beforeBy.keys()).sort()) {
-    const k0 = addCalendarDaysKey(k1, -1);
-    const k2 = addCalendarDaysKey(k1, 1);
+    const k0 = addDays(k1, -1);
+    const k2 = addDays(k1, 1);
     if (!beforeBy.has(k0) || !beforeBy.has(k2)) continue;
     const w0 = beforeBy.get(k0)!;
     const w1 = beforeBy.get(k1)!;
     const w2 = beforeBy.get(k2)!;
-    if (inferHighIntensity(w0) && isRestWorkoutPlan(w1) && inferHighIntensity(w2)) {
+    if (isHard(w0) && isRestWorkoutPlan(w1) && isHard(w2)) {
       const a1 = afterBy.get(k1);
       if (!a1 || !isRestWorkoutPlan(a1)) out.push(msgRestBufferLost);
     }
@@ -104,7 +85,6 @@ export function validateSwap(context: {
   validationContext: ValidationContext;
 }): ValidationResult {
   const v = context.validationContext;
-  const rs = v.recoverySummary;
 
   const microRaw = validateMicroStructure(context.after, v);
   const micro: ValidationResult =
@@ -118,28 +98,16 @@ export function validateSwap(context: {
 
   if (context.weekPhaseMap) {
     results.push(
-      validatePhaseSwap(context.source, context.target, { weekPhaseMap: context.weekPhaseMap, validationContext: v }),
+      validatePhaseSwap(context.source, context.target, {
+        weekPhaseMap: context.weekPhaseMap,
+        validationContext: v,
+        easyPaceSecPerKm: easyPaceOfPlan(context.after) ?? easyPaceOfPlan(context.before),
+      }),
     );
   }
   results.push(validateLoadShift(context.before, context.after, 0.3));
 
   if (micro.status === "warn") results.push(micro);
-
-  // Recovery influence is continuous (never gated by confidence).
-  // decisionScore = basePlanLoad + fatiguePressure * adjustedRecoveryInfluence + microStructurePenalty
-  // Here: we compute a recovery-axis severity with basePlanLoad=0, microStructurePenalty=0.
-  const basePlanLoad = 0;
-  const microStructurePenalty = 0;
-  const fatiguePressure = (50 - rs.avgRecovery) / 25; // fatigued => positive, fresh => negative
-  const decisionScore = basePlanLoad + fatiguePressure * rs.adjustedRecoveryInfluence + microStructurePenalty;
-  const recoveryAxisScore = Math.max(0, Math.min(100, Math.round(35 + decisionScore)));
-  const recoveryReason =
-    rs.recoveryStatus === "fatigued"
-      ? "Erholung: du bist aktuell eher ermüdet."
-      : rs.recoveryStatus === "fresh"
-        ? "Erholung: du bist aktuell eher frisch."
-        : "Erholung: normal.";
-  results.push({ status: "allow", axes: { recovery: axis(recoveryAxisScore, recoveryReason) } });
 
   return evaluate(results, v);
 }

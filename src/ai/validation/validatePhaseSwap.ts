@@ -2,21 +2,13 @@ import type { WorkoutV2 } from "../../planV2/types";
 import type { TrainingPhase } from "../../planV2/trainingPhase";
 import { getWorkoutPhase, type WeekPhaseMeta } from "../../core/getWorkoutPhase";
 import { allow, axis, warn, type ValidationResult } from "./validationResult";
-import { inferIntensity } from "./validateMicroStructure";
+import { isHardWorkout } from "./hardWorkout";
 import type { ValidationContext } from "./validationContext";
 
 export type PhaseSwapMeta = {
   sourcePhase: TrainingPhase;
   targetPhase: TrainingPhase;
 };
-
-function isHighIntensity(workout: WorkoutV2): boolean {
-  return inferIntensity(workout) === "high";
-}
-
-function isLongRun(workout: WorkoutV2): boolean {
-  return workout.sessionType === "long";
-}
 
 export function getSwapPhaseMeta(
   source: WorkoutV2,
@@ -32,45 +24,29 @@ export function getSwapPhaseMeta(
  * Deterministic phase-aware constraints for swaps.
  *
  * Strict rules:
- * - warn: hard sessions into taper (suboptimal, but user can override)
- * - warn: long runs into base (periodization)
- * - warn: peak -> peak stacking risk
+ * - warn: hard sessions into taper (suboptimal, but user can override; „hart“ = `isHardSession` des Kerns, I13)
+ *
+ * Entfallen (docs/plan-spec.md §15.5 (3)): „Long Run in die Basis“ und „Peak-Kompression“.
  */
 export function validatePhaseSwap(
   source: WorkoutV2,
   target: WorkoutV2,
-  context: { weekPhaseMap: Map<string, WeekPhaseMeta>; validationContext: ValidationContext },
+  context: { weekPhaseMap: Map<string, WeekPhaseMeta>; validationContext: ValidationContext; easyPaceSecPerKm?: number },
 ): ValidationResult {
-  const { sourcePhase, targetPhase } = getSwapPhaseMeta(source, target, context);
+  const easyPace = context.easyPaceSecPerKm;
+  const { targetPhase } = getSwapPhaseMeta(source, target, context);
   const v = context.validationContext;
   const rs = v.recoverySummary;
   const fatiguePressure = (50 - rs.avgRecovery) / 25; // continuous; fatigued => positive, fresh => negative
 
   // RULE 1: High-intensity into taper is suboptimal (warn only)
-  if (targetPhase === "taper" && isHighIntensity(source)) {
+  if (targetPhase === "taper" && isHardWorkout(source, easyPace)) {
     // decisionScore = basePlanLoad + fatiguePressure * adjustedRecoveryInfluence + microStructurePenalty
     const basePlanLoad = 70;
     const microStructurePenalty = 0;
     const decisionScore = basePlanLoad + fatiguePressure * rs.adjustedRecoveryInfluence + microStructurePenalty;
     const score = Math.max(0, Math.min(100, Math.round(decisionScore)));
     const axes = { structural: axis(score, "Intensive Einheit in Taper ist suboptimal") };
-    return score >= 60 ? warn(axes) : allow(axes);
-  }
-
-  // RULE 2: Long runs into base phase is usually suboptimal periodization (warn only)
-  if (isLongRun(source) && targetPhase === "base") {
-    const score = v.planGoal === "base" ? 35 : 55;
-    const axes = { structural: axis(score, "Phase mismatch: Long Run gehört typischerweise nicht in die Base-Phase.") };
-    return score >= 60 ? warn(axes) : allow(axes);
-  }
-
-  // RULE 3: Peak compression warning (user override)
-  if (sourcePhase === "peak" && targetPhase === "peak") {
-    const basePlanLoad = 70;
-    const microStructurePenalty = 0;
-    const decisionScore = basePlanLoad + fatiguePressure * rs.adjustedRecoveryInfluence + microStructurePenalty;
-    const score = Math.max(0, Math.min(100, Math.round(decisionScore)));
-    const axes = { structural: axis(score, "Phase/Struktur: Peak-Kompression kann die Belastung zu stark bündeln.") };
     return score >= 60 ? warn(axes) : allow(axes);
   }
 
