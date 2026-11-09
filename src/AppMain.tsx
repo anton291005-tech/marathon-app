@@ -118,6 +118,8 @@ import {
   switchPlanPreferences,
   writePlanPreferencesStore,
 } from "./onboarding/planOwnedPreferences";
+import { resolveActivePlanGoal } from "./planGoal";
+import { canonicalRaceDistanceKm, raceDistanceKind, targetTimeExample } from "./raceDistance";
 import { readPlanInputsFromPreferences } from "./onboarding/onboardingPlanInputs";
 import {
   MIGRATION_TO_SUPABASE_DONE_KEY,
@@ -830,9 +832,9 @@ function formatSecondsToRaceTime(totalSeconds){
 
 function getTrendLabel(predictedSeconds, targetSeconds){
   const diff = predictedSeconds - targetSeconds;
-  if(diff <= 0)return "Richtung Sub 2:50";
-  if(diff <= 120)return "Knapp an Sub 2:50 dran";
-  if(diff <= 300)return "Stabil auf gutem Marathonkurs";
+  if(diff <= 0)return "Auf Zielkurs";
+  if(diff <= 120)return "Knapp am Ziel dran";
+  if(diff <= 300)return "Stabil auf gutem Kurs";
   return "Noch Aufbau, aber klar auf dem Weg";
 }
 
@@ -885,7 +887,9 @@ export function getHalfMarathonRacePaceScore({ actualDistanceKm, actualDurationS
   if (!(actualDistanceKm >= 21) || !(actualDurationSec > 0)) return null;
   const projectedMarathonSeconds = riegelMarathonSeconds(actualDurationSec, actualDistanceKm);
   if (!Number.isFinite(projectedMarathonSeconds) || projectedMarathonSeconds <= 0) return null;
-  const safeTargetSeconds = targetSeconds && targetSeconds > 0 ? targetSeconds : (2 * 3600 + 49 * 60 + 50);
+  // Ohne Zielzeit (kein Ziel / „Nur finishen") gibt es nichts, woran das Rennergebnis zu messen wäre.
+  if (!(targetSeconds > 0)) return null;
+  const safeTargetSeconds = targetSeconds;
   const paceRatio = safeTargetSeconds / projectedMarathonSeconds;
   return Math.max(0, Math.min(1, 0.5 + (paceRatio - 1) * 10));
 }
@@ -984,7 +988,8 @@ export function getPerformancePrediction({
   halfMarathonRaceDaysAgo,
   targetSeconds,
 }){
-  const safeTargetSeconds = targetSeconds || (2 * 3600 + 49 * 60 + 50);
+  // Ohne Zielzeit (kein Ziel / „Nur finishen") gibt es keinen Zielwert, an dem die Form gemessen wird.
+  const hasTarget = typeof targetSeconds === "number" && targetSeconds > 0;
   const longRunScore = longRuns > 0 ? doneLongRuns / longRuns : 0;
   const hardScore = hardSessions > 0 ? doneHardSessions / hardSessions : 0;
   const feelingScore = Math.max(0, Math.min(1, (avgFeeling - 2) / 3));
@@ -1017,14 +1022,18 @@ export function getPerformancePrediction({
     readiness = baseReadiness + HALF_MARATHON_SIGNAL_NEUTRAL_DEFAULT * 0.08;
   }
 
+  const confidence = readiness >= 0.8 ? "hoch" : readiness >= 0.6 ? "mittel" : "früh im Block";
+  if (!hasTarget) {
+    return { predictedSeconds: null, predictedTime: null, trend: "Kein Zielwert gesetzt", confidence };
+  }
   const penalty = (1 - readiness) * 360;
-  const predictedSeconds = safeTargetSeconds + penalty;
+  const predictedSeconds = targetSeconds + penalty;
 
   return {
     predictedSeconds,
     predictedTime: formatSecondsToRaceTime(predictedSeconds),
-    trend: getTrendLabel(predictedSeconds, safeTargetSeconds),
-    confidence: readiness >= 0.8 ? "hoch" : readiness >= 0.6 ? "mittel" : "früh im Block",
+    trend: getTrendLabel(predictedSeconds, targetSeconds),
+    confidence,
   };
 }
 
@@ -1377,7 +1386,15 @@ export default function AppMain(){
           return;
         }
         setPreferences((prev) => {
-          const merged = { ...prev, ...remote };
+          // targetTime im Profil ist nutzerweit, die Zielzeit aber gehört zu EINEM Plan: Kennt die App den
+          // Besitzer-Plan der lokalen Preferences (oder steht lokal schon eine Zielzeit/ein Finish-Ziel),
+          // bleibt das lokale Ziel — sonst überschriebe die Marathon-Zielzeit aus dem Profil jeden anderen Plan.
+          const localGoalIsPlanOwned =
+            planPreferencesStoreRef.current?.ownerPlanId != null ||
+            typeof prev.targetTime === "string" ||
+            prev.raceGoal === "finish";
+          const { targetTime: remoteTargetTime, ...remoteRest } = remote;
+          const merged = { ...prev, ...(localGoalIsPlanOwned ? remoteRest : { ...remoteRest, targetTime: remoteTargetTime }) };
           if (
             (remote.maxHeartRateBpm == null || !Number.isFinite(Number(remote.maxHeartRateBpm))) &&
             prev.maxHeartRateBpm != null &&
@@ -2838,23 +2855,37 @@ export default function AppMain(){
     healthRunById,
     now: getAppNow(),
   });
-  const raceGoalFinish = preferences.raceGoal === "finish";
-  const parsedTargetTime = parseTargetTimeToSeconds(preferences.targetTime);
-  const targetSeconds = raceGoalFinish
-    ? null
-    : parsedTargetTime || (2 * 3600 + 49 * 60 + 50);
-  const targetTimeDisplay = raceGoalFinish
-    ? "Ziel: Finishen"
-    : parsedTargetTime
-      ? preferences.targetTime
-      : undefined;
-  const { halfMarathonRacePaceScore, halfMarathonRaceDaysAgo } = resolveHalfMarathonRaceSignal({
-    activeSessions: ACTIVE_SESSIONS,
-    logs,
-    healthRunById,
-    targetSeconds,
-    now: getAppNow(),
+  const activePlanName = allTrainingPlans.find((item) => item.is_active)?.plan_name ?? null;
+  const activePlanId = allTrainingPlans.find((item) => item.is_active)?.id ?? null;
+  /** Plan-eigene Preferences (Rennen, Ziel, Umfang) je Plan-ID — siehe planOwnedPreferences. */
+  const planPreferencesStoreRef = useRef(null);
+  if (planPreferencesStoreRef.current == null) planPreferencesStoreRef.current = readPlanPreferencesStore();
+  // Distanz und Zielzeit gehören zum AKTIVEN Plan — nichts fällt auf Marathon-Werte zurück (siehe planGoal.ts).
+  const ownerPlanIdForGoal = planPreferencesStoreRef.current?.ownerPlanId ?? null;
+  const activeGoal = resolveActivePlanGoal({
+    plan: displayPlan,
+    planName: activePlanName,
+    planId: activePlanId,
+    preferences,
+    ownerPlanId: ownerPlanIdForGoal,
   });
+  const activeRaceDistanceKm = activeGoal.raceDistanceKm;
+  const goalPreferencesApply = activeGoal.preferencesApply;
+  const raceGoalFinish = activeGoal.finishOnly;
+  const activeTargetTime = activeGoal.targetTime;
+  const targetSeconds = activeGoal.targetSeconds;
+  const targetTimeDisplay = activeGoal.targetTimeLabel;
+  // Das Halbmarathon-Rennsignal projiziert auf einen Marathon — nur sinnvoll in einem Marathonplan.
+  const { halfMarathonRacePaceScore, halfMarathonRaceDaysAgo } =
+    raceDistanceKind(activeRaceDistanceKm) === "marathon"
+      ? resolveHalfMarathonRaceSignal({
+          activeSessions: ACTIVE_SESSIONS,
+          logs,
+          healthRunById,
+          targetSeconds,
+          now: getAppNow(),
+        })
+      : { halfMarathonRacePaceScore: null, halfMarathonRaceDaysAgo: null };
   const predictionReadiness = getPredictionReadiness({
     doneSessionsCount: doneSess,
     loggedKm: loggedRunKm,
@@ -2890,6 +2921,7 @@ export default function AppMain(){
         healthRuns,
         targetSeconds,
         personalBestSeconds,
+        raceDistanceKm: activeRaceDistanceKm,
         now: appNow,
         homeRecoveryScore0_100: recoveryDomain.homeRecoveryScore0_100,
       }),
@@ -2899,13 +2931,12 @@ export default function AppMain(){
       healthRuns,
       targetSeconds,
       personalBestSeconds,
+      activeRaceDistanceKm,
       appNow,
       recoveryDomain.homeRecoveryScore0_100,
     ],
   );
   /** „Vorbereitung abgeschlossen": Zielrennen erledigt oder Renndatum vorbei (siehe prepCompletionState). */
-  const activePlanName = allTrainingPlans.find((item) => item.is_active)?.plan_name ?? null;
-  const activePlanId = allTrainingPlans.find((item) => item.is_active)?.id ?? null;
   const prepCompletion = useMemo(
     () =>
       getPrepCompletionState({
@@ -3163,7 +3194,9 @@ export default function AppMain(){
       const timeStr = marathonPrediction.predictedTime;
       const predSec = marathonPrediction.predictedSeconds;
       let subTag;
-      if (predSec < SUB3H_TARGET_SECONDS_UI) {
+      if (raceDistanceKind(activeRaceDistanceKm) !== "marathon") {
+        subTag = null;
+      } else if (predSec < SUB3H_TARGET_SECONDS_UI) {
         const mins = Math.max(1, Math.round((SUB3H_TARGET_SECONDS_UI - predSec) / 60));
         subTag = `${mins} min unter Sub-3h`;
       } else if (predSec <= SUB3H_TARGET_SECONDS_UI + 300) {
@@ -3172,7 +3205,7 @@ export default function AppMain(){
         const mins = Math.max(1, Math.round((predSec - SUB3H_TARGET_SECONDS_UI) / 60));
         subTag = `${mins} min über Sub-3h`;
       }
-      lines.push(`Aktuelle Prognose: ${timeStr} — ${subTag}`);
+      lines.push(subTag ? `Aktuelle Prognose: ${timeStr} — ${subTag}` : `Aktuelle Prognose: ${timeStr}`);
     } else {
       lines.push("Mehr abgeschlossene Einheiten für Zeitprognose nötig");
     }
@@ -3376,7 +3409,7 @@ export default function AppMain(){
   /** Ziel-Zeile der Profilkarte: Renntag und Distanz aus dem aktiven Plan, Ziel nur aus SEINEN Preferences. */
   const settingsGoalLine = () => {
     const race = prepCompleted ? null : findGoalRaceSession(displayPlan);
-    const ownerPlanId = planPreferencesStoreRef.current?.ownerPlanId ?? null;
+    const ownerPlanId = ownerPlanIdForGoal;
     return buildSettingsGoalLine({
       raceYmd: race?.ymd ?? null,
       todayYmd: getAppCalendarYmd(appNow),
@@ -3438,9 +3471,6 @@ export default function AppMain(){
     setAllTrainingPlans(list);
   }, [user?.id]);
 
-  /** Plan-eigene Preferences (Rennen, Ziel, Umfang) je Plan-ID — siehe planOwnedPreferences. */
-  const planPreferencesStoreRef = useRef(null);
-  if (planPreferencesStoreRef.current == null) planPreferencesStoreRef.current = readPlanPreferencesStore();
   const activePlanDescribesPreferences = prepCompleted
     ? prepCompleted.preferencesOwned
     : preferencesBelongToPlan(preferences, {
@@ -5374,6 +5404,7 @@ export default function AppMain(){
               <MarathonPredictionCard
                 variant="full"
                 prediction={marathonPrediction}
+                raceDistanceKm={activeRaceDistanceKm}
                 targetTimeLabel={targetTimeDisplay}
                 confidenceLabel={marathonConfidenceLabel}
                 coachHints={coachHints}
@@ -5414,7 +5445,11 @@ export default function AppMain(){
             </div>
 
             <div style={{ flexShrink: 0 }}>
-              <RaceCalculator />
+              <RaceCalculator
+                key={`${activePlanId ?? "plan"}:${activeRaceDistanceKm ?? "none"}:${raceGoalFinish ? "" : activeTargetTime}`}
+                raceDistanceKm={activeRaceDistanceKm}
+                initialTime={raceGoalFinish ? "" : activeTargetTime}
+              />
             </div>
 
           </div>
@@ -5676,9 +5711,25 @@ export default function AppMain(){
               type="text"
               lang="de-DE"
               inputMode="text"
-              value={preferences.targetTime}
-              onChange={(e)=>setPreferences((prev)=>({...prev,targetTime:e.target.value}))}
-              placeholder="z. B. 2:49:50"
+              value={activeTargetTime}
+              onChange={(e)=>{
+                const value = e.target.value;
+                // Gehörten die Preferences bisher nicht zum aktiven Plan, übernimmt dieser sie mit der Eingabe.
+                if (!goalPreferencesApply && activePlanId) {
+                  planPreferencesStoreRef.current = {
+                    ...planPreferencesStoreRef.current,
+                    ownerPlanId: activePlanId,
+                  };
+                  writePlanPreferencesStore(planPreferencesStoreRef.current);
+                }
+                setPreferences((prev)=>({
+                  ...prev,
+                  targetTime: value,
+                  ...(value.trim() !== "" && prev.raceGoal === "finish" ? { raceGoal: "time" } : {}),
+                  ...(!goalPreferencesApply && activeRaceDistanceKm ? { raceDistanceKm: activeRaceDistanceKm } : {}),
+                }));
+              }}
+              placeholder={`z. B. ${targetTimeExample(activeRaceDistanceKm)}`}
               style={{width:"100%",background:"var(--bg-primary)",border:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "1px solid rgba(56,189,248,0.5)" : "1px solid var(--border-input)",borderRadius:12,padding:"11px 12px",color:"var(--text-primary)",fontSize:16,boxSizing:"border-box",marginBottom:6,boxShadow:aiNavHint?.screen === "settings" && aiNavHint?.section === "race_goal" ? "0 0 0 2px rgba(56,189,248,0.2)" : "none"}}
             />
             <div style={{fontSize:11,color:"var(--text-muted)"}}>Format: hh:mm:ss — dein angestrebtes Rennziel für den Plan.</div>

@@ -27,8 +27,8 @@ import {
   type SessionLog,
 } from "./marathonPrediction";
 import { getSessionPlannedDistanceKm } from "./sessionDistance";
+import { canonicalRaceDistanceKm, MARATHON_KM, raceDistanceKind, riegelConvertSeconds } from "./raceDistance";
 
-const MARATHON_KM = 42.195;
 const RIEGEL_EXPONENT = 1.06;
 const MIN_RUN_KM = 8;
 const PACE_LOOKBACK_DAYS = 56;
@@ -65,6 +65,12 @@ export type ForecastInput = {
   targetSeconds?: number | null;
   /** Historischer Marathon-PR in Sekunden (optional). */
   personalBestSeconds?: number | null;
+  /**
+   * Renndistanz des aktiven Plans. Intern wird weiter in Marathon-Äquivalenten gerechnet und am Ende per
+   * Riegel auf diese Distanz umgerechnet. `undefined` = Marathon (Altverhalten), `null` = Distanz unbekannt
+   * → keine Prognose statt eines Marathon-Werts.
+   */
+  raceDistanceKm?: number | null;
 };
 
 export type MarathonForecast = {
@@ -421,11 +427,13 @@ function volumeAdherenceTimeFactor(adherence: number | null): number {
   return Math.max(0.985, 1 - 0.015 * Math.min(adherence - 1.08, 0.17));
 }
 
-function longRunDepthFactor(maxLongKm: number | null): number {
+/** Schwellen gelten für den Marathon; kürzere Rennen brauchen proportional kürzere Long Runs (mind. 40 %). */
+function longRunDepthFactor(maxLongKm: number | null, targetKm: number = MARATHON_KM): number {
   if (maxLongKm == null) return 1.06;
-  if (maxLongKm >= 26) return 1;
-  if (maxLongKm >= 21) return 1.015;
-  if (maxLongKm >= 18) return 1.03;
+  const scale = Math.max(0.4, Math.min(1, targetKm / MARATHON_KM));
+  if (maxLongKm >= 26 * scale) return 1;
+  if (maxLongKm >= 21 * scale) return 1.015;
+  if (maxLongKm >= 18 * scale) return 1.03;
   return 1.055;
 }
 
@@ -438,6 +446,7 @@ function recoveryTimeFactor(homeRecoveryScore0_100: number | null | undefined): 
 
 export function computeMarathonForecast(input: ForecastInput): MarathonForecast {
   const now = input.now ?? getAppNow();
+  const targetKm = input.raceDistanceKm === undefined ? MARATHON_KM : canonicalRaceDistanceKm(input.raceDistanceKm);
   const paceSamples = collectPaceRunSamples(input.plan, input.logs, input.healthRuns, now);
   const entries = getTrainingWindowData(input.plan, input.logs, now);
   const consistencyScore = getConsistencyScore(entries, now);
@@ -450,6 +459,24 @@ export function computeMarathonForecast(input: ForecastInput): MarathonForecast 
   );
   const window42Adherence = compute42DayVolumeAdherence(input.plan, input.logs, input.healthRuns, now);
   const raceAnchor = findRaceAnchor(input.plan, input.logs, input.healthRuns, now);
+
+  if (targetKm == null) {
+    return {
+      ready: false,
+      message: "Prognose nicht verfügbar – im Plan fehlt die Renndistanz.",
+      predictedSeconds: null,
+      predictedTime: null,
+      rangeLabel: null,
+      rangeLowSeconds: null,
+      rangeHighSeconds: null,
+      consistencyScore: paceSamples.length >= 1 ? consistencyScore : null,
+      sub3ProbabilityPercent: null,
+      sub250ProbabilityPercent: null,
+      paceSampleCount: paceSamples.length,
+      maxLongRunKm,
+      weeklyVolumeAdherence,
+    };
+  }
 
   if (paceSamples.length < MIN_PACE_SAMPLES && raceAnchor == null) {
     return {
@@ -513,7 +540,7 @@ export function computeMarathonForecast(input: ForecastInput): MarathonForecast 
 
   let predictedSeconds = applyPersonalBestCap(baseSeconds, input.personalBestSeconds);
   predictedSeconds *= volumeAdherenceTimeFactor(window42Adherence);
-  predictedSeconds *= longRunDepthFactor(maxLongRunKm);
+  predictedSeconds *= longRunDepthFactor(maxLongRunKm, targetKm);
   predictedSeconds *= recoveryTimeFactor(input.homeRecoveryScore0_100);
   predictedSeconds += ((100 - consistencyScore) / 100) * 120;
 
@@ -535,23 +562,34 @@ export function computeMarathonForecast(input: ForecastInput): MarathonForecast 
   const bandBase = 150 + (100 - consistencyScore) * 2.8;
   const rangeLow = Math.max(minSeconds, predictedSeconds - bandBase);
   const rangeHigh = Math.min(FORECAST_MAX_SECONDS, predictedSeconds + bandBase);
-  const rangeLabel = `${formatDurationMinutes(rangeLow)}–${formatDurationMinutes(rangeHigh)}`;
 
   const scale = 200 + (100 - consistencyScore) * 1.2;
-  const sub3ProbabilityPercent = Math.round(100 * sigmoid((10800 - predictedSeconds) / scale));
+  // Sub-3 / Sub-2:50 sind Marathon-Marken — nur dort, sonst keine Wahrscheinlichkeit.
+  const isMarathon = raceDistanceKind(targetKm) === "marathon";
+  const sub3ProbabilityPercent = isMarathon
+    ? Math.round(100 * sigmoid((10800 - predictedSeconds) / scale))
+    : null;
   const sub250Scale = wettkampfSessionCount >= 1 ? scale : scale * 2.5;
-  const sub250ProbabilityPercent = Math.round(
-    100 * sigmoid((10200 - predictedSeconds) / sub250Scale),
-  );
+  const sub250ProbabilityPercent = isMarathon
+    ? Math.round(100 * sigmoid((10200 - predictedSeconds) / sub250Scale))
+    : null;
+
+  // Marathon-Äquivalent → Zeit über die Plan-Distanz.
+  const toTarget = (marathonSeconds: number) =>
+    isMarathon ? marathonSeconds : Math.round(riegelConvertSeconds(marathonSeconds, MARATHON_KM, targetKm));
+  const outPredicted = toTarget(predictedSeconds);
+  const outLow = toTarget(rangeLow);
+  const outHigh = toTarget(rangeHigh);
+  const rangeLabel = `${formatDurationMinutes(outLow)}–${formatDurationMinutes(outHigh)}`;
 
   return {
     ready: true,
     message: "",
-    predictedSeconds,
-    predictedTime: formatDuration(predictedSeconds),
+    predictedSeconds: outPredicted,
+    predictedTime: formatDuration(outPredicted),
     rangeLabel,
-    rangeLowSeconds: Math.round(rangeLow),
-    rangeHighSeconds: Math.round(rangeHigh),
+    rangeLowSeconds: Math.round(outLow),
+    rangeHighSeconds: Math.round(outHigh),
     consistencyScore,
     sub3ProbabilityPercent,
     sub250ProbabilityPercent,
