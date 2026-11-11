@@ -1,5 +1,6 @@
 import { parseSessionDateLabel } from "../appSmartFeatures";
 import { validateTrainingPlanV2Integrity } from "../ai/validation/validateTrainingPlanV2Integrity";
+import { mondayYmdOfDateIso } from "../core/calendarYmd";
 import { rebuildPlanFromWorkouts } from "../core/deriveWeeksFromWorkouts";
 import { getAppNow } from "../core/time/timeSystem";
 import { mapSessionType } from "../lib/ai/mapSessionType";
@@ -63,12 +64,7 @@ function cleanPlanText(raw: unknown): string {
 }
 
 function mondayIsoFromDateIso(dateIso: string): string | null {
-  const date = new Date(dateIso);
-  if (!Number.isFinite(date.getTime())) return null;
-  date.setHours(12, 0, 0, 0);
-  const offset = (date.getDay() + 6) % 7;
-  date.setDate(date.getDate() - offset);
-  return date.toISOString().slice(0, 10);
+  return mondayYmdOfDateIso(dateIso);
 }
 
 /**
