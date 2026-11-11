@@ -70,8 +70,7 @@ Coding Agent: Cursor mit Composer (claude-sonnet oder GPT-4.1)
 Test-Device: iPhone 13 (nie Simulator für device-kritische Fixes)
 
 ### Offene Punkte (MVP)
-- KI-Einwilligung (`feat/ai-consent`, App-Store-Regel 5.1.2(i)) — siehe `docs/roadmap.md` „MVP-Blocker vor TestFlight“; Migration 015 vor dem Merge in Production anwenden
-- Trainings-Erinnerung (Notification id 1001) feuert täglich weiter, auch an Ruhetagen und nach Plan-Ende
+- iPhone-13-Test: KI-Einwilligung (Screen, Coach-Sperre, Widerruf) und Trainings-Erinnerung (nur Trainingstage, nichts nach Plan-Ende)
 - Sign in with Apple — blockiert, bis ein Apple Developer Account existiert
 - `SUPPORT_EMAIL` in `src/features/settings/appInfo.ts` ist ein Platzhalter (`support@example.invalid`) — vor TestFlight echte Adresse eintragen (Hilfe & Feedback, Fehler melden, Datenexport anfordern)
 - AI Coach: funktioniert, aber Antwortqualität noch nicht optimal — kein Blocker, weiter verbessern
@@ -79,6 +78,7 @@ Test-Device: iPhone 13 (nie Simulator für device-kritische Fixes)
 
 ### Erledigt (nicht mehr offen)
 - E-Mail-Verifizierung, Passwort-Reset, Account-Deletion-Test (laut Anton erledigt)
+- KI-Einwilligung (5.1.2(i)) in `main` seit 2026-11-11, Migration 015 in Production; Trainings-Erinnerung nur an Trainingstagen
 - Onboarding-Plan-Qualität: Plan-Kern live seit 2026-11-07 (`docs/plan-core-plan.md`)
 - Long-Run-Cap 30%/33% ist als harter Code-Clamp umgesetzt, nicht mehr nur Prompt-Regel (Ausnahme seit 2026-11-02: bei ≤ 3 Läufen pro Woche bis 50 %, siehe `longRunCap` in `api/_lib/planInvariants.js`)
 - Privacy Policy Link ist im App-Store-Review-Flow eingebunden
