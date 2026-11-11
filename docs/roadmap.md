@@ -259,6 +259,8 @@ Gemeint sind hier die Schritte des Umbauplans, nicht die nummerierten Schritte v
   - **Teil 3 `feat/session-kind-types`:** offen, nur Diagnose (Kern-Arten als echte App-Typen, alle `type === …`-Stellen, `capacityScore.ts:163`).
 - **Behoben (2026-11-11, `fix/woche-tab-start-week`, Commit b16fced): Woche-Tab öffnete bei Planstart mitten in der Woche auf der Vorwoche** (Plan ab Sa 07.11., heute Mi 11.11. → „Woche 1“ statt „Woche 2“). Ursache: `resolveCurrentPlanWeekIndex` zählte 7-Tage-Blöcke ab dem frühesten Session-Datum statt Mo–So-Wochen. Jetzt ab dem Montag der Startwoche, wie `planCore/dates.ts`. Test `src/appSmartFeatures.midWeekStart.test.ts`, Preview-Check bestanden. Der oben genannte, davon verschiedene Fehler „noch nicht begonnener Plan öffnet auf der letzten Woche“ bleibt offen.
 
+- **Behoben (2026-11-11, `fix/timezone-tests`, Commit e406b5d): Wochen-Montag rutschte ab UTC+13 einen Tag zurück.** `mondayIsoFromDateIso` (`normalizeTrainingPlan`) und `deriveWeeksFromWorkouts` rechneten mit lokaler Zeit und lasen in UTC; jetzt rein kalendarisch über `src/core/calendarYmd.ts`. Berlin/UTC/Los Angeles waren nie betroffen. **Bekannte Grenze (bewusst offen):** Unter `TZ=Pacific/Auckland` scheitern weiter `liveFixtureGolden` und `normalizeTrainingPlanLegacyYear` (Altplan-`dateIso` aus `localNoonIso`, lokale Zeit) sowie Matrix-Tests des alten Generators (entfallen mit Schritt 13). Für eine deutschsprachige App ohne Nutzer ab UTC+13 kein Blocker.
+
 ## Out of Scope bis TestFlight
 UI/UX-Redesign, Triathlon-Erweiterung, Android, Apple-Watch-Companion — nicht anfassen, auch nicht "nebenbei".
 
