@@ -296,7 +296,7 @@ Die App nimmt an, was der Kern liefern wird. Gleichzeitig wird der Nebenbefund z
 - **Abnahme:** Alle Invarianten grün, P1–P6 in den Bereichen.
   - Zusätzlich `docs/plan-core-profiles.md`: Vergleichstabelle P1–P6 gegen je einen Literaturplan (§13: Peak-km, LR-Max, LR ≥ 30 km, Q/Woche, Taper). Ist Grundlage fürs Spoho-Review.
   - Hinweis: `CI=true` schreibt keine neuen Snapshots. Die Snapshot-Dateien müssen mit eingecheckt werden.
-- **Umgesetzt (Branch `feat/plan-core-invariants`, zwei Teilcommits 7a/7b, nicht gemergt; Entscheidungen vom 2026-11-05):**
+- **Umgesetzt (Branch `feat/plan-core-invariants`, zwei Teilcommits 7a/7b, in `main` (Merge 7561621); Entscheidungen vom 2026-11-05):**
   - **7a `src/planCore/invariants.ts`:** `checkPlan(SessionPlan, inputs) → { violations, errors, warnings }`. Ein Verstoß hat Code (I1–I22 oder `QMIN`/`BEGINNER`/`VOLUME`/`LAYOUT`/`PLAN`), Regel, Schwere, Woche, Tag, Ist/Soll, Einheit. `INVARIANT_RULES` (120 Regeln) legt die Schwere fest:
     - **error:** Sicherheitsgrenze, verletzte Vorgabe des Nutzers oder für die App kaputter Plan. Dazu gehören I1, I2-Struktur (Art, ≥ 15 min, Hinweis-Missbrauch), I3, I5-Deckel, I6, I7, I8, I9 komplett, I12, I14, I15 (Abstände, letzte Tage), I16, I17, I18, I21, I22, Einsteiger mit I/R, Strukturfehler, doppelte IDs.
     - **warning:** I2-Dauern, I4 inkl. Monotonie, I5-Entlastungsband, I10, I11, I13, Mindestgrößen der Q-Einheiten, weiche Rennwochen-Regeln, Konsistenz des Volumenplans.
@@ -377,7 +377,7 @@ Die App nimmt an, was der Kern liefern wird. Gleichzeitig wird der Nebenbefund z
   - `Onboarding.*.test.tsx` erweitern: Pflichtfelder, Einsteiger-Modus ohne Rennergebnis, Ableitung der Spanne
   - `apiInputLimits.test.js`: neue Felder, Grenzen, Kürzung
 - **Abnahme:** Wizard auf iPhone 13 (Tastatur, Safe Areas, 390 px). Der Plan entsteht weiter über den heutigen Pfad.
-- **Umgesetzt (2026-11-06), Branch `feat/onboarding-plan-inputs`, nicht gemergt; Gerätetest auf dem iPhone 13 offen:**
+- **Umgesetzt (2026-11-06), Branch `feat/onboarding-plan-inputs`, in `main` (Merge 2b9f036); Gerätetest auf dem iPhone 13 offen:**
   - **Wizard (7 statt 5 Schritte):** 1 Distanz & Ziel (nur 5 km, 10 km, HM, M) → 2 Rennen (Renndatum mit Prüfung der Mindest-Planlänge, Start, Name) → **3 Trainingswoche** (Lauftage 3–6, verfügbare Tage Mo–So, alle vorausgewählt, Long-Run-Tag nur aus den verfügbaren, Vorgabe So/Sa/letzter wie `resolveLongRunDay`) → **4 Form** (Wochen-km als Zahl 0–150, längster Lauf optional 0–45 mit angezeigtem Standardwert, Rennergebnis „Wettkampf“ mit Distanz/Zeit/Datum, „Schätzung“ nur 5/10 km, „Keine Angabe“ = Einsteiger-Modus) → 5 Präferenzen → 6 Kalender → 7 Zusammenfassung mit allen neuen Angaben.
   - **Dateien:** `src/onboarding/onboardingPlanInputs.ts` (neu: Typen, `weeklyKmRangeFromKm`, Prüfungen, `raceDateTooEarlyMessage`, `toProfilePlanInputs`, `readPlanInputsFromPreferences`), `src/components/Onboarding.tsx`, `src/onboarding/marathonPreferencesOnboarding.ts` (`DISTANCE_SHORTCUTS` ohne 15 km, mit `coreDistance`; `planInputs` in Payload und Preferences), `planOwnedPreferences.ts` und `onboardingPlanIsolation.ts` (`planInputs` plan-eigen), `runtimePersistenceTypes.ts`, `claudePlanService.ts` (`PlanGenerationProfile`), `src/AppMain.tsx` (`initialPlanInputs` aus den Preferences), `api/_lib/inputLimits.js` (`cleanPlanInputs`, `legacyPlanProfile`), beide Routen unter `api/onboarding/`.
   - **Kern:** `earliestRaceDate(distance, startYmd)` (`phases.ts`), `defaultLongestRecentRunKm` + Config `inputs.longestRecentRunDefaultKm` (E, Review-Punkt 39), `buildPlan` speichert kein `freeText`, `normalizePlanCoreMeta` entfernt es. P1–P6 und Property-Pläne unverändert (der Kern-Fallback ohne Angabe bleibt 30 %/min. 5; das Onboarding schickt den Standardwert ausdrücklich mit). `CONFIG_VERSION` bleibt 0.9.0.
@@ -409,7 +409,7 @@ Kern im Vercel-Handler hinter dem Schalter.
   1. **Offline-Vergleich alt/neu** (Jest oder Skript, ohne Claude): P1–P6 und Zufallsprofile als Wizard-Profil → Mapping → `buildCheckedPlan` und derselbe Eingabesatz → deterministischer alter Generator (`deterministicPlanGenerator.js`). Für beide dieselben Kennzahlen: Wochen, Peak-km, längster Long Run, Long Runs ≥ 30 km, Q je Woche, Taper-Reduktion; dazu Kern errors/warnings je Code. Kern 0 errors; Abweichungen zum alten Plan erklärbar.
   2. **Preview-Deploy mit `on`:** Das Onboarding erzeugt einen Plan, die App zeigt ihn ohne UI-Änderung. Production bleibt auf `off`.
 
-- **Umgesetzt (2026-11-06), Branch `feat/plan-core-server`, nicht gemergt; Preview-Test mit `on` bestanden (2026-11-07):**
+- **Umgesetzt (2026-11-06), Branch `feat/plan-core-server`, in `main` (Merge 92e1075); Preview-Test mit `on` bestanden (2026-11-07):**
   - **Route:** `api/onboarding/generate-plan-full.ts` ersetzt die `.js` (gelöscht), `vercel.json` zeigt auf `.ts`. Exportiert per `module.exports = handler` (Babel kennt `export =` nicht); JS-Helfer per `require`, Kern und neue Module per `import`. Vorab geprüft: Jest lädt `api/*.ts` (inkl. `src/planCore`), `tsc -p api/tsconfig.json` erfasst die neuen Dateien ohne `allowJs`.
   - **Module:** `api/_lib/planCoreMapping.ts` (`profileToCoreInputs`, Europe/Berlin-Tag, `TT.MM.JJJJ` → YMD mit echter Datumsprüfung, Distanz 5/10/21,1/42,2 bzw. 42,195, `raceTargetTime` → `goalTime`; Wettkampfdatum muss existieren und ≤ heute sein, sonst ohne Rennergebnis mit Hinweis; `freeText` nie gesetzt), `api/_lib/planCoreRoute.ts` (`readPlanCoreMode`, `attemptCorePlan`, `coreFailureBody`, `logPlanCore`), `api/_lib/planMetrics.ts` (Kennzahlen für Log und Vergleich).
   - **Modi:** `off` Standard (auch leer/unbekannt). `on`: Kern-Plan bei 0 errors, Antwort `{ plan, source: "plan-core", configVersion }`, kein Claude, kein `ANTHROPIC_API_KEY` nötig. Rückfall auf den heutigen Generator bei `invariant`, `plan-too-short`, `invalid-input`, `exception`, `distance-unsupported`, `dates-invalid` mit Logzeile `[plan-core] {"event":"fallback",…,"planCoreFallbacks":1}`; alter Client ohne Plan-Eingaben = `legacy-inputs` (kein Zähler). Scheitert nach einem Verstoß auch der Rückfall: 500 `{ error: "plan-core-invariant", configVersion, errors, warnings, violations }`. `shadow`: Antwort vom heutigen Generator, Logzeile mit Kennzahlen beider Pläne; ein Kern-Fehler kommt dort nie in die Antwort.
@@ -435,7 +435,7 @@ Client-Kopie ersetzen.
   - `coachFeedback`-Test: HM-Plan mit LR 20 km → kein Hinweis; M-Plan mit LR-Peak 27 km, längster gelaufener LR 27 km → kein Hinweis
   - Onboarding-Test: vereinfachter Plan besteht `checkCorePlan`
 - **Abnahme:** Es gibt genau eine Generator-Implementierung im Client. Der vereinfachte Plan hat 0 Verstöße (heute 49).
-- **Umgesetzt (2026-11-07), Branch `feat/plan-core-client`, nicht gemergt; Gerätetest auf dem iPhone 13 offen.** Entscheidungen vom 2026-11-07:
+- **Umgesetzt (2026-11-07), Branch `feat/plan-core-client`, in `main` (Merge 8c31e8d); Gerätetest auf dem iPhone 13 offen.** Entscheidungen vom 2026-11-07:
   - **Lokaler Plan ohne Nachfrage:** Antwortet der Server nicht (Netzwerkfehler, Timeout, 5xx, Antwort ohne brauchbaren Plan), rechnet die App den Plan selbst (`src/onboarding/localCorePlan.ts` → `profileToCoreInputs` + `buildCheckedPlan`, „heute“ = `getAppTodayYmd()`). Gleiche Eingaben und gleicher Kern wie der Server im Modus `on`; Test: P1–P6 und 100 Zufallsprofile ergeben lokal und auf dem Server denselben Plan. Unterschied: „heute“ ist lokal das Gerätedatum, auf dem Server Europe/Berlin; außerhalb Mitteleuropas kann das um einen Tag abweichen (wirkt nur auf das Alter des Rennergebnisses). Bei 401/429/400 kein lokaler Plan (Meldungen wie bisher). Der Button „Vereinfachten Plan verwenden“ und der Struktur-Aufruf `fetchClaudePlanStructure` sind entfernt.
   - **Kern lehnt die Angaben ab** (Server 500 `plan-core-invariant`, lokal Verstoß oder `plan-too-short`/`invalid-input`): Überschrift „Plan so nicht möglich“, Meldung zu Renndatum/Lauftagen/Wochen-km, Button „Angaben ändern“ (zurück zu Schritt 2, Eingaben bleiben), kein „Erneut versuchen“. `fetchFullPlanFromClaude` liest dafür `error` aus dem Fehler-Body (`errorCode`).
   - **Übersetzung Profil → `CoreInputs`** liegt jetzt in `src/planCore/profileInputs.ts` (App und Server); `api/_lib/planCoreMapping.ts` exportiert sie weiter und behält nur `berlinTodayYmd`.
@@ -483,8 +483,8 @@ Alten Pfad löschen, wenn der Schalter stabil auf `on` steht.
 
 | Branch | Inhalt | Dateien |
 |---|---|---|
-| `refactor/recovery-week-flag` | App erkennt Entlastung am Flag statt am Text; `isRecoveryWeek` durch `toPlanWeeks`/`planToAi` reichen | `src/trainingIntelligence/sessionPlanTargets.ts:137-141`, `src/planV2/toPlanWeeks.ts:40-68`, `src/lib/ai/planToAi.ts:62-83` |
-| `fix/normalize-swim` | `swim` nicht mehr zu `easy` umdeuten (Spec §15.4) | `src/lib/ai/mapSessionType.ts:3-30`, `src/lib/ai/types.ts` (`SessionType`) |
+| `refactor/recovery-week-flag` | App erkennt Entlastung am Flag statt am Text; `isRecoveryWeek` durch `toPlanWeeks`/`planToAi` reichen. **Erledigt 2026-11-11 (3f44e8b).** | `src/trainingIntelligence/sessionPlanTargets.ts:137-141`, `src/planV2/toPlanWeeks.ts:40-68`, `src/lib/ai/planToAi.ts:62-83` |
+| `fix/normalize-swim` | `swim` nicht mehr zu `easy` umdeuten (Spec §15.4). **Erledigt 2026-11-11 (d5cd431).** | `src/lib/ai/mapSessionType.ts:3-30`, `src/lib/ai/types.ts` (`SessionType`) |
 | `feat/session-kind-types` | Kern-Arten als echte App-Typen statt Abbildung auf 8 Typen | `mapSessionType.ts`, alle `type === …`-Stellen, `src/scheduling/capacityScore.ts:163` |
 | `feat/plan-inputs-from-health` | Wochen-km und längsten Lauf aus `health_workouts` vorschlagen | `supabase/migrations/001_initial_schema.sql:44-60` (Lesepfad), Onboarding |
 | `fix/timezone-tests` | Vorbestehender Zeitzonen-Fehler im Altcode: Unter `TZ=Pacific/Auckland` scheitern `normalizeTrainingPlan`-Golden-Tests und mehrere Altests schon auf `main`-Stand (vom Reviewer in Schritt 3 gemeldet, **nicht verifiziert**). Vermutlich `mondayIsoFromDateIso`/`deriveWeeksFromWorkouts` (lokales `setHours` + `toISOString`). In Schritt 3 bewusst nicht angefasst | `src/planV2/normalizeTrainingPlan.ts` (`mondayIsoFromDateIso`), `src/core/deriveWeeksFromWorkouts.ts:3-13`, Tests mit `TZ=Pacific/Auckland` und `TZ=America/Los_Angeles` prüfen |
@@ -497,10 +497,10 @@ Alten Pfad löschen, wenn der Schalter stabil auf `on` steht.
 | # | Branch | MVP | Aufwand | hängt ab von | ändert Production? |
 |---|---|---|---|---|---|
 | 1 | `feat/plan-core-skeleton` | ja | M (1 T, inkl. Vercel-Test) | – | nein |
-| 2 | `feat/plan-core-volume` | ja | M (2–3 T) | 1 | nein (umgesetzt, nicht gemergt) |
+| 2 | `feat/plan-core-volume` | ja | M (2–3 T) | 1 | nein (in `main`) |
 | 3 | `fix/plan-contract-passthrough` | ja | S (1–1,5 T, inkl. Zonen nach `kind`) | – | ja, Woche-1-Fix |
 | 4 | `feat/plan-core-pace` | ja | M (2 T) | 1 | nein |
-| 5 | `feat/plan-core-weeks` | ja | M–L (3 T) | 2 | nein (umgesetzt, nicht gemergt) |
+| 5 | `feat/plan-core-weeks` | ja | M–L (3 T) | 2 | nein (in `main`) |
 | 6 | `feat/plan-core-sessions` | ja | L (4–5 T) | 4, 5 | nein |
 | 7 | `feat/plan-core-assemble` | ja | M (2–3 T) | 3, 6 | nein |
 | 9 | `feat/onboarding-plan-inputs` | ja | M–L (3 T) | 1 | ja, neue Fragen, alter Pfad |
