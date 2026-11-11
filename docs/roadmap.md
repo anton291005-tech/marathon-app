@@ -261,6 +261,15 @@ Gemeint sind hier die Schritte des Umbauplans, nicht die nummerierten Schritte v
 
 - **Behoben (2026-11-11, `fix/timezone-tests`, Commit e406b5d): Wochen-Montag rutschte ab UTC+13 einen Tag zurück.** `mondayIsoFromDateIso` (`normalizeTrainingPlan`) und `deriveWeeksFromWorkouts` rechneten mit lokaler Zeit und lasen in UTC; jetzt rein kalendarisch über `src/core/calendarYmd.ts`. Berlin/UTC/Los Angeles waren nie betroffen. **Bekannte Grenze (bewusst offen):** Unter `TZ=Pacific/Auckland` scheitern weiter `liveFixtureGolden` und `normalizeTrainingPlanLegacyYear` (Altplan-`dateIso` aus `localNoonIso`, lokale Zeit) sowie Matrix-Tests des alten Generators (entfallen mit Schritt 13). Für eine deutschsprachige App ohne Nutzer ab UTC+13 kein Blocker.
 
+## MVP-Blocker vor TestFlight
+- **`feat/ai-consent` — KI-Einwilligung (App-Store-Regel 5.1.2(i)), umgesetzt 2026-11-11, nicht gemergt.** Akzeptanzkriterium: Ohne ausdrückliche Zustimmung geht kein Nutzerinhalt an Anthropic.
+  - Migration `015_profiles_ai_consent.sql`: `profiles.ai_consent_at` + `ai_consent_version` (CHECK: beide gesetzt oder beide NULL). **Muss in Production angewendet sein, bevor der Branch live geht** — sonst ist die Einwilligung nicht lesbar und der Coach für alle mit 503 gesperrt (fail closed).
+  - Server: `guardRequest` Option `aiConsent` (Reihenfolge Token → Einwilligung → Eingabelimits → Rate Limit, ohne Einwilligung kein Kontingent verbraucht). `POST /api/ai` (Vercel und Express) und der alte `generate-plan` mit `"require"`: 403 ohne Zustimmung (anzeigbare Coach-Zeile), 503 wenn nicht lesbar. `generate-plan-full` mit `"read"`: Kern-Plan ohne Einwilligung, der Claude-Rückfall nur mit (sonst 500 → Client baut den Plan lokal; Log-Ereignis `no-ai-consent`).
+  - Client: Zustimmungs-Screen einmal nach dem Onboarding für alle, die noch nicht entschieden haben (auch Bestandsnutzer), vor der App-Tour; nennt Anthropic und die Daten (dieselbe Liste wie „Welche Daten MyRace nutzt“), zwei gleich gewichtete Buttons. Ablehnen merkt das Gerät (kein erneutes Fragen), der Coach zeigt dann nur einen Hinweis mit „Coach aktivieren“ und sendet nichts. Einstellungen → Datenschutz & Daten → „KI-Coach“ An/Aus (Widerruf löscht die Zustimmung in Supabase, wirkt sofort auch serverseitig).
+  - Abweichung vom Plan (2026-11-11): Statt eines eigenen Wizard-Schritts erscheint der Screen direkt nach dem Onboarding — dieselbe Stelle deckt Bestandsnutzer ab, der Plan entsteht ohnehin ohne KI.
+  - „Welche Daten MyRace nutzt“ korrigiert: Plan-Erstellung läuft ohne KI, Claude nur im Ausnahmefall mit Zustimmung.
+  - **Offen:** Migration 015 in Production anwenden und prüfen; Preview-Check in Chrome; Datenschutzerklärung um Anthropic als Empfänger (inkl. Apple-Health-Werte, Regel 5.1.3) ergänzen — prüft Anton; iPhone-13-Test.
+
 ## Out of Scope bis TestFlight
 UI/UX-Redesign, Triathlon-Erweiterung, Android, Apple-Watch-Companion — nicht anfassen, auch nicht "nebenbei".
 

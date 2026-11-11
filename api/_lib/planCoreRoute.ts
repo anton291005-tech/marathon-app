@@ -83,7 +83,7 @@ export function coreFailureBody(attempt: CoreAttempt): Record<string, unknown> |
   };
 }
 
-export type PlanCoreEvent = "core-plan" | "fallback" | "legacy-inputs" | "shadow";
+export type PlanCoreEvent = "core-plan" | "fallback" | "legacy-inputs" | "shadow" | "no-ai-consent";
 
 /**
  * Eine Logzeile je Ereignis, als JSON hinter `[plan-core]`. `planCoreFallbacks: 1` markiert jeden Rückfall im Modus

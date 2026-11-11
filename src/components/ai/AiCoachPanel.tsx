@@ -19,6 +19,8 @@ type Props = {
   onApplyPreferencesPatch?: (patch: unknown) => void;
   messages?: UiChatMessage[];
   setMessages?: React.Dispatch<React.SetStateAction<UiChatMessage[]>>;
+  /** KI-Einwilligung (Migration 015). Ohne Zustimmung zeigt das Panel nur einen Hinweis und sendet nichts. */
+  aiConsent: { granted: boolean; onActivate: () => void };
 };
 
 const QUICK_ACTIONS = [
@@ -42,7 +44,9 @@ export default function AiCoachPanel({
   onApplyPreferencesPatch,
   messages: controlledMessages,
   setMessages: setControlledMessages,
+  aiConsent,
 }: Props) {
+  const consentGranted = aiConsent.granted === true;
   const { t } = useTranslation();
   const [internalMessages, setInternalMessages] = useState<UiChatMessage[]>([
     {
@@ -75,6 +79,11 @@ export default function AiCoachPanel({
   };
 
   const sendToAI = async (userInput: string, loadingId: string) => {
+    if (!consentGranted) {
+      // Zweite Sicherung neben dem Hinweis im Render: ohne Einwilligung nie ein Request an /api/ai.
+      removeMessageById(loadingId);
+      return;
+    }
     try {
       const context = getContext();
       console.log("[AiCoachPanel] sending to AI, input:", userInput); // eslint-disable-line no-console
@@ -268,6 +277,33 @@ export default function AiCoachPanel({
       text: `Gerne. Beschreibe mir bitte kurz, wie ich die ${typeLabel}-Vorschau anpassen soll.`,
     });
   };
+
+  if (!consentGranted) {
+    return (
+      <div className="mr-coach">
+        <div className="mr-coach__top">
+          <header className="mr-screen-head mr-screen-head--sub">
+            <div className="mr-screen-head__text">
+              <h1 className="mr-screen-head__title">Coach</h1>
+              <div className="mr-screen-head__meta">Der KI-Coach ist aus.</div>
+            </div>
+          </header>
+        </div>
+        <div className="mr-coach__scroll" data-testid="coach-consent-off">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "8px 4px" }}>
+            <p style={{ margin: 0, fontSize: 16, lineHeight: "23px", color: "var(--ink-2)" }}>
+              Der Coach nutzt eine KI von Anthropic (Claude). Dafür brauchen wir deine Zustimmung, Daten wie deinen Plan,
+              deine Trainingseinträge und Erholungswerte an Anthropic zu schicken. Alles andere in MyRace funktioniert
+              auch ohne.
+            </p>
+            <button type="button" className="mr-btn mr-btn--primary" onClick={aiConsent.onActivate}>
+              Coach aktivieren
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mr-coach">

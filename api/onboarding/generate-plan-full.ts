@@ -50,6 +50,8 @@ async function handler(req: Req, res: Res): Promise<unknown> {
     const guard = await guardRequest(req, {
       validate: (body: unknown) => validatePlanBody(body, { enforceMaxDuration: true }),
       bucket: "plan_full",
+      // Lehnt nie ab: der Plan-Kern braucht keine Einwilligung, nur der Rückfall auf Claude.
+      aiConsent: "read",
     });
     if (!guard.ok) return sendGuardFailure(res, guard);
     const profile = guard.payload.profile as Record<string, unknown>;
@@ -65,6 +67,13 @@ async function handler(req: Req, res: Res): Promise<unknown> {
         }
         logPlanCore(attempt.reason === "inputs-missing" ? "legacy-inputs" : "fallback", mode, attempt.log);
       }
+    }
+
+    // Rückfall auf den heutigen Generator schickt das Profil an Claude: nur mit KI-Einwilligung (Migration 015).
+    // Ohne sie 500 wie bei einem Server-Fehler; der Client baut dann den Plan lokal mit dem Kern.
+    if (!guard.aiConsent) {
+      if (mode !== "off" && attempt) logPlanCore("no-ai-consent", mode, attempt.log);
+      return failure(res, onAttempt);
     }
 
     const key = process.env.ANTHROPIC_API_KEY?.trim();

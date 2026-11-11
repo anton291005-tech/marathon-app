@@ -23,7 +23,7 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
   try {
-    const guard = await guardRequest(req, { validate: validatePlanBody, bucket: "plan_structure" });
+    const guard = await guardRequest(req, { validate: validatePlanBody, bucket: "plan_structure", aiConsent: "require" });
     if (!guard.ok) return sendGuardFailure(res, guard);
     // Der Struktur-Aufruf schickt das Profil als JSON an Claude: ohne die Plan-Eingaben bleibt er wie bisher.
     const profile = legacyPlanProfile(guard.payload.profile);

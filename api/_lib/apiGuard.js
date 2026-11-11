@@ -2,13 +2,19 @@
 
 const { requireUser } = require("./requireUser");
 const { consumeApiQuota } = require("./apiQuota");
+const { readAiConsent } = require("./aiConsent");
 
 /**
  * Gemeinsamer Türsteher der kostenpflichtigen Endpunkte (Vercel-Funktionen und Express-Routen):
  * ohne gültiges Supabase-Session-Token erreicht kein Request einen KI-Aufruf.
  *
- * Reihenfolge: Token → Eingabelimits (`options.validate`, siehe `inputLimits.js`) → Rate Limit
- * (`options.bucket`, siehe `apiQuota.js`). Eine abgelehnte Eingabe verbraucht damit kein Kontingent.
+ * Reihenfolge: Token → KI-Einwilligung (`options.aiConsent`, siehe `aiConsent.js`) → Eingabelimits
+ * (`options.validate`, siehe `inputLimits.js`) → Rate Limit (`options.bucket`, siehe `apiQuota.js`).
+ * Eine abgelehnte Eingabe oder fehlende Einwilligung verbraucht damit kein Kontingent.
+ *
+ * `aiConsent`:
+ * - `"require"`: ohne Einwilligung 403, wenn sie nicht lesbar ist 503 (fail closed). Bodies aus `consentBodies`.
+ * - `"read"`: lehnt nie ab, liefert `aiConsent: true|false` im Ergebnis (nicht lesbar = false).
  * Der Handler bekommt nur `payload`, nie den rohen Body.
  *
  * @param {{ headers?: Record<string, string>, body?: unknown }} req
@@ -16,15 +22,32 @@ const { consumeApiQuota } = require("./apiQuota");
  *   validate?: (body: unknown) => { ok: true, payload: object, meta?: object } | { ok: false, status: number, body: { error: string } },
  *   bucket?: "coach_chat" | "plan_full" | "plan_structure",
  *   rateLimitBody?: (retryAfterSeconds: number) => object,
+ *   aiConsent?: "require" | "read",
+ *   consentBodies?: { required: object, unavailable: object },
  * }} [options] `rateLimitBody` ersetzt den 429-Body (der Coach-Chat braucht dort eine anzeigbare Nachricht).
  * @returns {Promise<
- *   | { ok: true, userId: string, payload: any, meta?: object }
+ *   | { ok: true, userId: string, payload: any, meta?: object, aiConsent?: boolean }
  *   | { ok: false, status: number, body: { error: string }, headers?: Record<string, string> }
  * >}
  */
 async function guardRequest(req, options = {}) {
   const auth = await requireUser(req);
   if (!auth.ok) return { ok: false, status: auth.status, body: auth.body };
+
+  let aiConsent;
+  if (options.aiConsent) {
+    const consent = await readAiConsent(auth.admin, auth.userId);
+    aiConsent = consent.ok && consent.granted;
+    if (options.aiConsent === "require" && !aiConsent) {
+      const bodies = options.consentBodies ?? {
+        required: { error: "ai_consent_required" },
+        unavailable: { error: "ai_consent_unavailable" },
+      };
+      return consent.ok
+        ? { ok: false, status: 403, body: bodies.required }
+        : { ok: false, status: 503, body: bodies.unavailable };
+    }
+  }
 
   const validated = options.validate ? options.validate(req.body) : { ok: true, payload: req.body };
   if (!validated.ok) return { ok: false, status: validated.status, body: validated.body };
@@ -43,7 +66,13 @@ async function guardRequest(req, options = {}) {
     }
   }
 
-  return { ok: true, userId: auth.userId, payload: validated.payload, meta: validated.meta };
+  return {
+    ok: true,
+    userId: auth.userId,
+    payload: validated.payload,
+    meta: validated.meta,
+    ...(options.aiConsent ? { aiConsent } : {}),
+  };
 }
 
 /** Schreibt die Ablehnung eines `guardRequest` in eine Vercel-/Express-Response. */

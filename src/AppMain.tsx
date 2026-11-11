@@ -127,6 +127,8 @@ import {
 import AiCoachPanel from "./components/ai/AiCoachPanel";
 import { PostWorkoutSummaryCard } from "./components/PostWorkoutSummaryCard";
 import { SessionDetailSheet } from "./features/session/SessionDetailSheet";
+import { AiConsentSheet } from "./features/aiConsent/AiConsentSheet";
+import { useAiConsent } from "./features/aiConsent/useAiConsent";
 import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
 import { buildHealthRunSuggestion, buildSessionFlow, estimateDurationMin, parseKmInput } from "./features/session/sessionDetailModel";
 import { getCoachFeedback } from "./coachFeedback";
@@ -3429,6 +3431,30 @@ export default function AppMain(){
     resetOnboardingFlag,
   ]);
 
+  // KI-Einwilligung (Migration 015): einmal nach dem Onboarding fragen (auch Bestandsnutzer), sonst auf Wunsch
+  // aus Coach oder Einstellungen. Ohne Zustimmung geht kein Request an /api/ai.
+  const aiConsent = useAiConsent(user?.id ?? null);
+  const [aiConsentSheetRequested, setAiConsentSheetRequested] = useState(false);
+  const [aiConsentFeedback, setAiConsentFeedback] = useState<"revoked" | "revoke-failed" | null>(null);
+  const aiConsentSheetVisible =
+    !!user && !showOnboarding && onboardingHydrationReady && (aiConsentSheetRequested || aiConsent.status === "undecided");
+  const handleAiConsentGrant = useCallback(async () => {
+    const ok = await aiConsent.grant();
+    if (ok) {
+      setAiConsentSheetRequested(false);
+      setAiConsentFeedback(null);
+    }
+    return ok;
+  }, [aiConsent]);
+  const handleAiConsentDecline = useCallback(() => {
+    aiConsent.decline();
+    setAiConsentSheetRequested(false);
+  }, [aiConsent]);
+  const handleAiConsentRevoke = useCallback(async () => {
+    const ok = await aiConsent.revoke();
+    setAiConsentFeedback(ok ? "revoked" : "revoke-failed");
+  }, [aiConsent]);
+
   const showNoPlanEmptyState =
     preferences?.onboardingComplete === true &&
     !showOnboarding &&
@@ -4554,6 +4580,7 @@ export default function AppMain(){
               onApplyPreferencesPatch={handleAiPreferencesPatch}
               messages={aiChatMessages}
               setMessages={setAiChatMessages}
+              aiConsent={{ granted: aiConsent.status === "granted", onActivate: () => setAiConsentSheetRequested(true) }}
             />
           </div>
         </div>
@@ -5369,11 +5396,40 @@ export default function AppMain(){
                   </SettingsGroup>
                 </>
               ) : settingsPage === "privacy" ? (
+                <>
+                <SettingsGroup
+                  title="KI"
+                  footer={
+                    aiConsentFeedback === "revoked"
+                      ? "KI-Coach ist aus. Es gehen keine Daten mehr an Anthropic."
+                      : aiConsentFeedback === "revoke-failed"
+                        ? "Ausschalten hat nicht geklappt. Prüf deine Verbindung und versuch es noch einmal."
+                        : aiConsent.status === "granted"
+                          ? "Der Coach schickt deine Fragen und Trainingsdaten an Anthropic (Claude). Tippen schaltet ihn aus."
+                          : aiConsent.status === "unavailable"
+                            ? "Status gerade nicht abrufbar (keine Verbindung?). Bis dahin bleibt der Coach aus."
+                            : "Der Coach ist aus. Tippen, um ihn mit deiner Zustimmung zu aktivieren."
+                  }
+                >
+                  <SettingsRow
+                    label="KI-Coach"
+                    value={aiConsent.status === "granted" ? "An" : aiConsent.status === "loading" || aiConsent.status === "unavailable" ? "–" : "Aus"}
+                    disabled={aiConsent.status === "loading"}
+                    onClick={() => {
+                      if (aiConsent.status === "granted") void handleAiConsentRevoke();
+                      else {
+                        setAiConsentFeedback(null);
+                        setAiConsentSheetRequested(true);
+                      }
+                    }}
+                  />
+                </SettingsGroup>
                 <SettingsGroup>
                   <SettingsRow label={t("settings.privacy_policy")} href={PRIVACY_POLICY_URL} external />
                   <SettingsRow label="Welche Daten MyRace nutzt" onClick={() => openSettingsPage("dataUsage")} />
                   <SettingsRow label="Datenexport anfordern" href={buildDataExportMailto({ accountEmail: user?.email })} />
                 </SettingsGroup>
+                </>
               ) : settingsPage === "dataUsage" ? (
                 <SettingsDataUsagePage />
               ) : (
@@ -5522,7 +5578,9 @@ export default function AppMain(){
         />
       ) : null}
 
-      {!showOnboarding && showTour && user ? (
+      {aiConsentSheetVisible ? <AiConsentSheet onGrant={handleAiConsentGrant} onDecline={handleAiConsentDecline} /> : null}
+
+      {!showOnboarding && !aiConsentSheetVisible && aiConsent.status !== "loading" && showTour && user ? (
         <AppTour
           onComplete={() => {
             void markTourSeen();

@@ -1,5 +1,6 @@
 // POST /api/onboarding/generate-plan-full mit dem Plan-Kern hinter PLAN_CORE_MODE (Umbauplan Schritt 10).
 
+const { consentFrom } = require("../testSupport/aiConsentAdminMock");
 const mockGetUser = jest.fn();
 const mockRpc = jest.fn();
 
@@ -68,7 +69,7 @@ beforeEach(() => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test-key";
   process.env.ANTHROPIC_API_KEY = "test-key-plan-core";
   delete process.env.PLAN_CORE_MODE;
-  createClient.mockImplementation(() => ({ auth: { getUser: mockGetUser }, rpc: mockRpc }));
+  createClient.mockImplementation(() => ({ auth: { getUser: mockGetUser }, rpc: mockRpc, from: consentFrom() }));
   mockRpc.mockResolvedValue({ data: [{ allowed: true, retry_after_seconds: 60 }], error: null });
   mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
   Anthropic.mockImplementation(() => ({ messages: { create: jest.fn() } }));
@@ -286,3 +287,39 @@ describe("Logs ohne Nutzerinhalte", () => {
     expect(all).not.toContain(addDays("2027-03-14", -7 * 15));
   });
 });
+
+describe("KI-Einwilligung (Migration 015): Claude-Rückfall nur mit Zustimmung", () => {
+  beforeEach(() => {
+    process.env.PLAN_CORE_MODE = "on";
+  });
+
+  test("Kern-Plan braucht keine Einwilligung", async () => {
+    createClient.mockImplementation(() => ({ auth: { getUser: mockGetUser }, rpc: mockRpc, from: consentFrom({ granted: false }) }));
+    const res = await call(p4());
+    expect(res.statusCode).toBe(200);
+    expect(res.body.source).toBe("plan-core");
+  });
+
+  test("ohne Einwilligung kein Rückfall auf Claude: 500, Client baut den Plan lokal", async () => {
+    createClient.mockImplementation(() => ({ auth: { getUser: mockGetUser }, rpc: mockRpc, from: consentFrom({ granted: false }) }));
+    const res = await call(oldClient(p4()));
+    expect(res.statusCode).toBe(500);
+    expect(generateFullPlanByPhases).not.toHaveBeenCalled();
+    expect(Anthropic).not.toHaveBeenCalled();
+    expect(coreLogs().map((l) => l.event)).toContain("no-ai-consent");
+  });
+
+  test("Einwilligung nicht lesbar zählt als keine Einwilligung", async () => {
+    createClient.mockImplementation(() => ({ auth: { getUser: mockGetUser }, rpc: mockRpc, from: consentFrom({ throws: true }) }));
+    const res = await call(oldClient(p4()));
+    expect(res.statusCode).toBe(500);
+    expect(generateFullPlanByPhases).not.toHaveBeenCalled();
+  });
+
+  test("mit Einwilligung bleibt der Rückfall wie bisher", async () => {
+    const res = await call(oldClient(p4()));
+    expect(res.statusCode).toBe(200);
+    expect(res.body.plan).toBe(LEGACY_PLAN);
+  });
+});
+

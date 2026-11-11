@@ -21,6 +21,8 @@ export const MARATHON_USER_ID_KEY = "marathonUserId";
 export const PREP_RECAPS_CACHE_KEY = "prepRecaps";
 /** Plan-eigene Preferences (Rennen, Ziel, Umfang) je Plan-ID — siehe `planOwnedPreferences`. */
 export const PLAN_OWNED_PREFERENCES_KEY = "marathonPlanOwnedPreferences";
+/** Nutzer-IDs, die auf diesem Gerät die KI-Einwilligung abgelehnt haben (→ nicht bei jedem Start fragen). */
+export const AI_CONSENT_DECLINED_KEY = "marathonAiConsentDeclined";
 
 /**
  * Read-only catalog for docs / debug (order is not normative).
@@ -40,4 +42,5 @@ export const KNOWN_MY_RACE_STORAGE_KEYS: readonly string[] = [
   MARATHON_USER_ID_KEY,
   PREP_RECAPS_CACHE_KEY,
   PLAN_OWNED_PREFERENCES_KEY,
+  AI_CONSENT_DECLINED_KEY,
 ];

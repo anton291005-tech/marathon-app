@@ -7,13 +7,13 @@ import type { UiChatMessage } from "./AiMessageList";
 
 /** Hält den kontrollierten messages-State wirklich im DOM aktuell (im Gegensatz zu einem jest.fn()-Mock). */
 function ControlledAiCoachPanel(
-  props: Omit<React.ComponentProps<typeof AiCoachPanel>, "messages" | "setMessages"> & {
+  props: Omit<React.ComponentProps<typeof AiCoachPanel>, "messages" | "setMessages" | "aiConsent"> & {
     initialMessages: UiChatMessage[];
   },
 ) {
   const { initialMessages, ...rest } = props;
   const [messages, setMessages] = useState<UiChatMessage[]>(initialMessages);
-  return <AiCoachPanel {...rest} messages={messages} setMessages={setMessages} />;
+  return <AiCoachPanel {...rest} aiConsent={{ granted: true, onActivate: () => {} }} messages={messages} setMessages={setMessages} />;
 }
 
 function buildSwapActionMessage(dayA: string, dayB: string): UiChatMessage {

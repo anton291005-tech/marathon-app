@@ -1,5 +1,6 @@
 // Harte Eingabelimits (api/_lib/inputLimits.js) und ihre Wirkung an den Routen.
 
+const { consentFrom } = require("../testSupport/aiConsentAdminMock");
 const mockGetUser = jest.fn();
 const mockRpc = jest.fn();
 
@@ -251,7 +252,7 @@ describe("Limits an den Routen", () => {
     process.env.REACT_APP_SUPABASE_URL = "https://example.supabase.co";
     process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test-key";
     process.env.ANTHROPIC_API_KEY = "test-key-input-limits";
-    createClient.mockImplementation(() => ({ auth: { getUser: mockGetUser }, rpc: mockRpc }));
+    createClient.mockImplementation(() => ({ auth: { getUser: mockGetUser }, rpc: mockRpc, from: consentFrom() }));
     mockRpc.mockResolvedValue({ data: [{ allowed: true, retry_after_seconds: 60 }], error: null });
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
     handleAiCoach.mockResolvedValue({ status: 200, body: { mode: "coach", message: "ok" } });

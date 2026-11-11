@@ -2147,6 +2147,7 @@ export default function App(){
             />
           </div>
           <AiCoachPanel
+            aiConsent={{ granted: false, onActivate: () => {} }}
             getContext={buildCurrentAiContext}
             onApplyPlanPatches={handleAiApplyPlanPatches}
             onNavigate={handleAiNavigate}

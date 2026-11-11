@@ -3,6 +3,7 @@
 const { handleAiCoach } = require("./_lib/coachHandlers");
 const { guardRequest, sendGuardFailure, coachRateLimitBody } = require("./_lib/apiGuard");
 const { validateCoachBody } = require("./_lib/inputLimits");
+const { COACH_CONSENT_REQUIRED_BODY, COACH_CONSENT_UNAVAILABLE_BODY } = require("./_lib/aiConsent");
 
 /**
  * Vercel serverless function: POST /api/ai
@@ -25,6 +26,8 @@ module.exports = async function handler(req, res) {
       validate: validateCoachBody,
       bucket: "coach_chat",
       rateLimitBody: coachRateLimitBody,
+      aiConsent: "require",
+      consentBodies: { required: COACH_CONSENT_REQUIRED_BODY, unavailable: COACH_CONSENT_UNAVAILABLE_BODY },
     });
     if (!guard.ok) return sendGuardFailure(res, guard);
     // Nur Größen, nie Inhalte — Grundlage, um COACH_CONTEXT_MAX_BYTES später enger zu ziehen.

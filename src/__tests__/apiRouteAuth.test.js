@@ -1,6 +1,7 @@
 // Pflicht-Token an den kostenpflichtigen Vercel-Funktionen: ohne gültiges Supabase-Token darf kein
 // Request einen KI-Aufruf erreichen.
 
+const { consentFrom } = require("../testSupport/aiConsentAdminMock");
 const mockGetUser = jest.fn();
 const mockRpc = jest.fn();
 
@@ -75,7 +76,7 @@ describe("kostenpflichtige Routen verlangen ein Supabase-Token", () => {
     process.env.REACT_APP_SUPABASE_URL = "https://example.supabase.co";
     process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test-key";
     process.env.ANTHROPIC_API_KEY = "test-key-route-auth";
-    createClient.mockImplementation(() => ({ auth: { getUser: mockGetUser }, rpc: mockRpc }));
+    createClient.mockImplementation(() => ({ auth: { getUser: mockGetUser }, rpc: mockRpc, from: consentFrom() }));
     mockRpc.mockResolvedValue({ data: [{ allowed: true, retry_after_seconds: 60 }], error: null });
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
     handleAiCoach.mockResolvedValue({ status: 200, body: { mode: "coach", message: "ok" } });

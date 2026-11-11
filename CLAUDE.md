@@ -38,7 +38,8 @@ An optional stricter-than-default commit pipeline exists but is not git-hook-enf
 - **Chat coach** (`POST /api/ai` → `api/_lib/coachHandlers.js` `handleAiCoach`): calls **Anthropic/Claude** (`claude-sonnet-4-6`) via `ANTHROPIC_API_KEY` (`callClaudeApi`). If `ANTHROPIC_API_KEY` is missing or the Claude call throws, it falls back to `fallbackStructuredResponse` (deterministic, in-process) rather than to OpenAI. Frontend picks provider in `src/lib/ai/generateAiResponse.ts`: `mockBrain` (local, deterministic) vs `openaiBrain` (hits `/api/ai` — despite the name, that endpoint is Claude now). Chat is provider-switchable via `REACT_APP_AI_PROVIDER=mock|openai`; if the `/api/ai` call fails for any reason, `generateAiResponse` falls back to `mockBrain` and appends `(Cloud-Antwort war nicht verfuegbar, lokaler Coach aktiv.)` to the message — the app must always remain usable.
 - **No OpenAI endpoint is deployed anymore**: `POST /api/ai/daily-coach`, `POST /api/onboarding/preferences-patches` and the Vercel `GET /api/ai/health` were removed (no live caller, no token check). `src/lib/ai/fetchAiDailyAdvice.ts` still exists client-side but has no live caller (`applyOnboardingPreferencesPatches.ts` was deleted in Plan-Kern step 11); the OpenAI helpers left in `api/_lib/coachHandlers.js` and `server/index.js` are legacy. `GET /api/ai/health` survives only in the local Express server.
 - **Every paid endpoint requires a Supabase session token** (`Authorization: Bearer …`): `api/_lib/apiGuard.js` `guardRequest` → `api/_lib/requireUser.js`. Client calls get the header from `src/lib/api/authHeaders.ts` `getApiAuthHeaders()`.
-- **Guard order for paid endpoints**: token → hard input limits (`api/_lib/inputLimits.js`) → per-user rate limit (`api/_lib/apiQuota.js`, Postgres function `consume_api_quota`, migration 014). The rate limit fails open on database errors; the token check fails closed. `API_QUOTA_EXEMPT_USER_IDS` (comma-separated user IDs) exempts accounts from the limit.
+- **Guard order for paid endpoints**: token → AI consent (`api/_lib/aiConsent.js`, migration 015, option `aiConsent`) → hard input limits (`api/_lib/inputLimits.js`) → per-user rate limit (`api/_lib/apiQuota.js`, Postgres function `consume_api_quota`, migration 014). The rate limit fails open on database errors; the token check fails closed. `API_QUOTA_EXEMPT_USER_IDS` (comma-separated user IDs) exempts accounts from the limit.
+- **AI consent (App Store 5.1.2(i))**: no user content reaches Anthropic without `profiles.ai_consent_at`/`ai_consent_version` (migration 015). `POST /api/ai` and the legacy `generate-plan` use `aiConsent: "require"` (403 without consent, 503 when unreadable — fails closed, unlike the rate limit); `generate-plan-full` uses `"read"`: the plan core needs no consent, only the Claude fallback does (without it: 500 → client builds the plan locally). Client: `src/features/aiConsent/` (sheet after onboarding for anyone undecided, coach panel locked without consent, toggle in Settings → Datenschutz & Daten). Keep `AI_CONSENT_VERSION` equal in `api/_lib/aiConsent.js` and `src/features/aiConsent/aiConsentState.ts` (tested).
 - **Onboarding plan generation** (`api/onboarding/generate-plan-full.ts`, switch `PLAN_CORE_MODE=off|shadow|on` in `api/_lib/planCoreRoute.ts`; **`on` in Production since 2026-11-07**): the deterministic plan core `src/planCore` (`buildCheckedPlan`, spec `docs/plan-spec.md`, rollout `docs/plan-core-plan.md`) builds the plan — **no Claude call**. On invariant errors or unusable input the route falls back to the legacy generator (`api/_lib/phasedFullPlanGenerator.js` / `claudePlanGenerator.js`: Haiku per-phase calls, Sonnet for the structure call, via `ANTHROPIC_API_KEY`; `deterministicPlanGenerator.js` is its non-AI fallback) and counts `planCoreFallbacks`; the legacy path is deleted in Plan-Kern step 13. The client builds a local core plan (`src/onboarding/localCorePlan.ts`) when the server does not answer. Rollback: set the switch to `off`, no data migration.
 - Either AI path is proposal-only: `src/ai/mutations/**` and `src/ai/intents/**` compute the change, but nothing is written back to the user's plan until confirmed in the UI (see `src/ai/validation/**` for the checks a proposed mutation must pass — swap, phase-swap, load-shift, micro-structure, plan integrity).
 
@@ -69,16 +70,16 @@ Coding Agent: Cursor mit Composer (claude-sonnet oder GPT-4.1)
 Test-Device: iPhone 13 (nie Simulator für device-kritische Fixes)
 
 ### Offene Punkte (MVP)
-- Email-Verifizierung (kein `type=signup`-Branch im Deep-Link — bekannter Bug)
-- Sign in with Apple
-- Password Reset
-- Onboarding-Plan-Qualität weiter verbessern
-- AI Coach: funktioniert, aber Antwortqualität noch nicht optimal — kein Blocker mehr, weiter verbessern
-- Account-Deletion Test
+- KI-Einwilligung (`feat/ai-consent`, App-Store-Regel 5.1.2(i)) — siehe `docs/roadmap.md` „MVP-Blocker vor TestFlight“; Migration 015 vor dem Merge in Production anwenden
+- Trainings-Erinnerung (Notification id 1001) feuert täglich weiter, auch an Ruhetagen und nach Plan-Ende
+- Sign in with Apple — blockiert, bis ein Apple Developer Account existiert
 - `SUPPORT_EMAIL` in `src/features/settings/appInfo.ts` ist ein Platzhalter (`support@example.invalid`) — vor TestFlight echte Adresse eintragen (Hilfe & Feedback, Fehler melden, Datenexport anfordern)
+- AI Coach: funktioniert, aber Antwortqualität noch nicht optimal — kein Blocker, weiter verbessern
 - Strava-Integration: Backend komplett, On-Device-Test auf iPhone 13 noch offen
 
 ### Erledigt (nicht mehr offen)
+- E-Mail-Verifizierung, Passwort-Reset, Account-Deletion-Test (laut Anton erledigt)
+- Onboarding-Plan-Qualität: Plan-Kern live seit 2026-11-07 (`docs/plan-core-plan.md`)
 - Long-Run-Cap 30%/33% ist als harter Code-Clamp umgesetzt, nicht mehr nur Prompt-Regel (Ausnahme seit 2026-11-02: bei ≤ 3 Läufen pro Woche bis 50 %, siehe `longRunCap` in `api/_lib/planInvariants.js`)
 - Privacy Policy Link ist im App-Store-Review-Flow eingebunden
 

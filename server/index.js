@@ -11,6 +11,7 @@ const cors = require("cors");
 const OpenAI = require("openai");
 const { handleAiCoach } = require("../api/_lib/coachHandlers");
 const { guardRequest, sendGuardFailure, coachRateLimitBody } = require("../api/_lib/apiGuard");
+const { COACH_CONSENT_REQUIRED_BODY, COACH_CONSENT_UNAVAILABLE_BODY } = require("../api/_lib/aiConsent");
 const { validateCoachBody } = require("../api/_lib/inputLimits");
 const { handleStravaAuthRequest, handleStravaCallbackRequest } = require("../api/_lib/stravaService");
 const {
@@ -641,6 +642,8 @@ app.post("/api/ai", async (req, res) => {
       validate: validateCoachBody,
       bucket: "coach_chat",
       rateLimitBody: coachRateLimitBody,
+      aiConsent: "require",
+      consentBodies: { required: COACH_CONSENT_REQUIRED_BODY, unavailable: COACH_CONSENT_UNAVAILABLE_BODY },
     });
     if (!guard.ok) return sendGuardFailure(res, guard);
 
