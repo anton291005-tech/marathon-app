@@ -35,6 +35,7 @@ export type SessionType =
   | "long"
   | "strength"
   | "bike"
+  | "swim"
   | "race";
 
 export type AiPlanSession = {

@@ -8,6 +8,7 @@ const SESSION_TYPES: readonly SessionType[] = [
   "long",
   "strength",
   "bike",
+  "swim",
   "race",
 ];
 
@@ -15,7 +16,8 @@ const SESSION_TYPE_SET = new Set<string>(SESSION_TYPES as readonly string[]);
 
 /**
  * Maps arbitrary plan/data strings to the canonical SessionType union.
- * Unknown values fall back to "easy" so training stays conservative.
+ * Non-run types (bike, strength, swim) are kept as they are and never reinterpreted as a run.
+ * Truly unknown values fall back to "easy" so training stays conservative.
  */
 export function mapSessionType(input: string): SessionType {
   const key = input.trim().toLowerCase();
