@@ -225,9 +225,17 @@ export function calendarDaysBetweenYmd(startYmd, endYmd) {
   return Math.round((e - s) / 86400000);
 }
 
+/** Wochentag eines YYYY-MM-DD, Montag = 0 … Sonntag = 6 (reine UTC-Kalenderrechnung, 1.1.1970 war ein Donnerstag). */
+function weekdayMon0(ymd) {
+  const [y, m, d] = ymd.split("-").map((x) => Number.parseInt(x, 10));
+  const epochDay = Math.round(Date.UTC(y, m - 1, d) / 86400000);
+  return (((epochDay + 3) % 7) + 7) % 7;
+}
+
 /**
  * 0-basierter PLAN-Index für „aktuelle Trainingswoche“ relativ zum Planbeginn.
- * Woche 1 = die ersten 7 Kalendertage ab frühestem Session-Datum (Europe/Berlin „heute“).
+ * Planwochen sind Mo–So-Kalenderwochen; Woche 1 darf eine Teilwoche sein (Planstart z. B. am Samstag).
+ * Gezählt wird daher ab dem Montag der Startwoche, nicht ab dem Startdatum selbst (Europe/Berlin „heute“).
  */
 export function resolveCurrentPlanWeekIndex(plan, now = getAppNow(), planYear) {
   const weeks = safePlanWeeks(plan);
@@ -238,7 +246,7 @@ export function resolveCurrentPlanWeekIndex(plan, now = getAppNow(), planYear) {
   const days = calendarDaysBetweenYmd(startYmd, todayYmd);
   if (!Number.isFinite(days)) return 0;
   if (days < 0) return 0;
-  const weekNum = Math.floor(days / 7) + 1;
+  const weekNum = Math.floor((days + weekdayMon0(startYmd)) / 7) + 1;
   const exact = weeks.findIndex((w) => w.wn === weekNum);
   if (exact >= 0) return exact;
   const firstWn = weeks[0]?.wn;
