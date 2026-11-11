@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
-import { getAppNow } from "../core/time/timeSystem";
+import { sessionYmd } from "../core/time/sessionDate";
+import { getSessionStatus } from "../sessionStatus";
 
 export type NotificationSettings = {
   enabled: boolean;
@@ -9,7 +10,17 @@ export type NotificationSettings = {
 };
 
 const STORAGE_KEY = "myrace-notification-settings";
-const NOTIFICATION_ID = 1001;
+
+/**
+ * Trainings-Erinnerungen: je eine einmalige Notification pro Tag mit offener Einheit in den nächsten
+ * `REMINDER_HORIZON_DAYS` Tagen, IDs `REMINDER_BASE_ID + Tagesoffset`. Früher war es eine einzige, täglich
+ * wiederholte Notification (id 1001) — sie feuerte auch an Ruhetagen und nach Plan-Ende weiter.
+ * Neu geplant wird bei jedem App-Start und jeder Änderung an Plan, Einträgen oder Einstellung (AppMain);
+ * nach Plan-Ende gibt es keine offenen Einheiten mehr und damit keine Erinnerung.
+ */
+export const REMINDER_BASE_ID = 1001;
+export const REMINDER_HORIZON_DAYS = 14;
+const REMINDER_IDS = Array.from({ length: REMINDER_HORIZON_DAYS }, (_, i) => REMINDER_BASE_ID + i);
 
 export function loadNotificationSettings(): NotificationSettings {
   try {
@@ -29,56 +40,95 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return display === "granted";
 }
 
-export async function scheduleTrainingReminder(
-  settings: NotificationSettings,
-  todayWorkoutTitle?: string
-): Promise<void> {
+export type ReminderSession = {
+  id: string;
+  type?: string | null;
+  title?: string | null;
+  date?: string | null;
+  dateIso?: string | null;
+};
+export type ReminderLog = { done?: boolean; skipped?: boolean; assignedRun?: { runId?: string } | null } | null | undefined;
+export type TrainingReminder = { id: number; at: Date; body: string };
+
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function localYmd(date: Date): string {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * Reiner Zeitplan: für heute (falls die Uhrzeit noch kommt) und die folgenden Tage bis zum Horizont je eine
+ * Erinnerung, wenn an dem Tag mindestens eine offene Einheit (kein Ruhetag, nicht erledigt, nicht ausgelassen) liegt.
+ */
+export function buildTrainingReminders(args: {
+  sessions: readonly ReminderSession[];
+  logs: Readonly<Record<string, ReminderLog>>;
+  settings: NotificationSettings;
+  now: Date;
+}): TrainingReminder[] {
+  const { sessions, logs, settings, now } = args;
+  if (!settings.enabled) return [];
+
+  const titlesByYmd = new Map<string, string[]>();
+  for (const session of sessions) {
+    if (!session || session.type === "rest") continue;
+    if (getSessionStatus(logs[session.id]) !== "open") continue;
+    const ymd = sessionYmd(session);
+    if (!ymd) continue;
+    const title = (session.title ?? "").trim() || "Training";
+    const list = titlesByYmd.get(ymd) ?? [];
+    list.push(title);
+    titlesByYmd.set(ymd, list);
+  }
+
+  const reminders: TrainingReminder[] = [];
+  for (let offset = 0; offset < REMINDER_HORIZON_DAYS; offset += 1) {
+    const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset, settings.hour, settings.minute, 0, 0);
+    if (at.getTime() <= now.getTime()) continue;
+    const titles = titlesByYmd.get(localYmd(at));
+    if (!titles?.length) continue;
+    reminders.push({ id: REMINDER_BASE_ID + offset, at, body: `Heute: ${titles.join(" und ")}` });
+  }
+  return reminders;
+}
+
+/** Ersetzt alle geplanten Trainings-Erinnerungen durch `reminders` (leer = alle abbestellen). */
+export async function syncTrainingReminders(reminders: readonly TrainingReminder[]): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
-
   await cancelTrainingReminder();
-
-  if (!settings.enabled) return;
+  if (reminders.length === 0) return;
 
   const permission = await requestNotificationPermission();
   if (!permission) return;
 
-  const body = todayWorkoutTitle
-    ? `Heute: ${todayWorkoutTitle}`
-    : "Dein Training wartet auf dich.";
-
-  const now = getAppNow();
-  const scheduled = new Date(now.getTime());
-  scheduled.setHours(settings.hour, settings.minute, 0, 0);
-  if (scheduled <= now) {
-    scheduled.setDate(scheduled.getDate() + 1);
-  }
-
   await LocalNotifications.schedule({
-    notifications: [
-      {
-        id: NOTIFICATION_ID,
-        title: "MyRace",
-        body,
-        schedule: {
-          at: scheduled,
-          repeats: true,
-          every: "day",
-        },
-        sound: undefined,
-        smallIcon: "ic_stat_icon_config_sample",
-        iconColor: "#3b82f6",
-      },
-    ],
+    notifications: reminders.map((reminder) => ({
+      id: reminder.id,
+      title: "MyRace",
+      body: reminder.body,
+      schedule: { at: reminder.at, allowWhileIdle: true },
+      sound: undefined,
+      smallIcon: "ic_stat_icon_config_sample",
+      iconColor: "#3b82f6",
+    })),
   });
 }
 
+/** Bestellt alle Trainings-Erinnerungen ab (inkl. der früheren, täglich wiederholten id 1001). */
 export async function cancelTrainingReminder(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   try {
     await LocalNotifications.cancel({
-      notifications: [{ id: NOTIFICATION_ID }],
+      notifications: REMINDER_IDS.map((id) => ({ id })),
     });
   } catch {}
+}
+
+/** Stabiler Schlüssel des Zeitplans: AppMain plant nur neu, wenn er sich ändert (nicht bei jedem Render). */
+export function reminderScheduleKey(reminders: readonly TrainingReminder[]): string {
+  return reminders.map((r) => `${r.id}@${r.at.getTime()}:${r.body}`).join("|");
 }
 
 /**
@@ -94,3 +144,4 @@ export async function cancelAllPendingNotifications(): Promise<void> {
   } catch {}
   await cancelTrainingReminder();
 }
+

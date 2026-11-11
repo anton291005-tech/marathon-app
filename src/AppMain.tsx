@@ -145,6 +145,7 @@ import {
 import { useAuth } from "./contexts/AuthContext";
 import { useLanguage } from "./context/LanguageContext";
 import { useNotifications } from "./context/NotificationContext";
+import { buildTrainingReminders, reminderScheduleKey, syncTrainingReminders } from "./services/notificationService";
 import { useTranslation } from "react-i18next";
 import {
   getDisplayPlannedDistanceKm,
@@ -2314,6 +2315,29 @@ export default function AppMain(){
 
   const displayPlan = useDisplayPlanFromTrainingState(trainingPlanV2, aiPlanPatches);
   const ALL_SESSIONS = displayPlan.flatMap((week) => getWeekSessionList(week));
+
+  // Trainings-Erinnerungen nur für Tage mit offener Einheit (nächste 14 Tage); nach Plan-Ende, an Ruhetagen und für
+  // erledigte/ausgelassene Einheiten keine. Neu geplant nur, wenn sich der Zeitplan tatsächlich ändert.
+  const trainingReminders = useMemo(
+    () =>
+      buildTrainingReminders({
+        sessions: ALL_SESSIONS,
+        logs: logs as Record<string, { done?: boolean; skipped?: boolean } | undefined>,
+        settings: notificationSettings,
+        now: getAppNow(),
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [displayPlan, logs, notificationSettings, getAppTodayYmd()],
+  );
+  const trainingReminderKey = reminderScheduleKey(trainingReminders);
+  const lastTrainingReminderKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!logsRemoteReady) return;
+    if (lastTrainingReminderKeyRef.current === trainingReminderKey) return;
+    lastTrainingReminderKeyRef.current = trainingReminderKey;
+    void syncTrainingReminders(trainingReminders);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trainingReminderKey, logsRemoteReady]);
   /** Einheiten in Entlastungswochen: die Auswertung nach dem Training zeigt für `easy` dieselbe Zone wie die Karte. */
   const recoveryWeekSessionIds = useMemo(
     () =>
@@ -5324,7 +5348,7 @@ export default function AppMain(){
                   <div style={{ color: "var(--text-primary)", fontWeight: 500 }}>Trainings-Erinnerung</div>
                   <div style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 2 }}>
                     {notificationSettings.enabled
-                      ? `Täglich um ${String(notificationSettings.hour).padStart(2, "0")}:${String(notificationSettings.minute).padStart(2, "0")} Uhr`
+                      ? `An Trainingstagen um ${String(notificationSettings.hour).padStart(2, "0")}:${String(notificationSettings.minute).padStart(2, "0")} Uhr`
                       : "Deaktiviert"}
                   </div>
                 </div>

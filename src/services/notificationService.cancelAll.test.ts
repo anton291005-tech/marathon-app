@@ -22,7 +22,7 @@ describe("cancelAllPendingNotifications", () => {
     getPending.mockResolvedValue({ notifications: [{ id: 1001 }, { id: 7 }] });
     await cancelAllPendingNotifications();
     expect(cancel).toHaveBeenCalledWith({ notifications: [{ id: 1001 }, { id: 7 }] });
-    expect(cancel).toHaveBeenLastCalledWith({ notifications: [{ id: 1001 }] });
+    expect(cancel.mock.calls[cancel.mock.calls.length - 1][0].notifications).toContainEqual({ id: 1001 });
   });
 
   test("kann die Liste nicht gelesen werden, wird die Trainings-Erinnerung trotzdem abbestellt", async () => {
@@ -30,7 +30,7 @@ describe("cancelAllPendingNotifications", () => {
     getPending.mockRejectedValue(new Error("plugin"));
     await expect(cancelAllPendingNotifications()).resolves.toBeUndefined();
     expect(cancel).toHaveBeenCalledTimes(1);
-    expect(cancel).toHaveBeenCalledWith({ notifications: [{ id: 1001 }] });
+    expect(cancel.mock.calls[0][0].notifications).toContainEqual({ id: 1001 });
   });
 
   test("im Web passiert nichts", async () => {

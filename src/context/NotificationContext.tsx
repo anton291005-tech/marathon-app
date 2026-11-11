@@ -1,8 +1,7 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useState } from "react";
 import {
   loadNotificationSettings,
   saveNotificationSettings,
-  scheduleTrainingReminder,
   cancelTrainingReminder,
   type NotificationSettings,
 } from "../services/notificationService";
@@ -24,19 +23,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const next = { ...settings, ...partial };
     setSettings(next);
     saveNotificationSettings(next);
-    if (next.enabled) {
-      await scheduleTrainingReminder(next);
-    } else {
-      await cancelTrainingReminder();
-    }
+    // Einschalten plant AppMain (kennt Plan und Einträge, `buildTrainingReminders`); Ausschalten wirkt sofort.
+    if (!next.enabled) await cancelTrainingReminder();
   };
-
-  useEffect(() => {
-    if (settings.enabled) {
-      void scheduleTrainingReminder(settings);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   return (
     <NotificationContext.Provider value={{ settings, updateSettings }}>
