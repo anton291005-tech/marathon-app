@@ -158,7 +158,7 @@
     <span class="wordmark-text">MyRace</span>
   </div>
   <h1>Datenschutzerklärung</h1>
-  <p class="meta">Zuletzt aktualisiert: Juni 2026</p>
+  <p class="meta">Zuletzt aktualisiert: November 2026</p>
 </header>
 
 <main>
@@ -178,7 +178,8 @@
     <ul>
       <li><strong>Kontodaten:</strong> E-Mail-Adresse und Passwort (verschlüsselt) bei der Registrierung</li>
       <li><strong>Trainingsdaten:</strong> Trainingsplan, abgeschlossene Einheiten, Distanzen und Zeiten</li>
-      <li><strong>Gesundheitsdaten:</strong> Lauf- und Raddaten aus Apple HealthKit (nur mit deiner Erlaubnis)</li>
+      <li><strong>Gesundheitsdaten:</strong> nur mit deiner Erlaubnis aus Apple HealthKit – Trainings (Art, Zeitpunkt, Dauer, Strecke, Puls) sowie Werte zur Erholung wie Schlaf, Herzfrequenzvariabilität (HRV) und Ruhepuls</li>
+      <li><strong>Kalenderdaten:</strong> nur mit deiner Erlaubnis Zeitpunkte und Titel deiner Termine, um Trainings um deinen Alltag zu planen</li>
       <li><strong>Nutzereingaben:</strong> Renndatum, Zielzeit, Trainingspräferenzen und Coach-Chateingaben</li>
     </ul>
   </section>
@@ -187,8 +188,8 @@
     <h2>3. Zweck der Verarbeitung</h2>
     <p>Deine Daten werden ausschließlich verwendet, um:</p>
     <ul>
-      <li>deinen persönlichen Marathontrainingsplan zu erstellen und zu aktualisieren</li>
-      <li>KI-Coaching-Antworten auf deine Anfragen zu generieren</li>
+      <li>deinen persönlichen Trainingsplan zu erstellen und zu aktualisieren – das berechnet MyRace selbst, ohne KI</li>
+      <li>Antworten des KI-Coachs auf deine Fragen zu erzeugen – nur wenn du dem zugestimmt hast (siehe Abschnitt 5)</li>
       <li>deine Trainingsfortschritte zu speichern und anzuzeigen</li>
       <li>deinen Account zu verwalten</li>
     </ul>
@@ -201,30 +202,46 @@
     <ul>
       <li><strong>Supabase</strong> (EU-Region, Frankfurt) – Datenbankhosting und Authentifizierung</li>
       <li><strong>Vercel</strong> – Serverless API-Hosting</li>
-      <li><strong>Anthropic Claude API</strong> – Verarbeitung von Coach-Anfragen und Plangenerierung</li>
-      <li><strong>Apple HealthKit</strong> – Zugriff auf Gesundheitsdaten (nur lokal auf deinem Gerät, mit deiner Erlaubnis)</li>
+      <li><strong>Anthropic</strong> (Claude API, USA) – Antworten des KI-Coachs; nur mit deiner ausdrücklichen Zustimmung (siehe Abschnitt 5). Informationen zur Verarbeitung durch Anthropic: <a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noreferrer">anthropic.com/legal/privacy</a></li>
+      <li><strong>Apple HealthKit</strong> – Lesezugriff auf Gesundheitsdaten, nur mit deiner Erlaubnis</li>
+      <li><strong>Strava</strong> (optional) – nur wenn du dein Strava-Konto verbindest</li>
     </ul>
     <p>Alle Dienste verarbeiten Daten ausschließlich zur Bereitstellung der App-Funktionen.</p>
   </section>
 
   <section>
-    <h2>5. Apple HealthKit</h2>
-    <p>MyRace kann auf Gesundheits- und Fitnessdaten aus Apple HealthKit zugreifen, sofern du dies explizit erlaubst. Diese Daten werden:</p>
+    <h2>5. KI-Coach (Anthropic) und deine Einwilligung</h2>
+    <p>Der Coach in MyRace beantwortet deine Fragen mit einer KI von Anthropic (Claude). Bevor dafür Daten an Anthropic gehen, fragt MyRace dich ausdrücklich um Zustimmung. Ohne Zustimmung geht nichts an Anthropic; alle anderen Funktionen bleiben nutzbar, nur der Coach ist aus.</p>
+    <p>Mit deiner Zustimmung schickt MyRace bei jeder Frage an den Coach:</p>
     <ul>
-      <li>ausschließlich zur Analyse deiner Trainingseinheiten genutzt</li>
-      <li>nicht an Dritte für Werbung oder Datenhandel weitergegeben</li>
-      <li>nicht ohne deine Zustimmung verarbeitet</li>
+      <li>deine Nachricht und den bisherigen Chatverlauf</li>
+      <li>deinen Trainingsplan und deine Trainingseinträge der letzten Wochen (inkl. Notizen und Gefühl)</li>
+      <li>Läufe und Radfahrten aus Apple Health der letzten Wochen (Art, Datum, Dauer, Distanz, Durchschnittspuls)</li>
+      <li>Erholungswerte: Schlaf, HRV, Ruhepuls</li>
+      <li>Zielzeit und maximale Herzfrequenz</li>
+    </ul>
+    <p>Deine E-Mail-Adresse wird nicht mitgeschickt. Nur im Ausnahmefall, wenn MyRace deinen Plan nicht selbst berechnen kann, hilft Claude bei der Plan-Erstellung aus und bekommt dafür Renndistanz, Ziel und Zielzeit, Renndatum, Planstart, deinen Wochenumfang und deine Wünsche aus dem Freitext – ebenfalls nur mit deiner Zustimmung.</p>
+    <p>Deine Zustimmung kannst du jederzeit in der App unter Einstellungen → Datenschutz &amp; Daten → KI-Coach widerrufen. Ab dann gehen keine Daten mehr an Anthropic.</p>
+  </section>
+
+  <section>
+    <h2>6. Apple HealthKit</h2>
+    <p>MyRace liest Gesundheits- und Fitnessdaten aus Apple HealthKit nur, wenn du dies ausdrücklich erlaubst; MyRace schreibt nichts in Apple Health. Die gelesenen Trainings und Erholungswerte werden in deinem MyRace-Konto gespeichert (Supabase, EU), damit Plan, Auswertung und Erholungsstand auf jedem Gerät gleich sind. Diese Daten werden:</p>
+    <ul>
+      <li>nur für dein Training genutzt (Auswertung, Erholung, Coach)</li>
+      <li>nie für Werbung oder Datenhandel weitergegeben</li>
+      <li>nur mit deiner Zustimmung an Anthropic geschickt (siehe Abschnitt 5)</li>
     </ul>
     <p>Du kannst den HealthKit-Zugriff jederzeit in den iPhone-Einstellungen unter Datenschutz → Gesundheit widerrufen.</p>
   </section>
 
   <section>
-    <h2>6. Datenspeicherung & Sicherheit</h2>
-    <p>Deine Daten werden in der EU (Supabase, Region Frankfurt) gespeichert. Passwörter werden verschlüsselt gespeichert und sind für uns nicht einsehbar. Der Zugriff auf deine Daten ist durch Row Level Security (RLS) geschützt — jeder Nutzer kann ausschließlich auf seine eigenen Daten zugreifen.</p>
+    <h2>7. Datenspeicherung & Sicherheit</h2>
+    <p>Deine Kontodaten, Trainings-, Gesundheits- und Kalenderdaten werden in der EU (Supabase, Region Frankfurt) gespeichert. Passwörter werden verschlüsselt gespeichert und sind für uns nicht einsehbar. Der Zugriff auf deine Daten ist durch Row Level Security (RLS) geschützt — jeder Nutzer kann ausschließlich auf seine eigenen Daten zugreifen.</p>
   </section>
 
   <section>
-    <h2>7. Deine Rechte</h2>
+    <h2>8. Deine Rechte</h2>
     <p>Gemäß DSGVO hast du das Recht auf:</p>
     <ul>
       <li><strong>Auskunft</strong> über deine gespeicherten Daten</li>
@@ -233,17 +250,18 @@
       <li><strong>Einschränkung</strong> der Verarbeitung</li>
       <li><strong>Datenübertragbarkeit</strong></li>
       <li><strong>Widerspruch</strong> gegen die Verarbeitung</li>
+      <li><strong>Widerruf</strong> einer erteilten Einwilligung, mit Wirkung für die Zukunft (KI-Coach: direkt in der App)</li>
     </ul>
     <p>Zur Ausübung deiner Rechte wende dich an: <a href="mailto:albers.anton291005@gmail.com">albers.anton291005@gmail.com</a></p>
   </section>
 
   <section>
-    <h2>8. Cookies & Tracking</h2>
+    <h2>9. Cookies & Tracking</h2>
     <p>MyRace verwendet keine Cookies und kein Tracking zu Werbezwecken. Es werden keine Nutzerprofile für Dritte erstellt.</p>
   </section>
 
   <section>
-    <h2>9. Änderungen dieser Erklärung</h2>
+    <h2>10. Änderungen dieser Erklärung</h2>
     <p>Bei wesentlichen Änderungen dieser Datenschutzerklärung werden Nutzer in der App informiert. Die aktuelle Version ist stets unter dieser URL abrufbar.</p>
   </section>
 
