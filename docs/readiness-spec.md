@@ -817,6 +817,8 @@ Wireframe-Beispiel aus §10.1 zur Kontrolle: A = −1,1 · B = −1,6 · C = −
 
 ## 18. Annahmen und Entscheidungen (zum gezielten Widersprechen)
 
+**Stand 2026-11-12:** Anton hat alle Entscheidungen dieses Abschnitts freigegeben (Chat: „ja, starte selbst mit allem“). Widerspruch zu einzelnen Punkten bleibt jederzeit möglich und wird hier nachgetragen.
+
 | # | Entscheidung | Begründung | Alternative |
 |---|---|---|---|
 | A1 | **Keine Zahl auf der Hauptkarte**, vier Stufen + Skala ohne Ziffern; Index 0–100 nur in Details | Scheingenauigkeit, Score-Angst, Abgrenzung von Whoop/Garmin | Variante C (Zahl im Ring) – weicht von Antons Beispiel „Readiness 54“ ab, deshalb hier ganz oben |

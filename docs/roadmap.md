@@ -271,6 +271,12 @@ Gemeint sind hier die Schritte des Umbauplans, nicht die nummerierten Schritte v
   - **Erledigt 2026-11-11:** Migration 015 in Production angewendet und per Abfrage geprüft (Spalten, CHECK, RLS, Policy `user_own_data`); Preview-Check bestanden (Screen nach Login, Ablehnen → Coach gesperrt + `/api/ai` 403, Einschalten → 200, Widerruf → sofort 403); in `main` (`7f9cf5c`). Datenschutzerklärung ergänzt (`a739238`, Abschnitt 5 KI-Coach, HealthKit korrigiert). **Offen:** iPhone-13-Test; rechtliche Prüfung der Datenschutzerklärung durch Anton.
 - **`fix/training-reminder` — in `main` (`4319862`).** Akzeptanzkriterium: Erinnerung nur an Tagen mit offener Einheit (nächste 14 Tage, Titel im Text), keine an Ruhetagen, für erledigte/ausgelassene Einheiten oder nach Plan-Ende; Ausschalten bestellt sofort alle ab (inkl. der alten täglichen id 1001). **Offen:** iPhone-13-Test (Notifications nur auf dem Gerät prüfbar). Bekannte Grenze: Wer die App 14 Tage nicht öffnet, bekommt bis zum nächsten Öffnen keine Erinnerung.
 
+## Readiness („Tagesform“) — Phase 3
+- **Recherche, Spec und Umsetzungsplan fertig (2026-11-12, Fable 5.2):** `docs/readiness-research.md`, `docs/readiness-spec.md` (Invarianten R1–R26, Szenarien S1–S14), `docs/readiness-plan.md` (Schritte 0–18, Schalter `REACT_APP_READINESS_MODE=off|shadow|on`). **Das Akzeptanzkriterium jedes Schritts steht dort und ist bindend.**
+- **Freigaben 2026-11-12:** alle Entscheidungen aus Spec §18 (u. a. keine Zahl auf der Hauptkarte, Kalender über Schlaf/Zeitfenster/bestätigte Etiketten, nur Vorschläge und nie Belastung erhöhen, alte Recovery-Pipeline ersetzen, alte Kalender-Branches `fix/load-class-ssot`, `fix/microstructure-delta`, `feat/event-load-semantics` werden nicht gemergt, vier Morgenfragen ohne Streak, Name „Tagesform“).
+- **Reihenfolge geändert (Anton, 2026-11-12):** Der Freundes-Test wird vorgezogen und läuft ohne Readiness. Voraussetzung TestFlight → Apple Developer Account (offen).
+- **Vor Schritt 3 in Production:** Zustimmungstext für Gesundheitsangaben und Datenschutzerklärung ergänzen. **Vor dem Spoho-Review:** tragende Quellen im Volltext gegenlesen (PubMed war für die Recherche gesperrt).
+
 ## Out of Scope bis TestFlight
 UI/UX-Redesign, Triathlon-Erweiterung, Android, Apple-Watch-Companion — nicht anfassen, auch nicht "nebenbei".
 

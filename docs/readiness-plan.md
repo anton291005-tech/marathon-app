@@ -294,6 +294,8 @@ Für den Test zusätzlich nötig (kein eigener Schritt, in 13 enthalten): zweima
 
 ## Entscheidungen, die vor dem Start Antons Freigabe brauchen
 
+**Freigegeben von Anton am 2026-11-12 (Punkte 1–7 vollständig, Punkt 8 als Aufgabe vor Schritt 3 in Production).** Zusätzlich entschieden: Der Freundes-Test wird vorgezogen und läuft auf dem Stand ohne Readiness; Schritte 2 und 3 sammeln dabei schon Daten.
+
 Aus Spec §18, in der Reihenfolge, in der sie Schritte blockieren:
 
 1. **A4** Neue Frage nach der Einheit, überspringbar (Schritt 2).
