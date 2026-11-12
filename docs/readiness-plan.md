@@ -1,6 +1,6 @@
 # Umbauplan: Readiness-System („Tagesform“)
 
-> Grundlage: `docs/readiness-spec.md` v0.1 und `docs/readiness-research.md` (12.11.2026). Stand des Codes: `main` @ `8f565ed`.
+> Grundlage: `docs/readiness-spec.md` v0.2 (nach unabhängiger Prüfung) und `docs/readiness-research.md` (12.11.2026). Stand des Codes: `main` @ `8f565ed`.
 > Art: reiner Plan. Kein App-Code geändert. Dateipfade sind am Repo geprüft; mit „neu“ markierte Pfade existieren noch nicht.
 > Vorbild: `docs/plan-core-plan.md`. Ein Schritt = ein Branch von `main` = ein Auftrag. Merge nur mit Freigabe.
 
@@ -8,7 +8,7 @@
 
 - **Ein reines TS-Modul** `src/readinessCore/**` (neu): keine Imports aus React, Node, Supabase oder anderen `src/`-Ordnern außer `src/planCore` (Typen, `isHardSession`, `dates`). Keine Uhr (`todayYmd` ist Eingabe), kein Netz, kein Sprachmodell. Geprüft mit `target: es5` wie der Plan-Kern (keine Iteration über Set/Map).
 - **Alle Zahlen in `src/readinessCore/config.ts`**, je Eintrag `{ value, source: "L"|"P"|"E", spec: "§4.3" }` und `CONFIG_VERSION`. Das Spoho-Review ändert nur diese Datei und die Snapshots.
-- **Invarianten R1–R24** als Prüffunktionen und Tests, **Referenzszenarien S1–S12** als Fixtures mit Snapshot- und Bereichsprüfung, dazu Property-Tests mit Seed (`src/planCore/random.ts` wiederverwenden).
+- **Invarianten R1–R26** als Prüffunktionen und Tests, **Referenzszenarien S1–S13 (inkl. S11b)** als Fixtures mit Snapshot- und Bereichsprüfung, dazu Property-Tests mit Seed (`src/planCore/random.ts` wiederverwenden).
 - **Production wird nie schlechter.** Bis Schritt 13 läuft der Kern hinter `REACT_APP_READINESS_MODE=off|shadow|on` (Standard `off`). `shadow` rechnet und speichert, zeigt aber weiter die heutige Recovery-Kachel. Die alte Pipeline bleibt bis Schritt 16 unverändert im Code.
 - **Neue Fragen und Tabellen sind additiv.** Jede Migration ist idempotent, hat RLS `user_own_data`, wird von Anton im Supabase-SQL-Editor angewendet und per Prüf-Abfrage bestätigt, **bevor** der zugehörige Branch gemergt wird. Der Client fällt bei fehlender Spalte/Tabelle (`42703`/`42P01`) still zurück (Muster `loadAllTrainingPlans`).
 - **Kein Kalendertitel und kein Check-in-Wert an ein Sprachmodell ohne KI-Einwilligung** (R18). Der Kern selbst ruft nie KI auf.
@@ -80,26 +80,27 @@ Neue Frage „Wie anstrengend war die Einheit?“ 0–10 (Spec §6.2). Erste sic
 - **Tests:** Sheet (RTL): Auswahl, Abwahl, Speichern ohne RPE bleibt möglich bei Altversion des Servers; Service-Mapping; Migration idempotent.
 - **Abnahme:** Auf dem Preview speichert eine erledigte Einheit `rpe` in Supabase; ohne angewendete Migration funktioniert das Abhaken weiter.
 - **Rückweg:** Feld im Sheet ausblenden; Spalten bleiben ungenutzt.
-- **Entscheidung nötig:** Pflicht beim Abhaken oder überspringbar? Plan: überspringbar mit einem Tipp („Später“), damit Auto-Sync-Einheiten nicht blockieren; die Karte fragt beim nächsten Öffnen einmal nach.
+- **Festgelegt (Spec §6.2, A4):** Standardfrage, mit einem Tipp („Später“) überspringbar, damit Auto-Sync-Einheiten nicht blockieren; die Karte fragt beim nächsten Öffnen einmal nach. Fehlende RPE → Fallback-Last.
 
 ### 3 · `feat/daily-checkin` — **MVP**, M–L (3 Tage)
 
 Morgen-Check-in (Spec §6.1) mit Gesundheits-Chips, ohne Wirkung auf den Plan.
 
-- **Migration `017_daily_checkins.sql`:** Tabelle laut Spec §15; RLS; Trigger `update_updated_at`; eindeutig `(user_id, calendar_day)`.
+- **Migration `017_daily_checkins.sql`:** Tabelle laut Spec §15; RLS; Trigger `update_updated_at`; eindeutig `(user_id, calendar_day)`. Dazu `profiles.health_consent_at`/`health_consent_version` (CHECK: beide gesetzt oder beide NULL, Muster Migration 015).
 - **Dateien (neu):**
   - `src/features/checkin/CheckInSheet.tsx`, `CheckInSheet.test.tsx`: vier Fragen, optional Schlafdauer-Stepper (nur ohne Schlafdaten), Chips mit Folgefragen
   - `src/features/checkin/checkInState.ts`: Gültigkeit (bis erste Einheit oder 14:00), lokaler Cache über `src/persistence/**`
-  - `src/features/checkin/healthConsent.ts`: einmalige Zustimmung zur Speicherung von Gesundheitsangaben (Spec §15)
+  - `src/features/checkin/healthConsent.ts`: einmalige Zustimmung zur Speicherung von Gesundheitsangaben (Spec §15), gespeichert in `profiles` über `src/lib/supabase/services/profilesService.ts`, nicht nur lokal
   - `src/lib/supabase/services/dailyCheckinsService.ts` + Test
 - **Dateien (geändert):**
   - `src/features/today/TodayCards.tsx`: Einstieg „Check-in“ auf Home (Karte, solange heute offen)
-  - `src/services/notificationService.ts`: eine tägliche Erinnerung (eigene id, abschaltbar, Standard 07:30); `src/contexts`/Einstellungen: Schalter und Uhrzeit
+  - `src/services/notificationService.ts`: eine tägliche Erinnerung (eigene id, abschaltbar, Standard 07:30, neutraler Text ohne Gesundheitsinhalt); Schalter und Uhrzeit dort, wo die Trainings-Erinnerung heute eingestellt wird (Diagnose zuerst: `src/context/NotificationContext.tsx` bzw. die Einstellungsseite, die ihn nutzt)
   - `src/features/settings/dataUsage.ts`: neue Datenart „Check-in und Befinden“
   - `api/_lib/deleteAccount.js`: `daily_checkins` in `USER_DATA_TABLES`
 - **Tests:** Sheet in < 5 Interaktionen abschließbar; Chip-Folgefragen; „Zwickt es noch?“ am Folgetag; Speichern offline und Nachreichen; Konto-Löschung enthält die Tabelle.
 - **Abnahme:** Check-in auf dem Preview speicherbar, erscheint am selben Tag nicht erneut, Erinnerung nur wenn eingeschaltet (iPhone-Test durch Anton). Keine Stufe, kein Vorschlag.
 - **Rückweg:** Karte ausblenden (Flag `CHECKIN_ENABLED` in `src/features/settings/settingsFlags.ts`).
+- **Production:** `CHECKIN_ENABLED` bleibt in Production bis Schritt 14 **aus** (Preview und Antons Gerät an). Grund: Ein Check-in ohne sichtbare Wirkung ist der am besten belegte Weg, Nutzer zu verlieren (Spec §6.4). Voraussetzung für Production außerdem: Zustimmungstext und Datenschutzerklärung (Entscheidung 8 unten).
 
 ### 4 · `feat/readiness-night-signals` — **MVP**, M (2–3 Tage), nach 0
 
@@ -135,7 +136,7 @@ Trainingslast (Spec §5).
 
 Kalendermerkmale, Cluster, Lebensdruck, Tageseignung (Spec §7).
 
-- **Dateien (neu):** `src/readinessCore/titleCluster.ts` (Schlüssel, Trigramm-Jaccard), `calendarFeatures.ts` (Schlafgelegenheit, Ruhezeit, spätes Ende, gebundene Stunden, Trainingsfenster), `lifePressure.ts`, `daySuitability.ts`, `labelSuggestions.ts` (Stichwörter → Vorschlag; portiert die Liste und die Ausschlussliste aus `src/scheduling/eventLoad.ts` des Branches `feat/event-load-semantics`), Tests.
+- **Dateien (neu):** `src/readinessCore/titleCluster.ts` (Schlüssel, Trigramm-Jaccard), `calendarFeatures.ts` (Schlafgelegenheit, Ruhezeit, gebundene Stunden, Trainingsfenster), `lifePressure.ts`, `daySuitability.ts`, `labelSuggestions.ts` (Stichwörter → Vorschlag; portiert die Liste und die Ausschlussliste aus `src/scheduling/eventLoad.ts` des Branches `feat/event-load-semantics`), Tests.
 - **Tests:** „Sprint Prüfung“ / „Sprint-Prüfung“ / „Sprintprüfung“ → ein Cluster; „Schachturnier“ ≠ Sport-Vorschlag; Schlafgelegenheit S2 = 5:45 h; unbekannt statt „gut“ ohne Abendtermin; über Mitternacht geteilte Blöcke (`eventToScheduleBlocks.ts` teilt bei 23:59) werden wieder zusammengesetzt; unetikettierte Termine wirken nur über Zeiten (R19); Schlafpunkte entfallen mit Schlafdaten (R15).
 - **Abnahme:** S1 und S2 liefern die Tageseignung aus der Spec.
 
@@ -143,7 +144,7 @@ Kalendermerkmale, Cluster, Lebensdruck, Tageseignung (Spec §7).
 
 Etiketten und Rückfrage (Spec §7.3, §10.5).
 
-- **Migration `018_event_load_labels.sql`:** Tabelle laut Spec §15.
+- **Migration `018_event_load_labels.sql`:** Tabelle laut Spec §15. **Vorher Prüf-Abfrage in Supabase:** Existiert schon eine Tabelle `event_load_labels` (aus dem alten Branch, dort als Migration 013 geplant)? Wenn ja, würde `CREATE TABLE IF NOT EXISTS` das neue Schema still überspringen; dann zuerst Schema vergleichen und per `ALTER` angleichen.
 - **Dateien (neu):** `src/lib/supabase/services/eventLoadLabelsService.ts` + Test; `src/features/calendarLabels/EventQuestionCard.tsx` (eine Frage, drei Chips, Art-Auswahl) + Test; `src/features/calendarLabels/MyEventsPage.tsx` (Liste der Cluster, Etikett ändern, „Zählt nicht“); `src/features/calendarLabels/questionQueue.ts` (höchstens 1/Tag, 3/Woche, Rangfolge).
 - **Dateien (geändert):** `src/calendar/eventToScheduleBlocks.ts`: Ganztagstermine nicht mehr verwerfen, als eigene Zeilenart ohne Zeiten (nur für Etiketten); `src/features/settings/settingsNavigation.ts` + `SettingsSectionList.tsx`: Eintrag „Meine Termine“ unter Training; `api/_lib/deleteAccount.js`: Tabelle aufnehmen.
 - **Tests:** Rangfolge; Obergrenzen; Etikett gilt für den Cluster; „Nicht mehr fragen“; Ganztag „Klausur“ wird etikettierbar und erzeugt keine Zeitmerkmale.
@@ -154,44 +155,45 @@ Etiketten und Rückfrage (Spec §7.3, §10.5).
 
 Zustand, Stufe, Datenbasis, Beiträge, Sicherheitsflags (Spec §4.6, §4.7, §9, §12).
 
-- **Dateien (neu):** `src/readinessCore/state.ts` (Erwartung, Update, Beiträge, Lücke), `level.ts` (Stufen, Hysterese, „eher“), `dataBasis.ts`, `safety.ts` (Signalregel A/B, Krankheit, Schmerz, anhaltend; Rückkehr-Zustand), `computeReadiness.ts` (setzt alles zusammen), `invariants.ts` (R1, R6, R8, R9, R12–R15, R21–R23 als Prüffunktionen), `__fixtures__/scenarios.ts` (S1–S12 mit Rohwerten), Tests.
+- **Dateien (neu):** `src/readinessCore/state.ts` (Erwartung, Update, Beiträge, Lücke), `level.ts` (Stufen, Hysterese, „eher“), `dataBasis.ts`, `safety.ts` (Signalregel A/B, Krankheit, Schmerz, anhaltend; Rückkehr-Zustand), `computeReadiness.ts` (setzt alles zusammen), `invariants.ts` (R1, R6, R8, R9, R12–R15, R21–R23, R26 als Prüffunktionen), `__fixtures__/scenarios.ts` (S1–S13 inkl. S11b mit Rohwerten), Tests.
 - **Tests:**
-  - `scenarios.test.ts`: S3, S5, S6, S8–S11 und das Wireframe-Beispiel treffen R auf ±0,05 und die Stufe exakt; Snapshot des ganzen Ergebnisses
+  - `scenarios.test.ts`: S3, S5, S6, S8–S11, S11b, S13 und das Wireframe-Beispiel treffen R auf ±0,05 und die Stufe exakt; Snapshot des ganzen Ergebnisses. Kennenlernphase, HRV-Deckel, Grenzen [−3, +3] und „ohne Messung nie `low`“ je mit eigenem Test
   - `state.property.test.ts`: 2 000 Nutzer-Tage je Datenstufe a–d, alle Invarianten; Summe der Beiträge = R
   - eingeschwungenes P: 0,26 (drei Blöcke), 0,40 (ohne Uhr), ≈ 2 (keine Eingaben)
   - Sicherheitsregeln: S4, S12; Temperatur allein löst nie aus; Flag überstimmt Stufe (R6)
 - **Zusätzlich:** `docs/readiness-sensitivity.md` (neu) aus einem Testlauf: Spec §13 Punkt 2.
 - **Abnahme:** alle genannten Tests grün; Sensitivitätsbericht liegt vor; kein Vorschlag in den Szenarien kippt bei ±50 % eines einzelnen [E]-Parameters, oder der Parameter steht als Review-Punkt in der Spec.
 
-### 10 · `feat/readiness-core-actions` — **MVP**, L (4 Tage), nach 9
+### 10 · `feat/readiness-core-actions` — **MVP**, L (5–6 Tage), nach 9
 
 Entscheidungslogik als reine Funktion (Spec §8).
 
-- **Dateien (neu):** `src/readinessCore/actions.ts` (Tabelle §8.3, Handlungsstufen), `moveCandidates.ts` (zulässige Zieltage §8.5), `weekActions.ts` („Diese Woche ruhiger“, Prüfungsphase, Wochenvorschau als Liste ungeeigneter Paare), `phaseRules.ts` (Taper, Rennwoche), `guards.ts` (R3, R4, R7, R10, R11, R16), Tests.
-- **Prüfung der Vorschläge:** Für Kern-Pläne (`meta.core` vorhanden) wendet ein Test jeden Vorschlag auf den Plan an und ruft `checkPlan`/`checkAssembledPlan` aus `src/planCore/invariants.ts`; für Altpläne `validateMicroStructure` (`src/ai/validation/validateMicroStructure.ts`). Der Kern selbst bekommt die Prüffunktion als Parameter, damit er rein bleibt.
+- **Dateien (neu):** `src/readinessCore/actions.ts` (Tabelle §8.3, Handlungsstufen), `moveCandidates.ts` (zulässige Zieltage §8.5), `weekActions.ts` („Diese Woche ruhiger“, Prüfungsphase, Wochenvorschau als Liste ungeeigneter Paare), `phaseRules.ts` (Taper, Rennwoche), `guards.ts` (R3, R4, R7, R10, R11, R16, R25), `planGuards.ts` (siehe unten), Tests. R5 wird hier geprüft (Kern gibt nur Vorschläge zurück, Typ-Test: keine Schreibfunktion im Export), R24 in Schritt 1 (Reinheitstest).
+- **Prüfung der Vorschläge (Spec §8.1 Nr. 2):** `checkPlan` aus `src/planCore/invariants.ts` ist dafür nicht nutzbar: Es erwartet das Zwischenformat `SessionPlan`, einen Weg vom gespeicherten `TrainingPlanV2` (mit Patches) dorthin gibt es nicht, und seine Regeln `I16/run-days` und `I3/two-week` (beide `error`) würden Pausen und Kürzungen blockieren. Deshalb **`src/readinessCore/planGuards.ts` (neu):** prüft I6 (inkl. Wochengrenze und MLR), I7, I8, I15 und I16 (nur verfügbare Tage) direkt auf Einheiten mit `dateIso`/`kind` plus `raceDate`, `availableDays`, `runDaysPerWeek` aus `meta.core.inputs`, und zwar nur für die betroffenen Tage und ihre Nachbarn. **Paritätstest:** Auf unveränderten Plänen P1–P6 meldet `planGuards` für diese Regeln dasselbe wie `checkPlan`. Altpläne ohne `meta.core.inputs`: zusätzlich `validateMicroStructure` (`src/ai/validation/validateMicroStructure.ts`) als Parameter, und kein Tausch auf einen bisherigen Ruhetag. Aufwand dafür in diesem Schritt eingerechnet (+1–2 Tage).
 - **Aus `fix/microstructure-delta` portieren (Idee, nicht Code):** Bewertung der **Änderung** (vorher/nachher, nur betroffene Tage plus Nachbarn) statt des ganzen Plans, damit ein alter Befund in einer anderen Woche keinen Vorschlag blockiert.
-- **Tests:** S1, S2, S7, S10 liefern genau den Vorschlag aus der Spec; Property: 2 000 zufällige (Plan aus P1–P6, Tag, Stufe, Eignung) → R3, R4, R10, R16 halten; kein Vorschlag bei Datenbasis „niedrig“ (R11); Rennen nie Quelle/Ziel.
+- **Tests:** S1, S2, S7, S10 liefern genau den Vorschlag aus der Spec; Property: 2 000 zufällige (Plan aus P1–P6, Tag, Stufe, Eignung) → R3, R4, R10, R16 halten; kein Vorschlag aus der Stufe bei Datenbasis „niedrig“ (R11); Rennen nie Quelle/Ziel; Krankheits-/Schmerz-Pause wird nie von der Plan-Prüfung unterdrückt; nachrückender Vorschlag hat nie mehr Belastung; Long Run verlässt seine Woche nicht; Taper ohne H2.
 - **Abnahme:** wie Tests. Noch nicht verdrahtet.
 
-### 11 · `feat/readiness-shadow` — **MVP**, M (2 Tage), nach 3, 4, 9
+### 11 · `feat/readiness-shadow` — **MVP**, M (2 Tage), nach 2, 3, 4, 8, 9
 
 Kern mit echten Daten füttern, Ergebnis speichern, nichts anzeigen.
 
 - **Migration `020_readiness_daily.sql`:** Tabelle laut Spec §15.
 - **Dateien (neu):** `src/readiness/buildReadinessInputs.ts` (liest `recovery_daily`-Zeilen, Check-ins, Logs, Plan, Blöcke, Etiketten), `src/app/runtime/useReadinessRuntime.ts`, `src/lib/supabase/services/readinessDailyService.ts`, `src/readiness/readinessMode.ts` (`REACT_APP_READINESS_MODE`, Standard `off`; zusätzlich lokaler Entwickler-Schalter über `src/migrationFlags.ts`), Tests.
 - **Dateien (geändert):** `src/AppMain.tsx`: Hook einhängen (nur bei `shadow`/`on`); `api/_lib/deleteAccount.js`: Tabelle aufnehmen.
-- **Tests:** Inputs-Builder mit Fixture-Konto; `off` → Hook rechnet nicht; `shadow` → speichert eine Zeile je Tag, UI unverändert (Snapshot der Home-Karte gleich).
+- **Tests:** Inputs-Builder mit Fixture-Konto; `off` → Hook rechnet nicht; `shadow` → speichert eine Zeile je Tag, UI unverändert (Snapshot der Home-Karte gleich); gespeicherte `contributions`/`proposal` enthalten keinen Termintitel; `toRemoteCoachPayload` (`src/lib/ai/getAiContext.ts`) enthält weder Check-in-Werte noch Flags, Stufe, Titel oder Cluster-Schlüssel (R18 fürs MVP).
 - **Abnahme:** Preview mit `shadow`: Für Antons Konto entstehen Zeilen in `readiness_daily`; Vergleichstabelle „alte Recovery-Zahl vs. neue Stufe“ über ≥ 7 Tage als Anhang hier. Production bleibt `off`.
 
-### 12 · `feat/readiness-calendar-engine` — **MVP**, M (3 Tage), nach 7, 10
+### 12 · `feat/readiness-calendar-engine` — **MVP**, M (3 Tage), nach 7, 8, 10
 
 Tageseignung ersetzt die Zeitanteil-Regel; Wochenvorschau (Spec §7.5, §8.4).
 
 - **Dateien (geändert):**
-  - `src/scheduling/capacityScore.ts`: hinter `readinessMode !== "off"` liefert `computeSessionDayFitScore` den Fit aus der Tageseignung (frei 1,0 · eingeschränkt 0,5 · ungeeignet 0,2 → unter `MIN_FIT_SCORE_THRESHOLD` 0,35); bei `off` unverändert
-  - `src/ai/mutations/scanWeekForCalendarConflicts.ts`, `proposeWeekCalendarReassignments.ts`, `buildCalendarReassignmentAction.ts`: Zieltage bis +3 Tage über die Wochengrenze (heute nur dieselbe Woche, `buildCalendarReassignmentAction.ts:36`); Grundtext nennt Termin und Merkmal („nur 5:45 h Zeit zum Schlafen“)
+  - `src/scheduling/capacityScore.ts`: hinter `readinessMode === "on"` (nicht bei `shadow`: dort bleibt jedes sichtbare Verhalten unverändert) liefert `computeSessionDayFitScore` den Fit aus der Tageseignung (frei 1,0 · eingeschränkt 0,5 · ungeeignet 0,2 → unter `MIN_FIT_SCORE_THRESHOLD` 0,35); bei `off` unverändert
+  - `src/ai/mutations/scanWeekForCalendarConflicts.ts`, `proposeWeekCalendarReassignments.ts`, `buildCalendarReassignmentAction.ts`: Zieltage bis +3 Tage, über die Wochengrenze nur nach Spec §8.5 Nr. 1 (Zielwoche bekommt nicht mehr km und nicht mehr Qualitäts-km; Long Run bleibt in seiner Woche; heute nur dieselbe Woche, `buildCalendarReassignmentAction.ts:36`); im Taper nur auf einen früheren Tag; Grundtext nennt Termin und Merkmal („nur 5:45 h Zeit zum Schlafen“)
   - `src/ai/mutations/validateWeekReassignmentBatch.ts`: unverändert nutzen
   - `src/components/ai/AiActionCard.tsx`: strukturierte Zeilen Alt → Neu mit Grund (Roadmap-Schritt 8 teilweise)
+  - `src/calendar/eventClassifier.ts`: Stichwörter liefern nur noch den Etikett-**Vorschlag** für die Rückfrage (Spec §7.3, A8), keine stille Wirkung
 - **Tests:** S1 und S2 Ende-zu-Ende über die Mutations-Engine; bestehende Suites (`capacityScore.test.ts`, `scanWeekForCalendarConflicts.test.ts`, `proposeWeekCalendarReassignments.test.ts`) bleiben bei `off` unverändert grün; neue Fälle bei `on`.
 - **Abnahme:** Preview mit `on`: Antons Testfall „Sprint Prüfung“ (mit Leerzeichen, als Prüfung etikettiert) am Intervalltag erzeugt einen Vorschlag ohne zwei harte Tage hintereinander; ohne Etikett und mit kurzer Dauer entsteht kein Konflikt (gewollt, R19) und die Rückfrage erscheint nach dem Termin.
 
@@ -199,8 +201,8 @@ Tageseignung ersetzt die Zeitanteil-Regel; Wochenvorschau (Spec §7.5, §8.4).
 
 Tageskarte und Detailansicht (Spec §10), Vorschläge bestätigen.
 
-- **Dateien (neu):** `src/features/readiness/ReadinessCard.tsx` (Variante A), `ReadinessDetail.tsx` (Marker mit Normalband, Beiträge, Regel im Klartext, 28-Tage-Verlauf), `src/readiness/readinessText.ts` (Bausteine §10.7), `src/readiness/applyProposal.ts` (führt bestätigte Vorschläge über Tausch bzw. Patch aus), Tests inkl. Sperrlisten-Test der Texte (R17).
-- **Dateien (geändert):** `src/features/today/TodayCards.tsx`: bei `on` ersetzt die Karte die Recovery-Kachel (`recoveryScore`, `onOpenRecovery`); `src/components/RecoveryVerlaufCard.tsx`: bei `on` durch den Verlauf der Detailansicht ersetzt; `src/app/runtime/recoveryRuntimePresentation.ts`: liefert bei `on` das neue Modell.
+- **Dateien (neu):** `src/features/readiness/ReadinessCard.tsx` (Variante A), `ReadinessDetail.tsx` (Marker mit Normalband, Beiträge, Regel im Klartext, 28-Tage-Verlauf), `src/readiness/readinessText.ts` (Bausteine §10.7), `src/readiness/applyProposal.ts` (führt bestätigte Vorschläge über Tausch bzw. Patch aus), `src/features/readiness/FitFeedback.tsx` (zweimal pro Woche „Hat die Einschätzung heute gepasst?“ → `readiness_daily.fit_feedback`), Tests inkl. Sperrlisten-Test der Texte (R17).
+- **Dateien (geändert):** `src/features/today/TodayCards.tsx`: bei `on` ersetzt die Karte die Recovery-Kachel (`recoveryScore`, `onOpenRecovery`); `src/components/RecoveryVerlaufCard.tsx`: bei `on` durch den Verlauf der Detailansicht ersetzt; `src/app/runtime/recoveryRuntimePresentation.ts`: liefert bei `on` das neue Modell; `src/app/runtime/useRecoveryDomainRuntime.ts`, `src/recovery/recoveryPresentation.ts`, `src/recovery/recoveryDisplayState.ts`: bei `on` nicht mehr für die Anzeige gelesen (Diagnose zuerst, welche Stellen sie noch brauchen).
 - **Tests:** Karte für jede Stufe und Datenstufe a–d (Snapshots der Texte); „Wie geplant“ speichert `decision: "declined"` und ändert nichts; Übernehmen ändert den Plan genau wie im Vorschlag und besteht die Integritätsprüfung; 390 px ohne Überlauf; kein Rot außerhalb der Sicherheitsstufen.
 - **Abnahme:** Chrome-Preview mit `on` gegen Antons Konto: Karte am Morgen nach Check-in, Detailansicht, ein angenommener und ein abgelehnter Vorschlag; iPhone-13-Sichtprüfung durch Anton.
 
@@ -214,12 +216,12 @@ Tageskarte und Detailansicht (Spec §10), Vorschläge bestätigen.
 
 Coach bekommt Stufe, Grund-Codes, Vorschlag (nur mit KI-Einwilligung).
 
-- `src/lib/ai/getAiContext.ts` (`toRemoteCoachPayload`), `src/lib/ai/recoverySummary.ts` (ersetzen), `api/_lib/coachHandlers.js` (Kontextblock, Guidance „widersprich der Tagesform nicht“ → konkrete Regel), `src/features/aiConsent/aiConsentState.ts` + `api/_lib/aiConsent.js` (Text und `AI_CONSENT_VERSION` erhöhen, falls Kalendertitel mitgehen sollen), `src/__tests__/apiLogsNoUserContent.test.js` erweitern (R18).
+- `src/lib/ai/getAiContext.ts` (`toRemoteCoachPayload`), `src/lib/ai/recoverySummary.ts` (ersetzen), `api/_lib/coachHandlers.js` (Kontextblock, Guidance „widersprich der Tagesform nicht“ → konkrete Regel), `src/features/aiConsent/aiConsentState.ts` + `api/_lib/aiConsent.js` (Text und `AI_CONSENT_VERSION` **zwingend** erhöhen und neu fragen: Stufe, Gründe und Flags sind Gesundheitsdaten, die die bestehende Einwilligung nicht abdeckt; Kalendertitel nur mit eigenem Satz im Text; zugleich den Zustimmungstext des Check-ins prüfen), `src/__tests__/apiLogsNoUserContent.test.js` erweitern (R18).
 - Vom Server eingesetzte Aktion `adjust_plan_for_illness` bei Recovery < 40 (`coachHandlers.js`) wird an das Sicherheitsflag gebunden statt an die alte Zahl.
 
 ### 16 · `chore/remove-legacy-recovery` — später, M (2 Tage), frühestens 3 Wochen nach 14
 
-Löschen: `src/recovery/recoveryScoringEngine.ts`, `latentRecoveryState.ts`, `homeRecoveryScore.ts`, `loadOnlyHomeRecoveryScore.ts`, `recoveryFallback7d.ts`, `recoverySemanticLayer.ts`, `recoveryInterpretationLayer.ts`, `aiInsightGenerator.ts`, `trainingDailyLoad.ts`, `planTrainingLoad.ts`, `getRecoveryInfluence.ts`, `recoveryScoreDebug.ts` samt Tests; Recovery-Achse in `src/ai/validation/validateSwap.ts` und `fatiguePressure` in `validatePhaseSwap.ts` durch Stufe/Flag ersetzen; `src/marathonPrediction.ts`/`marathonForecast.ts` auf das neue Modell umstellen oder entkoppeln (Diagnose zuerst: beide lesen heute `homeRecoveryScore`). Schalter `off` entfällt.
+Löschen: `src/recovery/recoveryScoringEngine.ts`, `latentRecoveryState.ts`, `homeRecoveryScore.ts`, `loadOnlyHomeRecoveryScore.ts`, `recoveryFallback7d.ts`, `recoverySemanticLayer.ts`, `recoveryInterpretationLayer.ts`, `aiInsightGenerator.ts`, `trainingDailyLoad.ts`, `planTrainingLoad.ts`, `getRecoveryInfluence.ts`, `recoveryScoreDebug.ts` samt Tests (auch `recoveryConfidenceLayer.test.ts`, das die Scoring-Engine testet; eine eigene Konfidenz-Datei gibt es nicht); Recovery-Achse in `src/ai/validation/validateSwap.ts` und `fatiguePressure` in `validatePhaseSwap.ts` durch Stufe/Flag ersetzen; `src/marathonPrediction.ts`/`marathonForecast.ts` auf das neue Modell umstellen oder entkoppeln (Diagnose zuerst: beide lesen heute `homeRecoveryScore`). Schalter `off` entfällt.
 
 ### 17 · `feat/readiness-insights` — später, L (4 Tage), sobald ≥ 6 Wochen Daten aus dem Freundes-Test vorliegen
 
@@ -242,16 +244,16 @@ Einsichten nach Spec §11: `src/readinessCore/insights.ts` (Block-Bootstrap mit 
 | 0 | Gerätepunkte | ja | S (½ T) | – | – | nein |
 | 1 | `feat/readiness-core-skeleton` | ja | S (1 T) | – | – | nein |
 | 2 | `feat/session-rpe` | ja | M (1,5 T) | – | 016 | ja, neue Frage |
-| 3 | `feat/daily-checkin` | ja | M–L (3 T) | – | 017 | ja, neue Karte (abschaltbar) |
+| 3 | `feat/daily-checkin` | ja | M–L (3 T) | – | 017 | nein (Flag in Production aus bis Schritt 14) |
 | 4 | `feat/readiness-night-signals` | ja | M (2–3 T) | 0 | 019 | nein (neue Felder) |
 | 5 | `feat/readiness-core-markers` | ja | M (2–3 T) | 1 | – | nein |
 | 6 | `feat/readiness-core-load` | ja | M (2 T) | 1 | – | nein |
 | 7 | `feat/readiness-core-life` | ja | M (2–3 T) | 1 | – | nein |
 | 8 | `feat/event-load-labels` | ja | M (2–3 T) | 7 | 018 | ja, Rückfrage (ohne Planwirkung) |
 | 9 | `feat/readiness-core-state` | ja | L (3–4 T) | 5, 6, 7 | – | nein |
-| 10 | `feat/readiness-core-actions` | ja | L (4 T) | 9 | – | nein |
-| 11 | `feat/readiness-shadow` | ja | M (2 T) | 3, 4, 9 | 020 | nein (Schalter `off`) |
-| 12 | `feat/readiness-calendar-engine` | ja | M (3 T) | 7, 10 | – | nein (Schalter) |
+| 10 | `feat/readiness-core-actions` | ja | L (5–6 T) | 9 | – | nein |
+| 11 | `feat/readiness-shadow` | ja | M (2 T) | 2, 3, 4, 8, 9 | 020 | nein (Schalter `off`) |
+| 12 | `feat/readiness-calendar-engine` | ja | M (3 T) | 7, 8, 10 | – | nein (Schalter) |
 | 13 | `feat/readiness-ui` | ja | L (3–4 T) | 10, 11 | – | nein (Schalter) |
 | 14 | `chore/readiness-cutover` | ja | S (½ T) | 12, 13 | – | ja, Umschalten |
 | 15 | `feat/readiness-coach-context` | später | M | 14 | – | ja |
@@ -259,7 +261,7 @@ Einsichten nach Spec §11: `src/readinessCore/insights.ts` (Block-Bootstrap mit 
 | 17 | `feat/readiness-insights` | später | L | 14 + Daten | – | ja |
 | 18 | diverse | später | S–L | – | – | – |
 
-**Aufwand bis Cutover:** Summe 30–36 Arbeitstage. **Kritischer Pfad:** 1 → 5 → 9 → 10 → 13 → 14 ≈ 14–17 Tage, plus 7 Tage `shadow` (laufen parallel zu 12 und 13). Mit drei parallelen Worktrees (Kern · Eingaben/UI · Kalender) realistisch rund drei Wochen Kalenderzeit.
+**Aufwand bis Cutover:** Summe 33–40 Arbeitstage. **Kritischer Pfad:** 1 → 5 → 9 → 10 → 13 → 14 ≈ 15–19 Tage, plus 7 Tage `shadow` (laufen parallel zu 12 und 13). Mit drei parallelen Worktrees (Kern · Eingaben/UI · Kalender) realistisch rund drei Wochen Kalenderzeit.
 
 ```
 0 ─ 4 ───────────────────────┐
@@ -279,11 +281,11 @@ Enthalten: Check-in, Session-RPE, Tageskarte mit Gründen und Vorschlag, Verschi
 
 Bewusst später: Einsichten (brauchen die Daten des Tests), Coach-Kontext, rMSSD, KI-Etiketten, individuelle Sensitivitäten, Löschen der alten Pipeline.
 
-Für den Test zusätzlich nötig (kein eigener Schritt, in 13 enthalten): zweimal pro Woche die Frage „Hat die Einschätzung heute gepasst?“ (Ja/Nein, in `readiness_daily.decision`-Nachbarfeld), als Grundlage der Auswertung nach Spec §13 Punkt 5.
+Für den Test zusätzlich nötig (kein eigener Schritt, in 13 enthalten): zweimal pro Woche die Frage „Hat die Einschätzung heute gepasst?“ (Ja/Nein, Spalte `readiness_daily.fit_feedback`), als Grundlage der Auswertung nach Spec §13 Punkt 5.
 
 ## Tests und Qualitätstor
 
-1. Spec → Config-Snapshot → Invarianten R1–R24 → Szenarien S1–S12 → Property-Tests.
+1. Spec → Config-Snapshot → Invarianten R1–R26 → Szenarien S1–S13 → Property-Tests.
 2. Sensitivitätsbericht (Schritt 9).
 3. 7 Tage `shadow` auf Antons Gerät mit Vergleichstabelle (Schritt 11).
 4. Chrome-Preview mit `on` (Schritte 12, 13), iPhone-13-Sichtprüfung.
@@ -294,12 +296,12 @@ Für den Test zusätzlich nötig (kein eigener Schritt, in 13 enthalten): zweima
 
 Aus Spec §18, in der Reihenfolge, in der sie Schritte blockieren:
 
-1. **A4** Neue Frage nach der Einheit (Schritt 2) – und ob sie überspringbar ist.
+1. **A4** Neue Frage nach der Einheit, überspringbar (Schritt 2).
 2. **A5, A6** Vier Morgenfragen, kein Streak (Schritt 3).
 3. **A9, A10** Alte Recovery-Pipeline ersetzen; alte Kalender-Branches nicht mergen (Schritte 5–12, 16).
 4. **A7, A8** Kalender über Schlaf/Zeitfenster und bestätigte Etiketten statt stiller Stichwörter (Schritte 7, 8, 12).
 5. **A1** Keine Zahl auf der Hauptkarte (Schritt 13).
-6. **A2, A3** Vorschlag statt Automatik, nie erhöhen (Schritt 10).
+6. **A2, A3, A22–A25** Vorschlag statt Automatik, nie erhöhen; Kennenlernphase, kein Streichen nur aus dem Check-in, HRV-Deckel, Prüfung an der Änderung (Schritte 9, 10).
 7. **A18** Name „Tagesform“ (Schritt 13).
 8. Rechtliches: Zustimmungstext für Gesundheitsangaben und Ergänzung der Datenschutzerklärung vor Schritt 3 in Production.
 

@@ -1836,23 +1836,23 @@ TriDot/RunDot, Suunto Coach (Seite nicht abrufbar), Nike Run Club, adidas Runnin
 | 26 | Gesundheits-Chips nach dem Gatekeeper-Prinzip (OSTRC) | **ja** | §6.1, §9 | Clarsen 2020 |
 | 27 | Schmerzgrenze als feste Zahl | **vorsichtig**: 4/10 oder verändertes Laufbild, als Vorsichtsregel | §9 | Klinikermeinung; Silbernagel erlaubt bis 5/10 bei Sehnen |
 | 28 | Stress-Punkte je Termin | **nein** | §7 | keine Evidenz |
-| 29 | Schlafgelegenheit, Ruhezeit < 11 h, spätes Ende, gebundene Stunden aus Terminen | **ja** | §7.2 | Vedaa 2015, Virtanen 2009; Schwellen Heuristik |
+| 29 | Schlafgelegenheit, Ruhezeit < 11 h, gebundene Stunden aus Terminen (spätes Ende geht in der Schlafgelegenheit auf) | **ja** | §7.2 | Vedaa 2015, Virtanen 2009; Schwellen Heuristik |
 | 30 | Etikettierte Stressoren (Prüfung, körperliche Schicht, Reise) | **ja**, nur nach Nutzer-Label | §7.3 | Mann 2016 als Hintergrund; Wirkung Heuristik |
 | 31 | Titel-Cluster über Normalisierung + Trigramme, Label je Cluster | **ja** | §7.3 | löst „Sprint Prüfung“-Fall ohne KI |
-| 32 | KI-Einordnung von Termintiteln | **später, optional, nur mit Einwilligung** | Plan Schritt 19 | Kern muss ohne KI laufen |
+| 32 | KI-Einordnung von Termintiteln | **später, optional, nur mit Einwilligung** | Plan Schritt 18 | Kern muss ohne KI laufen |
 | 33 | Persönliche Einsichten ab 10/10 Tagen, Bootstrap, Benjamini-Hochberg, Schrumpfung | **ja** | §11 | N-of-1-Methodik; Whoop nutzt 5/5 – statistisch zu wenig |
 | 34 | Additives Modell auf z-Werten, gleiche Blockgewichte | **ja** | §4 | Dawes 1979; keine validierte Formel existiert |
 | 35 | Lokales Niveau-Modell mit expliziter Varianz | **ja**, ersetzt „Kalman-light“ | §4.6 | gleiche Idee, aber Unsicherheit wird ehrlich mitgeführt |
 | 36 | Individuelle Sensitivitäten (β je Person) | **später**, ab 90 Tagen, geschrumpft | §11 | Overfitting-Risiko (Rothschild 2024) |
-| 37 | Bevölkerungs-Priors für Mittelwerte | **nein**, nur Plausibilitätsgrenzen und Streuungs-Startwerte | §4.2 | zwischen Personen viel mehr Streuung als innerhalb |
+| 37 | Bevölkerungs-Priors für Mittelwerte | **nein**, nur Plausibilitätsgrenzen | §3, §4.2 | zwischen Personen viel mehr Streuung als innerhalb |
 | 38 | Eigenes ML-Modell auf offenen Datensätzen | **nein** | – | keine Zielgröße, keine passenden Daten |
 | 39 | Offene Datensätze (PMData, LifeSnaps) für Trockenlauf | **ja**, in der Validierung | §13 | Plausibilität, Regressionstests |
 | 40 | Stufe + Band + Datenbasis statt nackter Zahl | **ja** | §10 | van der Bles 2020; Orthosomnie (Baron 2017) |
 | 41 | Krankheitsregel: zwei Nächte, mehrere Signale, dann fragen | **ja** | §9 | Alavi 2022, Quer 2021; nicht validiert → Review-Punkt |
 | 42 | „Neck Check“ | **nur als Erfahrungsregel gekennzeichnet** | §9 | IOC 2022: nicht validiert |
-| 43 | Entscheidungen zur Last höchstens zweimal pro Woche | **ja** (Wochenebene); Tagesvorschläge begrenzt | §8.4 | Nuuttila 2022 |
+| 43 | Entscheidungen zur Last höchstens zweimal pro Woche | **ja** (Wochenvorschläge höchstens zweimal je Woche, R25) | §8.4 | Nuuttila 2022 |
 | 44 | Last erhöhen bei guten Werten | **nein** im MVP | §8.1, R3 | kein Beleg für Nutzen in diesem Aufbau; Risiko |
-| 45 | Automatische Planänderung ohne Bestätigung | **nein** | §8.7 | unvalidiertes Maß; Vertrauensargument |
+| 45 | Automatische Planänderung ohne Bestätigung | **nein** | §8.8 | unvalidiertes Maß; Vertrauensargument |
 | 46 | Apples Readiness-Score nachbauen oder einlesen | **nein** | – | nur Series 12/Ultra 4, für Dritt-Apps vermutlich nicht lesbar; MyRace macht, was Apple nicht macht |
 | 47 | Claim „als einzige App liest MyRace den Kalender“ | **nein** | Kurzfassung | athletedata.health liest Google-Kalender; Abgrenzung über Lauf-Fokus, Regelbindung, Erklärung |
 | 48 | Claim „wissenschaftlich validiert“ | **nein** | §13 | erst nach eigener Auswertung |
