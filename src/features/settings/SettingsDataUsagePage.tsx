@@ -47,7 +47,7 @@ export function SettingsDataUsagePage({ showCheckIn = false }: { showCheckIn?: b
             </p>
             <BulletList items={CHECKIN_DATA_ITEMS} />
             <p style={{ ...textStyle, marginTop: 12 }}>
-              Die Angaben gehen nicht an einen KI-Anbieter. Löschst du dein Konto, werden sie mitgelöscht.
+              Derzeit gehen die Angaben nicht an einen KI-Anbieter. Löschst du dein Konto, werden sie mitgelöscht.
             </p>
           </Block>
         </SettingsGroup>

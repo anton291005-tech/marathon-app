@@ -4,7 +4,10 @@ import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-li
 import { CheckInSheet } from "../CheckInSheet";
 import {
   CHECKIN_QUESTIONS,
+  canEditCheckIn,
+  carryOverIllness,
   carryOverPain,
+  defaultSleepHoursFrom,
   emptyCheckIn,
   isCheckInComplete,
   readCheckInCache,
@@ -90,10 +93,12 @@ describe("CheckInSheet", () => {
     const { onSave } = renderSheet();
     answerAll();
     fireEvent.click(screen.getByRole("button", { name: "Etwas zwickt" }));
+    expect(screen.getByRole("button", { name: "Schmerz 4 von 10" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Knie" }));
     fireEvent.click(screen.getByRole("button", { name: "Schmerz 4 von 10" }));
     fireEvent.click(screen.getByRole("button", { name: "Ja" }));
     const last = onSave.mock.calls[onSave.mock.calls.length - 1][0];
-    expect(last.pain).toEqual({ area: "other", severity: 4, alteredGait: true });
+    expect(last.pain).toEqual({ area: "knee", severity: 4, alteredGait: true });
   });
 
   test("Brust-Symptom öffnet die Warnfrage, Ja zeigt den Notruf-Hinweis", () => {
@@ -114,6 +119,22 @@ describe("CheckInSheet", () => {
     answerAll();
     expect(screen.getByRole("button", { name: "Zwickt es noch?" })).toHaveAttribute("aria-pressed", "true");
     expect(onSave.mock.calls[0][0].pain).toEqual({ area: "knee", severity: 3, alteredGait: false });
+  });
+
+  test("nach dem Speichern lassen sich die Antworten ändern", () => {
+    const { onSave } = renderSheet();
+    answerAll();
+    fireEvent.click(screen.getByRole("button", { name: "Antworten ändern" }));
+    answerAll([4, 3, 2, 1]);
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(onSave.mock.calls[1][0].mind).toBe(1);
+  });
+
+  test("Krankheits-Chip von gestern ist vorausgewählt", () => {
+    const { onSave } = renderSheet({ carriedIllness: { symptoms: ["fever"] } });
+    answerAll();
+    expect(screen.getByRole("button", { name: "Fühle mich krank" })).toHaveAttribute("aria-pressed", "true");
+    expect(onSave.mock.calls[0][0].illness).toEqual({ symptoms: ["fever"] });
   });
 
   test("ohne Zustimmung erst der Zustimmungs-Screen, ohne Speichern", async () => {
@@ -142,6 +163,20 @@ describe("checkInState", () => {
     expect(shouldOfferCheckIn({ today: null, hour: 7, sessionDoneToday: true })).toBe(false);
     expect(shouldOfferCheckIn({ today: FULL, hour: 7, sessionDoneToday: false })).toBe(false);
     expect(isCheckInComplete({ ...FULL, mind: null })).toBe(false);
+  });
+
+  test("Ändern nur bis 14 Uhr und vor der ersten Einheit", () => {
+    expect(canEditCheckIn({ today: FULL, hour: 9, sessionDoneToday: false })).toBe(true);
+    expect(canEditCheckIn({ today: FULL, hour: 14, sessionDoneToday: false })).toBe(false);
+    expect(canEditCheckIn({ today: FULL, hour: 9, sessionDoneToday: true })).toBe(false);
+    expect(canEditCheckIn({ today: null, hour: 9, sessionDoneToday: false })).toBe(false);
+  });
+
+  test("Krankheit wird ohne Warnantwort übernommen; Schlaf-Vorbelegung ist der eigene Median", () => {
+    expect(carryOverIllness({ ...FULL, illness: { symptoms: ["chest"], redFlag: true } })).toEqual({ symptoms: ["chest"] });
+    expect(carryOverIllness({ ...FULL, illness: null })).toBeNull();
+    expect(defaultSleepHoursFrom({})).toBe(7.5);
+    expect(defaultSleepHoursFrom({ a: { ...FULL, sleepHoursSelf: 6 }, b: { ...FULL, sleepHoursSelf: 7 }, c: { ...FULL, sleepHoursSelf: 8.5 } })).toBe(7);
   });
 
   test("carryOverPain übernimmt nur vorhandenen Schmerz", () => {
@@ -192,6 +227,7 @@ describe("Rahmen", () => {
     expect(isCheckInEnabled(undefined, loc("marathon-git-feat-daily-checkin-anton291005-techs-projects.vercel.app"))).toBe(true);
     expect(isCheckInEnabled("1", loc("myrace.app"))).toBe(true);
     expect(isCheckInEnabled(undefined, loc("marathon-app.vercel.app"))).toBe(false);
+    expect(isCheckInEnabled(undefined, loc("marathon-git-main-anton291005-techs-projects.vercel.app"))).toBe(false);
     expect(isCheckInEnabled(undefined, loc("localhost", "capacitor:"))).toBe(false);
   });
 

@@ -18,6 +18,8 @@ export function isCheckInEnabled(
   if (!location) return false;
   const { protocol, hostname } = location;
   if ((protocol === "http:" || protocol === "https:") && (hostname === "localhost" || hostname === "127.0.0.1")) return true;
+  // Previews der Vercel-Projekte; der Alias des main-Branches zählt nicht als Preview.
+  if (/^marathon-[a-z0-9-]*git-main-/.test(hostname)) return false;
   return /^marathon-[a-z0-9-]+-anton291005-techs-projects\.vercel\.app$/.test(hostname);
 }
 

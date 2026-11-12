@@ -54,6 +54,35 @@ export function useDailyCheckIn(userId: string | null | undefined, todayYmd: str
     };
   }, [userId]);
 
+  // Nachreichen auch beim Zurückkommen in die App und beim Wiederverbinden, nicht nur beim Laden.
+  useEffect(() => {
+    if (!userId || consent !== "granted" || typeof window === "undefined") return undefined;
+    let running = false;
+    const flush = async () => {
+      if (running) return;
+      const cache = readCheckInCache();
+      if (!cache.pending.length) return;
+      running = true;
+      const done: string[] = [];
+      for (const day of cache.pending) {
+        const entry = cache.entries[day];
+        if (entry && (await saveDailyCheckin(userId, entry))) done.push(day);
+      }
+      const after = readCheckInCache();
+      writeCheckInCache({ entries: after.entries, pending: after.pending.filter((d) => !done.includes(d)) }, todayRef.current);
+      running = false;
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void flush();
+    };
+    window.addEventListener("online", flush);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", flush);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [userId, consent]);
+
   const grantConsent = useCallback(async () => {
     if (!userId) return false;
     const ok = await saveHealthConsent(userId, true);

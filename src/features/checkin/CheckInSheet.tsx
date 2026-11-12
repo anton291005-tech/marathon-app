@@ -5,6 +5,7 @@ import {
   ILLNESS_SYMPTOMS,
   PAIN_AREAS,
   type CheckInEntry,
+  type CheckInIllness,
   type CheckInPain,
   type IllnessSymptom,
   emptyCheckIn,
@@ -18,6 +19,8 @@ type Props = {
   initial: CheckInEntry | null;
   /** „Zwickt es noch?“: Schmerz von gestern, vorausgewählt. */
   carriedPain: CheckInPain | null;
+  /** Krankheits-Chip von gestern, vorausgewählt (Spec §6.1). */
+  carriedIllness?: CheckInIllness | null;
   /** Ohne Schlafdaten der Uhr: optionale Schlafdauer anbieten (Spec §6.1). */
   askSleepHours: boolean;
   /** Vorbelegung der Schlafdauer (eigener Median, am ersten Tag 7:30). */
@@ -44,6 +47,7 @@ export function CheckInSheet({
   day,
   initial,
   carriedPain,
+  carriedIllness = null,
   askSleepHours,
   defaultSleepHours,
   needsConsent,
@@ -57,10 +61,11 @@ export function CheckInSheet({
   const [entry, setEntry] = useState<CheckInEntry>(() => ({
     ...(initial ?? emptyCheckIn(day)),
     pain: initial?.pain ?? carriedPain,
+    illness: initial?.illness ?? carriedIllness,
   }));
   const [step, setStep] = useState(startComplete ? CHECKIN_QUESTIONS.length : 0);
   const [painOpen, setPainOpen] = useState(!!(initial?.pain ?? carriedPain));
-  const [illnessOpen, setIllnessOpen] = useState(!!initial?.illness);
+  const [illnessOpen, setIllnessOpen] = useState(!!(initial?.illness ?? carriedIllness));
   const done = step >= CHECKIN_QUESTIONS.length;
 
   const update = (patch: Partial<CheckInEntry>) => {
@@ -79,7 +84,9 @@ export function CheckInSheet({
 
   const setPain = (patch: Partial<CheckInPain> | null) => {
     if (patch === null) return update({ pain: null });
-    const base: CheckInPain = entry.pain ?? { area: "other", severity: 0, alteredGait: false };
+    // Stelle zuerst: Stärke und Gangbild erst, wenn eine Stelle gewählt ist (kein stilles „anderes“).
+    if (!entry.pain && !patch.area) return;
+    const base: CheckInPain = entry.pain ?? { area: patch.area as CheckInPain["area"], severity: 0, alteredGait: false };
     update({ pain: { ...base, ...patch } });
   };
 
@@ -175,6 +182,9 @@ export function CheckInSheet({
           ) : (
             <>
               <p className="mr-sheet__text">Noch etwas, das du heute wissen lassen willst? Alles hier ist freiwillig.</p>
+              <button type="button" className="mr-checkin__link" onClick={() => setStep(0)}>
+                Antworten ändern
+              </button>
 
               {askSleepHours ? (
                 <div>
@@ -253,6 +263,7 @@ export function CheckInSheet({
                         className={entry.pain?.severity === n ? "mr-feeling__btn mr-checkin__num is-on" : "mr-feeling__btn mr-checkin__num"}
                         aria-label={`Schmerz ${n} von 10`}
                         aria-pressed={entry.pain?.severity === n}
+                        disabled={!entry.pain}
                         onClick={() => setPain({ severity: n })}
                       >
                         {n}
@@ -267,6 +278,7 @@ export function CheckInSheet({
                         key={String(v)}
                         className={entry.pain?.alteredGait === v ? "mr-checkin__chip is-on" : "mr-checkin__chip"}
                         aria-pressed={entry.pain?.alteredGait === v}
+                        disabled={!entry.pain}
                         onClick={() => setPain({ alteredGait: v })}
                       >
                         {v ? "Ja" : "Nein"}

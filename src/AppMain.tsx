@@ -132,7 +132,7 @@ import { CheckInCard } from "./features/checkin/CheckInCard";
 import { CheckInReminderSetting } from "./features/checkin/CheckInReminderSetting";
 import { loadCheckInReminderSettings, saveCheckInReminderSettings, syncCheckInReminder } from "./services/notificationService";
 import { CheckInSheet } from "./features/checkin/CheckInSheet";
-import { carryOverPain, shouldOfferCheckIn } from "./features/checkin/checkInState";
+import { canEditCheckIn, carryOverIllness, carryOverPain, defaultSleepHoursFrom, readCheckInCache, shouldOfferCheckIn } from "./features/checkin/checkInState";
 import { useDailyCheckIn } from "./features/checkin/useDailyCheckIn";
 import { isCheckInEnabled } from "./features/settings/settingsFlags";
 import { CHECKIN_SKIPPED_DAY_KEY } from "./persistence/marathonLocalStorageKeys";
@@ -2346,13 +2346,12 @@ export default function AppMain(){
     saveCheckInReminderSettings(next);
     setCheckInReminder(next);
   }, []);
+  const checkInWindow = { today: dailyCheckIn.today, hour: getAppNow().getHours(), sessionDoneToday: checkInSessionDoneToday };
+  const checkInBase = checkInEnabled && !!user && dailyCheckIn.consent !== "loading" && dailyCheckIn.consent !== "unavailable";
+  // Erledigt: kleine Karte „Ändern“, solange der Check-in gilt; offen: Karte mit „Check-in“ / „Heute nicht“.
+  const checkInDone = checkInBase && canEditCheckIn(checkInWindow);
   const showCheckInCard =
-    checkInEnabled &&
-    !!user &&
-    dailyCheckIn.consent !== "loading" &&
-    dailyCheckIn.consent !== "unavailable" &&
-    checkInSkippedDay !== checkInTodayYmd &&
-    shouldOfferCheckIn({ today: dailyCheckIn.today, hour: getAppNow().getHours(), sessionDoneToday: checkInSessionDoneToday });
+    checkInDone || (checkInBase && checkInSkippedDay !== checkInTodayYmd && shouldOfferCheckIn(checkInWindow));
   // Nachfrage „Wie anstrengend war …?“ (Readiness Schritt 2): einmal je Einheit, die ohne Anstrengung abgehakt wurde.
   const [rpePromptDismissed, setRpePromptDismissed] = useState<Set<string>>(() => readRpePromptDismissed());
   const rpePromptTodayYmd = getAppTodayYmd();
@@ -4287,6 +4286,7 @@ export default function AppMain(){
           {productionMarkOncePerFrame("home:recovery_score", uiRecoveryScore0_100, { view: "home" })}
           {showCheckInCard ? (
             <CheckInCard
+              done={checkInDone}
               onStart={() => setCheckInSheetOpen(true)}
               onSkip={() => {
                 safeWriteLocalStorageItem(CHECKIN_SKIPPED_DAY_KEY, checkInTodayYmd);
@@ -5685,8 +5685,9 @@ export default function AppMain(){
           day={checkInTodayYmd}
           initial={dailyCheckIn.today}
           carriedPain={carryOverPain(dailyCheckIn.yesterday)}
+          carriedIllness={carryOverIllness(dailyCheckIn.yesterday)}
           askSleepHours={!checkInHasWatchSleep}
-          defaultSleepHours={7.5}
+          defaultSleepHours={defaultSleepHoursFrom(readCheckInCache().entries)}
           needsConsent={dailyCheckIn.consent !== "granted"}
           onGrantConsent={dailyCheckIn.grantConsent}
           onSave={(entry) => void dailyCheckIn.save(entry)}
