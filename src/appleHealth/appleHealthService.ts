@@ -18,6 +18,7 @@ import type { PermissionState } from "../recovery/recoveryDisplayState";
 import type { RecoveryDailyRow } from "../recovery/recoveryTypes";
 import { loadHealthAnchors, saveHealthAnchors } from "./healthAnchorStore";
 import { appleHealthMissingCyclingDistance } from "./appleHealthPermissions";
+import { MyRaceHealthSignals } from "./healthSignalsPlugin";
 import { classifyWorkoutType } from "./workoutTypeClassifier";
 
 export const APPLE_HEALTH_READ_TYPES = [
@@ -33,6 +34,7 @@ export const APPLE_HEALTH_READ_TYPES = [
   "respiratoryRate",
   "bodyTemperature",
   "basalBodyTemperature",
+  "oxygenSaturation",
 ] as const;
 
 /** Lokale Mitternacht (Gerätekalender), analog zu Calendar.current.startOfDay. */
@@ -195,10 +197,25 @@ export async function healthKitIsAvailable(): Promise<boolean> {
   }
 }
 
+/**
+ * Lesezugriff auf die Uhr-Signale, die das Health-Plugin nicht kennt (lokales Plugin `MyRaceHealthSignals`).
+ * HealthKit zeigt den Dialog nur für Typen, die noch nicht beantwortet wurden – ein erneuter Aufruf bei jedem Start
+ * ist für Bestandsnutzer die Stelle, an der die neuen Typen einmal erscheinen. Fehler sind nie fatal.
+ */
+export async function healthSignalsRequestReadAuthorization(): Promise<void> {
+  try {
+    const result = await MyRaceHealthSignals.requestAuthorization();
+    console.log("[appleHealthService] healthSignals requestAuthorization", result);
+  } catch (e) {
+    console.warn("[appleHealthService] healthSignals requestAuthorization failed", e);
+  }
+}
+
 export async function healthKitRequestReadAuthorization(): Promise<void> {
   const { Health } = await import("@capgo/capacitor-health");
   const result = await Health.requestAuthorization({ read: [...APPLE_HEALTH_READ_TYPES] });
   console.log("[appleHealthService] requestAuthorization", result);
+  await healthSignalsRequestReadAuthorization();
   try {
     const check = await Health.checkAuthorization({ read: [...APPLE_HEALTH_READ_TYPES] });
     console.log("[appleHealthService] checkAuthorization readAuthorized", check?.readAuthorized, "readDenied", check?.readDenied);

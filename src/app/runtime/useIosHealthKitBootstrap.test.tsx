@@ -16,6 +16,7 @@ jest.mock("../../health/healthDataService", () => ({
   shouldForceFullHealthKitReauth: jest.fn(() => false),
   healthKitFetchRecoveryDailyLast120Days: jest.fn(async () => []),
   healthKitRequestReadAuthorization: jest.fn(async () => undefined),
+  healthSignalsRequestReadAuthorization: jest.fn(async () => undefined),
 }));
 
 describe("useIosHealthKitBootstrap", () => {

@@ -1,4 +1,5 @@
 import { APPLE_HEALTH_READ_TYPES } from "../../appleHealth/appleHealthService";
+import { HEALTH_SIGNAL_TYPES, type HealthSignalType } from "../../appleHealth/healthSignalsPlugin";
 
 type AppleHealthReadType = (typeof APPLE_HEALTH_READ_TYPES)[number];
 
@@ -20,11 +21,28 @@ export const APPLE_HEALTH_TYPE_LABELS: Record<AppleHealthReadType, string> = {
   respiratoryRate: "Atemfrequenz",
   bodyTemperature: "Körpertemperatur",
   basalBodyTemperature: "Basaltemperatur",
+  oxygenSaturation: "Blutsauerstoff",
+};
+
+/**
+ * Typen, die das lokale Plugin `MyRaceHealthSignals` zusätzlich anfragt (`src/appleHealth/healthSignalsPlugin.ts`).
+ * Eigener Record, ebenfalls an die Typliste gebunden: kommt dort ein Typ dazu, bricht der Build, bis er hier einen Namen hat.
+ */
+export const HEALTH_SIGNAL_TYPE_LABELS: Record<HealthSignalType, string> = {
+  heartRateVariabilityRMSSD: "Herzfrequenzvariabilität (RMSSD, ab iOS 27)",
+  workoutEffortScore: "Anstrengung je Training (von dir bewertet)",
+  estimatedWorkoutEffortScore: "Anstrengung je Training (von der Uhr geschätzt)",
+  appleSleepingWristTemperature: "Handgelenktemperatur im Schlaf",
+  heartRateRecoveryOneMinute: "Pulserholung nach dem Training",
+  vo2Max: "VO2max",
 };
 
 /** Die angefragten Apple-Health-Datentypen in der Reihenfolge des HealthKit-Scopes. */
 export function listAppleHealthDataTypes(): string[] {
-  return APPLE_HEALTH_READ_TYPES.map((type) => APPLE_HEALTH_TYPE_LABELS[type]);
+  return [
+    ...APPLE_HEALTH_READ_TYPES.map((type) => APPLE_HEALTH_TYPE_LABELS[type]),
+    ...HEALTH_SIGNAL_TYPES.map((type) => HEALTH_SIGNAL_TYPE_LABELS[type]),
+  ];
 }
 
 export type AiDataUse = { title: string; provider: string; items: readonly string[]; note?: string };

@@ -1,12 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import { APPLE_HEALTH_READ_TYPES } from "../../appleHealth/appleHealthService";
 import { SettingsDataUsagePage } from "./SettingsDataUsagePage";
+import { HEALTH_SIGNAL_TYPES } from "../../appleHealth/healthSignalsPlugin";
 import { AI_DATA_USES, APPLE_HEALTH_TYPE_LABELS, listAppleHealthDataTypes } from "./dataUsage";
 
 describe("Datennutzung", () => {
   test("jeder angefragte HealthKit-Typ hat genau einen eigenen Anzeigenamen", () => {
     const labels = listAppleHealthDataTypes();
-    expect(labels).toHaveLength(APPLE_HEALTH_READ_TYPES.length);
+    expect(labels).toHaveLength(APPLE_HEALTH_READ_TYPES.length + HEALTH_SIGNAL_TYPES.length);
     expect(new Set(labels).size).toBe(labels.length);
     for (const type of APPLE_HEALTH_READ_TYPES) {
       expect(APPLE_HEALTH_TYPE_LABELS[type]).toBeTruthy();

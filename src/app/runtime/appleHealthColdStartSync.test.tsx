@@ -20,6 +20,7 @@ jest.mock("../../health/healthDataService", () => ({
   shouldForceFullHealthKitReauth: jest.fn(),
   healthKitFetchRecoveryDailyLast120Days: jest.fn(),
   healthKitRequestReadAuthorization: jest.fn(),
+  healthSignalsRequestReadAuthorization: jest.fn(),
 }));
 
 const CONNECTED_KEY = "marathonAppleHealthConnected";

@@ -9,6 +9,7 @@ import {
   healthKitFetchRecoveryDailyLast120Days,
   healthKitIsAvailable,
   healthKitRequestReadAuthorization,
+  healthSignalsRequestReadAuthorization,
   shouldForceFullHealthKitReauth,
 } from "../../health/healthDataService";
 import { mergeRecoveryDailyPersisted } from "../../recovery/recoveryStorage";
@@ -260,6 +261,9 @@ export function useIosHealthKitBootstrap(api: IosHealthKitBootstrapApi): void {
 
         if (localStorage.getItem(appleHealthConnectedStorageKey) === "1") {
           setIsHealthConnected(true);
+          // Neue Uhr-Signale (Anstrengung, RMSSD, Temperatur …): HealthKit fragt nur die noch unbeantworteten Typen,
+          // sonst ist das ein stiller No-op.
+          await healthSignalsRequestReadAuthorization();
           let resolvedSleep: PermissionState = "unknown";
           let resolvedHrv: PermissionState = "unknown";
           let resolvedRhr: PermissionState = "unknown";

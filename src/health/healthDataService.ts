@@ -18,6 +18,7 @@ export {
   healthKitForceRefreshWorkoutsLast3Days,
   healthKitIsAvailable,
   healthKitRequestReadAuthorization,
+  healthSignalsRequestReadAuthorization,
   isHealthKitPermissionComplete,
   localCalendarStartOfDay,
   shouldForceFullHealthKitReauth,
