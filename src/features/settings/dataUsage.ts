@@ -59,7 +59,6 @@ export const AI_PLAN_FALLBACK_DATA_ITEMS: readonly string[] = [
 /** Was der Morgen-Check-in speichert (`daily_checkins`, Migration 017) — nur mit Zustimmung zu Gesundheitsangaben. */
 export const CHECKIN_DATA_ITEMS: readonly string[] = [
   "Schlafqualität, Energie, Beine und Kopf (je 1–5)",
-  "Geschätzte Schlafdauer, wenn du sie einträgst",
   "„Etwas zwickt“: Körperstelle, Stärke und ob du anders läufst",
   "„Fühle mich krank“: angegebene Symptome",
 ];

@@ -99,7 +99,7 @@ Morgen-Check-in (Spec §6.1) mit Gesundheits-Chips, ohne Wirkung auf den Plan.
 
 - **Migration `017_daily_checkins.sql`:** Tabelle laut Spec §15; RLS; Trigger `update_updated_at`; eindeutig `(user_id, calendar_day)`. Dazu `profiles.health_consent_at`/`health_consent_version` (CHECK: beide gesetzt oder beide NULL, Muster Migration 015).
 - **Dateien (neu):**
-  - `src/features/checkin/CheckInSheet.tsx`, `CheckInSheet.test.tsx`: vier Fragen, optional Schlafdauer-Stepper (nur ohne Schlafdaten), Chips mit Folgefragen
+  - `src/features/checkin/CheckInSheet.tsx`, `CheckInSheet.test.tsx`: vier Fragen, Chips mit Folgefragen (Schlafdauer-Stepper am 12.11.2026 entfernt: Schlafdauer kommt nur von der Uhr, siehe `docs/readiness-data-sources.md`)
   - `src/features/checkin/checkInState.ts`: Gültigkeit (bis erste Einheit oder 14:00), lokaler Cache über `src/persistence/**`
   - `src/features/checkin/healthConsent.ts`: einmalige Zustimmung zur Speicherung von Gesundheitsangaben (Spec §15), gespeichert in `profiles` über `src/lib/supabase/services/profilesService.ts`, nicht nur lokal
   - `src/lib/supabase/services/dailyCheckinsService.ts` + Test

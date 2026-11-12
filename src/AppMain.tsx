@@ -132,7 +132,7 @@ import { CheckInCard } from "./features/checkin/CheckInCard";
 import { CheckInReminderSetting } from "./features/checkin/CheckInReminderSetting";
 import { loadCheckInReminderSettings, saveCheckInReminderSettings, syncCheckInReminder } from "./services/notificationService";
 import { CheckInSheet } from "./features/checkin/CheckInSheet";
-import { canEditCheckIn, carryOverIllness, carryOverPain, defaultSleepHoursFrom, readCheckInCache, shouldOfferCheckIn } from "./features/checkin/checkInState";
+import { canEditCheckIn, carryOverIllness, carryOverPain, shouldOfferCheckIn } from "./features/checkin/checkInState";
 import { useDailyCheckIn } from "./features/checkin/useDailyCheckIn";
 import { isCheckInEnabled } from "./features/settings/settingsFlags";
 import { CHECKIN_SKIPPED_DAY_KEY } from "./persistence/marathonLocalStorageKeys";
@@ -2334,9 +2334,6 @@ export default function AppMain(){
   const [checkInSheetOpen, setCheckInSheetOpen] = useState(false);
   const [checkInSkippedDay, setCheckInSkippedDay] = useState<string | null>(() => safeReadLocalStorageItem(CHECKIN_SKIPPED_DAY_KEY));
   const checkInSessionDoneToday = ALL_SESSIONS.some((s) => sessionYmd(s) === checkInTodayYmd && logs[s.id]?.done === true);
-  const checkInHasWatchSleep = Array.isArray(recoveryDailyRows)
-    ? recoveryDailyRows.some((row) => row?.date === checkInTodayYmd && typeof row?.sleepHours === "number" && row.sleepHours > 0)
-    : false;
   const [checkInReminder, setCheckInReminder] = useState(() => loadCheckInReminderSettings());
   useEffect(() => {
     if (!checkInEnabled || dailyCheckIn.consent === "loading" || dailyCheckIn.consent === "unavailable") return;
@@ -5686,8 +5683,6 @@ export default function AppMain(){
           initial={dailyCheckIn.today}
           carriedPain={carryOverPain(dailyCheckIn.yesterday)}
           carriedIllness={carryOverIllness(dailyCheckIn.yesterday)}
-          askSleepHours={!checkInHasWatchSleep}
-          defaultSleepHours={defaultSleepHoursFrom(readCheckInCache().entries)}
           needsConsent={dailyCheckIn.consent !== "granted"}
           onGrantConsent={dailyCheckIn.grantConsent}
           onSave={(entry) => void dailyCheckIn.save(entry)}

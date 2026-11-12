@@ -86,7 +86,7 @@ Alle optional außer Plan und Datum. Der Kern bekommt sie als reine Daten; er ha
 | `todayYmd` | `src/core/time/timeSystem.ts` | – | alle |
 | Plan (Einheiten mit `dateIso`, `kind`, km, Pace, Phase, `isRecoveryWeek`) | `TrainingPlanV2` | `training_plans` | alle |
 | Erledigte Einheiten: Ist-km, Dauer, RPE 0–10 (neu), Gefühl 1–5 | Session-Eintrag, Health | `session_logs` (+ `rpe`, `duration_min`), `health_workouts` | alle |
-| Check-in: Schlaf, Energie, Beine, Kopf (je 1–5), optionale Schlafdauer, Gesundheits-Chips | neu | `daily_checkins` (neu) | a–c |
+| Check-in: Schlaf, Energie, Beine, Kopf (je 1–5), Gesundheits-Chips (Schlafdauer nur von der Uhr, keine manuelle Angabe – Entscheidung 12.11.2026, siehe `readiness-data-sources.md`) | neu | `daily_checkins` (neu) | a–c |
 | Schlafdauer, Schlaffenster | Apple Health | `recovery_daily.sleep_hours`, lokal Fenster | a |
 | Herzfrequenz im Schlaf (bevorzugt) oder Ruhepuls | Apple Health | `recovery_daily.resting_hr` (+ neu `sleep_hr`) | a, b |
 | HRV als **Nacht-Median** der SDNN-Werte im Schlaffenster | Apple Health | `recovery_daily.hrv_night_ms` (neu, §15); `hrv_ms` bleibt Tagesmittel für die alte Pipeline | a |

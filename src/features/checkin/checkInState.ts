@@ -87,18 +87,6 @@ export function carryOverIllness(yesterday: CheckInEntry | null | undefined): Ch
   return yesterday?.illness?.symptoms?.length ? { symptoms: [...yesterday.illness.symptoms] } : null;
 }
 
-/** Vorbelegung der Schlafdauer: Median der eigenen Angaben der letzten 14 Tage, sonst 7:30 (Spec §6.1). */
-export function defaultSleepHoursFrom(entries: Readonly<Record<string, CheckInEntry>>, fallback = 7.5): number {
-  const values = Object.values(entries)
-    .map((e) => e?.sleepHoursSelf)
-    .filter((v): v is number => typeof v === "number" && v >= 2 && v <= 14)
-    .sort((a, b) => a - b);
-  if (!values.length) return fallback;
-  const mid = Math.floor(values.length / 2);
-  const median = values.length % 2 ? values[mid] : (values[mid - 1] + values[mid]) / 2;
-  return Math.round(median * 4) / 4;
-}
-
 /** „Zwickt es noch?“: Schmerz von gestern wird heute vorausgewählt (Spec §6.1). */
 export function carryOverPain(yesterday: CheckInEntry | null | undefined): CheckInPain | null {
   return yesterday?.pain ? { ...yesterday.pain } : null;

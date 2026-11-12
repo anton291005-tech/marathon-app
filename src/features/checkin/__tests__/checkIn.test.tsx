@@ -7,7 +7,6 @@ import {
   canEditCheckIn,
   carryOverIllness,
   carryOverPain,
-  defaultSleepHoursFrom,
   emptyCheckIn,
   isCheckInComplete,
   readCheckInCache,
@@ -46,8 +45,6 @@ function renderSheet(overrides: Partial<React.ComponentProps<typeof CheckInSheet
       day={DAY}
       initial={null}
       carriedPain={null}
-      askSleepHours={false}
-      defaultSleepHours={7.5}
       needsConsent={false}
       onGrantConsent={onGrantConsent}
       onSave={onSave}
@@ -73,9 +70,10 @@ beforeEach(() => {
 });
 
 describe("CheckInSheet", () => {
-  test("vier Tipps speichern den Check-in (unter 5 Interaktionen)", () => {
+  test("vier Tipps speichern den Check-in (unter 5 Interaktionen), keine Schlafdauer-Eingabe", () => {
     const { onSave } = renderSheet();
     answerAll();
+    expect(screen.queryByText("Wie lange hast du geschlafen?")).toBeNull();
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onSave.mock.calls[0][0]).toMatchObject({ day: DAY, sleepQuality: 4, energy: 3, legs: 2, mind: 5, pain: null, illness: null });
     expect(screen.getByText("Danke!")).toBeInTheDocument();
@@ -142,11 +140,11 @@ describe("CheckInSheet", () => {
       initial: { ...FULL, pain: null, illness: null },
       carriedPain: { area: "knee", severity: 3, alteredGait: false },
       carriedIllness: { symptoms: ["fever"] },
-      askSleepHours: true,
     });
     expect(screen.getByRole("button", { name: "Etwas zwickt" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("button", { name: "Fühle mich krank" })).toHaveAttribute("aria-pressed", "false");
-    fireEvent.click(screen.getByRole("button", { name: "15 Minuten mehr" }));
+    fireEvent.click(screen.getByRole("button", { name: "Antworten ändern" }));
+    answerAll();
     expect(onSave.mock.calls[0][0]).toMatchObject({ pain: null, illness: null });
   });
 
@@ -161,12 +159,6 @@ describe("CheckInSheet", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  test("Schlafdauer nur ohne Uhr, Schritte zu 15 Minuten", () => {
-    const { onSave } = renderSheet({ askSleepHours: true });
-    answerAll();
-    fireEvent.click(screen.getByRole("button", { name: "15 Minuten mehr" }));
-    expect(onSave.mock.calls[onSave.mock.calls.length - 1][0].sleepHoursSelf).toBe(7.75);
-  });
 });
 
 describe("checkInState", () => {
@@ -185,11 +177,9 @@ describe("checkInState", () => {
     expect(canEditCheckIn({ today: null, hour: 9, sessionDoneToday: false })).toBe(false);
   });
 
-  test("Krankheit wird ohne Warnantwort übernommen; Schlaf-Vorbelegung ist der eigene Median", () => {
+  test("Krankheit wird ohne Warnantwort übernommen", () => {
     expect(carryOverIllness({ ...FULL, illness: { symptoms: ["chest"], redFlag: true } })).toEqual({ symptoms: ["chest"] });
     expect(carryOverIllness({ ...FULL, illness: null })).toBeNull();
-    expect(defaultSleepHoursFrom({})).toBe(7.5);
-    expect(defaultSleepHoursFrom({ a: { ...FULL, sleepHoursSelf: 6 }, b: { ...FULL, sleepHoursSelf: 7 }, c: { ...FULL, sleepHoursSelf: 8.5 } })).toBe(7);
   });
 
   test("carryOverPain übernimmt nur vorhandenen Schmerz", () => {

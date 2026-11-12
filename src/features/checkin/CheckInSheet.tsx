@@ -21,10 +21,6 @@ type Props = {
   carriedPain: CheckInPain | null;
   /** Krankheits-Chip von gestern, vorausgewählt (Spec §6.1). */
   carriedIllness?: CheckInIllness | null;
-  /** Ohne Schlafdaten der Uhr: optionale Schlafdauer anbieten (Spec §6.1). */
-  askSleepHours: boolean;
-  /** Vorbelegung der Schlafdauer (eigener Median, am ersten Tag 7:30). */
-  defaultSleepHours: number;
   needsConsent: boolean;
   onGrantConsent: () => Promise<boolean>;
   onSave: (entry: CheckInEntry) => void;
@@ -33,23 +29,15 @@ type Props = {
 
 const SEVERITIES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-function formatHours(hours: number): string {
-  const h = Math.floor(hours);
-  const m = Math.round((hours - h) * 60);
-  return `${h}:${String(m).padStart(2, "0")} h`;
-}
-
 /**
  * Morgen-Check-in (Readiness Spec §6.1): vier Fragen, je ein Tipp; nach der vierten Antwort ist gespeichert.
- * Danach optional Schlafdauer und die Chips „Etwas zwickt“ / „Fühle mich krank“. In diesem Schritt ohne Wirkung auf den Plan.
+ * Danach optional die Chips „Etwas zwickt“ / „Fühle mich krank“. In diesem Schritt ohne Wirkung auf den Plan.
  */
 export function CheckInSheet({
   day,
   initial,
   carriedPain,
   carriedIllness = null,
-  askSleepHours,
-  defaultSleepHours,
   needsConsent,
   onGrantConsent,
   onSave,
@@ -187,32 +175,6 @@ export function CheckInSheet({
                 Antworten ändern
               </button>
 
-              {askSleepHours ? (
-                <div>
-                  <div className="mr-entry-label">Wie lange hast du geschlafen?</div>
-                  <div className="mr-km-stepper">
-                    <button
-                      type="button"
-                      className="mr-km-stepper__btn"
-                      aria-label="15 Minuten weniger"
-                      onClick={() => update({ sleepHoursSelf: Math.max(2, (entry.sleepHoursSelf ?? defaultSleepHours) - 0.25) })}
-                    >
-                      −
-                    </button>
-                    <div className="mr-km-stepper__field" aria-live="polite">
-                      <span>{formatHours(entry.sleepHoursSelf ?? defaultSleepHours)}</span>
-                    </div>
-                    <button
-                      type="button"
-                      className="mr-km-stepper__btn"
-                      aria-label="15 Minuten mehr"
-                      onClick={() => update({ sleepHoursSelf: Math.min(14, (entry.sleepHoursSelf ?? defaultSleepHours) + 0.25) })}
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              ) : null}
 
               <div className="mr-checkin__chips">
                 <button
