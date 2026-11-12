@@ -187,7 +187,7 @@ describe("SessionEntrySheet", () => {
     expect(screen.getByRole("button", { name: "Gefühl 4 von 5" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Gefühl 3 von 5" })).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
-    expect(onSave).toHaveBeenCalledWith({ actualKm: "9.5", feeling: 4, notes: "", adoptSuggestion: false });
+    expect(onSave).toHaveBeenCalledWith({ actualKm: "9.5", feeling: 4, rpe: null, notes: "", adoptSuggestion: false });
   });
 
   test("bestehende Sterne-Werte werden 1:1 übernommen", () => {
@@ -196,7 +196,7 @@ describe("SessionEntrySheet", () => {
     expect(screen.getByRole("heading", { name: "Eintrag bearbeiten" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Gefühl 2 von 5" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
-    expect(onSave).toHaveBeenCalledWith({ actualKm: "10.4", feeling: 2, notes: "zäh", adoptSuggestion: false });
+    expect(onSave).toHaveBeenCalledWith({ actualKm: "10.4", feeling: 2, rpe: null, notes: "zäh", adoptSuggestion: false });
   });
 
   test("Health-Vorschlag nur, wenn ein verknüpfbarer Lauf existiert", () => {
@@ -213,7 +213,7 @@ describe("SessionEntrySheet", () => {
     expect((screen.getByLabelText("Distanz") as HTMLInputElement).value).toBe("10,4");
     expect(screen.getByRole("button", { name: "Übernommen" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
-    expect(onSave).toHaveBeenCalledWith({ actualKm: "10.4", feeling: 0, notes: "", adoptSuggestion: true });
+    expect(onSave).toHaveBeenCalledWith({ actualKm: "10.4", feeling: 0, rpe: null, notes: "", adoptSuggestion: true });
   });
 
   test("ohne Distanzfeld (Kraft, verknüpfter Health-Lauf) bleibt actualKm unberührt", () => {
@@ -221,7 +221,7 @@ describe("SessionEntrySheet", () => {
     render(entry({ initialKm: null, onSave }));
     expect(screen.queryByLabelText("Distanz")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
-    expect(onSave).toHaveBeenCalledWith({ actualKm: undefined, feeling: 0, notes: "", adoptSuggestion: false });
+    expect(onSave).toHaveBeenCalledWith({ actualKm: undefined, feeling: 0, rpe: null, notes: "", adoptSuggestion: false });
   });
 
   test("Als offen markieren nur beim Bearbeiten mit Handler", () => {
@@ -231,5 +231,48 @@ describe("SessionEntrySheet", () => {
     rerender(entry({ mode: "edit", onReopen }));
     fireEvent.click(screen.getByRole("button", { name: "Als offen markieren" }));
     expect(onReopen).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("SessionEntrySheet – Anstrengung 0–10 (Readiness Spec §6.2)", () => {
+  test("Auswahl speichert die RPE, erneutes Tippen nimmt sie zurück, Anker wird angezeigt", () => {
+    const onSave = jest.fn();
+    render(entry({ onSave }));
+    expect(screen.getByText("Wie anstrengend war die Einheit?")).toBeInTheDocument();
+    expect(screen.getByText("Und wie hat sie sich angefühlt?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Anstrengung 6 von 10$/ }));
+    expect(screen.getByText("6 · zwischen anstrengend und sehr anstrengend")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Anstrengung 7 von 10, sehr anstrengend$/ }));
+    expect(screen.getByText("7 · sehr anstrengend")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ rpe: 7 }));
+    fireEvent.click(screen.getByRole("button", { name: /^Anstrengung 7 von 10/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ rpe: null }));
+  });
+
+  test("0 ist ein gültiger Wert („gar nicht“)", () => {
+    const onSave = jest.fn();
+    render(entry({ onSave }));
+    fireEvent.click(screen.getByRole("button", { name: /^Anstrengung 0 von 10, gar nicht$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ rpe: 0 }));
+  });
+
+  test("„Später“ blendet die Frage aus und speichert ohne RPE; zurückholbar", () => {
+    const onSave = jest.fn();
+    render(entry({ onSave, initialRpe: 5 }));
+    expect(screen.getByRole("button", { name: /^Anstrengung 5 von 10/ })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Später" }));
+    expect(screen.queryByTestId("entry-rpe")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ rpe: null }));
+    fireEvent.click(screen.getByRole("button", { name: "Anstrengung doch angeben" }));
+    expect(screen.getByTestId("entry-rpe")).toBeInTheDocument();
+  });
+
+  test("Bearbeiten: gespeicherte RPE ist vorausgewählt", () => {
+    render(entry({ mode: "edit", initialRpe: 3 }));
+    expect(screen.getByRole("button", { name: /^Anstrengung 3 von 10, mäßig$/ })).toHaveAttribute("aria-pressed", "true");
   });
 });

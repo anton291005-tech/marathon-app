@@ -2285,6 +2285,7 @@ export default function AppMain(){
       ...(nextLogs[modal.id] || {}),
       ...(values.actualKm !== undefined ? { actualKm: values.actualKm } : {}),
       feeling: values.feeling,
+      rpe: values.rpe ?? undefined,
       notes: values.notes,
       done: true,
       skipped: false,
@@ -5585,6 +5586,7 @@ export default function AppMain(){
           subtitle={[modal.title, modalPlannedKm != null ? `Plan ${formatKmDe(modalPlannedKm)} km` : null].filter(Boolean).join(" · ")}
           initialKm={modalEntryInitialKm}
           initialFeeling={modalLog?.feeling ?? null}
+          initialRpe={typeof modalLog?.rpe === "number" ? modalLog.rpe : null}
           initialNotes={typeof modalLog?.notes === "string" ? modalLog.notes : ""}
           suggestion={modalSuggestedRun ? buildHealthRunSuggestion(modalSuggestedRun, appNow) : null}
           onSave={saveModalEntry}
