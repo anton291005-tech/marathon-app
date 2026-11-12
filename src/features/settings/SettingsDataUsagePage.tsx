@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { SettingsGroup } from "./SettingsList";
-import { AI_DATA_USES, listAppleHealthDataTypes } from "./dataUsage";
+import { AI_DATA_USES, CHECKIN_DATA_ITEMS, listAppleHealthDataTypes } from "./dataUsage";
 
 const textStyle: CSSProperties = { fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.5, margin: 0 };
 
@@ -21,7 +21,7 @@ function Block({ children }: { children: ReactNode }) {
 }
 
 /** Infoseite „Welche Daten MyRace nutzt" — reine Information, keine Einwilligungslogik. */
-export function SettingsDataUsagePage() {
+export function SettingsDataUsagePage({ showCheckIn = false }: { showCheckIn?: boolean } = {}) {
   return (
     <>
       <SettingsGroup title="Apple Health" padded>
@@ -37,6 +37,21 @@ export function SettingsDataUsagePage() {
           </p>
         </Block>
       </SettingsGroup>
+
+      {showCheckIn ? (
+        <SettingsGroup title="Check-in und Befinden" padded>
+          <Block>
+            <p style={textStyle}>
+              Nur wenn du den Gesundheitsangaben zugestimmt hast, speichert MyRace deinen Morgen-Check-in in deinem
+              Konto:
+            </p>
+            <BulletList items={CHECKIN_DATA_ITEMS} />
+            <p style={{ ...textStyle, marginTop: 12 }}>
+              Die Angaben gehen nicht an einen KI-Anbieter. Löschst du dein Konto, werden sie mitgelöscht.
+            </p>
+          </Block>
+        </SettingsGroup>
+      ) : null}
 
       {AI_DATA_USES.map((use) => (
         <SettingsGroup key={use.title} title={use.title} padded>

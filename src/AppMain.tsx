@@ -128,6 +128,14 @@ import AiCoachPanel from "./components/ai/AiCoachPanel";
 import { PostWorkoutSummaryCard } from "./components/PostWorkoutSummaryCard";
 import { SessionDetailSheet } from "./features/session/SessionDetailSheet";
 import { AiConsentSheet } from "./features/aiConsent/AiConsentSheet";
+import { CheckInCard } from "./features/checkin/CheckInCard";
+import { CheckInReminderSetting } from "./features/checkin/CheckInReminderSetting";
+import { loadCheckInReminderSettings, saveCheckInReminderSettings, syncCheckInReminder } from "./services/notificationService";
+import { CheckInSheet } from "./features/checkin/CheckInSheet";
+import { carryOverPain, shouldOfferCheckIn } from "./features/checkin/checkInState";
+import { useDailyCheckIn } from "./features/checkin/useDailyCheckIn";
+import { isCheckInEnabled } from "./features/settings/settingsFlags";
+import { CHECKIN_SKIPPED_DAY_KEY } from "./persistence/marathonLocalStorageKeys";
 import { useAiConsent } from "./features/aiConsent/useAiConsent";
 import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
 import { buildHealthRunSuggestion, buildSessionFlow, estimateDurationMin, parseKmInput } from "./features/session/sessionDetailModel";
@@ -229,7 +237,7 @@ import {
   MARATHON_PREFERENCES_KEY,
   TRAINING_PLAN_V2_STORAGE_KEY,
 } from "./persistence/marathonLocalStorageKeys";
-import { safeReadLocalStorageItem } from "./persistence/safeLocalStorage";
+import { safeReadLocalStorageItem, safeWriteLocalStorageItem } from "./persistence/safeLocalStorage";
 import { hydrateMarathonLogsFromStorage } from "./sessionLogs/hydrateMarathonLogs";
 import {
   logsNotBeforeForSuccessorPlan,
@@ -316,7 +324,7 @@ import {
   getAppNowEpochMs,
   getAppTodayYmd,
 } from "./core/time/timeSystem";
-import { sessionDate } from "./core/time/sessionDate";
+import { sessionDate, sessionYmd } from "./core/time/sessionDate";
 import {
   devMarkOncePerFrame,
   monitorMetricSource,
@@ -2316,6 +2324,33 @@ export default function AppMain(){
   const displayPlan = useDisplayPlanFromTrainingState(trainingPlanV2, aiPlanPatches);
   const ALL_SESSIONS = displayPlan.flatMap((week) => getWeekSessionList(week));
 
+  // Morgen-Check-in (Readiness Schritt 3): ohne Wirkung auf den Plan; Production aus (settingsFlags.isCheckInEnabled).
+  const checkInEnabled = useMemo(() => isCheckInEnabled(), []);
+  const checkInTodayYmd = getAppTodayYmd();
+  const dailyCheckIn = useDailyCheckIn(checkInEnabled ? user?.id ?? null : null, checkInTodayYmd);
+  const [checkInSheetOpen, setCheckInSheetOpen] = useState(false);
+  const [checkInSkippedDay, setCheckInSkippedDay] = useState<string | null>(() => safeReadLocalStorageItem(CHECKIN_SKIPPED_DAY_KEY));
+  const checkInSessionDoneToday = ALL_SESSIONS.some((s) => sessionYmd(s) === checkInTodayYmd && logs[s.id]?.done === true);
+  const checkInHasWatchSleep = Array.isArray(recoveryDailyRows)
+    ? recoveryDailyRows.some((row) => row?.date === checkInTodayYmd && typeof row?.sleepHours === "number" && row.sleepHours > 0)
+    : false;
+  const [checkInReminder, setCheckInReminder] = useState(() => loadCheckInReminderSettings());
+  useEffect(() => {
+    if (!checkInEnabled || dailyCheckIn.consent === "loading" || dailyCheckIn.consent === "unavailable") return;
+    void syncCheckInReminder(dailyCheckIn.consent === "granted" ? checkInReminder : { ...checkInReminder, enabled: false });
+  }, [checkInEnabled, dailyCheckIn.consent, checkInReminder]);
+  const updateCheckInReminder = useCallback((next) => {
+    saveCheckInReminderSettings(next);
+    setCheckInReminder(next);
+  }, []);
+  const showCheckInCard =
+    checkInEnabled &&
+    !!user &&
+    dailyCheckIn.consent !== "loading" &&
+    dailyCheckIn.consent !== "unavailable" &&
+    checkInSkippedDay !== checkInTodayYmd &&
+    shouldOfferCheckIn({ today: dailyCheckIn.today, hour: getAppNow().getHours(), sessionDoneToday: checkInSessionDoneToday });
+
   // Trainings-Erinnerungen nur für Tage mit offener Einheit (nächste 14 Tage); nach Plan-Ende, an Ruhetagen und für
   // erledigte/ausgelassene Einheiten keine. Neu geplant nur, wenn sich der Zeitplan tatsächlich ändert.
   const trainingReminders = useMemo(
@@ -4226,6 +4261,15 @@ export default function AppMain(){
 
           {devMarkOncePerFrame("home:recovery_score", uiRecoveryScore0_100, { view: "home" })}
           {productionMarkOncePerFrame("home:recovery_score", uiRecoveryScore0_100, { view: "home" })}
+          {showCheckInCard ? (
+            <CheckInCard
+              onStart={() => setCheckInSheetOpen(true)}
+              onSkip={() => {
+                safeWriteLocalStorageItem(CHECKIN_SKIPPED_DAY_KEY, checkInTodayYmd);
+                setCheckInSkippedDay(checkInTodayYmd);
+              }}
+            />
+          ) : null}
           <PrepCard
             data-tour="recovery-card"
             doneSessions={doneSess}
@@ -5417,6 +5461,7 @@ export default function AppMain(){
                 </div>
               )}
             </div>
+            {checkInEnabled ? <CheckInReminderSetting settings={checkInReminder} onChange={updateCheckInReminder} /> : null}
                   </SettingsGroup>
                 </>
               ) : settingsPage === "privacy" ? (
@@ -5455,7 +5500,7 @@ export default function AppMain(){
                 </SettingsGroup>
                 </>
               ) : settingsPage === "dataUsage" ? (
-                <SettingsDataUsagePage />
+                <SettingsDataUsagePage showCheckIn={checkInEnabled} />
               ) : (
                 <>
                   <SettingsGroup
@@ -5599,6 +5644,20 @@ export default function AppMain(){
           userId={user?.id ?? null}
           initialPlanInputs={readPlanInputsFromPreferences(preferences)}
           onCancel={onboardingForNewPlan || newPrepWizardOpen ? handleOnboardingCancel : undefined}
+        />
+      ) : null}
+
+      {checkInSheetOpen && checkInEnabled ? (
+        <CheckInSheet
+          day={checkInTodayYmd}
+          initial={dailyCheckIn.today}
+          carriedPain={carryOverPain(dailyCheckIn.yesterday)}
+          askSleepHours={!checkInHasWatchSleep}
+          defaultSleepHours={7.5}
+          needsConsent={dailyCheckIn.consent !== "granted"}
+          onGrantConsent={dailyCheckIn.grantConsent}
+          onSave={(entry) => void dailyCheckIn.save(entry)}
+          onClose={() => setCheckInSheetOpen(false)}
         />
       ) : null}
 

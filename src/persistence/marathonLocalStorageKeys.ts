@@ -23,6 +23,10 @@ export const PREP_RECAPS_CACHE_KEY = "prepRecaps";
 export const PLAN_OWNED_PREFERENCES_KEY = "marathonPlanOwnedPreferences";
 /** Nutzer-IDs, die auf diesem Gerät die KI-Einwilligung abgelehnt haben (→ nicht bei jedem Start fragen). */
 export const AI_CONSENT_DECLINED_KEY = "marathonAiConsentDeclined";
+/** Lokaler Cache der Morgen-Check-ins (letzte 14 Tage) inkl. noch nicht gespeicherter (`pending`). */
+export const DAILY_CHECKINS_CACHE_KEY = "marathonDailyCheckins";
+/** Kalendertag, an dem der Check-in mit „Heute nicht“ ausgeblendet wurde. */
+export const CHECKIN_SKIPPED_DAY_KEY = "marathonCheckinSkippedDay";
 
 /**
  * Read-only catalog for docs / debug (order is not normative).
@@ -43,4 +47,6 @@ export const KNOWN_MY_RACE_STORAGE_KEYS: readonly string[] = [
   PREP_RECAPS_CACHE_KEY,
   PLAN_OWNED_PREFERENCES_KEY,
   AI_CONSENT_DECLINED_KEY,
+  DAILY_CHECKINS_CACHE_KEY,
+  CHECKIN_SKIPPED_DAY_KEY,
 ];

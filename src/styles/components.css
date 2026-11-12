@@ -389,3 +389,20 @@ textarea.mr-field { height: auto; min-height: 92px; padding: var(--space-3) 14px
 .mr-feeling__scale { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; line-height: 16px; color: var(--ink-3); }
 .mr-entry-notes { box-sizing: border-box; width: 100%; margin: 0; padding: 14px var(--space-4); border: 0; border-radius: var(--radius-m); background: var(--surface-2); color: var(--ink); font: 400 16px/22px var(--font-sans); resize: none; outline: none; }
 .mr-entry-notes:focus-visible { box-shadow: var(--shadow-focus); }
+
+/* Morgen-Check-in (Readiness Spec §6.1) */
+.mr-checkin-card { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3, 12px); padding: var(--space-4, 16px); }
+.mr-checkin-card__title { font: 600 17px/22px var(--font-rounded, inherit); color: var(--ink); }
+.mr-checkin-card__sub { margin-top: 2px; font-size: 13px; line-height: 18px; color: var(--ink-3); }
+.mr-checkin-card__actions { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.mr-checkin__options { display: flex; flex-direction: column; gap: var(--space-2, 8px); }
+.mr-checkin__option { height: 52px; margin: 0; padding: 0 16px; border: 0; border-radius: 14px; background: var(--surface-2); color: var(--ink); font: 600 17px/22px var(--font-rounded, inherit); text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mr-checkin__option.is-on { background: var(--ink); color: var(--surface-0); }
+.mr-checkin__option:focus-visible, .mr-checkin__chip:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.mr-checkin__chips { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+.mr-checkin__chip { min-height: 36px; margin: 0; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-1); color: var(--ink-2); font: 500 15px/20px var(--font-text, inherit); cursor: pointer; }
+.mr-checkin__chip.is-on { border-color: var(--ink); background: var(--ink); color: var(--surface-0); }
+.mr-checkin__follow { display: flex; flex-direction: column; gap: var(--space-2, 8px); }
+.mr-checkin__grid { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 4px; }
+.mr-checkin__num { height: 40px; border-radius: 10px; font-size: 15px; }
+.mr-checkin__link { align-self: flex-start; margin: 0; padding: 4px 0; border: 0; background: none; color: var(--ink-3); font: 500 14px/18px var(--font-text, inherit); cursor: pointer; }

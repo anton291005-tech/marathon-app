@@ -145,3 +145,49 @@ export async function cancelAllPendingNotifications(): Promise<void> {
   await cancelTrainingReminder();
 }
 
+
+/**
+ * Check-in-Erinnerung (Readiness Spec §6.1): eine tägliche Notification mit eigener ID, neutraler Text ohne
+ * Gesundheitsinhalt (Sperrbildschirm), keine zweite, keine Mahnung. Geplant nur, wenn der Check-in aktiv ist und
+ * der Nutzer den Gesundheitsangaben zugestimmt hat (AppMain).
+ */
+export const CHECKIN_REMINDER_ID = 2001;
+export const CHECKIN_REMINDER_TEXT = "Wie geht es dir heute?";
+const CHECKIN_REMINDER_KEY = "myrace-checkin-reminder";
+
+export function loadCheckInReminderSettings(): NotificationSettings {
+  try {
+    const raw = localStorage.getItem(CHECKIN_REMINDER_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { enabled: true, hour: 7, minute: 30 };
+}
+
+export function saveCheckInReminderSettings(settings: NotificationSettings): void {
+  try {
+    localStorage.setItem(CHECKIN_REMINDER_KEY, JSON.stringify(settings));
+  } catch {}
+}
+
+/** Plant die tägliche Check-in-Erinnerung neu bzw. bestellt sie ab (`enabled: false`). */
+export async function syncCheckInReminder(settings: NotificationSettings): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    await LocalNotifications.cancel({ notifications: [{ id: CHECKIN_REMINDER_ID }] });
+  } catch {}
+  if (!settings.enabled) return;
+  const permission = await requestNotificationPermission();
+  if (!permission) return;
+  await LocalNotifications.schedule({
+    notifications: [
+      {
+        id: CHECKIN_REMINDER_ID,
+        title: "MyRace",
+        body: CHECKIN_REMINDER_TEXT,
+        schedule: { on: { hour: settings.hour, minute: settings.minute }, repeats: true, allowWhileIdle: true },
+        smallIcon: "ic_stat_icon_config_sample",
+        iconColor: "#3b82f6",
+      },
+    ],
+  });
+}
