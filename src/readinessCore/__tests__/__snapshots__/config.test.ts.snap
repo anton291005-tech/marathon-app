@@ -1,0 +1,852 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`readinessCore/config Snapshot (Wert geändert → CONFIG_VERSION erhöhen) 1`] = `
+Object {
+  "CONFIG": Object {
+    "actions": Object {
+      "calmerWeekEasyFactor": Object {
+        "source": "E",
+        "spec": "§8.4",
+        "value": 0.8,
+      },
+      "calmerWeekLongRunFactor": Object {
+        "source": "E",
+        "spec": "§8.4",
+        "value": 0.75,
+      },
+      "calmerWeekTriggerDays": Object {
+        "source": "E",
+        "spec": "§8.4",
+        "value": 3,
+      },
+      "calmerWeekTriggerLowDays": Object {
+        "source": "E",
+        "spec": "§8.4",
+        "value": 2,
+      },
+      "easyInsteadMaxMinutes": Object {
+        "source": "E",
+        "spec": "§8.2",
+        "value": 60,
+      },
+      "easyMinMinutes": Object {
+        "source": "E",
+        "spec": "§8.2",
+        "value": 20,
+      },
+      "fallbackOrder": Object {
+        "source": "E",
+        "spec": "§8.1",
+        "value": Array [
+          "H2",
+          "H3",
+        ],
+      },
+      "lastQualityBeforeRaceDays": Object {
+        "source": "P",
+        "spec": "§8.7",
+        "value": Object {
+          "marathon": 4,
+          "other": 3,
+        },
+      },
+      "lighterFactor": Object {
+        "source": "L",
+        "spec": "§8.2",
+        "value": 0.75,
+      },
+      "longRunHardMinutes": Object {
+        "source": "E",
+        "spec": "§8.3",
+        "value": 90,
+      },
+      "longRunMoveDays": Object {
+        "source": "E",
+        "spec": "§8.5",
+        "value": 1,
+      },
+      "minDaysBetweenLongRuns": Object {
+        "source": "E",
+        "spec": "§8.6",
+        "value": 6,
+      },
+      "moveWindowDays": Object {
+        "source": "E",
+        "spec": "§8.2",
+        "value": 3,
+      },
+      "persistentMinDays": Object {
+        "source": "E",
+        "spec": "§8.4",
+        "value": 7,
+      },
+      "persistentWindowDays": Object {
+        "source": "E",
+        "spec": "§8.4",
+        "value": 10,
+      },
+      "signalZ": Object {
+        "source": "E",
+        "spec": "§8.3",
+        "value": -0.5,
+      },
+      "weekProposalsMax": Object {
+        "source": "L",
+        "spec": "§8.4",
+        "value": 2,
+      },
+    },
+    "baseline": Object {
+      "madScale": Object {
+        "source": "L",
+        "spec": "§4.2",
+        "value": 1.4826,
+      },
+      "minSpread": Object {
+        "heartRateBpm": Object {
+          "source": "L",
+          "spec": "§4.2",
+          "value": 2,
+        },
+        "lnHrv": Object {
+          "source": "E",
+          "spec": "§4.2",
+          "value": 0.1,
+        },
+        "sleepHours": Object {
+          "source": "E",
+          "spec": "§4.2",
+          "value": 0.75,
+        },
+      },
+      "minValues": Object {
+        "source": "E",
+        "spec": "§4.2",
+        "value": 14,
+      },
+      "windowDays": Object {
+        "source": "L",
+        "spec": "§4.2",
+        "value": 28,
+      },
+      "zClamp": Object {
+        "source": "E",
+        "spec": "§4.2",
+        "value": 3,
+      },
+    },
+    "body": Object {
+      "heartRateDeadband": Object {
+        "source": "P",
+        "spec": "§4.3",
+        "value": 0.5,
+      },
+      "heartRateMeanDays": Object {
+        "source": "E",
+        "spec": "§4.3",
+        "value": 3,
+      },
+      "heartRateMinValues": Object {
+        "source": "E",
+        "spec": "§4.3",
+        "value": 2,
+      },
+      "hrvDeadbandRmssd": Object {
+        "source": "P",
+        "spec": "§4.3",
+        "value": 0.5,
+      },
+      "hrvDeadbandSdnn": Object {
+        "source": "E",
+        "spec": "§4.3",
+        "value": 1,
+      },
+      "hrvFloor": Object {
+        "source": "E",
+        "spec": "§4.3",
+        "value": -1,
+      },
+      "hrvMeanDays": Object {
+        "source": "L",
+        "spec": "§4.3",
+        "value": 7,
+      },
+      "hrvMinSamplesPerNight": Object {
+        "source": "E",
+        "spec": "§4.3",
+        "value": 3,
+      },
+      "hrvMinValues": Object {
+        "source": "L",
+        "spec": "§4.3",
+        "value": 4,
+      },
+      "reliability": Object {
+        "hrvOnly": Object {
+          "source": "E",
+          "spec": "§4.3",
+          "value": 2,
+        },
+        "restingHeartRateOnly": Object {
+          "source": "E",
+          "spec": "§4.3",
+          "value": 1.5,
+        },
+        "sleepHeartRate": Object {
+          "source": "E",
+          "spec": "§4.3",
+          "value": 1,
+        },
+      },
+    },
+    "calendar": Object {
+      "boundHoursHigh": Object {
+        "source": "E",
+        "spec": "§7.4",
+        "value": 10,
+      },
+      "clusterTrigramJaccard": Object {
+        "source": "E",
+        "spec": "§7.3",
+        "value": 0.6,
+      },
+      "eveningEndAfter": Object {
+        "source": "E",
+        "spec": "§7.2",
+        "value": "18:00",
+      },
+      "examPhaseCount": Object {
+        "source": "E",
+        "spec": "§7.5",
+        "value": 2,
+      },
+      "examPhaseDays": Object {
+        "source": "E",
+        "spec": "§7.5",
+        "value": 7,
+      },
+      "lateTrainingAfter": Object {
+        "source": "E",
+        "spec": "§7.2",
+        "value": "21:00",
+      },
+      "lifePressure": Object {
+        "boundHoursOver10": Object {
+          "source": "E",
+          "spec": "§7.4",
+          "value": 1,
+        },
+        "demandingYesterday": Object {
+          "source": "E",
+          "spec": "§7.4",
+          "value": 1,
+        },
+        "examToday": Object {
+          "source": "E",
+          "spec": "§7.4",
+          "value": 1,
+        },
+        "examYesterday": Object {
+          "source": "E",
+          "spec": "§7.4",
+          "value": 0.5,
+        },
+        "max": Object {
+          "source": "E",
+          "spec": "§7.4",
+          "value": 3,
+        },
+        "mediumYesterday": Object {
+          "source": "E",
+          "spec": "§7.4",
+          "value": 0.5,
+        },
+        "physicalWorkOver6h": Object {
+          "source": "E",
+          "spec": "§7.4",
+          "value": 1,
+        },
+        "quickReturn": Object {
+          "source": "E",
+          "spec": "§7.4",
+          "value": 0.5,
+        },
+        "sleep6to7h": Object {
+          "source": "E",
+          "spec": "§7.4",
+          "value": 1,
+        },
+        "sleepUnder6h": Object {
+          "source": "E",
+          "spec": "§7.4",
+          "value": 2,
+        },
+        "travelDays": Object {
+          "source": "E",
+          "spec": "§7.4",
+          "value": 2,
+        },
+        "travelDemanding": Object {
+          "source": "E",
+          "spec": "§7.4",
+          "value": 1.5,
+        },
+      },
+      "maxQuestionsPerDay": Object {
+        "source": "E",
+        "spec": "§7.3",
+        "value": 1,
+      },
+      "maxQuestionsPerWeek": Object {
+        "source": "E",
+        "spec": "§7.3",
+        "value": 3,
+      },
+      "morningStartBefore": Object {
+        "source": "E",
+        "spec": "§7.2",
+        "value": "12:00",
+      },
+      "overnightMinHoursNextDay": Object {
+        "source": "E",
+        "spec": "§7.2",
+        "value": 2,
+      },
+      "physicalShiftHours": Object {
+        "source": "E",
+        "spec": "§7.4",
+        "value": 6,
+      },
+      "quickReturnHours": Object {
+        "source": "L",
+        "spec": "§7.2",
+        "value": 11,
+      },
+      "skipLimit": Object {
+        "source": "E",
+        "spec": "§7.3",
+        "value": 3,
+      },
+      "sleepBufferMin": Object {
+        "source": "E",
+        "spec": "§7.2",
+        "value": 60,
+      },
+      "suitabilityHorizonDays": Object {
+        "source": "E",
+        "spec": "§7.5",
+        "value": 14,
+      },
+      "windowEnd": Object {
+        "source": "E",
+        "spec": "§7.2",
+        "value": "22:00",
+      },
+      "windowExtraMin": Object {
+        "source": "E",
+        "spec": "§7.2",
+        "value": 45,
+      },
+      "windowStart": Object {
+        "source": "E",
+        "spec": "§7.2",
+        "value": "06:00",
+      },
+    },
+    "checkIn": Object {
+      "defaultReminder": Object {
+        "source": "E",
+        "spec": "§6.1",
+        "value": "07:30",
+      },
+      "defaultSelfSleepHours": Object {
+        "source": "E",
+        "spec": "§6.1",
+        "value": 7.5,
+      },
+      "sleepStepperMinutes": Object {
+        "source": "E",
+        "spec": "§6.1",
+        "value": 15,
+      },
+      "validUntilHour": Object {
+        "source": "E",
+        "spec": "§6.1",
+        "value": 14,
+      },
+    },
+    "learning": Object {
+      "insightBootstrapBlockDays": Object {
+        "source": "L",
+        "spec": "§11",
+        "value": 3,
+      },
+      "insightExpiryDays": Object {
+        "source": "E",
+        "spec": "§11",
+        "value": 90,
+      },
+      "insightFdr": Object {
+        "source": "L",
+        "spec": "§11",
+        "value": 0.1,
+      },
+      "insightInterval": Object {
+        "source": "E",
+        "spec": "§11",
+        "value": 0.9,
+      },
+      "insightMinDaysEach": Object {
+        "source": "E",
+        "spec": "§11",
+        "value": 10,
+      },
+      "insightMinEffectSpreads": Object {
+        "source": "E",
+        "spec": "§11",
+        "value": 0.5,
+      },
+      "insightShrinkN": Object {
+        "source": "E",
+        "spec": "§11",
+        "value": 15,
+      },
+      "insightWindowDays": Object {
+        "source": "E",
+        "spec": "§11",
+        "value": 120,
+      },
+      "sensitivityBounds": Object {
+        "source": "E",
+        "spec": "§11",
+        "value": Object {
+          "max": 2,
+          "min": 0.5,
+        },
+      },
+      "sensitivityMinPairedDays": Object {
+        "source": "E",
+        "spec": "§11",
+        "value": 90,
+      },
+      "sensitivityShrinkN": Object {
+        "source": "E",
+        "spec": "§11",
+        "value": 60,
+      },
+      "weekdayPatternWeeks": Object {
+        "source": "E",
+        "spec": "§11",
+        "value": 8,
+      },
+    },
+    "load": Object {
+      "atlDays": Object {
+        "source": "P",
+        "spec": "§5",
+        "value": 7,
+      },
+      "capWhileFewDays": Object {
+        "source": "E",
+        "spec": "§5",
+        "value": 1,
+      },
+      "crossTrainingDefaultMin": Object {
+        "source": "E",
+        "spec": "§5",
+        "value": 45,
+      },
+      "ctlDays": Object {
+        "source": "P",
+        "spec": "§5",
+        "value": 42,
+      },
+      "deviationRpePoints": Object {
+        "source": "E",
+        "spec": "§5",
+        "value": 2,
+      },
+      "deviationSessionsInRow": Object {
+        "source": "E",
+        "spec": "§5",
+        "value": 2,
+      },
+      "fallbackPaceMinPerKm": Object {
+        "source": "E",
+        "spec": "§5",
+        "value": 6.5,
+      },
+      "fewDaysThreshold": Object {
+        "source": "E",
+        "spec": "§5",
+        "value": 14,
+      },
+      "minCtlAu": Object {
+        "source": "E",
+        "spec": "§5",
+        "value": 50,
+      },
+      "personalRpeBounds": Object {
+        "source": "E",
+        "spec": "§11",
+        "value": Object {
+          "max": 2,
+          "min": 0.5,
+        },
+      },
+      "personalRpeMinSessions": Object {
+        "source": "E",
+        "spec": "§5",
+        "value": 10,
+      },
+      "preStartWeight": Object {
+        "source": "E",
+        "spec": "§5",
+        "value": 2,
+      },
+      "prefillDays": Object {
+        "source": "E",
+        "spec": "§5",
+        "value": 28,
+      },
+      "pressureMax": Object {
+        "source": "E",
+        "spec": "§5",
+        "value": 3,
+      },
+      "pressurePerPoint": Object {
+        "source": "E",
+        "spec": "§5",
+        "value": 0.25,
+      },
+      "weightsByKind": Object {
+        "source": "E",
+        "spec": "§5",
+        "value": Object {
+          "BIKE": 2.5,
+          "E": 2,
+          "I": 8,
+          "LR": 3,
+          "M": 4,
+          "MLR": 3,
+          "R": 8,
+          "RACE": 9,
+          "REC": 1.5,
+          "STRENGTH": 3,
+          "SWIM": 2.5,
+          "T": 6,
+        },
+      },
+    },
+    "output": Object {
+      "getToKnowDays": Object {
+        "source": "E",
+        "spec": "§4.7",
+        "value": 14,
+      },
+      "highBasisMinCheckIns": Object {
+        "source": "E",
+        "spec": "§4.7",
+        "value": 14,
+      },
+      "hysteresis": Object {
+        "source": "E",
+        "spec": "§4.7",
+        "value": 0.1,
+      },
+      "indexCenter": Object {
+        "source": "E",
+        "spec": "§4.7",
+        "value": 50,
+      },
+      "indexPerR": Object {
+        "source": "E",
+        "spec": "§4.7",
+        "value": 20,
+      },
+      "indexRoundTo": Object {
+        "source": "E",
+        "spec": "§4.7",
+        "value": 5,
+      },
+      "levelThresholds": Object {
+        "source": "E",
+        "spec": "§4.7",
+        "value": Object {
+          "above": 0.5,
+          "below": -1.25,
+          "normal": -0.5,
+        },
+      },
+      "nearBoundary": Object {
+        "source": "E",
+        "spec": "§4.7",
+        "value": 0.15,
+      },
+      "noBasisAfterDays": Object {
+        "source": "E",
+        "spec": "§4.7",
+        "value": 3,
+      },
+    },
+    "plausibility": Object {
+      "durationMin": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": Object {
+          "max": 600,
+          "min": 5,
+        },
+      },
+      "heartRateBpm": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": Object {
+          "max": 110,
+          "min": 30,
+        },
+      },
+      "respiratoryRate": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": Object {
+          "max": 30,
+          "min": 6,
+        },
+      },
+      "rpe": Object {
+        "source": "L",
+        "spec": "§3",
+        "value": Object {
+          "max": 10,
+          "min": 0,
+        },
+      },
+      "sdnnMs": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": Object {
+          "max": 300,
+          "min": 5,
+        },
+      },
+      "sleepHours": Object {
+        "source": "E",
+        "spec": "§3",
+        "value": Object {
+          "max": 14,
+          "min": 2,
+        },
+      },
+    },
+    "safety": Object {
+      "coldEasyMaxMinutes": Object {
+        "source": "E",
+        "spec": "§9.2",
+        "value": 30,
+      },
+      "heartRateClearlyElevated": Object {
+        "source": "L",
+        "spec": "§9.1",
+        "value": Object {
+          "bpm": 5,
+          "spreads": 2,
+        },
+      },
+      "heartRateElevated": Object {
+        "source": "L",
+        "spec": "§9.1",
+        "value": Object {
+          "bpm": 3,
+          "spreads": 1.5,
+        },
+      },
+      "illnessDoctorAfterDays": Object {
+        "source": "L",
+        "spec": "§9.2",
+        "value": 7,
+      },
+      "painDoctorDaysAny": Object {
+        "source": "E",
+        "spec": "§9.3",
+        "value": 7,
+      },
+      "painDoctorDaysStrong": Object {
+        "source": "E",
+        "spec": "§9.3",
+        "value": 3,
+      },
+      "painStopAt": Object {
+        "source": "P",
+        "spec": "§9.3",
+        "value": 4,
+      },
+      "persistentEasyDays": Object {
+        "source": "P",
+        "spec": "§9.4",
+        "value": 3,
+      },
+      "replanAfterPauseDays": Object {
+        "source": "E",
+        "spec": "§9.2",
+        "value": 7,
+      },
+      "respiratoryClearlyElevated": Object {
+        "source": "L",
+        "spec": "§9.1",
+        "value": 1.5,
+      },
+      "respiratoryElevated": Object {
+        "source": "L",
+        "spec": "§9.1",
+        "value": 1,
+      },
+      "returnEasyDays": Object {
+        "source": "E",
+        "spec": "§9.2",
+        "value": 2,
+      },
+      "returnTestMinutes": Object {
+        "source": "E",
+        "spec": "§9.2",
+        "value": Object {
+          "max": 20,
+          "min": 10,
+        },
+      },
+      "temperatureClearlyElevated": Object {
+        "source": "L",
+        "spec": "§9.1",
+        "value": 0.8,
+      },
+      "temperatureElevated": Object {
+        "source": "L",
+        "spec": "§9.1",
+        "value": 0.5,
+      },
+    },
+    "sleep": Object {
+      "absoluteFloorHours": Object {
+        "source": "E",
+        "spec": "§4.4",
+        "value": 6,
+      },
+      "deadband": Object {
+        "source": "P",
+        "spec": "§4.4",
+        "value": 0.5,
+      },
+      "floorLastNightZ": Object {
+        "source": "E",
+        "spec": "§4.4",
+        "value": -1,
+      },
+      "floorThreeNightsZ": Object {
+        "source": "E",
+        "spec": "§4.4",
+        "value": -2,
+      },
+      "reliabilityQualityOnly": Object {
+        "source": "E",
+        "spec": "§4.4",
+        "value": 1.5,
+      },
+      "reliabilityWithDuration": Object {
+        "source": "E",
+        "spec": "§4.4",
+        "value": 1,
+      },
+      "threeNightsMinValues": Object {
+        "source": "E",
+        "spec": "§4.4",
+        "value": 2,
+      },
+      "weightLastNight": Object {
+        "source": "E",
+        "spec": "§4.4",
+        "value": 0.5,
+      },
+      "weightThreeNights": Object {
+        "source": "E",
+        "spec": "§4.4",
+        "value": 0.5,
+      },
+    },
+    "state": Object {
+      "betaLife": Object {
+        "source": "E",
+        "spec": "§4.6",
+        "value": 0.2,
+      },
+      "betaLoad": Object {
+        "source": "E",
+        "spec": "§4.6",
+        "value": 0.3,
+      },
+      "p0": Object {
+        "source": "E",
+        "spec": "§4.6",
+        "value": 1,
+      },
+      "phi": Object {
+        "source": "E",
+        "spec": "§4.6",
+        "value": 0.7,
+      },
+      "q": Object {
+        "source": "E",
+        "spec": "§4.6",
+        "value": 1,
+      },
+      "r0": Object {
+        "source": "E",
+        "spec": "§4.6",
+        "value": 0,
+      },
+      "rClamp": Object {
+        "source": "E",
+        "spec": "§4.6",
+        "value": 3,
+      },
+      "resetAfterGapDays": Object {
+        "source": "E",
+        "spec": "§4.6",
+        "value": 3,
+      },
+    },
+    "wellbeing": Object {
+      "minCountForOwnSpread": Object {
+        "source": "E",
+        "spec": "§4.5",
+        "value": 7,
+      },
+      "minSpread": Object {
+        "source": "E",
+        "spec": "§4.5",
+        "value": 0.7,
+      },
+      "pseudoCount": Object {
+        "source": "E",
+        "spec": "§4.5",
+        "value": 7,
+      },
+      "reliability": Object {
+        "source": "E",
+        "spec": "§4.5",
+        "value": 1,
+      },
+      "scaleMidpoint": Object {
+        "source": "E",
+        "spec": "§4.5",
+        "value": 3,
+      },
+      "spreadBeforeMinCount": Object {
+        "source": "E",
+        "spec": "§4.5",
+        "value": 1,
+      },
+    },
+  },
+  "CONFIG_VERSION": "0.1.0",
+}
+`;
