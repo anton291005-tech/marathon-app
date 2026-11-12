@@ -9,7 +9,7 @@ import { RPE_PROMPT_DISMISSED_KEY } from "../../persistence/marathonLocalStorage
 import { safeReadLocalStorageJson, safeWriteLocalStorageJson } from "../../persistence/safeLocalStorage";
 
 type PromptSession = { id: string; type?: string | null; title?: string | null; date?: string | null; dateIso?: string | null };
-type PromptLog = { done?: boolean; skipped?: boolean; rpe?: number } | null | undefined;
+type PromptLog = { done?: boolean; skipped?: boolean; rpe?: number; assignedRun?: unknown } | null | undefined;
 
 /** Wie viele Kalendertage zurück nachgefragt wird (heute und gestern). */
 export const RPE_PROMPT_DAYS = 2;
@@ -34,7 +34,8 @@ export function pickRpePromptSession<S extends PromptSession>(args: {
   for (const session of args.sessions) {
     if (!session || session.type === "rest" || args.dismissed.has(session.id)) continue;
     const log = args.logs[session.id];
-    if (!log || log.done !== true || log.skipped === true || typeof log.rpe === "number") continue;
+    // Erledigt = abgehakt oder ein Apple-Health-Lauf von Hand zugeordnet (setzt `done` nicht, zählt aber als erledigt).
+    if (!log || (log.done !== true && !log.assignedRun) || log.skipped === true || typeof log.rpe === "number") continue;
     const ymd = sessionYmd(session);
     if (!ymd || ymd < earliest || ymd > args.todayYmd) continue;
     if (!best || ymd > best.ymd) best = { session, ymd };

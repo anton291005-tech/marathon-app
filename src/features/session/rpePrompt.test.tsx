@@ -35,6 +35,11 @@ describe("pickRpePromptSession", () => {
     expect(pickRpePromptSession({ sessions: SESSIONS, logs: { ruhe: { done: true } }, todayYmd: TODAY, dismissed: new Set() })).toBeNull();
   });
 
+  test("von Hand zugeordneter Health-Lauf zählt als erledigt", () => {
+    const logs = { heute: { assignedRun: { runId: "r1" } } };
+    expect(pickRpePromptSession({ sessions: SESSIONS, logs, todayYmd: TODAY, dismissed: new Set() })?.id).toBe("heute");
+  });
+
   it("„Später“-Liste wird gespeichert", () => {
     window.localStorage.clear();
     writeRpePromptDismissed(new Set(["a", "b"]));

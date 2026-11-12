@@ -2335,14 +2335,11 @@ export default function AppMain(){
       return next;
     });
   }, []);
-  const rateRpePrompt = useCallback(
-    async (sessionId: string, rpe: number) => {
-      const prev = logs[sessionId] || {};
-      await save({ ...logs, [sessionId]: { ...prev, rpe } }, [sessionId]);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [logs],
-  );
+  // Kein useCallback: `save` liest logsRemoteReady/user aus dem Closure, eine veraltete Kopie würde nur in die Warteschlange schreiben.
+  const rateRpePrompt = async (sessionId: string, rpe: number) => {
+    const prev = logs[sessionId] || {};
+    await save({ ...logs, [sessionId]: { ...prev, rpe } }, [sessionId]);
+  };
 
   // Trainings-Erinnerungen nur für Tage mit offener Einheit (nächste 14 Tage); nach Plan-Ende, an Ruhetagen und für
   // erledigte/ausgelassene Einheiten keine. Neu geplant nur, wenn sich der Zeitplan tatsächlich ändert.
