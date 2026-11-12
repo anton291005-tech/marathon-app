@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { SettingsGroup } from "./SettingsList";
+import { HealthSignalsDiagnosticsPanel } from "./HealthSignalsDiagnosticsPanel";
 import { AI_DATA_USES, CHECKIN_DATA_ITEMS, listAppleHealthDataTypes } from "./dataUsage";
 
 const textStyle: CSSProperties = { fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.5, margin: 0 };
@@ -21,7 +22,10 @@ function Block({ children }: { children: ReactNode }) {
 }
 
 /** Infoseite „Welche Daten MyRace nutzt" — reine Information, keine Einwilligungslogik. */
-export function SettingsDataUsagePage({ showCheckIn = false }: { showCheckIn?: boolean } = {}) {
+export function SettingsDataUsagePage({
+  showCheckIn = false,
+  showDiagnostics = false,
+}: { showCheckIn?: boolean; showDiagnostics?: boolean } = {}) {
   return (
     <>
       <SettingsGroup title="Apple Health" padded>
@@ -66,6 +70,8 @@ export function SettingsDataUsagePage({ showCheckIn = false }: { showCheckIn?: b
       <p style={{ ...textStyle, fontSize: 12, color: "var(--text-muted)", padding: "0 16px" }}>
         Ist der Coach nicht erreichbar, siehst du eine Fehlermeldung.
       </p>
+
+      {showDiagnostics ? <HealthSignalsDiagnosticsPanel /> : null}
     </>
   );
 }

@@ -5529,7 +5529,7 @@ export default function AppMain(){
                 </SettingsGroup>
                 </>
               ) : settingsPage === "dataUsage" ? (
-                <SettingsDataUsagePage showCheckIn={checkInEnabled} />
+                <SettingsDataUsagePage showCheckIn={checkInEnabled} showDiagnostics={checkInEnabled} />
               ) : (
                 <>
                   <SettingsGroup
