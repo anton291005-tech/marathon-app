@@ -5,6 +5,7 @@ import { formatPlannedHrZoneDisplay } from "../trainingIntelligence/zoneBpmDispl
 import { shouldUseIntervalScoring } from "../utils/workoutEvaluationGuards";
 import { compareHR, comparePace } from "../lib/training/compareActualToPlanned";
 import { fmtBikePlannedDuration } from "../utils/bikeDurationParser";
+import { rpeAnchorLabel } from "../features/session/sessionDetailModel";
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
@@ -486,6 +487,8 @@ export function PostWorkoutSummaryCard(props: {
   const logFeelingLabel =
     logFeeling != null ? LOG_FEELING_LABELS[Math.max(1, Math.min(5, logFeeling))] ?? null : null;
   const logNotes = isLogOnly ? summary.logDetails?.notes ?? null : null;
+  const logRpe = isLogOnly ? summary.logDetails?.rpe ?? null : null;
+  const logRpeLabel = logRpe != null ? `Anstrengung ${rpeAnchorLabel(logRpe)}` : null;
   const showCoachBlock = !isLogOnly || !!coachMessage;
 
   return (
@@ -697,7 +700,7 @@ export function PostWorkoutSummaryCard(props: {
             ) : null}
 
             {/* Log-Werte (nur ohne Health-Workout): Gefühl + Notiz */}
-            {logFeelingLabel || logNotes ? (
+            {logFeelingLabel || logNotes || logRpeLabel ? (
               <div
                 data-testid="pws-log-details"
                 style={{
@@ -711,6 +714,9 @@ export function PostWorkoutSummaryCard(props: {
                   gap: 6,
                 }}
               >
+                {logRpeLabel ? (
+                  <div style={{ fontSize: 14, color: "var(--ink)", fontWeight: 800 }}>{logRpeLabel}</div>
+                ) : null}
                 {logFeelingLabel ? (
                   <div style={{ fontSize: 14, color: "var(--ink)", fontWeight: 800 }}>{logFeelingLabel}</div>
                 ) : null}
@@ -721,7 +727,7 @@ export function PostWorkoutSummaryCard(props: {
                 ) : null}
               </div>
             ) : null}
-            {isLogOnly && visibleTileCount === 0 && !logFeelingLabel && !logNotes ? (
+            {isLogOnly && visibleTileCount === 0 && !logFeelingLabel && !logNotes && !logRpeLabel ? (
               <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5, marginBottom: 14 }}>
                 Als erledigt markiert, ohne aufgezeichnete Werte.
               </div>

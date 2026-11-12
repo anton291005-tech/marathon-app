@@ -16,6 +16,9 @@ export type DbSessionLog = {
   completed: boolean | null;
   skipped: boolean | null;
   feeling: number | null;
+  /** Migration 016; fehlt vor dem Anwenden. */
+  rpe?: number | null;
+  duration_min?: number | null;
   actual_distance_meters: number | null;
   notes: string | null;
   assigned_run: unknown | null;
@@ -37,9 +40,35 @@ function metersToActualKmKmString(meters: number | null): string | undefined {
   return String(km);
 }
 
+/** Session-RPE 0–10 als ganze Zahl, sonst `null`. */
+export function normalizeRpe(value: unknown): number | null {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(n) || n < 0 || n > 10) return null;
+  return Math.round(n);
+}
+
+/**
+ * Dauer in Minuten (5–600): zuerst aus dem aktuell zugeordneten Health-Lauf (Sekunden), sonst ein ausdrücklich
+ * eingetragener Wert. `duration_min` aus der Datenbank wird bewusst nicht ins lokale Log geladen: Sonst würde nach
+ * dem Lösen oder Wechseln eines Laufs die alte Dauer erneut gespeichert.
+ */
+export function sessionDurationMin(log: SessionLog): number | null {
+  const raw =
+    typeof log.assignedRun?.duration === "number"
+      ? log.assignedRun.duration / 60
+      : typeof log.durationMin === "number"
+        ? log.durationMin
+        : NaN;
+  if (!Number.isFinite(raw)) return null;
+  const minutes = Math.round(raw);
+  return minutes >= 5 && minutes <= 600 ? minutes : null;
+}
+
 function dbRowToSessionLog(row: DbSessionLog): SessionLog {
   const log: SessionLog = {};
   if (row.feeling != null && Number.isFinite(row.feeling)) log.feeling = row.feeling;
+  const rpe = normalizeRpe(row.rpe);
+  if (rpe != null) log.rpe = rpe;
   const ak = metersToActualKmKmString(row.actual_distance_meters);
   if (ak !== undefined) log.actualKm = ak;
   if (row.notes != null && row.notes !== "") log.notes = row.notes;
@@ -62,6 +91,8 @@ function sessionLogToUpsertPayload(args: { userId: string; sessionId: string; lo
     completed: args.log.done ?? null,
     skipped: args.log.skipped ?? null,
     feeling: args.log.feeling ?? null,
+    rpe: normalizeRpe(args.log.rpe),
+    duration_min: sessionDurationMin(args.log),
     actual_distance_meters: actualKmToMeters(args.log.actualKm),
     notes: args.log.notes ?? null,
     assigned_run: args.log.assignedRun != null ? args.log.assignedRun : null,
@@ -97,8 +128,27 @@ const SESSION_LOGS_ON_CONFLICT = "user_id,session_id" as const;
 /** Postgres: no unique/exclusion constraint for ON CONFLICT (constraint not deployed yet). */
 const PG_NO_MATCHING_UNIQUE_CONSTRAINT = "42P10";
 
+/** PostgREST: Spalte unbekannt (Migration 016 noch nicht angewendet). */
+const PGRST_UNKNOWN_COLUMN = "PGRST204";
+
+function isMissingRpeColumns(error: PostgrestError | null): boolean {
+  if (!error) return false;
+  const text = `${error.message ?? ""} ${error.details ?? ""}`;
+  return (error.code === PGRST_UNKNOWN_COLUMN || error.code === "42703") && /\b(rpe|duration_min)\b/.test(text);
+}
+
+type UpsertRow = ReturnType<typeof sessionLogToUpsertPayload>;
+
+/** Zeile ohne die Spalten aus Migration 016 — damit das Abhaken ohne die Migration weiter funktioniert. */
+function withoutRpeColumns(row: UpsertRow): Omit<UpsertRow, "rpe" | "duration_min"> {
+  const { rpe: _rpe, duration_min: _durationMin, ...rest } = row;
+  void _rpe;
+  void _durationMin;
+  return rest;
+}
+
 async function upsertSessionLogViaSelectInsertUpdate(
-  row: ReturnType<typeof sessionLogToUpsertPayload>,
+  row: UpsertRow | Omit<UpsertRow, "rpe" | "duration_min">,
 ): Promise<{ data: unknown; error: PostgrestError | null }> {
   const { data: existing, error: selectError } = await supabase
     .from("session_logs")
@@ -125,17 +175,17 @@ export async function upsertSessionLogWithResult(
   log: SessionLog,
 ): Promise<SessionLogUpsertResult> {
   const row = sessionLogToUpsertPayload({ userId, sessionId, log });
-  const upsertResult = await supabase
-    .from("session_logs")
-    .upsert(row, { onConflict: SESSION_LOGS_ON_CONFLICT });
+  const write = async (payload: UpsertRow | Omit<UpsertRow, "rpe" | "duration_min">) => {
+    const upsertResult = await supabase.from("session_logs").upsert(payload, { onConflict: SESSION_LOGS_ON_CONFLICT });
+    if (upsertResult.error?.code === PG_NO_MATCHING_UNIQUE_CONSTRAINT) {
+      return upsertSessionLogViaSelectInsertUpdate(payload);
+    }
+    return { data: upsertResult.data as unknown, error: upsertResult.error };
+  };
 
-  let data: unknown = upsertResult.data;
-  let error: PostgrestError | null = upsertResult.error;
-
-  if (error?.code === PG_NO_MATCHING_UNIQUE_CONSTRAINT) {
-    const fallback = await upsertSessionLogViaSelectInsertUpdate(row);
-    data = fallback.data;
-    error = fallback.error;
+  let { data, error } = await write(row);
+  if (isMissingRpeColumns(error)) {
+    ({ data, error } = await write(withoutRpeColumns(row)));
   }
 
   return { data, error, row };

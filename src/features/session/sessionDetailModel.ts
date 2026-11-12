@@ -140,3 +140,25 @@ export function buildHealthRunSuggestion(
   if (run.duration > 0) parts.push(formatClock(run.duration));
   return { line: parts.join(" · "), km };
 }
+
+/** Anker der CR-10-Skala (Foster 2001), deutsche Formulierung laut Readiness-Spec §6.2 (Review-Punkt 6). */
+export const RPE_ANCHORS: Readonly<Record<number, string>> = {
+  0: "gar nicht",
+  1: "sehr leicht",
+  2: "leicht",
+  3: "mäßig",
+  5: "anstrengend",
+  7: "sehr anstrengend",
+  10: "maximal",
+};
+
+/** „6 · zwischen anstrengend und sehr anstrengend“ bzw. „5 · anstrengend“. */
+export function rpeAnchorLabel(value: number): string {
+  const exact = RPE_ANCHORS[value];
+  if (exact) return `${value} · ${exact}`;
+  let below = value;
+  while (below > 0 && !RPE_ANCHORS[below]) below -= 1;
+  let above = value;
+  while (above < 10 && !RPE_ANCHORS[above]) above += 1;
+  return `${value} · zwischen ${RPE_ANCHORS[below]} und ${RPE_ANCHORS[above]}`;
+}

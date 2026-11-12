@@ -2,13 +2,22 @@ import { useState } from "react";
 import { Heart, X } from "lucide-react";
 import { ICON_STROKE } from "../../ui/icons";
 import { formatKmDe } from "../../ui/formatDe";
-import { kmInputToLogValue, normalizeFeeling, stepKmInput, type HealthRunSuggestion } from "./sessionDetailModel";
+import {
+  RPE_ANCHORS,
+  kmInputToLogValue,
+  normalizeFeeling,
+  rpeAnchorLabel,
+  stepKmInput,
+  type HealthRunSuggestion,
+} from "./sessionDetailModel";
 
 export type SessionEntryValues = {
   /** Wert fürs Log (`"10.4"`); `undefined`, wenn die Einheit kein Distanzfeld hat. */
   actualKm: string | undefined;
   /** 1–5; 0 = nicht angegeben (wie bisher im Log). */
   feeling: number;
+  /** Anstrengung 0–10 (Session-RPE); `null` = nicht angegeben bzw. „Später“. */
+  rpe: number | null;
   notes: string;
   /** Der vorgeschlagene Health-Lauf soll mit diesem Eintrag verknüpft werden. */
   adoptSuggestion: boolean;
@@ -21,6 +30,8 @@ type SessionEntrySheetProps = {
   /** Startwert des Distanzfelds; `null` = kein Distanzfeld (Einheit ohne Distanz oder Health-Lauf verknüpft). */
   initialKm: number | null;
   initialFeeling: number | null;
+  /** Bereits gespeicherte Anstrengung 0–10, sonst `null`. */
+  initialRpe?: number | null;
   initialNotes: string;
   /** Nur gesetzt, wenn ein erkannter, noch nicht zugeordneter Health-Lauf existiert. */
   suggestion: HealthRunSuggestion | null;
@@ -30,12 +41,15 @@ type SessionEntrySheetProps = {
   onReopen?: () => void;
 };
 
+const RPE_VALUES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
 /** Bottom-Sheet „Einheit eintragen" (docs/design-system/mockups/Einheit_Eintragen.dc.html). */
 export function SessionEntrySheet({
   mode,
   subtitle,
   initialKm,
   initialFeeling,
+  initialRpe = null,
   initialNotes,
   suggestion,
   onSave,
@@ -44,6 +58,8 @@ export function SessionEntrySheet({
 }: SessionEntrySheetProps) {
   const [km, setKm] = useState(initialKm != null ? formatKmDe(initialKm) : "");
   const [feeling, setFeeling] = useState(normalizeFeeling(initialFeeling) ?? 0);
+  const [rpe, setRpe] = useState<number | null>(initialRpe);
+  const [rpeLater, setRpeLater] = useState(false);
   const [notes, setNotes] = useState(initialNotes);
   const [adopted, setAdopted] = useState(false);
   const hasKmField = initialKm != null;
@@ -103,8 +119,56 @@ export function SessionEntrySheet({
             </div>
           ) : null}
 
+          {rpeLater ? (
+            <button type="button" className="mr-rpe__resume" onClick={() => setRpeLater(false)}>
+              Anstrengung doch angeben
+            </button>
+          ) : (
+            <fieldset className="mr-feeling mr-rpe" data-testid="entry-rpe">
+              <legend className="mr-entry-label">Wie anstrengend war die Einheit?</legend>
+              {initialRpe == null ? (
+                // „Später“ nur, solange noch nichts gespeichert ist: Beim Bearbeiten würde es sonst einen Wert löschen.
+                <button
+                  type="button"
+                  className="mr-rpe__later"
+                  onClick={() => {
+                    setRpe(null);
+                    setRpeLater(true);
+                  }}
+                >
+                  Später
+                </button>
+              ) : null}
+              <div className="mr-rpe__grid">
+                {RPE_VALUES.map((n) => (
+                  <button
+                    type="button"
+                    key={n}
+                    className={rpe === n ? "mr-feeling__btn mr-rpe__btn is-on" : "mr-feeling__btn mr-rpe__btn"}
+                    aria-label={`Anstrengung ${n} von 10${RPE_ANCHORS[n] ? `, ${RPE_ANCHORS[n]}` : ""}`}
+                    aria-pressed={rpe === n}
+                    onClick={() => setRpe((current) => (current === n ? null : n))}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <div className="mr-feeling__scale" aria-live="polite">
+                {rpe != null ? (
+                  <span className="mr-rpe__chosen">{rpeAnchorLabel(rpe)}</span>
+                ) : (
+                  <>
+                    <span>0 gar nicht</span>
+                    <span>5 anstrengend</span>
+                    <span>10 maximal</span>
+                  </>
+                )}
+              </div>
+            </fieldset>
+          )}
+
           <fieldset className="mr-feeling">
-            <legend className="mr-entry-label">Wie hat es sich angefühlt?</legend>
+            <legend className="mr-entry-label">Und wie hat sie sich angefühlt?</legend>
             <div className="mr-feeling__grid">
               {[1, 2, 3, 4, 5].map((n) => (
                 <button
@@ -139,7 +203,9 @@ export function SessionEntrySheet({
           <button
             type="button"
             className="mr-btn mr-btn--primary mr-btn--block"
-            onClick={() => onSave({ actualKm: hasKmField ? kmInputToLogValue(km) : undefined, feeling, notes, adoptSuggestion: adopted })}
+            onClick={() =>
+              onSave({ actualKm: hasKmField ? kmInputToLogValue(km) : undefined, feeling, rpe, notes, adoptSuggestion: adopted })
+            }
           >
             Speichern
           </button>
