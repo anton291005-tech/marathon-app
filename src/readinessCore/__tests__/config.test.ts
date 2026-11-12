@@ -90,11 +90,13 @@ describe("readinessCore/config", () => {
     expect(problems).toEqual([]);
   });
 
-  it("Stufen-Grenzen sind absteigend und um 0 symmetrisch für normal", () => {
-    const t = CONFIG.output.levelThresholds.value;
-    expect(t.above).toBeGreaterThan(t.normal);
-    expect(t.normal).toBeGreaterThan(t.below);
-    expect(t.above).toBe(-t.normal);
+  it("Stufen-Grenzen: Normalband positiv, low liegt unter dem Band", () => {
+    expect(CONFIG.output.normalBand.value).toBeGreaterThan(0);
+    expect(CONFIG.output.lowBelow.value).toBeLessThan(-CONFIG.output.normalBand.value);
+  });
+
+  it("Schlafgelegenheit: kurz < eingeschränkt", () => {
+    expect(CONFIG.calendar.sleepOpportunityShortHours.value).toBeLessThan(CONFIG.calendar.sleepOpportunityLimitedHours.value);
   });
 
   it("HRV kann nie positiv zählen und nie allein eine Stufe kippen (R7)", () => {

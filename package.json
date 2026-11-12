@@ -284,7 +284,7 @@
             {
               "object": "Math",
               "property": "random",
-              "message": "Der Plan-Kern ist deterministisch (I20): kein Math.random."
+              "message": "Der Readiness-Kern ist deterministisch: kein Math.random."
             }
           ]
         }

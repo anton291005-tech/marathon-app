@@ -10,7 +10,7 @@
  * Der Kern wird wie der Plan-Kern mit `target: es5` geprüft: keine Iteration über Set/Map, keine Spreads darüber.
  */
 
-import type { ActionCode, Level } from "./types";
+import type { ActionCode } from "./types";
 
 export type ParamSource = "L" | "P" | "E";
 
@@ -34,7 +34,7 @@ export const CONFIG = {
     heartRateBpm: p<Range>({ min: 30, max: 110 }, "E", "§3"),
     sdnnMs: p<Range>({ min: 5, max: 300 }, "E", "§3"),
     respiratoryRate: p<Range>({ min: 6, max: 30 }, "E", "§3"),
-    rpe: p<Range>({ min: 0, max: 10 }, "L", "§3"),
+    rpe: p<Range>({ min: 0, max: 10 }, "E", "§3"),
     durationMin: p<Range>({ min: 5, max: 600 }, "E", "§3"),
   },
 
@@ -63,7 +63,7 @@ export const CONFIG = {
     /** Totband für SDNN aus Hintergrundmessungen (doppelt so breit wegen ~29 % Messfehler). */
     hrvDeadbandSdnn: p(1.0, "E", "§4.3"),
     /** Totband für rMSSD aus durchgehender Nachtmessung (später). */
-    hrvDeadbandRmssd: p(0.5, "P", "§4.3"),
+    hrvDeadbandRmssd: p(0.5, "E", "§4.3"),
     /** z_HRV wird auf [hrvFloor, 0] begrenzt: nie positiv, nie mehr als −1. */
     hrvFloor: p(-1.0, "E", "§4.3"),
     reliability: {
@@ -78,7 +78,7 @@ export const CONFIG = {
     weightLastNight: p(0.5, "E", "§4.4"),
     weightThreeNights: p(0.5, "E", "§4.4"),
     threeNightsMinValues: p(2, "E", "§4.4"),
-    deadband: p(0.5, "P", "§4.4"),
+    deadband: p(0.5, "E", "§4.4"),
     absoluteFloorHours: p(6, "E", "§4.4"),
     floorLastNightZ: p(-1, "E", "§4.4"),
     floorThreeNightsZ: p(-2, "E", "§4.4"),
@@ -110,20 +110,20 @@ export const CONFIG = {
 
   /** §4.7 Ausgabe: Stufe, Datenbasis, Index. */
   output: {
-    /** Untergrenzen von R je Stufe; `low` liegt darunter. */
-    levelThresholds: p<Readonly<Record<Exclude<Level, "low">, number>>>(
-      { above: 0.5, normal: -0.5, below: -1.25 },
-      "E",
-      "§4.7",
-    ),
+    /** ±0,5 als kleinste relevante Änderung: R ≥ +0,5 → above, R ≤ −0,5 → below. */
+    normalBand: p(0.5, "P", "§4.7"),
+    /** R < −1,25 → low. */
+    lowBelow: p(-1.25, "E", "§4.7"),
     hysteresis: p(0.1, "E", "§4.7"),
     nearBoundary: p(0.15, "E", "§4.7"),
     getToKnowDays: p(14, "E", "§4.7"),
     highBasisMinCheckIns: p(14, "E", "§4.7"),
+    highBasisMinBlocks: p(2, "E", "§4.7"),
     noBasisAfterDays: p(3, "E", "§4.7"),
     indexCenter: p(50, "E", "§4.7"),
     indexPerR: p(20, "E", "§4.7"),
     indexRoundTo: p(5, "E", "§4.7"),
+    indexRange: p<Range>({ min: 0, max: 100 }, "E", "§4.7"),
   },
 
   /** §5 Trainingslast (AU = RPE × Minuten). */
@@ -183,6 +183,9 @@ export const CONFIG = {
     windowEnd: p("22:00", "E", "§7.2"),
     windowExtraMin: p(45, "E", "§7.2"),
     lateTrainingAfter: p("21:00", "E", "§7.2"),
+    /** Schlafgelegenheit: unter 6 h → 2 Punkte / ungeeignet; 6–7 h → 1 Punkt / eingeschränkt. */
+    sleepOpportunityShortHours: p(6, "E", "§7.4"),
+    sleepOpportunityLimitedHours: p(7, "E", "§7.4"),
     clusterTrigramJaccard: p(0.6, "E", "§7.3"),
     maxQuestionsPerDay: p(1, "E", "§7.3"),
     maxQuestionsPerWeek: p(3, "E", "§7.3"),
@@ -223,11 +226,13 @@ export const CONFIG = {
     persistentWindowDays: p(10, "E", "§8.4"),
     persistentMinDays: p(7, "E", "§8.4"),
     weekProposalsMax: p(2, "L", "§8.4"),
+    /** „Zwei Wochen in Folge mindestens ein Q gestrichen“ → Hinweis „Plan passt schlecht zum Alltag“. */
+    misfitWeeksInRow: p(2, "E", "§8.4"),
     minDaysBetweenLongRuns: p(6, "E", "§8.6"),
     longRunHardMinutes: p(90, "E", "§8.3"),
     /** Reihenfolge, in der ein Vorschlag bei Regelverstoß nachrückt (immer weniger Belastung). */
     fallbackOrder: p<readonly ActionCode[]>(["H2", "H3"], "E", "§8.1"),
-    lastQualityBeforeRaceDays: p({ marathon: 4, other: 3 }, "P", "§8.7"),
+    lastQualityBeforeRaceDays: p({ marathon: 4, other: 3 }, "E", "§8.7"),
   },
 
   /** §9 Sicherheit. */
@@ -238,6 +243,10 @@ export const CONFIG = {
     respiratoryClearlyElevated: p(1.5, "L", "§9.1"),
     temperatureElevated: p(0.5, "L", "§9.1"),
     temperatureClearlyElevated: p(0.8, "L", "§9.1"),
+    /** Regel A: Herzfrequenz „deutlich erhöht“ in so vielen Nächten in Folge. */
+    signalsNightsInRow: p(2, "E", "§9.1"),
+    /** Nur Hals/Nase: harte Einheiten heute und morgen → H3. */
+    coldNoHardDays: p(2, "P", "§9.2"),
     coldEasyMaxMinutes: p(30, "E", "§9.2"),
     returnTestMinutes: p<Range>({ min: 10, max: 20 }, "E", "§9.2"),
     returnEasyDays: p(2, "E", "§9.2"),
@@ -253,10 +262,11 @@ export const CONFIG = {
   learning: {
     insightMinDaysEach: p(10, "E", "§11"),
     insightWindowDays: p(120, "E", "§11"),
-    insightBootstrapBlockDays: p(3, "L", "§11"),
+    insightBootstrapBlockDays: p(3, "E", "§11"),
     insightInterval: p(0.9, "E", "§11"),
     insightMinEffectSpreads: p(0.5, "E", "§11"),
-    insightFdr: p(0.1, "L", "§11"),
+    insightMaxTargets: p(4, "E", "§11"),
+    insightFdr: p(0.1, "E", "§11"),
     insightShrinkN: p(15, "E", "§11"),
     insightExpiryDays: p(90, "E", "§11"),
     weekdayPatternWeeks: p(8, "E", "§11"),

@@ -159,13 +159,18 @@ export type SafetyFlag =
   | "persistent_below"
   | "see_doctor";
 
-/** §8 Vorschlag für eine Einheit oder die Woche; wird erst nach Bestätigung im UI angewendet. */
+/** Art der Änderung (Plan „Architekturentscheidung“): H1 reduce, H2 move, H3 soften, H4 rest. */
+export type ProposalKind = "move" | "reduce" | "soften" | "rest";
+
+/** §8 Vorschlag für eine Einheit oder die Woche; eine Beschreibung, angewendet erst nach Bestätigung im UI. */
 export type Proposal = {
-  readonly action: ActionCode;
+  readonly kind: ProposalKind;
+  /** Handlungsstufe nach §8.2 (H1–H4); H0 erzeugt keinen Vorschlag. */
+  readonly action: Exclude<ActionCode, "H0">;
   readonly scope: "today" | "week";
   readonly sessionId?: string;
-  /** Bei H2: Zieltag. */
-  readonly toDay?: Ymd;
+  /** Bei `move`: Zieltag. */
+  readonly targetYmd?: Ymd;
   /** Bei H1: Faktor auf Umfang bzw. Dauer. */
   readonly factor?: number;
   readonly reasons: readonly ReasonCode[];

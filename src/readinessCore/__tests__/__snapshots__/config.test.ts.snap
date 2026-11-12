@@ -43,7 +43,7 @@ Object {
         ],
       },
       "lastQualityBeforeRaceDays": Object {
-        "source": "P",
+        "source": "E",
         "spec": "§8.7",
         "value": Object {
           "marathon": 4,
@@ -69,6 +69,11 @@ Object {
         "source": "E",
         "spec": "§8.6",
         "value": 6,
+      },
+      "misfitWeeksInRow": Object {
+        "source": "E",
+        "spec": "§8.4",
+        "value": 2,
       },
       "moveWindowDays": Object {
         "source": "E",
@@ -152,7 +157,7 @@ Object {
         "value": 2,
       },
       "hrvDeadbandRmssd": Object {
-        "source": "P",
+        "source": "E",
         "spec": "§4.3",
         "value": 0.5,
       },
@@ -332,6 +337,16 @@ Object {
         "spec": "§7.2",
         "value": 60,
       },
+      "sleepOpportunityLimitedHours": Object {
+        "source": "E",
+        "spec": "§7.4",
+        "value": 7,
+      },
+      "sleepOpportunityShortHours": Object {
+        "source": "E",
+        "spec": "§7.4",
+        "value": 6,
+      },
       "suitabilityHorizonDays": Object {
         "source": "E",
         "spec": "§7.5",
@@ -377,7 +392,7 @@ Object {
     },
     "learning": Object {
       "insightBootstrapBlockDays": Object {
-        "source": "L",
+        "source": "E",
         "spec": "§11",
         "value": 3,
       },
@@ -387,7 +402,7 @@ Object {
         "value": 90,
       },
       "insightFdr": Object {
-        "source": "L",
+        "source": "E",
         "spec": "§11",
         "value": 0.1,
       },
@@ -395,6 +410,11 @@ Object {
         "source": "E",
         "spec": "§11",
         "value": 0.9,
+      },
+      "insightMaxTargets": Object {
+        "source": "E",
+        "spec": "§11",
+        "value": 4,
       },
       "insightMinDaysEach": Object {
         "source": "E",
@@ -544,6 +564,11 @@ Object {
         "spec": "§4.7",
         "value": 14,
       },
+      "highBasisMinBlocks": Object {
+        "source": "E",
+        "spec": "§4.7",
+        "value": 2,
+      },
       "highBasisMinCheckIns": Object {
         "source": "E",
         "spec": "§4.7",
@@ -564,19 +589,23 @@ Object {
         "spec": "§4.7",
         "value": 20,
       },
+      "indexRange": Object {
+        "source": "E",
+        "spec": "§4.7",
+        "value": Object {
+          "max": 100,
+          "min": 0,
+        },
+      },
       "indexRoundTo": Object {
         "source": "E",
         "spec": "§4.7",
         "value": 5,
       },
-      "levelThresholds": Object {
+      "lowBelow": Object {
         "source": "E",
         "spec": "§4.7",
-        "value": Object {
-          "above": 0.5,
-          "below": -1.25,
-          "normal": -0.5,
-        },
+        "value": -1.25,
       },
       "nearBoundary": Object {
         "source": "E",
@@ -587,6 +616,11 @@ Object {
         "source": "E",
         "spec": "§4.7",
         "value": 3,
+      },
+      "normalBand": Object {
+        "source": "P",
+        "spec": "§4.7",
+        "value": 0.5,
       },
     },
     "plausibility": Object {
@@ -615,7 +649,7 @@ Object {
         },
       },
       "rpe": Object {
-        "source": "L",
+        "source": "E",
         "spec": "§3",
         "value": Object {
           "max": 10,
@@ -644,6 +678,11 @@ Object {
         "source": "E",
         "spec": "§9.2",
         "value": 30,
+      },
+      "coldNoHardDays": Object {
+        "source": "P",
+        "spec": "§9.2",
+        "value": 2,
       },
       "heartRateClearlyElevated": Object {
         "source": "L",
@@ -714,6 +753,11 @@ Object {
           "min": 10,
         },
       },
+      "signalsNightsInRow": Object {
+        "source": "E",
+        "spec": "§9.1",
+        "value": 2,
+      },
       "temperatureClearlyElevated": Object {
         "source": "L",
         "spec": "§9.1",
@@ -732,7 +776,7 @@ Object {
         "value": 6,
       },
       "deadband": Object {
-        "source": "P",
+        "source": "E",
         "spec": "§4.4",
         "value": 0.5,
       },
