@@ -128,6 +128,8 @@ import AiCoachPanel from "./components/ai/AiCoachPanel";
 import { PostWorkoutSummaryCard } from "./components/PostWorkoutSummaryCard";
 import { SessionDetailSheet } from "./features/session/SessionDetailSheet";
 import { AiConsentSheet } from "./features/aiConsent/AiConsentSheet";
+import { RpePromptCard } from "./features/session/RpePromptCard";
+import { pickRpePromptSession, readRpePromptDismissed, writeRpePromptDismissed } from "./features/session/rpePrompt";
 import { useAiConsent } from "./features/aiConsent/useAiConsent";
 import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
 import { buildHealthRunSuggestion, buildSessionFlow, estimateDurationMin, parseKmInput } from "./features/session/sessionDetailModel";
@@ -316,7 +318,7 @@ import {
   getAppNowEpochMs,
   getAppTodayYmd,
 } from "./core/time/timeSystem";
-import { sessionDate } from "./core/time/sessionDate";
+import { sessionDate, sessionYmd } from "./core/time/sessionDate";
 import {
   devMarkOncePerFrame,
   monitorMetricSource,
@@ -2317,6 +2319,31 @@ export default function AppMain(){
   const displayPlan = useDisplayPlanFromTrainingState(trainingPlanV2, aiPlanPatches);
   const ALL_SESSIONS = displayPlan.flatMap((week) => getWeekSessionList(week));
 
+  // Nachfrage „Wie anstrengend war …?“ (Readiness Schritt 2): einmal je Einheit, die ohne Anstrengung abgehakt wurde.
+  const [rpePromptDismissed, setRpePromptDismissed] = useState<Set<string>>(() => readRpePromptDismissed());
+  const rpePromptTodayYmd = getAppTodayYmd();
+  const rpePromptSession = useMemo(
+    () => pickRpePromptSession({ sessions: ALL_SESSIONS, logs, todayYmd: rpePromptTodayYmd, dismissed: rpePromptDismissed }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [displayPlan, logs, rpePromptTodayYmd, rpePromptDismissed],
+  );
+  const dismissRpePrompt = useCallback((sessionId: string) => {
+    setRpePromptDismissed((prev) => {
+      const next = new Set(prev);
+      next.add(sessionId);
+      writeRpePromptDismissed(next);
+      return next;
+    });
+  }, []);
+  const rateRpePrompt = useCallback(
+    async (sessionId: string, rpe: number) => {
+      const prev = logs[sessionId] || {};
+      await save({ ...logs, [sessionId]: { ...prev, rpe } }, [sessionId]);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [logs],
+  );
+
   // Trainings-Erinnerungen nur für Tage mit offener Einheit (nächste 14 Tage); nach Plan-Ende, an Ruhetagen und für
   // erledigte/ausgelassene Einheiten keine. Neu geplant nur, wenn sich der Zeitplan tatsächlich ändert.
   const trainingReminders = useMemo(
@@ -4227,6 +4254,14 @@ export default function AppMain(){
 
           {devMarkOncePerFrame("home:recovery_score", uiRecoveryScore0_100, { view: "home" })}
           {productionMarkOncePerFrame("home:recovery_score", uiRecoveryScore0_100, { view: "home" })}
+          {rpePromptSession ? (
+            <RpePromptCard
+              title={typeof rpePromptSession.title === "string" && rpePromptSession.title.trim() ? rpePromptSession.title : "Training"}
+              when={sessionYmd(rpePromptSession) === rpePromptTodayYmd ? "heute" : "gestern"}
+              onRate={(rpe) => void rateRpePrompt(rpePromptSession.id, rpe)}
+              onDismiss={() => dismissRpePrompt(rpePromptSession.id)}
+            />
+          ) : null}
           <PrepCard
             data-tour="recovery-card"
             doneSessions={doneSess}

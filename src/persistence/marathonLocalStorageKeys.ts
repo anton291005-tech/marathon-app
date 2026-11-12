@@ -23,6 +23,8 @@ export const PREP_RECAPS_CACHE_KEY = "prepRecaps";
 export const PLAN_OWNED_PREFERENCES_KEY = "marathonPlanOwnedPreferences";
 /** Nutzer-IDs, die auf diesem Gerät die KI-Einwilligung abgelehnt haben (→ nicht bei jedem Start fragen). */
 export const AI_CONSENT_DECLINED_KEY = "marathonAiConsentDeclined";
+/** Session-IDs, bei denen die Nachfrage „Wie anstrengend war …?“ mit „Später“ beendet wurde. */
+export const RPE_PROMPT_DISMISSED_KEY = "marathonRpePromptDismissed";
 
 /**
  * Read-only catalog for docs / debug (order is not normative).
@@ -43,4 +45,5 @@ export const KNOWN_MY_RACE_STORAGE_KEYS: readonly string[] = [
   PREP_RECAPS_CACHE_KEY,
   PLAN_OWNED_PREFERENCES_KEY,
   AI_CONSENT_DECLINED_KEY,
+  RPE_PROMPT_DISMISSED_KEY,
 ];

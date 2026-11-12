@@ -125,8 +125,9 @@ export function SessionEntrySheet({
             </button>
           ) : (
             <fieldset className="mr-feeling mr-rpe" data-testid="entry-rpe">
-              <div className="mr-rpe__head">
-                <legend className="mr-entry-label">Wie anstrengend war die Einheit?</legend>
+              <legend className="mr-entry-label">Wie anstrengend war die Einheit?</legend>
+              {initialRpe == null ? (
+                // „Später“ nur, solange noch nichts gespeichert ist: Beim Bearbeiten würde es sonst einen Wert löschen.
                 <button
                   type="button"
                   className="mr-rpe__later"
@@ -137,7 +138,7 @@ export function SessionEntrySheet({
                 >
                   Später
                 </button>
-              </div>
+              ) : null}
               <div className="mr-rpe__grid">
                 {RPE_VALUES.map((n) => (
                   <button

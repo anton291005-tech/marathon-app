@@ -261,8 +261,8 @@ describe("SessionEntrySheet – Anstrengung 0–10 (Readiness Spec §6.2)", () =
 
   test("„Später“ blendet die Frage aus und speichert ohne RPE; zurückholbar", () => {
     const onSave = jest.fn();
-    render(entry({ onSave, initialRpe: 5 }));
-    expect(screen.getByRole("button", { name: /^Anstrengung 5 von 10/ })).toHaveAttribute("aria-pressed", "true");
+    render(entry({ onSave }));
+    fireEvent.click(screen.getByRole("button", { name: /^Anstrengung 5 von 10/ }));
     fireEvent.click(screen.getByRole("button", { name: "Später" }));
     expect(screen.queryByTestId("entry-rpe")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
@@ -271,8 +271,9 @@ describe("SessionEntrySheet – Anstrengung 0–10 (Readiness Spec §6.2)", () =
     expect(screen.getByTestId("entry-rpe")).toBeInTheDocument();
   });
 
-  test("Bearbeiten: gespeicherte RPE ist vorausgewählt", () => {
+  test("Bearbeiten: gespeicherte RPE ist vorausgewählt, „Später“ fehlt (würde den Wert löschen)", () => {
     render(entry({ mode: "edit", initialRpe: 3 }));
     expect(screen.getByRole("button", { name: /^Anstrengung 3 von 10, mäßig$/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: "Später" })).toBeNull();
   });
 });

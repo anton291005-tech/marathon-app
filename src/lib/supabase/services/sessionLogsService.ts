@@ -47,13 +47,17 @@ export function normalizeRpe(value: unknown): number | null {
   return Math.round(n);
 }
 
-/** Dauer in Minuten (5–600): eingetragen, sonst aus dem zugeordneten Health-Lauf (Sekunden). */
+/**
+ * Dauer in Minuten (5–600): zuerst aus dem aktuell zugeordneten Health-Lauf (Sekunden), sonst ein ausdrücklich
+ * eingetragener Wert. `duration_min` aus der Datenbank wird bewusst nicht ins lokale Log geladen: Sonst würde nach
+ * dem Lösen oder Wechseln eines Laufs die alte Dauer erneut gespeichert.
+ */
 export function sessionDurationMin(log: SessionLog): number | null {
   const raw =
-    typeof log.durationMin === "number"
-      ? log.durationMin
-      : typeof log.assignedRun?.duration === "number"
-        ? log.assignedRun.duration / 60
+    typeof log.assignedRun?.duration === "number"
+      ? log.assignedRun.duration / 60
+      : typeof log.durationMin === "number"
+        ? log.durationMin
         : NaN;
   if (!Number.isFinite(raw)) return null;
   const minutes = Math.round(raw);
@@ -65,7 +69,6 @@ function dbRowToSessionLog(row: DbSessionLog): SessionLog {
   if (row.feeling != null && Number.isFinite(row.feeling)) log.feeling = row.feeling;
   const rpe = normalizeRpe(row.rpe);
   if (rpe != null) log.rpe = rpe;
-  if (typeof row.duration_min === "number" && Number.isFinite(row.duration_min)) log.durationMin = row.duration_min;
   const ak = metersToActualKmKmString(row.actual_distance_meters);
   if (ak !== undefined) log.actualKm = ak;
   if (row.notes != null && row.notes !== "") log.notes = row.notes;

@@ -28,10 +28,15 @@ describe("normalizeRpe", () => {
 });
 
 describe("sessionDurationMin", () => {
-  it("nimmt die eingetragene Dauer, sonst den Health-Lauf (Sekunden)", () => {
-    expect(sessionDurationMin({ durationMin: 48 })).toBe(48);
+  it("nimmt zuerst den zugeordneten Health-Lauf (Sekunden), sonst eine eingetragene Dauer", () => {
     expect(sessionDurationMin({ assignedRun: { runId: "r", startDate: "x", duration: 3000, distanceKm: 10 } })).toBe(50);
+    expect(sessionDurationMin({ durationMin: 48 })).toBe(48);
+    expect(sessionDurationMin({ durationMin: 48, assignedRun: { runId: "r", startDate: "x", duration: 3000, distanceKm: 10 } })).toBe(50);
     expect(sessionDurationMin({})).toBeNull();
+  });
+
+  it("gelöster Lauf: keine alte Dauer mehr (duration_min wird nicht ins lokale Log geladen)", () => {
+    expect(sessionDurationMin({ done: true })).toBeNull();
   });
 
   it("verwirft Werte außerhalb 5–600 min", () => {
