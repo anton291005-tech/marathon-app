@@ -137,6 +137,19 @@ describe("CheckInSheet", () => {
     expect(onSave.mock.calls[0][0].illness).toEqual({ symptoms: ["fever"] });
   });
 
+  test("abgewählter Chip bleibt beim erneuten Öffnen abgewählt", () => {
+    const { onSave } = renderSheet({
+      initial: { ...FULL, pain: null, illness: null },
+      carriedPain: { area: "knee", severity: 3, alteredGait: false },
+      carriedIllness: { symptoms: ["fever"] },
+      askSleepHours: true,
+    });
+    expect(screen.getByRole("button", { name: "Etwas zwickt" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Fühle mich krank" })).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(screen.getByRole("button", { name: "15 Minuten mehr" }));
+    expect(onSave.mock.calls[0][0]).toMatchObject({ pain: null, illness: null });
+  });
+
   test("ohne Zustimmung erst der Zustimmungs-Screen, ohne Speichern", async () => {
     const { onSave, onGrantConsent, onClose } = renderSheet({ needsConsent: true });
     expect(screen.getByText("Deine Angaben speichern?")).toBeInTheDocument();

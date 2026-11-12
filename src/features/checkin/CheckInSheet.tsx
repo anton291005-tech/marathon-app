@@ -60,12 +60,13 @@ export function CheckInSheet({
   const [consentFailed, setConsentFailed] = useState(false);
   const [entry, setEntry] = useState<CheckInEntry>(() => ({
     ...(initial ?? emptyCheckIn(day)),
-    pain: initial?.pain ?? carriedPain,
-    illness: initial?.illness ?? carriedIllness,
+    // Gestern nur übernehmen, solange es heute keinen Eintrag gibt — sonst käme ein heute abgewählter Chip zurück.
+    pain: initial ? initial.pain : carriedPain,
+    illness: initial ? initial.illness : carriedIllness,
   }));
   const [step, setStep] = useState(startComplete ? CHECKIN_QUESTIONS.length : 0);
-  const [painOpen, setPainOpen] = useState(!!(initial?.pain ?? carriedPain));
-  const [illnessOpen, setIllnessOpen] = useState(!!(initial?.illness ?? carriedIllness));
+  const [painOpen, setPainOpen] = useState(!!(initial ? initial.pain : carriedPain));
+  const [illnessOpen, setIllnessOpen] = useState(!!(initial ? initial.illness : carriedIllness));
   const done = step >= CHECKIN_QUESTIONS.length;
 
   const update = (patch: Partial<CheckInEntry>) => {
@@ -223,7 +224,7 @@ export function CheckInSheet({
                     setPainOpen(!painOpen);
                   }}
                 >
-                  {carriedPain && !initial?.pain ? "Zwickt es noch?" : "Etwas zwickt"}
+                  {carriedPain && !initial ? "Zwickt es noch?" : "Etwas zwickt"}
                 </button>
                 <button
                   type="button"
