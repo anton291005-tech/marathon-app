@@ -51,6 +51,17 @@ Keine Code-Änderung. Auf dem iPhone 13 mit Antons Uhr prüfen und in diesem Dok
 
 - **Abnahme:** Ergebnis als Abschnitt „Gerätebefund“ hier eingetragen. Liefert das Plugin keine Herzfrequenz im Schlaffenster, nutzt Schritt 4 den Tages-Ruhepuls (`r_B = 1,5`, Spec §4.3); die Spec bleibt gültig.
 
+#### Gerätebefund (Code-Teil, 2026-11-12; Punkte 1 und 3 offen für Anton)
+
+Geprüft an den Typen und am Swift-Code von `@capgo/capacitor-health` 8.4.2 (`dist/esm/definitions.d.ts`, `ios/Sources/HealthPlugin/Health.swift`):
+
+- **Herzfrequenz-Samples mit Zeitstempel:** ja, über `readSamples({ dataType: "heartRate", startDate, endDate, limit })`. Standard-`limit` ist 100 → für das Schlaffenster ausdrücklich höher setzen (z. B. 2000). Damit ist die Schlaf-Herzfrequenz (§4.3, `r_B = 1`) machbar, sofern die Uhr nachts misst (Punkt 1).
+- **HRV:** nur `heartRateVariabilitySDNN` als Einzelwerte mit Zeitstempel. **Keine Schlag-zu-Schlag-Serien** (`HKHeartbeatSeriesType` nicht unterstützt) → rMSSD ist mit diesem Plugin nicht möglich; Schritt 18 „rMSSD“ bräuchte ein eigenes natives Plugin.
+- **Handgelenkstemperatur im Schlaf** (`appleSleepingWristTemperature`): **nicht** unterstützt; nur `bodyTemperature`/`basalBodyTemperature` (meist manuell eingetragen). §9.1 läuft damit vorerst ohne Temperatur (Regel A über Atemfrequenz, Regel B nicht erfüllbar).
+- **`workoutEffortScore`:** nicht gemappt; `Workout` liefert nur Typ, Dauer, Energie, Strecke, Quelle und `metadata` als Zeichenketten. Die Vorbelegung aus §6.2 entfällt vorerst.
+- **Schlafphasen:** ja (`sleepState`: inBed/asleep/awake/rem/deep/light), damit lässt sich das Schlaffenster bestimmen.
+- **Offen (Anton, iPhone 13 + Uhr):** Punkt 1 (Anzahl SDNN-Werte pro Nacht in drei Nächten) und Punkt 3 (Series 12).
+
 ### 1 · `feat/readiness-core-skeleton` — **MVP**, S (1 Tag)
 
 Gerüst ohne Logik, nicht verdrahtet.

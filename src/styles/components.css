@@ -387,6 +387,16 @@ textarea.mr-field { height: auto; min-height: 92px; padding: var(--space-3) 14px
 .mr-feeling__btn.is-on { background: var(--ink); color: var(--surface-0); font-weight: 700; }
 .mr-feeling__btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
 .mr-feeling__scale { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; line-height: 16px; color: var(--ink-3); }
+/* Anstrengung 0–10 (Readiness Spec §6.2): 11 Stufen in einer Reihe, kleiner als die Gefühl-Knöpfe */
+.mr-rpe { position: relative; }
+.mr-rpe > .mr-rpe__later { position: absolute; top: 0; right: 0; }
+.mr-rpe-prompt { padding: var(--space-4, 16px); }
+.mr-rpe-prompt .mr-entry-label { padding-right: 64px; }
+.mr-rpe__grid { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 4px; }
+.mr-rpe__btn { height: 40px; border-radius: 10px; font-size: 15px; }
+.mr-rpe__chosen { color: var(--ink-2); font-weight: 600; }
+.mr-rpe__later, .mr-rpe__resume { margin: 0; padding: 4px 0; border: 0; background: none; color: var(--ink-3); font: 500 14px/18px var(--font-text, inherit); cursor: pointer; }
+.mr-rpe__resume { align-self: flex-start; color: var(--accent-text, var(--ink-2)); }
 .mr-entry-notes { box-sizing: border-box; width: 100%; margin: 0; padding: 14px var(--space-4); border: 0; border-radius: var(--radius-m); background: var(--surface-2); color: var(--ink); font: 400 16px/22px var(--font-sans); resize: none; outline: none; }
 .mr-entry-notes:focus-visible { box-shadow: var(--shadow-focus); }
 

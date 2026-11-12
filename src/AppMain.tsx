@@ -136,6 +136,8 @@ import { carryOverPain, shouldOfferCheckIn } from "./features/checkin/checkInSta
 import { useDailyCheckIn } from "./features/checkin/useDailyCheckIn";
 import { isCheckInEnabled } from "./features/settings/settingsFlags";
 import { CHECKIN_SKIPPED_DAY_KEY } from "./persistence/marathonLocalStorageKeys";
+import { RpePromptCard } from "./features/session/RpePromptCard";
+import { pickRpePromptSession, readRpePromptDismissed, writeRpePromptDismissed } from "./features/session/rpePrompt";
 import { useAiConsent } from "./features/aiConsent/useAiConsent";
 import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
 import { buildHealthRunSuggestion, buildSessionFlow, estimateDurationMin, parseKmInput } from "./features/session/sessionDetailModel";
@@ -2293,6 +2295,7 @@ export default function AppMain(){
       ...(nextLogs[modal.id] || {}),
       ...(values.actualKm !== undefined ? { actualKm: values.actualKm } : {}),
       feeling: values.feeling,
+      rpe: values.rpe ?? undefined,
       notes: values.notes,
       done: true,
       skipped: false,
@@ -2350,6 +2353,27 @@ export default function AppMain(){
     dailyCheckIn.consent !== "unavailable" &&
     checkInSkippedDay !== checkInTodayYmd &&
     shouldOfferCheckIn({ today: dailyCheckIn.today, hour: getAppNow().getHours(), sessionDoneToday: checkInSessionDoneToday });
+  // Nachfrage „Wie anstrengend war …?“ (Readiness Schritt 2): einmal je Einheit, die ohne Anstrengung abgehakt wurde.
+  const [rpePromptDismissed, setRpePromptDismissed] = useState<Set<string>>(() => readRpePromptDismissed());
+  const rpePromptTodayYmd = getAppTodayYmd();
+  const rpePromptSession = useMemo(
+    () => pickRpePromptSession({ sessions: ALL_SESSIONS, logs, todayYmd: rpePromptTodayYmd, dismissed: rpePromptDismissed }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [displayPlan, logs, rpePromptTodayYmd, rpePromptDismissed],
+  );
+  const dismissRpePrompt = useCallback((sessionId: string) => {
+    setRpePromptDismissed((prev) => {
+      const next = new Set(prev);
+      next.add(sessionId);
+      writeRpePromptDismissed(next);
+      return next;
+    });
+  }, []);
+  // Kein useCallback: `save` liest logsRemoteReady/user aus dem Closure, eine veraltete Kopie würde nur in die Warteschlange schreiben.
+  const rateRpePrompt = async (sessionId: string, rpe: number) => {
+    const prev = logs[sessionId] || {};
+    await save({ ...logs, [sessionId]: { ...prev, rpe } }, [sessionId]);
+  };
 
   // Trainings-Erinnerungen nur für Tage mit offener Einheit (nächste 14 Tage); nach Plan-Ende, an Ruhetagen und für
   // erledigte/ausgelassene Einheiten keine. Neu geplant nur, wenn sich der Zeitplan tatsächlich ändert.
@@ -4270,6 +4294,14 @@ export default function AppMain(){
               }}
             />
           ) : null}
+          {rpePromptSession ? (
+            <RpePromptCard
+              title={typeof rpePromptSession.title === "string" && rpePromptSession.title.trim() ? rpePromptSession.title : "Training"}
+              when={sessionYmd(rpePromptSession) === rpePromptTodayYmd ? "heute" : "gestern"}
+              onRate={(rpe) => void rateRpePrompt(rpePromptSession.id, rpe)}
+              onDismiss={() => dismissRpePrompt(rpePromptSession.id)}
+            />
+          ) : null}
           <PrepCard
             data-tour="recovery-card"
             doneSessions={doneSess}
@@ -5630,6 +5662,7 @@ export default function AppMain(){
           subtitle={[modal.title, modalPlannedKm != null ? `Plan ${formatKmDe(modalPlannedKm)} km` : null].filter(Boolean).join(" · ")}
           initialKm={modalEntryInitialKm}
           initialFeeling={modalLog?.feeling ?? null}
+          initialRpe={typeof modalLog?.rpe === "number" ? modalLog.rpe : null}
           initialNotes={typeof modalLog?.notes === "string" ? modalLog.notes : ""}
           suggestion={modalSuggestedRun ? buildHealthRunSuggestion(modalSuggestedRun, appNow) : null}
           onSave={saveModalEntry}

@@ -231,6 +231,63 @@
             }
           ]
         }
+      },
+      {
+        "files": [
+          "src/readinessCore/**/*.ts"
+        ],
+        "excludedFiles": [
+          "src/readinessCore/**/__tests__/**",
+          "src/readinessCore/**/__fixtures__/**",
+          "src/readinessCore/**/*.test.ts"
+        ],
+        "rules": {
+          "no-restricted-imports": [
+            "error",
+            {
+              "patterns": [
+                {
+                  "group": [
+                    "**/auxiliary/**",
+                    "**/auxiliary/*"
+                  ],
+                  "message": "SSOT-facing code must not import quarantined experimental modules under src/auxiliary."
+                },
+                {
+                  "group": [
+                    "/[a-zA-Z@_]*",
+                    "../**",
+                    "!../planCore",
+                    "!../planCore/**"
+                  ],
+                  "message": "src/readinessCore darf nur Dateien aus demselben Ordner (./…) und aus src/planCore importieren: kein React, kein Node, kein Supabase, nichts aus anderen src-Ordnern."
+                }
+              ]
+            }
+          ],
+          "no-restricted-globals": [
+            "error",
+            "window",
+            "document",
+            "localStorage",
+            "sessionStorage",
+            "process",
+            "require",
+            "fetch",
+            "Buffer",
+            "setTimeout",
+            "setInterval",
+            "console"
+          ],
+          "no-restricted-properties": [
+            "error",
+            {
+              "object": "Math",
+              "property": "random",
+              "message": "Der Readiness-Kern ist deterministisch: kein Math.random."
+            }
+          ]
+        }
       }
     ]
   },

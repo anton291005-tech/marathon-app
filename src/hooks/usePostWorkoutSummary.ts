@@ -119,7 +119,7 @@ export type PostWorkoutSummary = {
    */
   source?: "health" | "log";
   /** Nur bei `source: "log"`: Gefühl (1–5) und Notiz aus dem Log. */
-  logDetails?: { feeling: number | null; notes: string | null } | null;
+  logDetails?: { feeling: number | null; rpe?: number | null; notes: string | null } | null;
 };
 
 export function isEligibleWorkout(type: string): boolean {
@@ -434,7 +434,11 @@ export function buildLogOnlyConclusion(
     ai: null,
     maxHeartRateBpm: maxHeartRateBpm ?? null,
     source: "log",
-    logDetails: { feeling: feeling != null ? Math.round(feeling) : null, notes },
+    logDetails: {
+      feeling: feeling != null ? Math.round(feeling) : null,
+      rpe: typeof log?.rpe === "number" && log.rpe >= 0 && log.rpe <= 10 ? Math.round(log.rpe) : null,
+      notes,
+    },
   };
 }
 

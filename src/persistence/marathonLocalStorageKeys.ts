@@ -27,6 +27,8 @@ export const AI_CONSENT_DECLINED_KEY = "marathonAiConsentDeclined";
 export const DAILY_CHECKINS_CACHE_KEY = "marathonDailyCheckins";
 /** Kalendertag, an dem der Check-in mit „Heute nicht“ ausgeblendet wurde. */
 export const CHECKIN_SKIPPED_DAY_KEY = "marathonCheckinSkippedDay";
+/** Session-IDs, bei denen die Nachfrage „Wie anstrengend war …?“ mit „Später“ beendet wurde. */
+export const RPE_PROMPT_DISMISSED_KEY = "marathonRpePromptDismissed";
 
 /**
  * Read-only catalog for docs / debug (order is not normative).
@@ -49,4 +51,5 @@ export const KNOWN_MY_RACE_STORAGE_KEYS: readonly string[] = [
   AI_CONSENT_DECLINED_KEY,
   DAILY_CHECKINS_CACHE_KEY,
   CHECKIN_SKIPPED_DAY_KEY,
+  RPE_PROMPT_DISMISSED_KEY,
 ];

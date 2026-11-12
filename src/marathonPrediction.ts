@@ -67,6 +67,10 @@ export type PlanWeek = {
 
 export type SessionLog = {
   feeling?: number;
+  /** Anstrengung nach der Einheit, Session-RPE 0–10 (Readiness Spec §6.2); fehlt = nicht angegeben. */
+  rpe?: number;
+  /** Dauer in Minuten (5–600); sonst aus `assignedRun.duration` abgeleitet (sessionLogsService). */
+  durationMin?: number;
   actualKm?: string;
   notes?: string;
   done?: boolean;
