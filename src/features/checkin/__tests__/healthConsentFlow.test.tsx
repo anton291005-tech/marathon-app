@@ -1,5 +1,5 @@
 // Gesundheits-Zustimmung v2: Reihenfolge (App-Abfrage vor Apple-Dialog), Anstrengung nur mit Zustimmung, Widerruf.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import {
   afterHealthConsentGranted,
   connectAppleHealthWithConsent,
@@ -178,7 +178,7 @@ describe("Zustimmungs-Sheet", () => {
     expect(screen.getByTestId("health-consent-text").textContent).toBe(HEALTH_CONSENT_TEXT);
     expect(screen.getByText("Gesundheitsdaten speichern?")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Zustimmen"));
-    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(onGrant).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByText("Nicht jetzt"));
     expect(onDecline).toHaveBeenCalledTimes(1);
