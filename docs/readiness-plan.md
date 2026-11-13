@@ -115,18 +115,26 @@ Morgen-Check-in (Spec §6.1) mit Gesundheits-Chips, ohne Wirkung auf den Plan.
 
 ### G1 · `feat/garmin-via-apple-health` — **MVP**, M (2 Tage), nach Hotfix Apple-Health-Verbindung, vor Schritt 4
 
-Garmin-Nutzer bekommen ihre Nachtdaten über Apple Health: Garmin Connect schreibt (nach Freischaltung in der Garmin-App) u. a. Schlaf, Herzfrequenz und Trainings nach Apple Health, aber **keine HRV**. Ziel: Diese Nutzer landen in Datenstufe **a2** (Spec §12) statt in b, ohne eigene Garmin-Schnittstelle.
+**Ausgangslage (13.11.2026):** Im Code gibt es keine Garmin-Anbindung; Strava liefert nur Aktivitäten, keine Nachtwerte. Garmin-Nutzer fallen heute praktisch auf Datenstufe c. Garmin Connect schreibt auf dem iPhone laut Garmin-Anleitung u. a. Herzfrequenz, Schlaf (Sleep Analysis), Aktivenergie, Ruheenergie, Schritte und Trainings nach Apple Health – **nicht** HRV, Body Battery, Stress und Handgelenktemperatur. Ziel: Garmin-Nutzer landen in Datenstufe **a2** (Spec §12) statt in c, ohne eigene Garmin-Schnittstelle.
+
+Einordnung: **vor Schritt 4**, weil Schritt 4 die Nachtwerte aggregiert und dabei nicht auf die Apple Watch als Quelle festgelegt sein darf.
 
 - **Voraussetzung:** Hotfix Apple-Health-Verbindung ist auf `main` (eigener Branch von `origin/main`: `activeEnergyBurned` aus der Anfrageliste, Recovery-Abruf liest `calories`, Schutztest gegen die Plugin-Typliste). Ohne ihn scheitert die HealthKit-Anfrage komplett.
-- **Quellen-unabhängig lesen:** kein Filter auf Apple Watch oder ein Bundle. Jedes Sample behält `sourceName` (und, wo vorhanden, Gerät) bis zur Aggregation. Welche Typen Garmin tatsächlich schreibt (Schlafphasen? Ruhepuls? Atemfrequenz?), auf einem Garmin-Testgerät prüfen – nicht aus Doku übernehmen.
-- **Eine Quelle pro Nacht und Typ, nicht mischen:** Liefern mehrere Quellen dieselbe Nacht (z. B. Apple Watch + Garmin, oder Uhr + iPhone-Schlafplan), wird je Typ eine Quelle gewählt: beim Schlaf die mit den meisten Schlafminuten im Hauptschlaffenster, bei Gleichstand die mit Gerät „Watch“/Uhr vor iPhone; Schlaf-HF und HRV aus der Quelle mit den meisten Werten im gewählten Schlaffenster. Keine Mittelwerte über Quellen (sonst doppelte Schlafminuten und vermischte Grundlinien). Die gewählte Quelle steht je Nacht in `signal_meta` (z. B. `sources.sleep`), damit ein Quellwechsel als neue Grundlinie erkennbar ist (Spec §4.2, gleiche Regel wie SDNN↔RMSSD).
-- **Onboarding-Hinweis:** Beim Verbinden von Apple Health und in Einstellungen → Verbindungen ein Satz für Garmin-Nutzer: „Garmin? In Garmin Connect die Verbindung zu Apple Health einschalten, dann kommen Schlaf und Puls auch hier an.“ Genauen Menüpfad in Garmin Connect auf dem Gerät prüfen. Hinweis nur zeigen, wenn keine Uhr-Nachtdaten ankommen oder eine Garmin-Quelle erkannt ist.
-- **Diagnose-Panel:** zeigt je Typ die Quellen mit Anzahl Werte (z. B. „Schlaf: Garmin Connect 7, iPhone 2“) und welche Quelle je Nacht gewählt würde.
-- **Dateien:** `src/recovery/aggregateRecoverySamples.ts` (Quellenwahl je Nacht als reine Funktion, z. B. `pickNightSource`), `src/recovery/aggregateRecoverySamples.ts`-Typ `MinimalHealthSample` um `sourceName?` erweitern, `src/appleHealth/appleHealthService.ts` (Quelle durchreichen), `src/appleHealth/healthSignalsDiagnostics.ts`, Hinweistext in den Verbinden-Stellen.
+- **Quellen-unabhängig lesen:** kein Filter auf Apple-Watch-Quellen bei Schlaf, Herzfrequenz, Ruhepuls und Trainings. Jedes Sample behält `sourceName` (und, wo vorhanden, Gerät) bis zur Aggregation.
+- **Eine Quelle pro Nacht, nicht mischen:** Liefern mehrere Quellen dieselbe Nacht (z. B. Apple Watch + Garmin, oder Uhr + iPhone-Schlafplan), wird **eine** Quelle gewählt – Priorität: die mit den meisten Schlafsamples in dieser Nacht. Schlaf-HF (und HRV, falls vorhanden) kommen aus derselben Quelle. Keine Mittelwerte über Quellen (sonst doppelte Schlafminuten und vermischte Grundlinien). Die gewählte Quelle steht je Nacht in `signal_meta` (z. B. `sources.sleep`), damit ein Quellwechsel als neue Grundlinie erkennbar ist (Spec §4.2, gleiche Regel wie SDNN↔RMSSD).
+- **Ruhepuls-Rückfall:** Schreibt Garmin keinen eigenen Ruhepuls, wird er aus der niedrigsten Schlaf-HF der Nacht abgeleitet – erst nach dem Garmin-Gerätebefund festlegen (offene Frage unten).
+- **Datenstufe a2** (Spec §12): Schlaf + Herzfrequenz im Schlaffenster + Check-in → Blöcke A, B (nur Schlaf-HF), C. Text: „Deine Uhr liefert Schlaf und Puls, aber keine HRV. Die Einschätzung ist trotzdem vollwertig.“
+- **Onboarding/Verbindungen:** Wird kein Apple-Watch-Gerät gefunden, Hinweis mit Anleitung „Garmin Connect → Einstellungen → Verbundene Apps → Apple Health → alle Kategorien an“.
+- **Diagnose-Panel:** Quellen je Typ mit Anzahl Werte ausgeben (z. B. „Schlaf: Garmin Connect 7, iPhone 2“) und welche Quelle je Nacht gewählt würde – damit ein Freund mit Garmin den Befund schicken kann.
+- **Dateien:** `src/recovery/aggregateRecoverySamples.ts` (Quellenwahl je Nacht als reine Funktion, z. B. `pickNightSource`; `MinimalHealthSample` um `sourceName?` erweitern), `src/appleHealth/appleHealthService.ts` (Quelle durchreichen), `src/appleHealth/healthSignalsDiagnostics.ts`, Hinweistext an den Verbinden-Stellen.
 - **Tests:** Nacht mit Apple Watch + Garmin → genau eine Quelle, keine doppelten Schlafminuten; Garmin-only-Nacht → Schlaf + Schlaf-HF, kein HRV-Nachtwert, Datenstufe a2; Quellwechsel zwischen Nächten → Kennzeichnung in `signal_meta`; Nacht mit nur iPhone-Schlafplan („im Bett“) zählt nicht als Uhr-Nacht.
-- **Abnahme:** Mit einem Garmin-Testgerät (Freundes-Test) stehen drei Nächte mit Schlaf und Schlaf-HF und der Quelle „Garmin Connect“ im Diagnose-Panel; mit Antons Apple Watch ändert sich nichts.
-- **Production / Entscheidung für Anton:** Die heutige Aggregation summiert Schlafsegmente aller Quellen – bei mehreren Quellen werden Schlafminuten heute schon doppelt gezählt. Soll die Quellenwahl auch die alten Felder (`sleepHours`, `hrvMs`) korrigieren (ändert die heutige Recovery-Zahl für Mehrquellen-Nutzer) oder nur die neuen Nachtfelder aus Schritt 4 speisen?
+- **Test und Abnahme:** ein Freund mit Garmin, Befund-Panel über TestFlight, 7 Nächte. Abnahme: Schlaf und Schlaf-HF pro Nacht vorhanden, Datenstufe a2 wird erkannt; mit Antons Apple Watch ändert sich nichts.
+- **Production / Entscheidung für Anton:** Die heutige Aggregation summiert Schlafsegmente aller Quellen – bei mehreren Quellen werden Schlafminuten schon heute doppelt gezählt. Soll die Quellenwahl auch die alten Felder (`sleepHours`, `hrvMs`) korrigieren (ändert die heutige Recovery-Zahl für Mehrquellen-Nutzer) oder nur die neuen Nachtfelder aus Schritt 4 speisen?
 - **Migration:** keine (Quelle in `signal_meta`, jsonb).
+- **Offene Fragen für den Test mit einem Garmin-Freund:**
+  - Schreibt Garmin Connect Schlaf mit Phasen oder nur Dauer?
+  - Schreibt Garmin einen eigenen Ruhepuls-Wert oder nur Herzfrequenz-Samples?
+  - Kommen Trainings mit Durchschnittspuls an?
 
 ### 4 · `feat/readiness-night-signals` — **MVP**, M (2–3 Tage), nach 0
 
@@ -253,9 +261,18 @@ Löschen: `src/recovery/recoveryScoringEngine.ts`, `latentRecoveryState.ts`, `ho
 
 Einsichten nach Spec §11: `src/readinessCore/insights.ts` (Block-Bootstrap mit festem Seed, Benjamini-Hochberg, Schrumpfung, Störgrößen), `src/features/readiness/InsightsList.tsx`, Texte mit Pflichtbausteinen (R20). Abnahme an synthetischen Reihen mit bekanntem und ohne Effekt (Fehlalarmquote ≤ 10 %).
 
+### G2 · Garmin Health API — später, nach dem Freundes-Test
+
+Garmin Connect Developer Program (Health API): liefert HRV, Body Battery, Stress, Schlaf, SpO2, Atmung und VO2max serverseitig per Push. Nur nach Antrag und Freigabe, für Firmen gedacht. Neue Anträge sind seit Frühjahr 2026 pausiert, ohne Termin für die Wiedereröffnung (Stand Sept. 2026).
+
+- **Voraussetzung:** Programm nimmt wieder Anträge an; MyRace hat eine geeignete Rechtsform und Datenschutzunterlagen.
+- **Bringt:** HRV (Nacht-RMSSD) für Garmin-Nutzer → Datenstufe a statt a2.
+- **Alternative prüfen:** Aggregator mit eigener Garmin-Freigabe (z. B. Terra – kostenpflichtig; Open Wearables – selbst zu hosten), Kosten gegen Nutzerzahl abwägen.
+- **Bis dahin:** developer.garmin.com regelmäßig auf Wiedereröffnung prüfen; Garmin läuft über Apple Health (G1).
+
 ### 18 · Weitere „später“-Punkte (eigene kleine Branches)
 
-- **Garmin Health API** (direkte Anbindung, inkl. HRV und Body Battery): erst, wenn Garmin wieder Anträge für das Developer-Programm annimmt (laut Anton derzeit pausiert). Bis dahin läuft Garmin über Apple Health (Schritt G1, Datenstufe a2).
+- **Garmin Health API:** siehe G2 (Programm pausiert neue Anträge; bis dahin Garmin über Apple Health, G1).
 - **rMSSD:** Nacht-HRV aus Schlag-zu-Schlag-Serien oder Series-12-Werten (abhängig von Schritt 0); Totband dann 0,5.
 - **KI-Vorschlag für Etiketten** mit Einwilligung (`/api/ai`-Unterroute, Vorschlag wirkt erst nach Bestätigung).
 - **Individuelle Sensitivitäten** ab 90 Tagen (Spec §11).
@@ -284,6 +301,7 @@ Einsichten nach Spec §11: `src/readinessCore/insights.ts` (Block-Bootstrap mit 
 | 12 | `feat/readiness-calendar-engine` | ja | M (3 T) | 7, 8, 10 | – | nein (Schalter) |
 | 13 | `feat/readiness-ui` | ja | L (3–4 T) | 10, 11 | – | nein (Schalter) |
 | 14 | `chore/readiness-cutover` | ja | S (½ T) | 12, 13 | – | ja, Umschalten |
+| G2 | Garmin Health API | später | M–L | Freundes-Test, Garmin-Freigabe | – | ja |
 | 15 | `feat/readiness-coach-context` | später | M | 14 | – | ja |
 | 16 | `chore/remove-legacy-recovery` | später | M | 14 + 3 Wochen | – | nein |
 | 17 | `feat/readiness-insights` | später | L | 14 + Daten | – | ja |

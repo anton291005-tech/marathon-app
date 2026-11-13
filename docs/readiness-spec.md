@@ -694,7 +694,7 @@ Beispiele zulässiger Einsichten: Schlaf nach Terminart · Befinden am Tag nach 
 | Stufe | Vorhanden | Blöcke | Datenbasis (typisch) | Was die App sagt |
 |---|---|---|---|---|
 | **a** Uhr mit Nachtdaten | Schlaf, Schlaf-HF, HRV, Check-in, Plan, Kalender | A, B, C + Erwartung | hoch (nach 14 Tagen) | volle Karte |
-| **a2** Uhr mit Nacht, ohne HRV | Schlaf, Schlaf-HF, Check-in, Plan, Kalender (typisch Garmin über Apple Health; Garmin schreibt keine HRV nach Apple Health) | A, B (nur HF, wie b), C | mittel bis hoch | volle Karte; einmaliger Hinweis „HRV liefert deine Uhr nicht an Apple Health – die Einschätzung nutzt Schlaf und Puls“ |
+| **a2** Uhr mit Nacht, ohne HRV | Schlaf, Schlaf-HF, Check-in, Plan, Kalender (typisch Garmin über Apple Health; Garmin schreibt keine HRV nach Apple Health) | A, B (nur HF, wie b), C | mittel bis hoch | volle Karte; einmaliger Hinweis „Deine Uhr liefert Schlaf und Puls, aber keine HRV. Die Einschätzung ist trotzdem vollwertig.“ |
 | **b** Uhr ohne Nacht | Ruhepuls (Tag), Workouts mit Puls, Check-in | A, B (nur HF, `r_B = 1,5`), C aus Check-in | mittel bis hoch | volle Karte, einmaliger Hinweis zu Nachtdaten |
 | **c** ohne Uhr | Check-in, Plan, Kalender | A, C aus Check-in | mittel | volle Karte mit dem Satz „Körpersignale sehe ich ohne Uhr nicht“ |
 | **d** keine Eingaben | Plan, evtl. Kalender | keine | niedrig → keine | Tag 1–3: „Einschätzung nur aus Training und Kalender“; danach keine Stufe. Kalender-Vorausschau (§7.5, §8.4) funktioniert weiter, weil sie keine Stufe braucht |
@@ -703,7 +703,7 @@ In jeder Stufe funktionieren: Wochenvorschau aus dem Kalender, Sicherheits-Chips
 
 In Stufe b ist HRV nicht verwendbar: Ohne Schlaffenster gibt es keinen Nacht-Median, und Tageswerte sind nicht vergleichbar.
 
-**Quellen-Unabhängigkeit (Stufen a, a2, b):** Die Stufe hängt an den vorhandenen Signalen, nicht am Hersteller. MyRace liest Apple Health ohne Filter auf eine bestimmte Uhr. Liefern mehrere Quellen dieselbe Nacht, wird je Nacht und Typ **eine** Quelle gewählt (Schlaf: meiste Schlafminuten im Hauptschlaffenster; Schlaf-HF/HRV: meiste Werte im gewählten Fenster) – nie gemischt oder gemittelt. Ein Quellwechsel gilt wie ein Wechsel SDNN↔RMSSD als neue Grundlinie (§4.2). Umsetzung: Plan Schritt G1 und Schritt 4.
+**Quellen-Unabhängigkeit (Stufen a, a2, b):** Die Stufe hängt an den vorhandenen Signalen, nicht am Hersteller. MyRace liest Apple Health ohne Filter auf eine bestimmte Uhr. Liefern mehrere Quellen dieselbe Nacht, wird je Nacht **eine** Quelle gewählt (Priorität: die mit den meisten Schlafsamples; Schlaf-HF und HRV aus derselben Quelle) – nie gemischt oder gemittelt. Schreibt die Quelle keinen eigenen Ruhepuls (z. B. Garmin), wird er aus der niedrigsten Schlaf-HF abgeleitet – Festlegung nach dem Garmin-Gerätebefund. Ein Quellwechsel gilt wie ein Wechsel SDNN↔RMSSD als neue Grundlinie (§4.2). Umsetzung: Plan Schritt G1 und Schritt 4.
 
 ## 13. Validierung
 
