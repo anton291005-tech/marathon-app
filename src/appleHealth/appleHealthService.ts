@@ -19,7 +19,11 @@ import type { RecoveryDailyRow } from "../recovery/recoveryTypes";
 import { loadHealthAnchors, saveHealthAnchors } from "./healthAnchorStore";
 import { appleHealthMissingCyclingDistance } from "./appleHealthPermissions";
 import { isWatchSignalsEnabled } from "../features/settings/settingsFlags";
-import { isHealthDataProcessingAllowed } from "../health/healthConsentStore";
+import {
+  isHealthDataProcessingAllowed,
+  requestHealthConsentDecision,
+  waitForHealthConsentResolved,
+} from "../health/healthConsentStore";
 import { MyRaceHealthSignals } from "./healthSignalsPlugin";
 import { classifyWorkoutType } from "./workoutTypeClassifier";
 
@@ -28,8 +32,9 @@ export const APPLE_HEALTH_READ_TYPES = [
   "distance",
   "distanceCycling",
   "heartRate",
+  // „calories“ ist im Plugin die Aktivenergie (HKQuantityTypeIdentifier.activeEnergyBurned). Ein eigener Eintrag
+  // „activeEnergyBurned“ kennt @capgo/capacitor-health 8.4.2 nicht – der ganze Request schlug daran fehl.
   "calories",
-  "activeEnergyBurned",
   "sleep",
   "heartRateVariability",
   "restingHeartRate",
@@ -247,7 +252,16 @@ export async function healthSignalsRequestReadAuthorization(): Promise<void> {
   }
 }
 
+/** Wie lange die HealthKit-Anfrage beim Start höchstens auf die geladene Gesundheits-Zustimmung wartet. */
+export const HEALTH_CONSENT_WAIT_MS = 15000;
+
 export async function healthKitRequestReadAuthorization(): Promise<void> {
+  // Mit Uhr-Signale-Flag: erst die Gesundheits-Zustimmung in der App (Sheet), dann der Apple-Dialog – auch wenn die
+  // Anfrage aus dem Kaltstart kommt, bevor die Zustimmung geladen ist. Ohne Zustimmung: Umfang ohne Erholungs-Typen.
+  if (isWatchSignalsEnabled()) {
+    await waitForHealthConsentResolved(HEALTH_CONSENT_WAIT_MS);
+    await requestHealthConsentDecision();
+  }
   const { Health } = await import("@capgo/capacitor-health");
   const result = await Health.requestAuthorization({ read: appleHealthReadTypesInScope() });
   console.log("[appleHealthService] requestAuthorization", result);
@@ -688,7 +702,8 @@ export async function healthKitFetchRecoveryDailyLast120Days(now: Date = getAppN
 
     const types = [
       "sleep",
-      "activeEnergyBurned",
+      // Aktivenergie: im Plugin „calories“; weiter unten als „activeEnergyBurned“ an die Aggregation gereicht.
+      "calories",
       "heartRateVariability",
       "restingHeartRate",
       "respiratoryRate",
@@ -708,7 +723,7 @@ export async function healthKitFetchRecoveryDailyLast120Days(now: Date = getAppN
         });
         for (const s of res.samples || []) {
           all.push({
-            dataType: s.dataType,
+            dataType: s.dataType === "calories" ? "activeEnergyBurned" : s.dataType,
             value: s.value,
             unit: s.unit,
             startDate: s.startDate,

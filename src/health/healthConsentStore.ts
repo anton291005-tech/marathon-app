@@ -55,6 +55,25 @@ export function isHealthDataProcessingAllowed(watchSignals: boolean = isWatchSig
   return !watchSignals || state.status === "granted";
 }
 
+/** Wartet, bis die Zustimmung geladen ist (Status ≠ `loading`), höchstens `timeoutMs`. */
+export function waitForHealthConsentResolved(timeoutMs: number): Promise<void> {
+  if (state.status !== "loading") return Promise.resolve();
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      unsubscribe();
+      resolve();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    const unsubscribe = subscribeHealthConsent(() => {
+      if (state.status !== "loading") finish();
+    });
+  });
+}
+
 /**
  * Öffnet die Zustimmungs-Abfrage und wartet auf die Entscheidung. Bereits zugestimmt → sofort `true`,
  * abgelehnt/nicht ladbar → sofort `false` (keine erneute Abfrage).
