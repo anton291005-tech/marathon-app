@@ -49,9 +49,32 @@ Was wegfällt bzw. automatisch wird:
 
 ## 4. Offene Fragen (auf dem iPhone klären)
 
-1. Welche Apple Watch trägt Anton (Series 8+ → Handgelenktemperatur)?
-2. Schreibt seine Uhr unter watchOS 27 schon `heartRateVariabilityRMSSD`, oder nur Series 12 / Ultra 4?
-3. Wie viele SDNN-Werte pro Nacht kommen an (Schritt 0, Teil 1)?
+1. Welche Apple Watch trägt Anton (Series 8+ → Handgelenktemperatur)? → **Apple Watch Ultra (1. Generation, `Watch6,18`)**, Handgelenktemperatur kommt an (§5).
+2. Schreibt seine Uhr unter watchOS 27 schon `heartRateVariabilityRMSSD`, oder nur Series 12 / Ultra 4? → **Nein.** Der Typ existiert unter iOS 27.2 und wurde angefragt, aber in 7 Tagen kam kein Wert (§5).
+3. Wie viele SDNN-Werte pro Nacht kommen an (Schritt 0, Teil 1)? → **Rund 6 SDNN-Werte pro Kalendertag** (über den ganzen Tag, nicht nur nachts). Wie viele davon im Schlaffenster liegen, zeigt die Diagnose noch nicht (§5, offen).
+
+## 5. Gerätebefund Ultra (13.11.2026)
+
+iPhone 13 mit iOS 27.2, Apple Watch Ultra 1 (`Watch6,18`, Quelle „Apple Watch von Anton“). Zwei Runden mit dem Diagnose-Panel (Einstellungen → Datenschutz & Daten → „Uhr-Signale prüfen“, nur mit Flag). Werte: letzte 7 Tage (07.–13.11.), Trainings: 14 Tage.
+
+**Vorweg – Runde 1 war verfälscht:** SDNN und SpO2 meldeten „Authorization not determined“. Ursache: Die Anfrage des bestehenden Plugins scheiterte komplett am unbekannten Typnamen `activeEnergyBurned` (seit Juni, auch in Production). Behoben auf `fix/apple-health-read-types`; Runde 2 unten ist nach dem Fix. Alle 18 abgefragten Typen stehen jetzt auf „angefragt“. Ob iOS Lesen erlaubt oder verweigert hat, verrät HealthKit nicht; „0 Werte“ heißt deshalb „keine Daten oder verweigert“ – Anton hat im Dialog alle Typen eingeschaltet.
+
+| Signal | Ergebnis (7 Tage) | Bedeutung |
+|---|---|---|
+| **Gerät** | Apple Watch Ultra (1. Gen), `Watch6,18` | – |
+| **HRV RMSSD** (`heartRateVariabilityRMSSD`) | Typ vorhanden (iOS 27.2), **0 Werte** | Ultra 1 schreibt kein RMSSD (passt zu „sicher Series 12 / Ultra 4“) |
+| **HRV SDNN** | **40 Werte, 6 je Tag** (11-07 bis 11-12 je 6, 11-13 bis 13:40 UTC: 4); über den Tag verteilt, z. B. 06:52, 12:34, 13:39 Ortszeit; Ausreißer 150,9 ms am frühen Morgen | Nachtwert nur aus den Werten im Schlaffenster – deren Zahl je Nacht ist noch nicht ausgewertet |
+| **Handgelenktemperatur Schlaf** | **7 Werte, 1 je Nacht** (11-07: 2), **Absolutwert** 35,5–35,9 °C; Zeitstempel = Schlafbeginn (~23:05–23:45 Ortszeit) | Keine Abweichung: Grundlinie und Delta rechnet MyRace selbst. Tageszuordnung über den Aufwachtag (`endDate`), nicht über den Schlafbeginn – sonst landet der Wert auf dem Vorabend |
+| **Blutsauerstoff SpO2** | 156 Werte, 16–27 je Tag; Wert als **Anteil 0–1** (0,95–0,98), nicht Prozent | Nutzung offen (Checkliste „vor Production nutzen oder entfernen“) |
+| **VO2max** | 1 Wert (07.11., 57,7 mL/(kg·min)) | Kein Training an diesem Tag in HealthKit – der Wert entstand ohne gestartetes Workout |
+| **Anstrengung je Training** | 1 Training in 14 Tagen (31.10., Laufen, 52 min, 10,04 km): **selbst = 6, geschätzt = 6**, beide über **`related`** gefunden | `predicateForWorkoutEffortSamplesRelated` funktioniert; der Zeitfenster-Rückfall wurde nicht gebraucht. In 7 Tagen 0 Effort-Werte, weil kein Training im Fenster lag |
+| **Pulserholung 1 min** | 0 Werte | Nicht aussagekräftig: kein Training in den 7 Tagen (Pulserholung entsteht nach Workouts) |
+| **Trainings** | bestehendes Plugin und HealthKit direkt: dasselbe eine Training | Kein Lesefehler; Runde-1-Frage „VO2max ohne Training“ geklärt |
+
+**Offen für einen späteren Lauf** (nicht blockierend):
+- SDNN-Werte **im Schlaffenster** je Nacht zählen (Diagnose um das Schlaffenster erweitern). Davon hängt die Mindestzahl für den Nachtwert in Schritt 4 ab (Plan: „< 3 Werte → kein Nachtwert“ – bei 6 Werten pro Tag ist fraglich, ob nachts 3 zusammenkommen).
+- Pulserholung und Effort nach einem Training in den letzten 7 Tagen erneut prüfen.
+
 
 ## TODO: Vor Merge / Wiederaufnahme Schritt 3
 
