@@ -53,6 +53,14 @@ Was wegfällt bzw. automatisch wird:
 2. Schreibt seine Uhr unter watchOS 27 schon `heartRateVariabilityRMSSD`, oder nur Series 12 / Ultra 4?
 3. Wie viele SDNN-Werte pro Nacht kommen an (Schritt 0, Teil 1)?
 
+## TODO: Vor Merge / Wiederaufnahme Schritt 3
+
+Stand 13.11.2026, Branch `feat/health-native-signals`. Der Entwurf von Schritt 3 (Session-RPE aus der Uhr) liegt getrennt auf `wip/health-signals-step3` (3fb3e03) und ist nicht in diesem Branch.
+
+- [ ] **Vollständiger Testlauf vor dem Merge:** `CI=true npm test` über das ganze Repo (bisher nur die berührten Ordner), dazu `CI=false npm run build`.
+- [ ] **Datenschutzerklärung ergänzen:** muss HRV (SDNN und RMSSD), Handgelenktemperatur, Anstrengung (Effort Score) und Blutsauerstoff (SpO2) nennen – Pulserholung und VO2max ebenfalls, sie werden mit angefragt. Vor dem Merge, weil die Datennutzungsseite sie ohne Flag nicht mehr listet, sobald das Flag in Production aufgeht.
+- [ ] **Schritt 3 wieder aufnehmen:** `useWatchEffortRpe` (Entwurf auf dem WIP-Branch) hinter `isWatchSignalsEnabled()` legen, damit die RPE-Übernahme in Production nicht läuft; dazu Tests (Effort→RPE-Abbildung, manuelle RPE wird nie überschrieben, Rückschau „(Uhr)“/„(geschätzt)“), Migration `021_health_native_signals.sql` schreiben (Anton spielt sie ein) und erst nach dem Gerätebefund („Gerätebefund Ultra“) fortfahren.
+
 ## Quellen
 
 - HealthKit-Typen: developer.apple.com/documentation/healthkit/hkquantitytypeidentifier, HealthKit-Updates (Effort Score, State of Mind)
