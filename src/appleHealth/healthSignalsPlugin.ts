@@ -4,6 +4,7 @@
  * liefert alles ein leeres Ergebnis. Doku: docs/readiness-data-sources.md.
  */
 import { registerPlugin } from "@capacitor/core";
+import { isHealthDataProcessingAllowed } from "../health/healthConsentStore";
 
 /** Schlüssel = Name des HealthKit-Typs ohne Präfix (identisch zur Swift-Seite). */
 export const HEALTH_SIGNAL_TYPES = [
@@ -112,9 +113,17 @@ function plugin(): MyRaceHealthSignalsPlugin {
   return registered;
 }
 
+/**
+ * Fassade für alle Aufrufer. Mit Uhr-Signale-Flag gilt ohne Gesundheits-Zustimmung v2: kein Apple-Dialog, kein
+ * Lesen – dieselben leeren Ergebnisse wie im Web. `availability` sagt nur, welche Typen das OS kennt, und bleibt offen.
+ */
 export const MyRaceHealthSignals: MyRaceHealthSignalsPlugin = {
-  requestAuthorization: () => plugin().requestAuthorization(),
-  readQuantitySamples: (options) => plugin().readQuantitySamples(options),
-  readWorkoutEffort: (options) => plugin().readWorkoutEffort(options),
+  requestAuthorization: () =>
+    isHealthDataProcessingAllowed()
+      ? plugin().requestAuthorization()
+      : Promise.resolve({ granted: false, requested: [], reason: "health_consent_missing" }),
+  readQuantitySamples: (options) =>
+    isHealthDataProcessingAllowed() ? plugin().readQuantitySamples(options) : Promise.resolve({ samples: [] }),
+  readWorkoutEffort: (options) => (isHealthDataProcessingAllowed() ? plugin().readWorkoutEffort(options) : Promise.resolve({})),
   availability: () => plugin().availability(),
 };

@@ -4,6 +4,7 @@ import {
   MyRaceHealthSignals,
   healthSignalsWebFallback,
 } from "./healthSignalsPlugin";
+import { resetHealthConsentStoreForTests, setHealthConsentStatus } from "../health/healthConsentStore";
 import { HEALTH_SIGNAL_TYPE_LABELS, listAppleHealthDataTypes } from "../features/settings/dataUsage";
 
 describe("MyRaceHealthSignals (Web-Fallback)", () => {
@@ -33,6 +34,17 @@ describe("MyRaceHealthSignals (Web-Fallback)", () => {
     expect(Object.keys(healthSignalsWebFallback).sort()).toEqual(
       ["availability", "readQuantitySamples", "readWorkoutEffort", "requestAuthorization"],
     );
+  });
+});
+
+describe("Fassade ohne Gesundheits-Zustimmung (Flag an in Jest)", () => {
+  it("kein Dialog, kein Lesen", async () => {
+    resetHealthConsentStoreForTests();
+    setHealthConsentStatus("u1", "undecided");
+    await expect(MyRaceHealthSignals.requestAuthorization()).resolves.toMatchObject({ reason: "health_consent_missing" });
+    await expect(
+      MyRaceHealthSignals.readWorkoutEffort({ workoutStart: "2026-11-11T06:00:00Z", workoutEnd: "2026-11-11T07:00:00Z" }),
+    ).resolves.toEqual({});
   });
 });
 

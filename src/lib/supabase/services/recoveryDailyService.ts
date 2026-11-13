@@ -1,4 +1,5 @@
 import type { RecoveryDailyRow } from "../../../recovery/recoveryTypes";
+import { isHealthDataProcessingAllowed } from "../../../health/healthConsentStore";
 import { supabase } from "../client";
 
 type DbRecoveryDailyRow = {
@@ -67,6 +68,8 @@ export async function loadRecoveryDaily(userId: string): Promise<RecoveryDailyRo
 }
 
 export async function saveRecoveryDay(userId: string, row: RecoveryDailyRow): Promise<void> {
+  // Mit Uhr-Signale-Flag ohne Gesundheits-Zustimmung v2: keine Erholungswerte ins Konto.
+  if (!isHealthDataProcessingAllowed()) return;
   const day =
     typeof row.date === "string" && row.date.length >= 10 ? row.date.trim().slice(0, 10) : "";
   if (!day) return;

@@ -3,6 +3,7 @@ jest.mock("../client", () => ({ supabase: { from: jest.fn() } }));
 
 import { supabase } from "../client";
 import { normalizeRpe, sessionDurationMin, upsertSessionLogWithResult } from "./sessionLogsService";
+import { resetHealthConsentStoreForTests, setHealthConsentStatus } from "../../../health/healthConsentStore";
 
 const from = supabase.from as jest.Mock;
 
@@ -13,7 +14,11 @@ function mockUpsertSequence(results: Array<{ error: unknown }>) {
   return upsert;
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  resetHealthConsentStoreForTests();
+  setHealthConsentStatus("u", "granted");
+});
 
 describe("normalizeRpe", () => {
   it.each([
@@ -65,6 +70,15 @@ describe("upsertSessionLogWithResult", () => {
     expect(upsert.mock.calls[1][0]).not.toHaveProperty("rpe");
     expect(upsert.mock.calls[1][0]).not.toHaveProperty("duration_min");
     expect(upsert.mock.calls[1][0]).toMatchObject({ completed: true, session_id: "s1" });
+  });
+
+  it("mit Uhr-Signale-Flag ohne Gesundheits-Zustimmung: rpe wird weggelassen (nicht genullt), Rest bleibt", async () => {
+    // Jest läuft unter localhost → isWatchSignalsEnabled() ist an.
+    setHealthConsentStatus("u", "declined");
+    const upsert = mockUpsertSequence([{ error: null }]);
+    await upsertSessionLogWithResult("u", "s1", { done: true, rpe: 6, durationMin: 45 });
+    expect(upsert.mock.calls[0][0]).not.toHaveProperty("rpe");
+    expect(upsert.mock.calls[0][0]).toMatchObject({ completed: true, duration_min: 45 });
   });
 
   it("andere Fehler lösen keinen zweiten Versuch aus", async () => {

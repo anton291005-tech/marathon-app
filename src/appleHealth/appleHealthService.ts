@@ -19,6 +19,7 @@ import type { RecoveryDailyRow } from "../recovery/recoveryTypes";
 import { loadHealthAnchors, saveHealthAnchors } from "./healthAnchorStore";
 import { appleHealthMissingCyclingDistance } from "./appleHealthPermissions";
 import { isWatchSignalsEnabled } from "../features/settings/settingsFlags";
+import { isHealthDataProcessingAllowed } from "../health/healthConsentStore";
 import { MyRaceHealthSignals } from "./healthSignalsPlugin";
 import { classifyWorkoutType } from "./workoutTypeClassifier";
 
@@ -41,9 +42,33 @@ export const APPLE_HEALTH_READ_TYPES = [
 /** Typen, die nur mit dem Uhr-Signale-Flag angefragt werden (`isWatchSignalsEnabled`). */
 export const APPLE_HEALTH_WATCH_SIGNAL_ONLY_TYPES: readonly (typeof APPLE_HEALTH_READ_TYPES)[number][] = ["oxygenSaturation"];
 
-/** Die Typen, die in diesem Build tatsächlich angefragt werden: ohne Flag fehlen die Uhr-Signale-Typen. */
-export function appleHealthReadTypesInScope(watchSignals: boolean = isWatchSignalsEnabled()): (typeof APPLE_HEALTH_READ_TYPES)[number][] {
-  return APPLE_HEALTH_READ_TYPES.filter((t) => watchSignals || APPLE_HEALTH_WATCH_SIGNAL_ONLY_TYPES.indexOf(t) < 0);
+/**
+ * Erholungs-Typen, die mit Flag nur nach der Gesundheits-Zustimmung v2 angefragt und gelesen werden
+ * (`isHealthDataProcessingAllowed`). Trainings-Typen (workouts, Strecken, Puls, Kalorien) bleiben immer im Umfang.
+ */
+export const APPLE_HEALTH_CONSENT_TYPES: readonly (typeof APPLE_HEALTH_READ_TYPES)[number][] = [
+  "sleep",
+  "heartRateVariability",
+  "restingHeartRate",
+  "respiratoryRate",
+  "bodyTemperature",
+  "basalBodyTemperature",
+  "oxygenSaturation",
+];
+
+/**
+ * Die Typen, die in diesem Build tatsächlich angefragt werden: ohne Flag fehlen die Uhr-Signale-Typen (sonst wie
+ * bisher); mit Flag fehlen ohne Gesundheits-Zustimmung zusätzlich alle Erholungs-Typen.
+ */
+export function appleHealthReadTypesInScope(
+  watchSignals: boolean = isWatchSignalsEnabled(),
+  consentAllowed: boolean = isHealthDataProcessingAllowed(watchSignals),
+): (typeof APPLE_HEALTH_READ_TYPES)[number][] {
+  return APPLE_HEALTH_READ_TYPES.filter((t) => {
+    if (!watchSignals && APPLE_HEALTH_WATCH_SIGNAL_ONLY_TYPES.indexOf(t) >= 0) return false;
+    if (!consentAllowed && APPLE_HEALTH_CONSENT_TYPES.indexOf(t) >= 0) return false;
+    return true;
+  });
 }
 
 /** Lokale Mitternacht (Gerätekalender), analog zu Calendar.current.startOfDay. */
@@ -212,7 +237,8 @@ export async function healthKitIsAvailable(): Promise<boolean> {
  * ist für Bestandsnutzer die Stelle, an der die neuen Typen einmal erscheinen. Fehler sind nie fatal.
  */
 export async function healthSignalsRequestReadAuthorization(): Promise<void> {
-  if (!isWatchSignalsEnabled()) return;
+  // Mit Flag erst nach der Gesundheits-Zustimmung v2 – der Apple-Dialog kommt immer nach der Abfrage in der App.
+  if (!isWatchSignalsEnabled() || !isHealthDataProcessingAllowed()) return;
   try {
     const result = await MyRaceHealthSignals.requestAuthorization();
     console.log("[appleHealthService] healthSignals requestAuthorization", result);
@@ -646,6 +672,8 @@ export async function healthKitForceRefreshWorkoutsLast3Days(): Promise<HealthKi
  * Schlaf + nächtliche Vitaldaten (HRV, Ruhepuls, Atemfrequenz, optional Hauttemp.) — letzte 120 Tage, zu Tageszeilen aggregiert.
  */
 export async function healthKitFetchRecoveryDailyLast120Days(now: Date = getAppNow()): Promise<RecoveryDailyRow[]> {
+  // Mit Uhr-Signale-Flag ohne Gesundheits-Zustimmung v2: keine Erholungswerte lesen.
+  if (!isHealthDataProcessingAllowed()) return [];
   try {
     const { Health } = await import("@capgo/capacitor-health");
     const available = await Health.isAvailable();

@@ -1,5 +1,6 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import type { SessionLog } from "../../../marathonPrediction";
+import { isHealthDataProcessingAllowed } from "../../../health/healthConsentStore";
 import { supabase } from "../client";
 
 export type SessionLogUpsertResult = {
@@ -147,8 +148,20 @@ function withoutRpeColumns(row: UpsertRow): Omit<UpsertRow, "rpe" | "duration_mi
   return rest;
 }
 
+/**
+ * Ohne Gesundheits-Zustimmung v2 (nur mit Uhr-Signale-Flag) geht die Anstrengung nicht ins Konto: Die Spalte wird
+ * weggelassen, nicht auf NULL gesetzt – so löscht ein Speichern während „Zustimmung lädt“ keinen vorhandenen Wert.
+ */
+function withoutRpe(row: UpsertRow): Omit<UpsertRow, "rpe"> {
+  const { rpe: _rpe, ...rest } = row;
+  void _rpe;
+  return rest;
+}
+
+type AnyRow = UpsertRow | Omit<UpsertRow, "rpe"> | Omit<UpsertRow, "rpe" | "duration_min">;
+
 async function upsertSessionLogViaSelectInsertUpdate(
-  row: UpsertRow | Omit<UpsertRow, "rpe" | "duration_min">,
+  row: AnyRow,
 ): Promise<{ data: unknown; error: PostgrestError | null }> {
   const { data: existing, error: selectError } = await supabase
     .from("session_logs")
@@ -175,7 +188,7 @@ export async function upsertSessionLogWithResult(
   log: SessionLog,
 ): Promise<SessionLogUpsertResult> {
   const row = sessionLogToUpsertPayload({ userId, sessionId, log });
-  const write = async (payload: UpsertRow | Omit<UpsertRow, "rpe" | "duration_min">) => {
+  const write = async (payload: AnyRow) => {
     const upsertResult = await supabase.from("session_logs").upsert(payload, { onConflict: SESSION_LOGS_ON_CONFLICT });
     if (upsertResult.error?.code === PG_NO_MATCHING_UNIQUE_CONSTRAINT) {
       return upsertSessionLogViaSelectInsertUpdate(payload);
@@ -183,7 +196,7 @@ export async function upsertSessionLogWithResult(
     return { data: upsertResult.data as unknown, error: upsertResult.error };
   };
 
-  let { data, error } = await write(row);
+  let { data, error } = await write(isHealthDataProcessingAllowed() ? row : withoutRpe(row));
   if (isMissingRpeColumns(error)) {
     ({ data, error } = await write(withoutRpeColumns(row)));
   }

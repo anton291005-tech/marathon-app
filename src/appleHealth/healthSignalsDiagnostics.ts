@@ -4,6 +4,7 @@
  * liest die Anstrengung je Workout. Nur Diagnose – nichts davon wird gespeichert oder im normalen Betrieb gezeigt.
  */
 import { getAppNow } from "../core/time/timeSystem";
+import { isHealthDataProcessingAllowed } from "../health/healthConsentStore";
 import {
   HEALTH_SIGNAL_TYPES,
   HEALTH_SIGNAL_UNITS,
@@ -41,6 +42,8 @@ export type HealthSignalsDiagnostics = {
   authorization: { granted: boolean; requested: string[]; reason?: string } | { error: string };
   signals: SignalSummary[];
   workouts: WorkoutEffortRow[];
+  /** Ohne Gesundheits-Zustimmung v2 wird nichts gelesen. */
+  consentMissing?: boolean;
 };
 
 function localYmd(iso: string): string {
@@ -110,6 +113,12 @@ export async function collectHealthSignalsDiagnostics(): Promise<HealthSignalsDi
   }
 
   const signals: SignalSummary[] = [];
+  const workouts: WorkoutEffortRow[] = [];
+
+  // Ohne Gesundheits-Zustimmung v2 liest auch die Diagnose nichts (Fassade und Recovery-Abruf sind ohnehin gesperrt).
+  if (!isHealthDataProcessingAllowed()) {
+    return { generatedAt: now.toISOString(), availability, authorization, signals, workouts, consentMissing: true };
+  }
 
   // SDNN über das bestehende Plugin (zum Vergleich mit RMSSD).
   try {
@@ -168,7 +177,6 @@ export async function collectHealthSignalsDiagnostics(): Promise<HealthSignalsDi
     }
   }
 
-  const workouts: WorkoutEffortRow[] = [];
   try {
     const { Health } = await import("@capgo/capacitor-health");
     const res = await Health.queryWorkouts({ startDate: startIso, endDate: endIso, limit: 50, ascending: false });
@@ -218,6 +226,9 @@ export function formatHealthSignalsReport(d: HealthSignalsDiagnostics): string {
       ? `Freigabe-Dialog: Fehler ${d.authorization.error}`
       : `Freigabe-Dialog: ${d.authorization.granted ? "durchgelaufen" : "nicht möglich"}${d.authorization.reason ? ` (${d.authorization.reason})` : ""}`,
   );
+  if (d.consentMissing) {
+    lines.push("Keine Gesundheits-Zustimmung: nichts gelesen. Erst unter Einstellungen → Datenschutz & Daten → Gesundheitsdaten zustimmen.");
+  }
   lines.push("");
   for (const s of d.signals) {
     lines.push(`${s.label} [${s.unit}]: ${s.count} Werte${s.error ? ` – FEHLER ${s.error}` : ""}`);
