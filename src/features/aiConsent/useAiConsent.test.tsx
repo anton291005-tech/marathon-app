@@ -12,7 +12,7 @@ import { useAiConsent } from "./useAiConsent";
 
 const load = loadAiConsentRow as jest.Mock;
 const save = saveAiConsent as jest.Mock;
-const GRANTED_ROW = { ai_consent_at: "2026-11-11T21:00:00.000Z", ai_consent_version: 1 };
+const GRANTED_ROW = { ai_consent_at: "2026-11-11T21:00:00.000Z", ai_consent_version: 2 };
 
 beforeEach(() => {
   window.localStorage.clear();

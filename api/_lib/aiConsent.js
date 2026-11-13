@@ -11,7 +11,7 @@
  */
 
 /** Mindestversion des Einwilligungstexts. Anheben, wenn sich Anbieter oder Datenarten wesentlich ändern. */
-const AI_CONSENT_VERSION = 1;
+const AI_CONSENT_VERSION = 2;
 
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} admin

@@ -9,8 +9,12 @@
 import { safeReadLocalStorageJson, safeWriteLocalStorageJson } from "../../persistence/safeLocalStorage";
 import { AI_CONSENT_DECLINED_KEY } from "../../persistence/marathonLocalStorageKeys";
 
-/** Mindestversion des Einwilligungstexts; muss `AI_CONSENT_VERSION` in `api/_lib/aiConsent.js` entsprechen. */
-export const AI_CONSENT_VERSION = 1;
+/**
+ * Mindestversion des Einwilligungstexts; muss `AI_CONSENT_VERSION` in `api/_lib/aiConsent.js` entsprechen.
+ * Verlauf: 1 = erste Fassung; 2 (2026-11-13) = Coach-Daten nennen zusätzlich die Anstrengung (RPE) in den
+ * Trainingseinträgen, die schon vorher mitgeschickt wurde. Alle mit Version 1 werden neu gefragt.
+ */
+export const AI_CONSENT_VERSION = 2;
 
 /**
  * - `loading`: noch nicht gelesen

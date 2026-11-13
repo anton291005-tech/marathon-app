@@ -29,6 +29,16 @@ describe("aiConsentState", () => {
     expect(isConsentRowGranted({ ...GRANTED, ai_consent_version: AI_CONSENT_VERSION - 1 })).toBe(false);
   });
 
+  test("Version 2: Zustimmung und Ablehnung aus Version 1 gelten nicht mehr – es wird neu gefragt", () => {
+    expect(AI_CONSENT_VERSION).toBe(2);
+    const v1 = { ai_consent_at: "2026-11-11T21:00:00.000Z", ai_consent_version: 1 };
+    expect(isConsentRowGranted(v1)).toBe(false);
+    expect(statusFromConsentRow(v1, false)).toBe("undecided");
+    window.localStorage.setItem("marathonAiConsentDeclined", JSON.stringify({ u1: 1 }));
+    expect(readDeclinedOnDevice("u1")).toBe(false);
+    window.localStorage.removeItem("marathonAiConsentDeclined");
+  });
+
   test("ohne Zustimmung: undecided, nach Ablehnen auf dem Gerät: declined", () => {
     expect(statusFromConsentRow(null, false)).toBe("undecided");
     expect(statusFromConsentRow(null, true)).toBe("declined");
