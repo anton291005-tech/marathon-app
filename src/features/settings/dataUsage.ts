@@ -60,7 +60,7 @@ export type AiDataUse = { title: string; provider: string; items: readonly strin
 export const AI_COACH_DATA_ITEMS: readonly string[] = [
   "Deine Nachricht und der Chatverlauf",
   "Dein Trainingsplan",
-  "Deine Trainingseinträge der letzten Wochen (inkl. Notizen und Gefühl)",
+  "Deine Trainingseinträge der letzten Wochen (inkl. Notizen, Gefühl und Anstrengung)",
   "Läufe und Radfahrten aus Apple Health der letzten Wochen (Art, Datum, Dauer, Distanz, Durchschnittspuls)",
   "Erholungswerte: Schlaf, HRV, Ruhepuls",
   "Zielzeit und Max-HF",
