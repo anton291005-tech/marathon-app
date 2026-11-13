@@ -1,5 +1,6 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import type { SessionLog } from "../../../marathonPrediction";
+import { isRpeSource } from "../../../sessionLogs/rpeSource";
 import { supabase } from "../client";
 
 export type SessionLogUpsertResult = {
@@ -18,6 +19,8 @@ export type DbSessionLog = {
   feeling: number | null;
   /** Migration 016; fehlt vor dem Anwenden. */
   rpe?: number | null;
+  /** Migration 021; fehlt vor dem Anwenden. */
+  rpe_source?: string | null;
   duration_min?: number | null;
   actual_distance_meters: number | null;
   notes: string | null;
@@ -68,7 +71,10 @@ function dbRowToSessionLog(row: DbSessionLog): SessionLog {
   const log: SessionLog = {};
   if (row.feeling != null && Number.isFinite(row.feeling)) log.feeling = row.feeling;
   const rpe = normalizeRpe(row.rpe);
-  if (rpe != null) log.rpe = rpe;
+  if (rpe != null) {
+    log.rpe = rpe;
+    if (isRpeSource(row.rpe_source)) log.rpeSource = row.rpe_source;
+  }
   const ak = metersToActualKmKmString(row.actual_distance_meters);
   if (ak !== undefined) log.actualKm = ak;
   if (row.notes != null && row.notes !== "") log.notes = row.notes;
@@ -92,6 +98,7 @@ function sessionLogToUpsertPayload(args: { userId: string; sessionId: string; lo
     skipped: args.log.skipped ?? null,
     feeling: args.log.feeling ?? null,
     rpe: normalizeRpe(args.log.rpe),
+    rpe_source: normalizeRpe(args.log.rpe) != null && isRpeSource(args.log.rpeSource) ? args.log.rpeSource : null,
     duration_min: sessionDurationMin(args.log),
     actual_distance_meters: actualKmToMeters(args.log.actualKm),
     notes: args.log.notes ?? null,
@@ -131,24 +138,52 @@ const PG_NO_MATCHING_UNIQUE_CONSTRAINT = "42P10";
 /** PostgREST: Spalte unbekannt (Migration 016 noch nicht angewendet). */
 const PGRST_UNKNOWN_COLUMN = "PGRST204";
 
+function missingColumnText(error: PostgrestError | null): string | null {
+  if (!error || (error.code !== PGRST_UNKNOWN_COLUMN && error.code !== "42703")) return null;
+  return `${error.message ?? ""} ${error.details ?? ""}`;
+}
+
 function isMissingRpeColumns(error: PostgrestError | null): boolean {
-  if (!error) return false;
-  const text = `${error.message ?? ""} ${error.details ?? ""}`;
-  return (error.code === PGRST_UNKNOWN_COLUMN || error.code === "42703") && /\b(rpe|duration_min)\b/.test(text);
+  const text = missingColumnText(error);
+  return text != null && /\b(rpe|duration_min)\b/.test(text);
+}
+
+/** Migration 021 (`rpe_source`) fehlt: nur diese Spalte weglassen, `rpe` aus Migration 016 bleibt. */
+function isMissingRpeSourceColumn(error: PostgrestError | null): boolean {
+  const text = missingColumnText(error);
+  return text != null && /\brpe_source\b/.test(text);
+}
+
+/** Merkt sich pro App-Lauf, dass `rpe_source` auf dem Server fehlt — dann gibt es keinen Fehlversuch pro Speichern. */
+let rpeSourceColumnMissing = false;
+
+/** Nur für Tests. */
+export function resetRpeSourceColumnMemo(): void {
+  rpeSourceColumnMissing = false;
 }
 
 type UpsertRow = ReturnType<typeof sessionLogToUpsertPayload>;
+type RowWithoutRpeSource = Omit<UpsertRow, "rpe_source">;
+type RowWithoutRpeColumns = Omit<UpsertRow, "rpe" | "rpe_source" | "duration_min">;
+type AnyRow = UpsertRow | RowWithoutRpeSource | RowWithoutRpeColumns;
 
-/** Zeile ohne die Spalten aus Migration 016 — damit das Abhaken ohne die Migration weiter funktioniert. */
-function withoutRpeColumns(row: UpsertRow): Omit<UpsertRow, "rpe" | "duration_min"> {
-  const { rpe: _rpe, duration_min: _durationMin, ...rest } = row;
+function withoutRpeSource(row: UpsertRow): RowWithoutRpeSource {
+  const { rpe_source: _rpeSource, ...rest } = row;
+  void _rpeSource;
+  return rest;
+}
+
+/** Zeile ohne die Spalten aus Migration 016/021 — damit das Abhaken ohne die Migration weiter funktioniert. */
+function withoutRpeColumns(row: UpsertRow): RowWithoutRpeColumns {
+  const { rpe: _rpe, rpe_source: _rpeSource, duration_min: _durationMin, ...rest } = row;
   void _rpe;
+  void _rpeSource;
   void _durationMin;
   return rest;
 }
 
 async function upsertSessionLogViaSelectInsertUpdate(
-  row: UpsertRow | Omit<UpsertRow, "rpe" | "duration_min">,
+  row: AnyRow,
 ): Promise<{ data: unknown; error: PostgrestError | null }> {
   const { data: existing, error: selectError } = await supabase
     .from("session_logs")
@@ -175,7 +210,7 @@ export async function upsertSessionLogWithResult(
   log: SessionLog,
 ): Promise<SessionLogUpsertResult> {
   const row = sessionLogToUpsertPayload({ userId, sessionId, log });
-  const write = async (payload: UpsertRow | Omit<UpsertRow, "rpe" | "duration_min">) => {
+  const write = async (payload: AnyRow) => {
     const upsertResult = await supabase.from("session_logs").upsert(payload, { onConflict: SESSION_LOGS_ON_CONFLICT });
     if (upsertResult.error?.code === PG_NO_MATCHING_UNIQUE_CONSTRAINT) {
       return upsertSessionLogViaSelectInsertUpdate(payload);
@@ -183,7 +218,11 @@ export async function upsertSessionLogWithResult(
     return { data: upsertResult.data as unknown, error: upsertResult.error };
   };
 
-  let { data, error } = await write(row);
+  let { data, error } = await write(rpeSourceColumnMissing ? withoutRpeSource(row) : row);
+  if (!rpeSourceColumnMissing && isMissingRpeSourceColumn(error)) {
+    rpeSourceColumnMissing = true;
+    ({ data, error } = await write(withoutRpeSource(row)));
+  }
   if (isMissingRpeColumns(error)) {
     ({ data, error } = await write(withoutRpeColumns(row)));
   }

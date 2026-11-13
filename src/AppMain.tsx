@@ -296,6 +296,8 @@ import {
 import { loadRecoveryDailyFromStorage, mergeRecoveryDailyPersisted } from "./recovery/recoveryStorage";
 import { buildTodayAppleCoachLines } from "./appleHealth/todayPlanVsAppleRun";
 import { applyAppleHealthTrainingSync } from "./trainingIntelligence/applyAppleHealthSync";
+import { rpeSourceAfterManualInput } from "./appleHealth/watchEffortRpe";
+import { useWatchEffortRpe } from "./app/runtime/useWatchEffortRpe";
 import { isRunWorkout } from "./trainingIntelligence/isRunWorkout";
 import { normalizeAppleHealthRun } from "./trainingIntelligence/normalizeAppleHealthRun";
 import {
@@ -2296,6 +2298,7 @@ export default function AppMain(){
       ...(values.actualKm !== undefined ? { actualKm: values.actualKm } : {}),
       feeling: values.feeling,
       rpe: values.rpe ?? undefined,
+      rpeSource: rpeSourceAfterManualInput(logs[modal.id], values.rpe),
       notes: values.notes,
       done: true,
       skipped: false,
@@ -2368,7 +2371,7 @@ export default function AppMain(){
   // Kein useCallback: `save` liest logsRemoteReady/user aus dem Closure, eine veraltete Kopie würde nur in die Warteschlange schreiben.
   const rateRpePrompt = async (sessionId: string, rpe: number) => {
     const prev = logs[sessionId] || {};
-    await save({ ...logs, [sessionId]: { ...prev, rpe } }, [sessionId]);
+    await save({ ...logs, [sessionId]: { ...prev, rpe, rpeSource: "manual" } }, [sessionId]);
   };
 
   // Trainings-Erinnerungen nur für Tage mit offener Einheit (nächste 14 Tage); nach Plan-Ende, an Ruhetagen und für
@@ -2551,6 +2554,14 @@ export default function AppMain(){
     void save(result.logs, syncKeys);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Apple-Run-Merge nur bei neuen Health-Daten
   }, [healthRuns]);
+
+  // Anstrengung der Apple Watch als Session-RPE übernehmen (nur wenn noch keine RPE da ist).
+  useWatchEffortRpe({
+    enabled: Capacitor.getPlatform() === "ios" && isHealthConnected,
+    logs,
+    getLogs: () => logsRef.current,
+    save,
+  });
 
   useEffect(() => {
     const todayYmd = getAppTodayYmd();

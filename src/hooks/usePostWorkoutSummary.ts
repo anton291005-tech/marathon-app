@@ -1,3 +1,4 @@
+import { isRpeSource, type RpeSource } from "../sessionLogs/rpeSource";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getAppNow } from "../core/time/timeSystem";
 import { isSessionLogDone } from "../appSmartFeatures";
@@ -119,7 +120,7 @@ export type PostWorkoutSummary = {
    */
   source?: "health" | "log";
   /** Nur bei `source: "log"`: Gefühl (1–5) und Notiz aus dem Log. */
-  logDetails?: { feeling: number | null; rpe?: number | null; notes: string | null } | null;
+  logDetails?: { feeling: number | null; rpe?: number | null; rpeSource?: RpeSource | null; notes: string | null } | null;
 };
 
 export function isEligibleWorkout(type: string): boolean {
@@ -349,6 +350,16 @@ type ConclusionPlanSession = {
  * Conclusion Card allein aus dem gespeicherten Log (pure, keine Persistenz): für abgeschlossene
  * Sessions ohne verknüpftes Health-Workout. Was das Log nicht enthält, bleibt `null` — nie 0.
  */
+/** Session-RPE 0–10 aus dem Log, sonst `null`. */
+function rpeFromLog(log: { rpe?: unknown } | null | undefined): number | null {
+  return typeof log?.rpe === "number" && log.rpe >= 0 && log.rpe <= 10 ? Math.round(log.rpe) : null;
+}
+
+function rpeSourceFromLog(log: { rpeSource?: unknown } | null | undefined): RpeSource | null {
+  const source = log?.rpeSource;
+  return isRpeSource(source) ? source : null;
+}
+
 export function buildLogOnlyConclusion(
   session: ConclusionPlanSession,
   log: Record<string, any> | null | undefined,
@@ -436,7 +447,8 @@ export function buildLogOnlyConclusion(
     source: "log",
     logDetails: {
       feeling: feeling != null ? Math.round(feeling) : null,
-      rpe: typeof log?.rpe === "number" && log.rpe >= 0 && log.rpe <= 10 ? Math.round(log.rpe) : null,
+      rpe: rpeFromLog(log),
+      rpeSource: rpeSourceFromLog(log),
       notes,
     },
   };
@@ -1316,7 +1328,15 @@ export function usePostWorkoutSummary(args: HookArgs): {
       const end = health ? workoutEndDate(health) : null;
       if (runId && end) {
         const full = computeSummaryForWorkoutId(runId, toLocalDayKey(end));
-        if (full && full.session.id === sessionId) return { ...full, source: "health" };
+        if (full && full.session.id === sessionId) {
+          // Anstrengung (auch von der Uhr) gehört in die Rückschau; Gefühl und Notiz bleiben dem Log-only-Fall vorbehalten.
+          const rpe = rpeFromLog(log);
+          return {
+            ...full,
+            source: "health",
+            ...(rpe != null ? { logDetails: { feeling: null, notes: null, rpe, rpeSource: rpeSourceFromLog(log) } } : {}),
+          };
+        }
       }
       return buildLogOnlyConclusion(session, log, resolveMaxHeartRateBpm(args.maxHeartRateBpm), {
         recoveryWeek: args.recoveryWeekSessionIds?.has(session.id) === true,

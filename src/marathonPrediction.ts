@@ -69,6 +69,8 @@ export type SessionLog = {
   feeling?: number;
   /** Anstrengung nach der Einheit, Session-RPE 0–10 (Readiness Spec §6.2); fehlt = nicht angegeben. */
   rpe?: number;
+  /** Woher `rpe` stammt: Apple Watch (selbst bewertet / geschätzt) oder von Hand. Fehlt bei Altdaten. */
+  rpeSource?: "watch_user" | "watch_estimated" | "manual";
   /** Dauer in Minuten (5–600); sonst aus `assignedRun.duration` abgeleitet (sessionLogsService). */
   durationMin?: number;
   actualKm?: string;

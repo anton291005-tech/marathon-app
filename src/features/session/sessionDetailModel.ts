@@ -152,6 +152,13 @@ export const RPE_ANCHORS: Readonly<Record<number, string>> = {
   10: "maximal",
 };
 
+/** Zusatz hinter der Anstrengung: von der Uhr gemessen („Uhr“) bzw. geschätzt; von Hand oder unbekannt: nichts. */
+export function rpeSourceSuffix(source: string | null | undefined): string {
+  if (source === "watch_user") return " (Uhr)";
+  if (source === "watch_estimated") return " (geschätzt)";
+  return "";
+}
+
 /** „6 · zwischen anstrengend und sehr anstrengend“ bzw. „5 · anstrengend“. */
 export function rpeAnchorLabel(value: number): string {
   const exact = RPE_ANCHORS[value];

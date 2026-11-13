@@ -5,7 +5,7 @@ import { formatPlannedHrZoneDisplay } from "../trainingIntelligence/zoneBpmDispl
 import { shouldUseIntervalScoring } from "../utils/workoutEvaluationGuards";
 import { compareHR, comparePace } from "../lib/training/compareActualToPlanned";
 import { fmtBikePlannedDuration } from "../utils/bikeDurationParser";
-import { rpeAnchorLabel } from "../features/session/sessionDetailModel";
+import { rpeAnchorLabel, rpeSourceSuffix } from "../features/session/sessionDetailModel";
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
@@ -487,8 +487,10 @@ export function PostWorkoutSummaryCard(props: {
   const logFeelingLabel =
     logFeeling != null ? LOG_FEELING_LABELS[Math.max(1, Math.min(5, logFeeling))] ?? null : null;
   const logNotes = isLogOnly ? summary.logDetails?.notes ?? null : null;
-  const logRpe = isLogOnly ? summary.logDetails?.rpe ?? null : null;
-  const logRpeLabel = logRpe != null ? `Anstrengung ${rpeAnchorLabel(logRpe)}` : null;
+  // Die Anstrengung gehört auch zu Einheiten mit zugeordnetem Workout (z. B. von der Uhr).
+  const logRpe = summary.logDetails?.rpe ?? null;
+  const logRpeLabel =
+    logRpe != null ? `Anstrengung ${rpeAnchorLabel(logRpe)}${rpeSourceSuffix(summary.logDetails?.rpeSource)}` : null;
   const showCoachBlock = !isLogOnly || !!coachMessage;
 
   return (
