@@ -39,6 +39,53 @@ export type HealthSignalSample = {
   sourceName: string;
   /** z. B. „Watch“ / „iPhone“ – nur Diagnose. */
   deviceModel?: string;
+  /** z. B. „Watch6,18“ (Ultra 1) – nur Diagnose. */
+  hardwareVersion?: string;
+  deviceName?: string;
+  deviceManufacturer?: string;
+};
+
+/** Typnamen für `authorizationStatus`: eigene Signale plus die Typen des bestehenden Plugins (HealthKit-Namen). */
+export const AUTHORIZATION_STATUS_TYPES = [
+  "workout",
+  "heartRate",
+  "activeEnergyBurned",
+  "distanceWalkingRunning",
+  "distanceCycling",
+  "sleepAnalysis",
+  "heartRateVariabilitySDNN",
+  "restingHeartRate",
+  "respiratoryRate",
+  "bodyTemperature",
+  "basalBodyTemperature",
+  "oxygenSaturation",
+  ...HEALTH_SIGNAL_TYPES,
+] as const;
+
+/**
+ * `request`: „shouldRequest“ = nie angefragt (Lesen scheitert mit „not determined“), „unnecessary“ = schon angefragt.
+ * Ob ein Lesezugriff erlaubt oder verweigert wurde, verrät iOS absichtlich nicht – 0 Werte bei „unnecessary“ heißt
+ * „verweigert oder keine Daten“. `sharing` ist der Schreibstatus (MyRace schreibt nie).
+ */
+export type TypeAuthorizationStatus = {
+  available: boolean;
+  request?: "shouldRequest" | "unnecessary" | "unknown" | "error";
+  sharing?: "notDetermined" | "sharingDenied" | "sharingAuthorized" | "unknown";
+};
+
+export type NativeWorkout = {
+  /** HKWorkoutActivityType.rawValue (37 = Laufen, 52 = Gehen, 13 = Radfahren, 24 = Wandern). */
+  activityType: number;
+  startDate: string;
+  endDate: string;
+  durationMin: number;
+  sourceName: string;
+  sourceBundleId?: string;
+  distanceKm?: number;
+  deviceModel?: string;
+  hardwareVersion?: string;
+  deviceName?: string;
+  deviceManufacturer?: string;
 };
 
 export type RequestAuthorizationResult = {
@@ -77,6 +124,8 @@ export interface MyRaceHealthSignalsPlugin {
   readQuantitySamples(options: ReadQuantitySamplesOptions): Promise<{ samples: HealthSignalSample[] }>;
   readWorkoutEffort(options: { workoutStart: string; workoutEnd: string }): Promise<WorkoutEffortResult>;
   availability(): Promise<HealthSignalsAvailability>;
+  authorizationStatus(options: { types: readonly string[] }): Promise<{ types: Record<string, TypeAuthorizationStatus> }>;
+  readWorkouts(options: { startDate: string; endDate: string; limit?: number }): Promise<{ workouts: NativeWorkout[] }>;
 }
 
 function allTypes(value: boolean): Record<HealthSignalType, boolean> {
@@ -98,6 +147,12 @@ export const healthSignalsWebFallback: MyRaceHealthSignalsPlugin = {
   },
   async availability() {
     return { healthDataAvailable: false, systemVersion: "web", types: allTypes(false) };
+  },
+  async authorizationStatus() {
+    return { types: {} };
+  },
+  async readWorkouts() {
+    return { workouts: [] };
   },
 };
 
@@ -126,4 +181,8 @@ export const MyRaceHealthSignals: MyRaceHealthSignalsPlugin = {
     isHealthDataProcessingAllowed() ? plugin().readQuantitySamples(options) : Promise.resolve({ samples: [] }),
   readWorkoutEffort: (options) => (isHealthDataProcessingAllowed() ? plugin().readWorkoutEffort(options) : Promise.resolve({})),
   availability: () => plugin().availability(),
+  // Nur Metadaten (angefragt ja/nein) – auch ohne Zustimmung, damit die Diagnose den Stand zeigen kann.
+  authorizationStatus: (options) => plugin().authorizationStatus(options),
+  // Trainings liest MyRace auch ohne Gesundheits-Zustimmung (Datenschutzerklärung §6); hier nur für die Diagnose.
+  readWorkouts: (options) => plugin().readWorkouts(options),
 };

@@ -32,7 +32,7 @@ describe("MyRaceHealthSignals (Web-Fallback)", () => {
 
   it("der Fallback ist dieselbe Oberfläche wie das Plugin", () => {
     expect(Object.keys(healthSignalsWebFallback).sort()).toEqual(
-      ["availability", "readQuantitySamples", "readWorkoutEffort", "requestAuthorization"],
+      ["authorizationStatus", "availability", "readQuantitySamples", "readWorkoutEffort", "readWorkouts", "requestAuthorization"],
     );
   });
 });

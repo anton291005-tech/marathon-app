@@ -14,7 +14,9 @@ public class MyRaceHealthSignalsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "requestAuthorization", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "readQuantitySamples", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "readWorkoutEffort", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "availability", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "availability", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "authorizationStatus", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "readWorkouts", returnType: CAPPluginReturnPromise)
     ]
 
     /// Schlüssel nach außen = Name des HealthKit-Typs (ohne Präfix), damit TS und Doku dieselben Namen nutzen.
@@ -162,7 +164,7 @@ public class MyRaceHealthSignalsPlugin: CAPPlugin, CAPBridgedPlugin {
                     "endDate": Self.isoString(s.endDate),
                     "sourceName": s.sourceRevision.source.name
                 ]
-                if let model = s.device?.model { row["deviceModel"] = model }
+                Self.addDevice(s.device, to: &row)
                 return row
             }
             call.resolve(["samples": samples])
@@ -289,6 +291,127 @@ public class MyRaceHealthSignalsPlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
         store.execute(q)
+    }
+
+    // MARK: - Gerät
+
+    /// Modell („Watch“), Hardware-Version (z. B. „Watch6,18“ = Ultra 1), Name, Hersteller – nur für die Diagnose.
+    private static func addDevice(_ device: HKDevice?, to row: inout [String: Any]) {
+        guard let device = device else { return }
+        if let v = device.model { row["deviceModel"] = v }
+        if let v = device.hardwareVersion { row["hardwareVersion"] = v }
+        if let v = device.name { row["deviceName"] = v }
+        if let v = device.manufacturer { row["deviceManufacturer"] = v }
+    }
+
+    // MARK: - authorizationStatus (Diagnose)
+
+    /// HealthKit-Typ zu einem Namen: die eigenen Signale plus die Typen, die das bestehende Plugin anfragt.
+    private func objectType(named name: String) -> HKObjectType? {
+        if let signal = Signal(rawValue: name) {
+            return signal.isAvailableOnThisOS ? signal.quantityType : nil
+        }
+        switch name {
+        case "workout": return HKObjectType.workoutType()
+        case "sleepAnalysis": return HKObjectType.categoryType(forIdentifier: .sleepAnalysis)
+        case "heartRateVariabilitySDNN": return HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN)
+        case "oxygenSaturation": return HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)
+        case "heartRate": return HKQuantityType.quantityType(forIdentifier: .heartRate)
+        case "restingHeartRate": return HKQuantityType.quantityType(forIdentifier: .restingHeartRate)
+        case "respiratoryRate": return HKQuantityType.quantityType(forIdentifier: .respiratoryRate)
+        case "bodyTemperature": return HKQuantityType.quantityType(forIdentifier: .bodyTemperature)
+        case "basalBodyTemperature": return HKQuantityType.quantityType(forIdentifier: .basalBodyTemperature)
+        case "activeEnergyBurned": return HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)
+        case "distanceWalkingRunning": return HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning)
+        case "distanceCycling": return HKQuantityType.quantityType(forIdentifier: .distanceCycling)
+        default: return nil
+        }
+    }
+
+    /// Je Typ: `request` = ob HealthKit noch fragen würde („shouldRequest“ = nie angefragt → Lesen scheitert mit
+    /// „not determined“; „unnecessary“ = schon angefragt – ob erlaubt oder verweigert, verrät iOS für Lesezugriff
+    /// absichtlich nicht). `sharing` = Schreibstatus (MyRace schreibt nie, daher meist „notDetermined“/„sharingDenied“).
+    @objc func authorizationStatus(_ call: CAPPluginCall) {
+        let names = (call.getArray("types") as? [String]) ?? []
+        guard let store = store else {
+            call.resolve(["types": [String: Any]()])
+            return
+        }
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var out: [String: Any] = [:]
+        for name in names {
+            guard let type = objectType(named: name) else {
+                out[name] = ["available": false]
+                continue
+            }
+            let sharing: String
+            switch store.authorizationStatus(for: type) {
+            case .notDetermined: sharing = "notDetermined"
+            case .sharingDenied: sharing = "sharingDenied"
+            case .sharingAuthorized: sharing = "sharingAuthorized"
+            @unknown default: sharing = "unknown"
+            }
+            group.enter()
+            store.getRequestStatusForAuthorization(toShare: [], read: [type]) { status, error in
+                let request: String
+                if error != nil {
+                    request = "error"
+                } else {
+                    switch status {
+                    case .shouldRequest: request = "shouldRequest"
+                    case .unnecessary: request = "unnecessary"
+                    case .unknown: request = "unknown"
+                    @unknown default: request = "unknown"
+                    }
+                }
+                lock.lock()
+                out[name] = ["available": true, "request": request, "sharing": sharing]
+                lock.unlock()
+                group.leave()
+            }
+        }
+        group.notify(queue: .global()) {
+            call.resolve(["types": out])
+        }
+    }
+
+    // MARK: - readWorkouts (Diagnose, Gegenprobe zum bestehenden Plugin)
+
+    @objc func readWorkouts(_ call: CAPPluginCall) {
+        guard let start = Self.parseDate(call.getString("startDate")),
+              let end = Self.parseDate(call.getString("endDate")) else {
+            call.reject("invalid_date")
+            return
+        }
+        guard let store = store else {
+            call.resolve(["workouts": [[String: Any]]()])
+            return
+        }
+        let limit = max(1, min(call.getInt("limit") ?? 50, 500))
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+        let query = HKSampleQuery(sampleType: HKObjectType.workoutType(), predicate: predicate, limit: limit, sortDescriptors: [sort]) { _, results, error in
+            if let error = error {
+                call.reject(error.localizedDescription, nil, error)
+                return
+            }
+            let rows: [[String: Any]] = (results as? [HKWorkout] ?? []).map { w in
+                var row: [String: Any] = [
+                    "activityType": Int(w.workoutActivityType.rawValue),
+                    "startDate": Self.isoString(w.startDate),
+                    "endDate": Self.isoString(w.endDate),
+                    "durationMin": (w.duration / 60).rounded(),
+                    "sourceName": w.sourceRevision.source.name,
+                    "sourceBundleId": w.sourceRevision.source.bundleIdentifier
+                ]
+                if let km = w.totalDistance?.doubleValue(for: .meterUnit(with: .kilo)) { row["distanceKm"] = (km * 100).rounded() / 100 }
+                Self.addDevice(w.device, to: &row)
+                return row
+            }
+            call.resolve(["workouts": rows])
+        }
+        store.execute(query)
     }
 
     // MARK: - availability

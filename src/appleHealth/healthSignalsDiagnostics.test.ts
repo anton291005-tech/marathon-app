@@ -1,4 +1,5 @@
 import {
+  describeDevice,
   formatHealthSignalsReport,
   summarizeSamples,
   type HealthSignalsDiagnostics,
@@ -49,5 +50,44 @@ describe("Geräte-Diagnose", () => {
     expect(text).toContain("selbst=6(related) geschätzt=–");
     expect(text).toContain("kein Wert");
     expect(text).toContain("iOS 27.0");
+  });
+
+  it("Bericht: Freigabe je Typ trennt „nie angefragt“ von „angefragt“, nennt Geräte und native Trainings", () => {
+    const d: HealthSignalsDiagnostics = {
+      generatedAt: "2026-11-14T08:00:00.000Z",
+      availability: null,
+      authorization: { granted: true, requested: [] },
+      signals: [
+        summarizeSamples("HRV SDNN (bestehendes Plugin)", "ms", [], "heartRateVariabilitySDNN"),
+        summarizeSamples("VO2max", "mL/(kg·min)", [
+          { value: 47.2, startDate: "2026-11-07T08:00:00", sourceName: "Apple Watch", deviceModel: "Watch", hardwareVersion: "Watch6,18" },
+        ], "vo2Max"),
+      ],
+      workouts: [],
+      typeStatus: {
+        heartRateVariabilitySDNN: { available: true, request: "shouldRequest", sharing: "notDetermined" },
+        vo2Max: { available: true, request: "unnecessary", sharing: "sharingDenied" },
+        workout: { available: true, request: "unnecessary", sharing: "sharingDenied" },
+        heartRateVariabilityRMSSD: { available: false },
+      },
+      nativeWorkouts: [
+        { activityType: 37, startDate: "2026-11-07T07:10:00.000Z", endDate: "2026-11-07T08:02:00.000Z", durationMin: 52, sourceName: "Apple Watch", distanceKm: 10.4, deviceModel: "Watch", hardwareVersion: "Watch6,18" },
+      ],
+      devices: ["Watch · Watch6,18 · Apple Watch"],
+    };
+    const text = formatHealthSignalsReport(d);
+    expect(text).toContain("HRV SDNN (bestehendes Plugin) [ms]: 0 Werte {NIE ANGEFRAGT}");
+    expect(text).toContain("VO2max [mL/(kg·min)]: 1 Werte {angefragt}");
+    expect(text).toContain("Watch Watch6,18");
+    expect(text).toContain("Geräte: Watch · Watch6,18 · Apple Watch");
+    expect(text).toContain("heartRateVariabilityRMSSD: auf diesem OS nicht vorhanden");
+    expect(text).toContain("Trainings laut bestehendem Plugin (0) {angefragt}");
+    expect(text).toContain("Trainings direkt aus HealthKit (1):");
+    expect(text).toContain("Typ 37  52 min  10.4 km  Apple Watch / Watch Watch6,18");
+  });
+
+  it("describeDevice: nur vorhandene Teile", () => {
+    expect(describeDevice({ deviceModel: "Watch", hardwareVersion: "Watch6,18" })).toBe("Watch · Watch6,18");
+    expect(describeDevice({})).toBeNull();
   });
 });
