@@ -46,7 +46,7 @@ describe("Typen, Einheiten und Labels", () => {
   });
 
   it("die Datennutzungsliste enthält Native-Typen und oxygenSaturation (Blutsauerstoff)", () => {
-    const all = listAppleHealthDataTypes();
+    const all = listAppleHealthDataTypes(true);
     for (const t of HEALTH_SIGNAL_TYPES) expect(all).toContain(HEALTH_SIGNAL_TYPE_LABELS[t]);
     expect(all).toContain("Blutsauerstoff");
     expect(new Set(all).size).toBe(all.length);

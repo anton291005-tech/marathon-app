@@ -34,7 +34,7 @@ export function SettingsDataUsagePage({
             Wenn du Apple Health verbindest, fragt MyRace Lesezugriff auf diese Daten an. Was du freigibst,
             entscheidest du im Apple-Dialog; MyRace schreibt nichts in Apple Health.
           </p>
-          <BulletList items={listAppleHealthDataTypes()} />
+          <BulletList items={listAppleHealthDataTypes(showDiagnostics)} />
           <p style={{ ...textStyle, marginTop: 12 }}>
             Trainings und Tageswerte zur Erholung werden in deinem MyRace-Konto gespeichert, damit Plan,
             Auswertung und Erholungsstand auf jedem Gerät gleich sind.

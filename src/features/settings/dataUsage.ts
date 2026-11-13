@@ -1,4 +1,4 @@
-import { APPLE_HEALTH_READ_TYPES } from "../../appleHealth/appleHealthService";
+import { APPLE_HEALTH_READ_TYPES, APPLE_HEALTH_WATCH_SIGNAL_ONLY_TYPES } from "../../appleHealth/appleHealthService";
 import { HEALTH_SIGNAL_TYPES, type HealthSignalType } from "../../appleHealth/healthSignalsPlugin";
 
 type AppleHealthReadType = (typeof APPLE_HEALTH_READ_TYPES)[number];
@@ -37,11 +37,16 @@ export const HEALTH_SIGNAL_TYPE_LABELS: Record<HealthSignalType, string> = {
   vo2Max: "VO2max",
 };
 
-/** Die angefragten Apple-Health-Datentypen in der Reihenfolge des HealthKit-Scopes. */
-export function listAppleHealthDataTypes(): string[] {
+/**
+ * Die angefragten Apple-Health-Datentypen in der Reihenfolge des HealthKit-Scopes. Die Uhr-Signale
+ * (`watchSignals`) nur, wenn dieser Build sie auch anfragt (`isWatchSignalsEnabled`); sonst würde die Seite
+ * Daten nennen, die gar nicht gelesen werden.
+ */
+export function listAppleHealthDataTypes(watchSignals = false): string[] {
+  const types = APPLE_HEALTH_READ_TYPES.filter((t) => watchSignals || APPLE_HEALTH_WATCH_SIGNAL_ONLY_TYPES.indexOf(t) < 0);
   return [
-    ...APPLE_HEALTH_READ_TYPES.map((type) => APPLE_HEALTH_TYPE_LABELS[type]),
-    ...HEALTH_SIGNAL_TYPES.map((type) => HEALTH_SIGNAL_TYPE_LABELS[type]),
+    ...types.map((type) => APPLE_HEALTH_TYPE_LABELS[type]),
+    ...(watchSignals ? HEALTH_SIGNAL_TYPES.map((type) => HEALTH_SIGNAL_TYPE_LABELS[type]) : []),
   ];
 }
 

@@ -6,7 +6,7 @@ import { AI_DATA_USES, APPLE_HEALTH_TYPE_LABELS, listAppleHealthDataTypes } from
 
 describe("Datennutzung", () => {
   test("jeder angefragte HealthKit-Typ hat genau einen eigenen Anzeigenamen", () => {
-    const labels = listAppleHealthDataTypes();
+    const labels = listAppleHealthDataTypes(true);
     expect(labels).toHaveLength(APPLE_HEALTH_READ_TYPES.length + HEALTH_SIGNAL_TYPES.length);
     expect(new Set(labels).size).toBe(labels.length);
     for (const type of APPLE_HEALTH_READ_TYPES) {
@@ -15,9 +15,24 @@ describe("Datennutzung", () => {
     expect(Object.keys(APPLE_HEALTH_TYPE_LABELS).sort()).toEqual([...APPLE_HEALTH_READ_TYPES].sort());
   });
 
-  test("die Seite listet alle Health-Typen und beide KI-Wege mit Anbieter", () => {
+  test("ohne Uhr-Signale-Flag (Production) fehlen Blutsauerstoff und die Native-Typen in der Liste und auf der Seite", () => {
+    const labels = listAppleHealthDataTypes();
+    expect(labels).toHaveLength(APPLE_HEALTH_READ_TYPES.length - 1);
+    expect(labels).not.toContain(APPLE_HEALTH_TYPE_LABELS.oxygenSaturation);
     render(<SettingsDataUsagePage />);
-    for (const label of listAppleHealthDataTypes()) {
+    expect(screen.queryByText(APPLE_HEALTH_TYPE_LABELS.oxygenSaturation)).toBeNull();
+    expect(screen.queryByText(/RMSSD/)).toBeNull();
+    expect(screen.queryByText("Uhr-Signale (Test)")).toBeNull();
+  });
+
+  test("mit Flag zeigt die Seite die Uhr-Signale", () => {
+    render(<SettingsDataUsagePage showDiagnostics />);
+    for (const label of listAppleHealthDataTypes(true)) expect(screen.getByText(label)).toBeInTheDocument();
+  });
+
+  test("die Seite listet alle Health-Typen und beide KI-Wege mit Anbieter", () => {
+    render(<SettingsDataUsagePage showDiagnostics />);
+    for (const label of listAppleHealthDataTypes(true)) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
     for (const use of AI_DATA_USES) {

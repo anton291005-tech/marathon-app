@@ -23,3 +23,12 @@ export function isCheckInEnabled(
   return /^marathon-[a-z0-9-]+-anton291005-techs-projects\.vercel\.app$/.test(hostname);
 }
 
+
+/**
+ * Uhr-Signale (Readiness Baustein B/C: RMSSD, Anstrengung, Handgelenktemperatur, Pulserholung, VO2max, SpO2):
+ * hängen am selben Schalter wie der Check-in. In Production fragt die App dafür keinen neuen HealthKit-Dialog an
+ * und listet die Typen nicht auf der Datennutzungsseite – das Feature ist dort noch versteckt.
+ */
+export function isWatchSignalsEnabled(): boolean {
+  return isCheckInEnabled();
+}

@@ -18,6 +18,7 @@ import type { PermissionState } from "../recovery/recoveryDisplayState";
 import type { RecoveryDailyRow } from "../recovery/recoveryTypes";
 import { loadHealthAnchors, saveHealthAnchors } from "./healthAnchorStore";
 import { appleHealthMissingCyclingDistance } from "./appleHealthPermissions";
+import { isWatchSignalsEnabled } from "../features/settings/settingsFlags";
 import { MyRaceHealthSignals } from "./healthSignalsPlugin";
 import { classifyWorkoutType } from "./workoutTypeClassifier";
 
@@ -36,6 +37,14 @@ export const APPLE_HEALTH_READ_TYPES = [
   "basalBodyTemperature",
   "oxygenSaturation",
 ] as const;
+
+/** Typen, die nur mit dem Uhr-Signale-Flag angefragt werden (`isWatchSignalsEnabled`). */
+export const APPLE_HEALTH_WATCH_SIGNAL_ONLY_TYPES: readonly (typeof APPLE_HEALTH_READ_TYPES)[number][] = ["oxygenSaturation"];
+
+/** Die Typen, die in diesem Build tatsächlich angefragt werden: ohne Flag fehlen die Uhr-Signale-Typen. */
+export function appleHealthReadTypesInScope(watchSignals: boolean = isWatchSignalsEnabled()): (typeof APPLE_HEALTH_READ_TYPES)[number][] {
+  return APPLE_HEALTH_READ_TYPES.filter((t) => watchSignals || APPLE_HEALTH_WATCH_SIGNAL_ONLY_TYPES.indexOf(t) < 0);
+}
 
 /** Lokale Mitternacht (Gerätekalender), analog zu Calendar.current.startOfDay. */
 export function localCalendarStartOfDay(d: Date): Date {
@@ -203,6 +212,7 @@ export async function healthKitIsAvailable(): Promise<boolean> {
  * ist für Bestandsnutzer die Stelle, an der die neuen Typen einmal erscheinen. Fehler sind nie fatal.
  */
 export async function healthSignalsRequestReadAuthorization(): Promise<void> {
+  if (!isWatchSignalsEnabled()) return;
   try {
     const result = await MyRaceHealthSignals.requestAuthorization();
     console.log("[appleHealthService] healthSignals requestAuthorization", result);
@@ -213,11 +223,11 @@ export async function healthSignalsRequestReadAuthorization(): Promise<void> {
 
 export async function healthKitRequestReadAuthorization(): Promise<void> {
   const { Health } = await import("@capgo/capacitor-health");
-  const result = await Health.requestAuthorization({ read: [...APPLE_HEALTH_READ_TYPES] });
+  const result = await Health.requestAuthorization({ read: appleHealthReadTypesInScope() });
   console.log("[appleHealthService] requestAuthorization", result);
   await healthSignalsRequestReadAuthorization();
   try {
-    const check = await Health.checkAuthorization({ read: [...APPLE_HEALTH_READ_TYPES] });
+    const check = await Health.checkAuthorization({ read: appleHealthReadTypesInScope() });
     console.log("[appleHealthService] checkAuthorization readAuthorized", check?.readAuthorized, "readDenied", check?.readDenied);
   } catch (e) {
     console.warn("[appleHealthService] checkAuthorization after request failed", e);
@@ -439,7 +449,7 @@ export async function healthKitFetchWorkoutsForAppStorage(
     if (!available?.available) return empty();
 
     try {
-      const perm = await Health.checkAuthorization({ read: [...APPLE_HEALTH_READ_TYPES] });
+      const perm = await Health.checkAuthorization({ read: appleHealthReadTypesInScope() });
       if (typeof process === "undefined" || process.env?.NODE_ENV !== "test") {
         console.log("[PERMISSIONS]", { readAuthorized: perm?.readAuthorized, readDenied: perm?.readDenied });
       }
@@ -587,7 +597,7 @@ export async function healthKitFetchWorkoutsForAppStorage(
 
     let missingCyclingDistance = false;
     try {
-      const check = await Health.checkAuthorization({ read: [...APPLE_HEALTH_READ_TYPES] });
+      const check = await Health.checkAuthorization({ read: appleHealthReadTypesInScope() });
       const auth = check?.readAuthorized;
       missingCyclingDistance = appleHealthMissingCyclingDistance(Array.isArray(auth) ? auth : undefined);
     } catch (e) {
