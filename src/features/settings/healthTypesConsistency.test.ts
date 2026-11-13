@@ -1,6 +1,7 @@
 // Info.plist-Text, Datenschutzerklärung und Datennutzungsseite müssen dieselben Apple-Health-Typen nennen.
 import { readFileSync } from "fs";
 import { join } from "path";
+import { HEALTH_CONSENT_TEXT } from "../checkin/healthConsent";
 import { listAppleHealthDataTypes } from "./dataUsage";
 
 const root = process.cwd();
@@ -20,6 +21,7 @@ const COMMON_TERMS = [
   "Atemfrequenz",
   "Ruhepuls",
   "Schlaf",
+  "Basal",
 ];
 
 describe("Health-Typen: Info.plist, Datenschutzerklärung, Datennutzungsseite", () => {
@@ -40,6 +42,15 @@ describe("Health-Typen: Info.plist, Datenschutzerklärung, Datennutzungsseite", 
   });
 
   it("offene Rechtsfragen sind mit TODO-RECHT markiert", () => {
-    expect((policy.match(/TODO-RECHT/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    expect((policy.match(/TODO-RECHT/g) ?? []).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("der Zustimmungstext v2 nennt dieselben Erholungs-Typen", () => {
+    for (const term of COMMON_TERMS) expect(HEALTH_CONSENT_TEXT).toContain(term);
+  });
+
+  it("Datenschutzerklärung beschreibt die In-App-Zustimmung und den Widerruf in der App", () => {
+    expect(policy).toContain("Gesundheitsdaten speichern?");
+    expect(policy).toContain("Einstellungen → Datenschutz &amp; Daten → Gesundheitsdaten");
   });
 });

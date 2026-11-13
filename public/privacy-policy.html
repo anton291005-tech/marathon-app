@@ -178,7 +178,7 @@
     <ul>
       <li><strong>Kontodaten:</strong> E-Mail-Adresse und Passwort (verschlüsselt) bei der Registrierung</li>
       <li><strong>Trainingsdaten:</strong> Trainingsplan, abgeschlossene Einheiten, Distanzen und Zeiten</li>
-      <li><strong>Gesundheitsdaten:</strong> nur mit deiner Erlaubnis aus Apple HealthKit – Trainings (Art, Zeitpunkt, Dauer, Strecke, Puls, Kalorien und die Anstrengung, die du oder deine Uhr dazu angibst) sowie Werte zur Erholung: Schlaf, Herzfrequenzvariabilität (HRV), Ruhepuls, Atemfrequenz, Körper- und Handgelenktemperatur, Blutsauerstoff, Pulserholung und VO2max. Welche Werte genau gelesen werden, steht in Abschnitt 6.</li>
+      <li><strong>Gesundheitsdaten:</strong> nur mit deiner Erlaubnis aus Apple HealthKit – Trainings (Art, Zeitpunkt, Dauer, Strecke, Puls, Kalorien und die Anstrengung, die du oder deine Uhr dazu angibst) sowie Werte zur Erholung: Schlaf, Herzfrequenzvariabilität (HRV), Ruhepuls, Atemfrequenz, Körper-, Basal- und Handgelenktemperatur, Blutsauerstoff, Pulserholung und VO2max. Welche Werte genau gelesen werden, steht in Abschnitt 6.</li>
       <li><strong>Kalenderdaten:</strong> nur mit deiner Erlaubnis Zeitpunkte und Titel deiner Termine, um Trainings um deinen Alltag zu planen</li>
       <li><strong>Nutzereingaben:</strong> Renndatum, Zielzeit, Trainingspräferenzen und Coach-Chateingaben</li>
     </ul>
@@ -221,14 +221,13 @@
       <li>Erholungswerte: Schlaf, HRV, Ruhepuls</li>
       <li>Zielzeit und maximale Herzfrequenz</li>
     </ul>
-    <!-- TODO-RECHT: Die Anstrengung (RPE) steckt in den Trainingseinträgen, die komplett an Anthropic gehen (sliceLogsLast30Days). Sie ist ein Gesundheitsdatum im Sinne von Art. 9 DSGVO: prüfen, ob die Einwilligung in den KI-Coach das abdeckt oder ausdrücklich genannt werden muss. -->
-    <p>Deine E-Mail-Adresse wird nicht mitgeschickt. Nur im Ausnahmefall, wenn MyRace deinen Plan nicht selbst berechnen kann, hilft Claude bei der Plan-Erstellung aus und bekommt dafür Renndistanz, Ziel und Zielzeit, Renndatum, Planstart, deinen Wochenumfang und deine Wünsche aus dem Freitext – ebenfalls nur mit deiner Zustimmung.</p>
+    <!-- Erledigt 13.11.2026: Die Anstrengung steht im Einwilligungstext des KI-Coachs (Version 2, alle wurden neu gefragt). -->    <p>Deine E-Mail-Adresse wird nicht mitgeschickt. Nur im Ausnahmefall, wenn MyRace deinen Plan nicht selbst berechnen kann, hilft Claude bei der Plan-Erstellung aus und bekommt dafür Renndistanz, Ziel und Zielzeit, Renndatum, Planstart, deinen Wochenumfang und deine Wünsche aus dem Freitext – ebenfalls nur mit deiner Zustimmung.</p>
     <p>Deine Zustimmung kannst du jederzeit in der App unter Einstellungen → Datenschutz &amp; Daten → KI-Coach widerrufen. Ab dann gehen keine Daten mehr an Anthropic.</p>
   </section>
 
   <section>
     <h2>6. Apple HealthKit</h2>
-    <p>MyRace liest Gesundheits- und Fitnessdaten aus Apple HealthKit nur, wenn du dies ausdrücklich erlaubst; MyRace schreibt nichts in Apple Health. Im Apple-Dialog entscheidest du für jeden Datentyp einzeln, ob MyRace ihn lesen darf.</p>
+    <p>MyRace liest Gesundheits- und Fitnessdaten aus Apple HealthKit nur, wenn du dies ausdrücklich erlaubst; MyRace schreibt nichts in Apple Health. Dafür fragt MyRace zweimal: zuerst in der App um deine Zustimmung zur Verarbeitung deiner Gesundheitsdaten (siehe „Rechtsgrundlage“), danach zeigt Apple den Dialog, in dem du für jeden Datentyp einzeln entscheidest, ob MyRace ihn lesen darf. Ohne Zustimmung in der App fragt MyRace die Erholungswerte nicht an und liest sie nicht; Trainings liest MyRace für Plan und Auswertung auch ohne sie.</p>
 
     <p><strong>Was MyRace liest und wofür:</strong></p>
     <ul>
@@ -251,11 +250,11 @@
 
     <p><strong>Weitergabe:</strong> Diese Daten werden nur für dein Training genutzt (Auswertung, Erholung, Coach), nie für Werbung oder Datenhandel weitergegeben und nur mit deiner Zustimmung an Anthropic geschickt (siehe Abschnitt 5). Dabei gehen Erholungswerte wie Schlaf, HRV (Tagesmittel) und Ruhepuls sowie die Anstrengung deiner Einheiten mit. Handgelenktemperatur, RMSSD, Blutsauerstoff, Pulserholung und VO2max gehen derzeit nicht an Anthropic.</p>
 
-    <p><strong>Rechtsgrundlage:</strong> Das sind Gesundheitsdaten im Sinne von Art. 9 DSGVO. Wir verarbeiten sie ausschließlich auf Grundlage deiner ausdrücklichen Einwilligung (Art. 9 Abs. 2 lit. a und Art. 6 Abs. 1 lit. a DSGVO), die du mit der Freigabe im Apple-Dialog erteilst.</p>
-    <!-- TODO-RECHT: (1) Genügt der iOS-HealthKit-Dialog als „ausdrückliche“ Einwilligung nach Art. 9 Abs. 2 lit. a, oder braucht es zusätzlich eine eigene Einwilligung in der App (Muster: profiles.health_consent_at beim Check-in) mit Text, Zeitpunkt und Version? (2) Für die Nachweispflicht (Art. 7 Abs. 1) wird die Freigabe im Apple-Dialog von MyRace nicht protokolliert. (3) Datenschutz-Folgenabschätzung (Art. 35) bei umfangreicher Verarbeitung von Gesundheitsdaten prüfen. -->
+    <p><strong>Rechtsgrundlage:</strong> Das sind Gesundheitsdaten im Sinne von Art. 9 DSGVO. Wir verarbeiten sie – mit Ausnahme deiner Trainings – ausschließlich auf Grundlage deiner ausdrücklichen Einwilligung (Art. 9 Abs. 2 lit. a und Art. 6 Abs. 1 lit. a DSGVO). Diese Einwilligung gibst du in der App („Gesundheitsdaten speichern?“), bevor MyRace Erholungswerte aus Apple Health liest, eine Anstrengung speichert oder einen Check-in speichert. MyRace speichert dazu in deinem Konto den Zeitpunkt (von unserem Server gesetzt) und die Version des Textes, dem du zugestimmt hast; jeder je gezeigte Wortlaut bleibt archiviert. Ohne Zustimmung speichert MyRace keine Anstrengung und fragt nicht erneut danach.</p>
+    <!-- TODO-RECHT: (1) Reicht die In-App-Einwilligung v2 (Text, Zeitpunkt per Server, Version, Wortlaut-Archiv im Code) als „ausdrückliche“ Einwilligung nach Art. 9 Abs. 2 lit. a und als Nachweis nach Art. 7 Abs. 1? (2) Rechtsgrundlage für Trainings (Puls, Kalorien = Gesundheitsdaten?) ohne diese Einwilligung klären – derzeit nur über die Apple-Freigabe. (3) Datenschutz-Folgenabschätzung (Art. 35) bei umfangreicher Verarbeitung von Gesundheitsdaten prüfen. -->
 
-    <p><strong>Widerruf:</strong> Du kannst die Einwilligung jederzeit mit Wirkung für die Zukunft widerrufen, für jeden Datentyp einzeln oder ganz: in den iPhone-Einstellungen unter Gesundheit → Datenzugriff &amp; Geräte → MyRace. Ab dann liest MyRace die betroffenen Werte nicht mehr. Bereits gespeicherte Werte bleiben in deinem Konto, bis du dein Konto in der App löschst (dann werden sie mit gelöscht) oder uns schreibst (siehe Abschnitt 8). Der Widerruf berührt nicht die Rechtmäßigkeit der bis dahin erfolgten Verarbeitung.</p>
-    <!-- TODO-RECHT: Muss ein Widerruf der HealthKit-Freigabe die bereits gespeicherten Werte automatisch löschen (Art. 17 Abs. 1 lit. b) oder genügt Löschung auf Wunsch/Konto-Löschung? Die App erkennt einen Widerruf in iOS derzeit nicht und löscht daher nichts automatisch. -->
+    <p><strong>Widerruf:</strong> Du kannst die Einwilligung jederzeit mit Wirkung für die Zukunft widerrufen: in der App unter Einstellungen → Datenschutz &amp; Daten → Gesundheitsdaten. Nach einer Bestätigung löscht MyRace dann deine Check-ins, deine Erholungswerte (Tabelle <em>recovery_daily</em>) und die Anstrengung deiner Einheiten aus deinem Konto und auf diesem Gerät und liest keine Erholungswerte mehr. Deine Trainings bleiben erhalten; sie löschst du mit deinem Konto. Den Lesezugriff selbst entziehst du zusätzlich in den iPhone-Einstellungen unter Gesundheit → Datenzugriff &amp; Geräte → MyRace – das kann die App nicht für dich tun. Der Widerruf berührt nicht die Rechtmäßigkeit der bis dahin erfolgten Verarbeitung.</p>
+    <!-- TODO-RECHT: Entzieht jemand nur die iOS-Freigabe (ohne Widerruf in der App), erkennt die App das nicht und löscht nichts automatisch – genügt das (Art. 17 Abs. 1 lit. b)? -->
   </section>
 
   <section>

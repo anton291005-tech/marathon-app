@@ -45,7 +45,7 @@
 	<key>NSCalendarsUsageDescription</key>
 	<string>MyRace liest deine Kalendertermine, um Trainingseinheiten an Tagen mit freier Zeit zu planen. Termine werden nicht verändert.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>MyRace liest deine Trainings (inkl. Strecke, Kalorien und der Anstrengung, die du oder deine Uhr dazu angibst), Herzfrequenz, Ruhepuls, Herzfrequenzvariabilität (HRV), Atemfrequenz, Blutsauerstoff, Schlaf, Körper- und Handgelenktemperatur, Pulserholung und VO2max, um dein Training und deine Erholung einzuschätzen. MyRace schreibt nichts in Apple Health.</string>
+	<string>MyRace liest deine Trainings (inkl. Strecke, Kalorien und der Anstrengung, die du oder deine Uhr dazu angibst), Herzfrequenz, Ruhepuls, Herzfrequenzvariabilität (HRV), Atemfrequenz, Blutsauerstoff, Schlaf, Körper-, Basal- und Handgelenktemperatur, Pulserholung und VO2max, um dein Training und deine Erholung einzuschätzen. MyRace schreibt nichts in Apple Health.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Diese App speichert Trainingsdaten, um deinen Fortschritt zu verbessern.</string>
 	<key>UIApplicationSceneManifest</key>

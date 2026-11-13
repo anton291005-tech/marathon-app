@@ -132,6 +132,27 @@ export async function collectHealthSignalsDiagnostics(): Promise<HealthSignalsDi
     signals.push({ ...summarizeSamples("HRV SDNN (bestehendes Plugin)", "ms", []), error: errMsg(e) });
   }
 
+  // Blutsauerstoff über das bestehende Plugin (angefragt mit dem Uhr-Signale-Flag; Nutzung entscheidet Schritt 4).
+  try {
+    const { Health } = await import("@capgo/capacitor-health");
+    const res = await Health.readSamples({
+      dataType: "oxygenSaturation",
+      startDate: startIso,
+      endDate: endIso,
+      limit: 5000,
+      ascending: false,
+    });
+    signals.push(
+      summarizeSamples("Blutsauerstoff SpO2 (bestehendes Plugin)", "%", (res.samples || []).map((s) => ({
+        value: s.value,
+        startDate: s.startDate,
+        sourceName: s.sourceName ?? "?",
+      }))),
+    );
+  } catch (e) {
+    signals.push({ ...summarizeSamples("Blutsauerstoff SpO2 (bestehendes Plugin)", "%", []), error: errMsg(e) });
+  }
+
   for (const type of HEALTH_SIGNAL_TYPES) {
     try {
       const res = await MyRaceHealthSignals.readQuantitySamples({

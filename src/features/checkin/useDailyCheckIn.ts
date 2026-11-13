@@ -1,9 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { loadDailyCheckins, saveDailyCheckin } from "../../lib/supabase/services/dailyCheckinsService";
 import { type CheckInEntry, readCheckInCache, shiftYmd, writeCheckInCache } from "./checkInState";
-import { loadHealthConsent, saveHealthConsent } from "./healthConsent";
+import {
+  getHealthConsentState,
+  setHealthConsentStatus,
+  subscribeHealthConsent,
+  type HealthConsentStatus,
+} from "../../health/healthConsentStore";
+import { applyLoadedHealthConsent, loadHealthConsent, markHealthConsentGranted, saveHealthConsent } from "./healthConsent";
 
-export type HealthConsentStatus = "loading" | "granted" | "undecided" | "unavailable";
+export type { HealthConsentStatus };
+
+/** Status der Gesundheits-Zustimmung für diesen Nutzer aus dem App-Zustand (`loading`, solange nicht geladen). */
+export function useHealthConsentStatus(userId: string | null | undefined): HealthConsentStatus {
+  const state = useSyncExternalStore(subscribeHealthConsent, getHealthConsentState, getHealthConsentState);
+  return userId && state.userId === userId ? state.status : "loading";
+}
 
 export type DailyCheckInController = {
   today: CheckInEntry | null;
@@ -17,20 +29,18 @@ export type DailyCheckInController = {
 /** Morgen-Check-in (Readiness Schritt 3): lokaler Cache + Supabase, offline nachreichen. */
 export function useDailyCheckIn(userId: string | null | undefined, todayYmd: string): DailyCheckInController {
   const [entries, setEntries] = useState<Record<string, CheckInEntry>>(() => readCheckInCache().entries);
-  const [consent, setConsent] = useState<HealthConsentStatus>("loading");
+  const consent = useHealthConsentStatus(userId);
   const todayRef = useRef(todayYmd);
   todayRef.current = todayYmd;
 
   useEffect(() => {
-    if (!userId) {
-      setConsent("loading");
-      return undefined;
-    }
+    if (!userId) return undefined;
     let cancelled = false;
+    setHealthConsentStatus(userId, "loading");
     void (async () => {
       const consentResult = await loadHealthConsent(userId);
       if (cancelled) return;
-      setConsent(consentResult.ok ? (consentResult.granted ? "granted" : "undecided") : "unavailable");
+      applyLoadedHealthConsent(userId, consentResult);
       if (!consentResult.ok || !consentResult.granted) return;
 
       // Ausstehende Tage nachreichen, dann Server-Stand holen (lokal ausstehende Tage gewinnen).
@@ -86,7 +96,7 @@ export function useDailyCheckIn(userId: string | null | undefined, todayYmd: str
   const grantConsent = useCallback(async () => {
     if (!userId) return false;
     const ok = await saveHealthConsent(userId, true);
-    if (ok) setConsent("granted");
+    if (ok) markHealthConsentGranted(userId);
     return ok;
   }, [userId]);
 

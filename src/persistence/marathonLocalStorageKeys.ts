@@ -29,6 +29,8 @@ export const DAILY_CHECKINS_CACHE_KEY = "marathonDailyCheckins";
 export const CHECKIN_SKIPPED_DAY_KEY = "marathonCheckinSkippedDay";
 /** Session-IDs, bei denen die Nachfrage „Wie anstrengend war …?“ mit „Später“ beendet wurde. */
 export const RPE_PROMPT_DISMISSED_KEY = "marathonRpePromptDismissed";
+/** Nutzer-IDs → Textversion, für die auf diesem Gerät die Gesundheits-Zustimmung abgelehnt/widerrufen wurde. */
+export const HEALTH_CONSENT_DECLINED_KEY = "marathonHealthConsentDeclined";
 
 /**
  * Read-only catalog for docs / debug (order is not normative).
@@ -52,4 +54,5 @@ export const KNOWN_MY_RACE_STORAGE_KEYS: readonly string[] = [
   DAILY_CHECKINS_CACHE_KEY,
   CHECKIN_SKIPPED_DAY_KEY,
   RPE_PROMPT_DISMISSED_KEY,
+  HEALTH_CONSENT_DECLINED_KEY,
 ];

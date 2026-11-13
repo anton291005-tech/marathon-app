@@ -101,7 +101,7 @@ export function CheckInSheet({
                 <h1 id="checkin-consent-title" className="mr-sheet__title">Deine Angaben speichern?</h1>
               </div>
             </header>
-            <p className="mr-sheet__text">{HEALTH_CONSENT_TEXT}</p>
+            <p className="mr-sheet__text" style={{ whiteSpace: "pre-line" }}>{HEALTH_CONSENT_TEXT}</p>
             <p className="mr-sheet__text">Du kannst den Check-in jederzeit auslassen. Ohne Zustimmung speichert MyRace nichts davon.</p>
             {consentFailed ? (
               <p className="mr-sheet__text" role="alert">Speichern hat nicht geklappt. Prüf deine Verbindung und versuch es noch einmal.</p>
