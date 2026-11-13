@@ -113,9 +113,24 @@ Morgen-Check-in (Spec §6.1) mit Gesundheits-Chips, ohne Wirkung auf den Plan.
 - **Rückweg:** Karte ausblenden (Flag `CHECKIN_ENABLED` in `src/features/settings/settingsFlags.ts`).
 - **Production:** `CHECKIN_ENABLED` bleibt in Production bis Schritt 14 **aus** (Preview und Antons Gerät an). Grund: Ein Check-in ohne sichtbare Wirkung ist der am besten belegte Weg, Nutzer zu verlieren (Spec §6.4). Voraussetzung für Production außerdem: Zustimmungstext und Datenschutzerklärung (Entscheidung 8 unten).
 
+### G1 · `feat/garmin-via-apple-health` — **MVP**, M (2 Tage), nach Hotfix Apple-Health-Verbindung, vor Schritt 4
+
+Garmin-Nutzer bekommen ihre Nachtdaten über Apple Health: Garmin Connect schreibt (nach Freischaltung in der Garmin-App) u. a. Schlaf, Herzfrequenz und Trainings nach Apple Health, aber **keine HRV**. Ziel: Diese Nutzer landen in Datenstufe **a2** (Spec §12) statt in b, ohne eigene Garmin-Schnittstelle.
+
+- **Voraussetzung:** Hotfix Apple-Health-Verbindung ist auf `main` (eigener Branch von `origin/main`: `activeEnergyBurned` aus der Anfrageliste, Recovery-Abruf liest `calories`, Schutztest gegen die Plugin-Typliste). Ohne ihn scheitert die HealthKit-Anfrage komplett.
+- **Quellen-unabhängig lesen:** kein Filter auf Apple Watch oder ein Bundle. Jedes Sample behält `sourceName` (und, wo vorhanden, Gerät) bis zur Aggregation. Welche Typen Garmin tatsächlich schreibt (Schlafphasen? Ruhepuls? Atemfrequenz?), auf einem Garmin-Testgerät prüfen – nicht aus Doku übernehmen.
+- **Eine Quelle pro Nacht und Typ, nicht mischen:** Liefern mehrere Quellen dieselbe Nacht (z. B. Apple Watch + Garmin, oder Uhr + iPhone-Schlafplan), wird je Typ eine Quelle gewählt: beim Schlaf die mit den meisten Schlafminuten im Hauptschlaffenster, bei Gleichstand die mit Gerät „Watch“/Uhr vor iPhone; Schlaf-HF und HRV aus der Quelle mit den meisten Werten im gewählten Schlaffenster. Keine Mittelwerte über Quellen (sonst doppelte Schlafminuten und vermischte Grundlinien). Die gewählte Quelle steht je Nacht in `signal_meta` (z. B. `sources.sleep`), damit ein Quellwechsel als neue Grundlinie erkennbar ist (Spec §4.2, gleiche Regel wie SDNN↔RMSSD).
+- **Onboarding-Hinweis:** Beim Verbinden von Apple Health und in Einstellungen → Verbindungen ein Satz für Garmin-Nutzer: „Garmin? In Garmin Connect die Verbindung zu Apple Health einschalten, dann kommen Schlaf und Puls auch hier an.“ Genauen Menüpfad in Garmin Connect auf dem Gerät prüfen. Hinweis nur zeigen, wenn keine Uhr-Nachtdaten ankommen oder eine Garmin-Quelle erkannt ist.
+- **Diagnose-Panel:** zeigt je Typ die Quellen mit Anzahl Werte (z. B. „Schlaf: Garmin Connect 7, iPhone 2“) und welche Quelle je Nacht gewählt würde.
+- **Dateien:** `src/recovery/aggregateRecoverySamples.ts` (Quellenwahl je Nacht als reine Funktion, z. B. `pickNightSource`), `src/recovery/aggregateRecoverySamples.ts`-Typ `MinimalHealthSample` um `sourceName?` erweitern, `src/appleHealth/appleHealthService.ts` (Quelle durchreichen), `src/appleHealth/healthSignalsDiagnostics.ts`, Hinweistext in den Verbinden-Stellen.
+- **Tests:** Nacht mit Apple Watch + Garmin → genau eine Quelle, keine doppelten Schlafminuten; Garmin-only-Nacht → Schlaf + Schlaf-HF, kein HRV-Nachtwert, Datenstufe a2; Quellwechsel zwischen Nächten → Kennzeichnung in `signal_meta`; Nacht mit nur iPhone-Schlafplan („im Bett“) zählt nicht als Uhr-Nacht.
+- **Abnahme:** Mit einem Garmin-Testgerät (Freundes-Test) stehen drei Nächte mit Schlaf und Schlaf-HF und der Quelle „Garmin Connect“ im Diagnose-Panel; mit Antons Apple Watch ändert sich nichts.
+- **Production / Entscheidung für Anton:** Die heutige Aggregation summiert Schlafsegmente aller Quellen – bei mehreren Quellen werden Schlafminuten heute schon doppelt gezählt. Soll die Quellenwahl auch die alten Felder (`sleepHours`, `hrvMs`) korrigieren (ändert die heutige Recovery-Zahl für Mehrquellen-Nutzer) oder nur die neuen Nachtfelder aus Schritt 4 speisen?
+- **Migration:** keine (Quelle in `signal_meta`, jsonb).
+
 ### 4 · `feat/readiness-night-signals` — **MVP**, M (2–3 Tage), nach 0
 
-Uhr-Daten richtig aggregieren (Spec §4.3, §4.4, §2 Punkt 1).
+Uhr-Daten richtig aggregieren (Spec §4.3, §4.4, §2 Punkt 1). **Quellen-unabhängig:** Die Nachtwerte entstehen aus der je Nacht gewählten Quelle (Schritt G1, `pickNightSource`) – kein Filter auf Apple Watch, keine Mittelwerte über Quellen. Fehlt HRV (z. B. Garmin), bleibt `hrv_night_ms` leer und die Nacht zählt für Schlaf und Schlaf-HF (Datenstufe a2).
 
 - **Migration `019_recovery_daily_night.sql`:** `sleep_hr`, `hrv_night_ms`, `hrv_samples` (Nummer 019, weil 018 parallel in Schritt 8 entsteht; Reihenfolge der Anwendung egal).
 - **Dateien:**
@@ -240,6 +255,7 @@ Einsichten nach Spec §11: `src/readinessCore/insights.ts` (Block-Bootstrap mit 
 
 ### 18 · Weitere „später“-Punkte (eigene kleine Branches)
 
+- **Garmin Health API** (direkte Anbindung, inkl. HRV und Body Battery): erst, wenn Garmin wieder Anträge für das Developer-Programm annimmt (laut Anton derzeit pausiert). Bis dahin läuft Garmin über Apple Health (Schritt G1, Datenstufe a2).
 - **rMSSD:** Nacht-HRV aus Schlag-zu-Schlag-Serien oder Series-12-Werten (abhängig von Schritt 0); Totband dann 0,5.
 - **KI-Vorschlag für Etiketten** mit Einwilligung (`/api/ai`-Unterroute, Vorschlag wirkt erst nach Bestätigung).
 - **Individuelle Sensitivitäten** ab 90 Tagen (Spec §11).
@@ -256,7 +272,8 @@ Einsichten nach Spec §11: `src/readinessCore/insights.ts` (Block-Bootstrap mit 
 | 1 | `feat/readiness-core-skeleton` | ja | S (1 T) | – | – | nein |
 | 2 | `feat/session-rpe` | ja | M (1,5 T) | – | 016 | ja, neue Frage |
 | 3 | `feat/daily-checkin` | ja | M–L (3 T) | – | 017 | nein (Flag in Production aus bis Schritt 14) |
-| 4 | `feat/readiness-night-signals` | ja | M (2–3 T) | 0 | 019 | nein (neue Felder) |
+| G1 | `feat/garmin-via-apple-health` | ja | M (2 T) | Hotfix Apple-Health-Verbindung | – | offen (Entscheidung Quellenwahl alte Felder) |
+| 4 | `feat/readiness-night-signals` | ja | M (2–3 T) | 0, G1 | 019 | nein (neue Felder) |
 | 5 | `feat/readiness-core-markers` | ja | M (2–3 T) | 1 | – | nein |
 | 6 | `feat/readiness-core-load` | ja | M (2 T) | 1 | – | nein |
 | 7 | `feat/readiness-core-life` | ja | M (2–3 T) | 1 | – | nein |
@@ -275,7 +292,7 @@ Einsichten nach Spec §11: `src/readinessCore/insights.ts` (Block-Bootstrap mit 
 **Aufwand bis Cutover:** Summe 33–40 Arbeitstage. **Kritischer Pfad:** 1 → 5 → 9 → 10 → 13 → 14 ≈ 15–19 Tage, plus 7 Tage `shadow` (laufen parallel zu 12 und 13). Mit drei parallelen Worktrees (Kern · Eingaben/UI · Kalender) realistisch rund drei Wochen Kalenderzeit.
 
 ```
-0 ─ 4 ───────────────────────┐
+0 ─ G1 ─ 4 ──────────────────┐
 2 ───────────────────────────┤
 3 ───────────────────────────┤
 1 ─┬─ 5 ─┐                   │
