@@ -25,8 +25,9 @@ export const APPLE_HEALTH_READ_TYPES = [
   "distance",
   "distanceCycling",
   "heartRate",
+  // „calories“ ist im Plugin die Aktivenergie (HKQuantityTypeIdentifier.activeEnergyBurned). Ein eigener Eintrag
+  // „activeEnergyBurned“ kennt @capgo/capacitor-health 8.4.2 nicht – der ganze Request schlug daran fehl.
   "calories",
-  "activeEnergyBurned",
   "sleep",
   "heartRateVariability",
   "restingHeartRate",
@@ -633,7 +634,8 @@ export async function healthKitFetchRecoveryDailyLast120Days(now: Date = getAppN
 
     const types = [
       "sleep",
-      "activeEnergyBurned",
+      // Aktivenergie: im Plugin „calories“; weiter unten als „activeEnergyBurned“ an die Aggregation gereicht.
+      "calories",
       "heartRateVariability",
       "restingHeartRate",
       "respiratoryRate",
@@ -653,7 +655,7 @@ export async function healthKitFetchRecoveryDailyLast120Days(now: Date = getAppN
         });
         for (const s of res.samples || []) {
           all.push({
-            dataType: s.dataType,
+            dataType: s.dataType === "calories" ? "activeEnergyBurned" : s.dataType,
             value: s.value,
             unit: s.unit,
             startDate: s.startDate,
