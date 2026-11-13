@@ -11,6 +11,11 @@ import { applyLoadedHealthConsent, loadHealthConsent, markHealthConsentGranted, 
 
 export type { HealthConsentStatus };
 
+/** Ist die Zustimmungs-Abfrage gerade offen? */
+export function useHealthConsentSheetOpen(): boolean {
+  return useSyncExternalStore(subscribeHealthConsent, getHealthConsentState, getHealthConsentState).sheetOpen;
+}
+
 /** Status der Gesundheits-Zustimmung für diesen Nutzer aus dem App-Zustand (`loading`, solange nicht geladen). */
 export function useHealthConsentStatus(userId: string | null | undefined): HealthConsentStatus {
   const state = useSyncExternalStore(subscribeHealthConsent, getHealthConsentState, getHealthConsentState);
@@ -63,6 +68,11 @@ export function useDailyCheckIn(userId: string | null | undefined, todayYmd: str
       cancelled = true;
     };
   }, [userId]);
+
+  // Nach dem Widerruf ist der lokale Cache leer: angezeigte Einträge nicht stehen lassen.
+  useEffect(() => {
+    if (consent === "declined") setEntries(readCheckInCache().entries);
+  }, [consent]);
 
   // Nachreichen auch beim Zurückkommen in die App und beim Wiederverbinden, nicht nur beim Laden.
   useEffect(() => {

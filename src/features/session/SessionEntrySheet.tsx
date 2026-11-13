@@ -39,6 +39,8 @@ type SessionEntrySheetProps = {
   onClose: () => void;
   /** Bearbeiten: Eintrag zurücknehmen (Einheit wieder offen). Ohne Handler kein Button. */
   onReopen?: () => void;
+  /** `false` = keine Anstrengung abfragen (Gesundheits-Zustimmung abgelehnt). Standard `true`. */
+  rpeEnabled?: boolean;
 };
 
 const RPE_VALUES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -55,6 +57,7 @@ export function SessionEntrySheet({
   onSave,
   onClose,
   onReopen,
+  rpeEnabled = true,
 }: SessionEntrySheetProps) {
   const [km, setKm] = useState(initialKm != null ? formatKmDe(initialKm) : "");
   const [feeling, setFeeling] = useState(normalizeFeeling(initialFeeling) ?? 0);
@@ -119,7 +122,7 @@ export function SessionEntrySheet({
             </div>
           ) : null}
 
-          {rpeLater ? (
+          {!rpeEnabled ? null : rpeLater ? (
             <button type="button" className="mr-rpe__resume" onClick={() => setRpeLater(false)}>
               Anstrengung doch angeben
             </button>
@@ -204,7 +207,13 @@ export function SessionEntrySheet({
             type="button"
             className="mr-btn mr-btn--primary mr-btn--block"
             onClick={() =>
-              onSave({ actualKm: hasKmField ? kmInputToLogValue(km) : undefined, feeling, rpe, notes, adoptSuggestion: adopted })
+              onSave({
+                actualKm: hasKmField ? kmInputToLogValue(km) : undefined,
+                feeling,
+                rpe: rpeEnabled ? rpe : null,
+                notes,
+                adoptSuggestion: adopted,
+              })
             }
           >
             Speichern

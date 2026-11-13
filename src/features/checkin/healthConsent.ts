@@ -9,7 +9,12 @@
  */
 
 import { getAppNow } from "../../core/time/timeSystem";
-import { setHealthConsentStatus, settleHealthConsentDecision, type HealthConsentStatus } from "../../health/healthConsentStore";
+import {
+  requestHealthConsentDecision,
+  setHealthConsentStatus,
+  settleHealthConsentDecision,
+  type HealthConsentStatus,
+} from "../../health/healthConsentStore";
 import { supabase } from "../../lib/supabase/client";
 import { DAILY_CHECKINS_CACHE_KEY, HEALTH_CONSENT_DECLINED_KEY } from "../../persistence/marathonLocalStorageKeys";
 import {
@@ -173,6 +178,13 @@ export async function revokeHealthConsentAndData(userId: string): Promise<Health
   } catch {
     return { ok: false, reason: "failed" };
   }
+}
+
+/** Aus den Einstellungen erneut zustimmen (auch nach „Nicht jetzt“ oder Widerruf): Ablehnung vergessen, dann fragen. */
+export function askHealthConsentAgain(userId: string): Promise<boolean> {
+  writeHealthConsentDeclinedOnDevice(userId, false);
+  setHealthConsentStatus(userId, "undecided");
+  return requestHealthConsentDecision();
 }
 
 /** „Nicht jetzt“ in der Abfrage: für diese Version auf diesem Gerät nicht erneut fragen. */

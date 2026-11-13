@@ -132,9 +132,27 @@ import { CheckInCard } from "./features/checkin/CheckInCard";
 import { CheckInReminderSetting } from "./features/checkin/CheckInReminderSetting";
 import { loadCheckInReminderSettings, saveCheckInReminderSettings, syncCheckInReminder } from "./services/notificationService";
 import { CheckInSheet } from "./features/checkin/CheckInSheet";
+import { HealthConsentSheet } from "./features/checkin/HealthConsentSheet";
+import { HealthConsentRevokeDialog } from "./features/checkin/HealthConsentRevokeDialog";
+import {
+  askHealthConsentAgain,
+  declineHealthConsent,
+  grantHealthConsent,
+  revokeHealthConsentAndData,
+} from "./features/checkin/healthConsent";
+import {
+  afterHealthConsentGranted,
+  connectAppleHealthWithConsent,
+  isRpeInputAvailable,
+  mayStoreRpe,
+  shouldAskHealthConsentOnColdStart,
+  stripRpeFromLogs,
+} from "./features/checkin/healthConsentFlow";
+import { useHealthConsentSheetOpen, useHealthConsentStatus } from "./features/checkin/useDailyCheckIn";
+import { requestHealthConsentDecision } from "./health/healthConsentStore";
 import { canEditCheckIn, carryOverIllness, carryOverPain, shouldOfferCheckIn } from "./features/checkin/checkInState";
 import { useDailyCheckIn } from "./features/checkin/useDailyCheckIn";
-import { isCheckInEnabled } from "./features/settings/settingsFlags";
+import { isCheckInEnabled, isWatchSignalsEnabled } from "./features/settings/settingsFlags";
 import { CHECKIN_SKIPPED_DAY_KEY } from "./persistence/marathonLocalStorageKeys";
 import { RpePromptCard } from "./features/session/RpePromptCard";
 import { pickRpePromptSession, readRpePromptDismissed, writeRpePromptDismissed } from "./features/session/rpePrompt";
@@ -1741,7 +1759,12 @@ export default function AppMain(){
         return;
       }
       logHealthKit("Requesting authorization", APPLE_HEALTH_READ_TYPES);
-      await healthKitRequestReadAuthorization();
+      // Mit Uhr-Signale-Flag: erst die Gesundheits-Zustimmung in der App, dann der Apple-Dialog.
+      await connectAppleHealthWithConsent({
+        watchSignals: watchSignalsEnabled,
+        askConsent: requestHealthConsentDecision,
+        requestHealthKit: healthKitRequestReadAuthorization,
+      });
       logHealthKit("Permission granted");
       localStorage.setItem(APPLE_HEALTH_CONNECTED_KEY, "1");
       setIsHealthConnected(true);
@@ -2287,6 +2310,7 @@ export default function AppMain(){
   /** Eintragen-Sheet: speichert den Eintrag als erledigt; optional mit dem vorgeschlagenen Health-Lauf verknüpft. */
   const saveModalEntry=async(values)=>{
     if(!modal)return;
+    const rpeStoreNow = !watchSignalsEnabled || healthConsentStatus === "granted";
     const suggestedRun = values.adoptSuggestion ? healthRunById.get(logs[modal.id]?.suggestedHealthRunId) : null;
     const { nextLogs, syncSessionIds } = suggestedRun
       ? buildLogsWithAssignedRun(modal, suggestedRun)
@@ -2295,14 +2319,23 @@ export default function AppMain(){
       ...(nextLogs[modal.id] || {}),
       ...(values.actualKm !== undefined ? { actualKm: values.actualKm } : {}),
       feeling: values.feeling,
-      rpe: values.rpe ?? undefined,
+      // Mit Uhr-Signale-Flag ohne Zustimmung: Anstrengung erst nach der Abfrage (unten), sonst verwerfen.
+      rpe: rpeStoreNow ? values.rpe ?? undefined : undefined,
       notes: values.notes,
       done: true,
       skipped: false,
       at: getAppNow().toISOString(),
     };
+    const entrySessionId = modal.id;
     await save(nextLogs, syncSessionIds);
     closeModal();
+    if (!rpeStoreNow && typeof values.rpe === "number") {
+      const allowed = await mayStoreRpe({ watchSignals: watchSignalsEnabled, status: healthConsentStatus, askConsent: requestHealthConsentDecision });
+      if (allowed) {
+        const current = logsRef.current;
+        await latestSaveRef.current?.({ ...current, [entrySessionId]: { ...(current[entrySessionId] || {}), rpe: values.rpe } }, [entrySessionId]);
+      }
+    }
   };
 
   /** Eintrag zurücknehmen: Einheit wieder offen, Gefühl/Notiz/km bleiben im Log. */
@@ -2349,6 +2382,76 @@ export default function AppMain(){
   const checkInDone = checkInBase && canEditCheckIn(checkInWindow);
   const showCheckInCard =
     checkInDone || (checkInBase && checkInSkippedDay !== checkInTodayYmd && shouldOfferCheckIn(checkInWindow));
+  // Gesundheits-Zustimmung v2 (nur mit Uhr-Signale-Flag): Abfrage beim Start, Nachladen nach Zustimmung, Widerruf.
+  const watchSignalsEnabled = useMemo(() => isWatchSignalsEnabled(), []);
+  const healthConsentUserId = watchSignalsEnabled ? user?.id ?? null : null;
+  const healthConsentStatus = useHealthConsentStatus(healthConsentUserId);
+  const healthConsentSheetOpen = useHealthConsentSheetOpen();
+  const rpeInputAvailable = isRpeInputAvailable(watchSignalsEnabled, healthConsentStatus);
+  // `save` liest Zustand aus dem Closure; nach dem Warten auf die Zustimmung die neueste Fassung nehmen.
+  const latestSaveRef = useRef(null);
+  latestSaveRef.current = save;
+  const healthConsentAskedOnStartRef = useRef(false);
+  useEffect(() => {
+    if (
+      !shouldAskHealthConsentOnColdStart({
+        watchSignals: watchSignalsEnabled,
+        userId: healthConsentUserId,
+        connected: Capacitor.getPlatform() === "ios" && isHealthConnected,
+        status: healthConsentStatus,
+        alreadyAsked: healthConsentAskedOnStartRef.current,
+      })
+    ) {
+      return;
+    }
+    healthConsentAskedOnStartRef.current = true;
+    void requestHealthConsentDecision();
+  }, [watchSignalsEnabled, healthConsentUserId, isHealthConnected, healthConsentStatus]);
+  const prevHealthConsentStatusRef = useRef(healthConsentStatus);
+  useEffect(() => {
+    const prev = prevHealthConsentStatusRef.current;
+    prevHealthConsentStatusRef.current = healthConsentStatus;
+    if (!watchSignalsEnabled || healthConsentStatus !== "granted" || prev === "granted") return;
+    afterHealthConsentGranted({
+      connected: Capacitor.getPlatform() === "ios" && isHealthConnected,
+      requestHealthKit: healthKitRequestReadAuthorization,
+      hydrateRecovery: async () => {
+        const incoming = await healthKitFetchRecoveryDailyLast120Days();
+        if (!incoming.length) return;
+        setRecoveryDailyRows((prevRows) => {
+          const next = mergeRecoveryDailyPersisted(prevRows, incoming);
+          onRecoveryDailyMergedRef.current(next, incoming);
+          return next;
+        });
+      },
+    }).catch((e) => console.warn("[healthConsent] Nachladen nach Zustimmung fehlgeschlagen", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Wechsel auf „zugestimmt“
+  }, [watchSignalsEnabled, healthConsentStatus]);
+  const [healthRevokeOpen, setHealthRevokeOpen] = useState(false);
+  const [healthRevokeBusy, setHealthRevokeBusy] = useState(false);
+  const [healthRevokeError, setHealthRevokeError] = useState<string | null>(null);
+  const [healthConsentFeedback, setHealthConsentFeedback] = useState<string | null>(null);
+  const confirmHealthRevoke = async () => {
+    if (!user?.id) return;
+    setHealthRevokeBusy(true);
+    setHealthRevokeError(null);
+    const result = await revokeHealthConsentAndData(user.id);
+    setHealthRevokeBusy(false);
+    if (!result.ok) {
+      setHealthRevokeError(
+        result.reason === "rpc_missing"
+          ? "Widerruf ist auf dem Server noch nicht eingerichtet. Es wurde nichts gelöscht."
+          : "Widerruf hat nicht geklappt. Prüf deine Verbindung und versuch es noch einmal. Es wurde nichts gelöscht.",
+      );
+      return;
+    }
+    const stripped = stripRpeFromLogs(logsRef.current);
+    if (stripped.changedIds.length) await latestSaveRef.current?.(stripped.logs, stripped.changedIds);
+    setRecoveryDailyRows([]);
+    setHealthRevokeOpen(false);
+    setHealthConsentFeedback("Zustimmung widerrufen. Check-ins, Erholungswerte und Anstrengungen sind gelöscht.");
+  };
+
   // Nachfrage „Wie anstrengend war …?“ (Readiness Schritt 2): einmal je Einheit, die ohne Anstrengung abgehakt wurde.
   const [rpePromptDismissed, setRpePromptDismissed] = useState<Set<string>>(() => readRpePromptDismissed());
   const rpePromptTodayYmd = getAppTodayYmd();
@@ -2367,8 +2470,13 @@ export default function AppMain(){
   }, []);
   // Kein useCallback: `save` liest logsRemoteReady/user aus dem Closure, eine veraltete Kopie würde nur in die Warteschlange schreiben.
   const rateRpePrompt = async (sessionId: string, rpe: number) => {
-    const prev = logs[sessionId] || {};
-    await save({ ...logs, [sessionId]: { ...prev, rpe } }, [sessionId]);
+    // Mit Uhr-Signale-Flag: ohne Gesundheits-Zustimmung wird die Anstrengung verworfen (nach Abfrage, falls offen).
+    if (!(await mayStoreRpe({ watchSignals: watchSignalsEnabled, status: healthConsentStatus, askConsent: requestHealthConsentDecision }))) {
+      return;
+    }
+    const current = logsRef.current;
+    const prev = current[sessionId] || {};
+    await (latestSaveRef.current ?? save)({ ...current, [sessionId]: { ...prev, rpe } }, [sessionId]);
   };
 
   // Trainings-Erinnerungen nur für Tage mit offener Einheit (nächste 14 Tage); nach Plan-Ende, an Ruhetagen und für
@@ -4291,7 +4399,7 @@ export default function AppMain(){
               }}
             />
           ) : null}
-          {rpePromptSession ? (
+          {rpePromptSession && rpeInputAvailable ? (
             <RpePromptCard
               title={typeof rpePromptSession.title === "string" && rpePromptSession.title.trim() ? rpePromptSession.title : "Training"}
               when={sessionYmd(rpePromptSession) === rpePromptTodayYmd ? "heute" : "gestern"}
@@ -5522,6 +5630,34 @@ export default function AppMain(){
                     }}
                   />
                 </SettingsGroup>
+                {watchSignalsEnabled && user?.id ? (
+                  <SettingsGroup
+                    title="Gesundheitsdaten"
+                    footer={
+                      healthConsentFeedback ??
+                      (healthConsentStatus === "granted"
+                        ? "MyRace liest und speichert deine Erholungswerte, Check-ins und die Anstrengung deiner Einheiten. Tippen, um zu widerrufen und sie zu löschen."
+                        : healthConsentStatus === "unavailable"
+                          ? "Status gerade nicht abrufbar (keine Verbindung?). Bis dahin liest und speichert MyRace keine Gesundheitsdaten."
+                          : "Aus. MyRace liest keine Erholungswerte und speichert keine Anstrengung. Tippen, um zuzustimmen.")
+                    }
+                  >
+                    <SettingsRow
+                      label="Gesundheitsdaten"
+                      value={healthConsentStatus === "granted" ? "An" : healthConsentStatus === "loading" || healthConsentStatus === "unavailable" ? "–" : "Aus"}
+                      disabled={healthConsentStatus === "loading" || healthConsentStatus === "unavailable"}
+                      onClick={() => {
+                        setHealthConsentFeedback(null);
+                        if (healthConsentStatus === "granted") {
+                          setHealthRevokeError(null);
+                          setHealthRevokeOpen(true);
+                        } else {
+                          void askHealthConsentAgain(user.id);
+                        }
+                      }}
+                    />
+                  </SettingsGroup>
+                ) : null}
                 <SettingsGroup>
                   <SettingsRow label={t("settings.privacy_policy")} href={PRIVACY_POLICY_URL} external />
                   <SettingsRow label="Welche Daten MyRace nutzt" onClick={() => openSettingsPage("dataUsage")} />
@@ -5665,6 +5801,7 @@ export default function AppMain(){
           onSave={saveModalEntry}
           onClose={() => setModalEntryOpen(false)}
           onReopen={modalLog?.done === true && !modalLog?.assignedRun?.runId ? reopenModalEntry : undefined}
+          rpeEnabled={rpeInputAvailable}
         />
       ) : null}
 
@@ -5674,6 +5811,18 @@ export default function AppMain(){
           userId={user?.id ?? null}
           initialPlanInputs={readPlanInputsFromPreferences(preferences)}
           onCancel={onboardingForNewPlan || newPrepWizardOpen ? handleOnboardingCancel : undefined}
+        />
+      ) : null}
+
+      {watchSignalsEnabled && user?.id && healthConsentSheetOpen ? (
+        <HealthConsentSheet onGrant={() => grantHealthConsent(user.id)} onDecline={() => declineHealthConsent(user.id)} />
+      ) : null}
+      {healthRevokeOpen ? (
+        <HealthConsentRevokeDialog
+          busy={healthRevokeBusy}
+          error={healthRevokeError}
+          onCancel={() => setHealthRevokeOpen(false)}
+          onConfirm={() => void confirmHealthRevoke()}
         />
       ) : null}
 
