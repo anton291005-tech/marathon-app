@@ -11,8 +11,25 @@
 import { getAppNow } from "../../core/time/timeSystem";
 import { setHealthConsentStatus, settleHealthConsentDecision, type HealthConsentStatus } from "../../health/healthConsentStore";
 import { supabase } from "../../lib/supabase/client";
-import { HEALTH_CONSENT_DECLINED_KEY } from "../../persistence/marathonLocalStorageKeys";
-import { safeReadLocalStorageJson, safeWriteLocalStorageJson } from "../../persistence/safeLocalStorage";
+import { DAILY_CHECKINS_CACHE_KEY, HEALTH_CONSENT_DECLINED_KEY } from "../../persistence/marathonLocalStorageKeys";
+import {
+  safeReadLocalStorageJson,
+  safeRemoveLocalStorageItem,
+  safeWriteLocalStorageJson,
+} from "../../persistence/safeLocalStorage";
+import {
+  RECOVERY_DAILY_STORAGE_KEY,
+  RECOVERY_HAS_EVER_KPI_KEY,
+  RECOVERY_HOME_SCORE_BY_DAY_KEY,
+} from "../../recovery/recoveryStorage";
+
+/** Lokale Schlüssel mit Gesundheitswerten, die der Widerruf leert. */
+export const HEALTH_DATA_LOCAL_KEYS: readonly string[] = [
+  DAILY_CHECKINS_CACHE_KEY,
+  RECOVERY_DAILY_STORAGE_KEY,
+  RECOVERY_HOME_SCORE_BY_DAY_KEY,
+  RECOVERY_HAS_EVER_KPI_KEY,
+];
 
 export const HEALTH_CONSENT_TEXTS = {
   /** 2026-11-12, Readiness Schritt 3 (nur Check-in). */
@@ -122,6 +139,40 @@ export async function grantHealthConsent(userId: string): Promise<boolean> {
   const ok = await saveHealthConsent(userId, true);
   if (ok) markHealthConsentGranted(userId);
   return ok;
+}
+
+export type HealthDataRevokeResult =
+  | { ok: true; deleted: { daily_checkins: number; recovery_daily: number; session_logs_rpe: number } }
+  | { ok: false; reason: "rpc_missing" | "failed" };
+
+/** Lokale Kopien der Gesundheitswerte (Check-in-Cache, Erholungs-Tageszeilen, Score-Verlauf) auf diesem Gerät leeren. */
+export function clearLocalHealthData(): void {
+  for (const key of HEALTH_DATA_LOCAL_KEYS) safeRemoveLocalStorageItem(key);
+}
+
+/**
+ * Widerruf (Migration 022): Zustimmung zurücksetzen und gespeicherte Gesundheitswerte löschen – in einer
+ * Transaktion auf dem Server. Erst bei Erfolg werden die lokalen Kopien geleert und der Status auf „abgelehnt“
+ * gesetzt (nicht erneut fragen). Die session_logs-Anstrengung im App-Zustand leert der Aufrufer.
+ */
+export async function revokeHealthConsentAndData(userId: string): Promise<HealthDataRevokeResult> {
+  try {
+    const { data, error } = await supabase.rpc("revoke_health_consent_and_data");
+    if (error) {
+      const missing = error.code === "PGRST202" || error.code === "42883";
+      return { ok: false, reason: missing ? "rpc_missing" : "failed" };
+    }
+    clearLocalHealthData();
+    writeHealthConsentDeclinedOnDevice(userId, true);
+    setHealthConsentStatus(userId, "declined");
+    const d = (data ?? {}) as Partial<Record<"daily_checkins" | "recovery_daily" | "session_logs_rpe", number>>;
+    return {
+      ok: true,
+      deleted: { daily_checkins: d.daily_checkins ?? 0, recovery_daily: d.recovery_daily ?? 0, session_logs_rpe: d.session_logs_rpe ?? 0 },
+    };
+  } catch {
+    return { ok: false, reason: "failed" };
+  }
 }
 
 /** „Nicht jetzt“ in der Abfrage: für diese Version auf diesem Gerät nicht erneut fragen. */
