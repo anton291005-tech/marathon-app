@@ -5,24 +5,24 @@
 
 ## Kurzfassung für Anton
 
-**Lohnt sich die Idee?** Für den Ideathlon ja. Als Unternehmen nur unter Bedingungen. Die Gruppe ist groß: rund 5,6 Millionen Menschen in Deutschland arbeiten in Schicht. Befragungen nennen immer wieder dieselben Hürden für Sport – unregelmäßige Pläne, Erschöpfung, Angebote zu Bürozeiten. Kleine Studien zeigen auch, dass Training Schichtarbeitenden hilft (Schlaf, Fitness), aber fast nur mit Anleitung vor Ort. Drei Dinge dämpfen: Es ist nicht belegt, dass Schichtarbeitende sich insgesamt weniger bewegen. Es ist nicht belegt, dass Training nach Dienstplan mehr bringt als allgemeine Tipps. Und als reine App ist die Idee schwach: Seit 2025 gibt es mehrere kleine Apps dafür, und in Deutschland werben schon zwei Anbieter auf dem Weg über die Krankenkassen (Carefit für die Pflege, AIMO als geprüfte Bewegungs-App) – beide ohne Trainingsplan nach Dienstplan.
+**Lohnt sich die Idee?** Für den Ideathlon ja. Als Unternehmen nur unter Bedingungen. Die Gruppe ist groß: rund 5,6 Millionen Menschen in Deutschland arbeiten in Schicht. Befragungen nennen immer wieder dieselben Hürden für Sport – unregelmäßige Pläne, Erschöpfung, Angebote zu Bürozeiten. Kleine Studien zeigen, dass Training Schichtarbeitenden hilft (Schlaf, Fitness), aber fast nur mit Anleitung vor Ort. Drei Dinge dämpfen: Es ist nicht belegt, dass Schichtarbeitende sich weniger bewegen. Es ist nicht belegt, dass Training nach Dienstplan mehr bringt als allgemeine Tipps. Und als reine App ist die Idee schwach: Seit 2025 gibt es mehrere kleine Apps dafür, und in Deutschland sind zwei Anbieter schon auf dem Weg über die Krankenkassen unterwegs (Carefit für die Pflege, AIMO als geprüfte Bewegungs-App) – beide ohne Trainingsplan nach Dienstplan.
 
-**In welcher Form?** Als zweites Produkt auf der Technik von MyRace, nicht als ganz neue App und nicht nur als Schalter in MyRace. Ehrlich gerechnet übernimmst du davon weniger, als es klingt: den Kalender-Import und die Technik zum Verschieben von Einheiten. Die Regeln für Schichten gibt es noch nicht, und die „Tagesform“ ist geplant, aber nicht gebaut. Der erste Bauschritt ist derselbe wie für einen Schicht-Modus in MyRace; du verlierst also nichts, wenn es dabei bleibt.
+**In welcher Form?** Als zweites Produkt auf der Technik von MyRace, nicht als neue App und nicht nur als Schalter in MyRace. Ehrlich gerechnet übernimmst du weniger, als es klingt: den Kalender-Import und die Technik zum Verschieben von Einheiten. Die Regeln für Schichten gibt es noch nicht; die „Tagesform“ ist geplant, aber nicht gebaut. Der erste Bauschritt ist derselbe wie für einen Schicht-Modus in MyRace – du verlierst nichts, wenn es dabei bleibt.
 
-**Was dich von anderen unterscheiden würde**, ist kein Code, sondern drei Dinge, die du noch nicht hast: eine Studie mit der Spoho, ein Prüfsiegel der Krankenkassen und ein Partner mit Zugang zu Betrieben. Die Spoho bietet dafür gute Türen: Das Institut, das für die AOK Gesundheitsförderung in Betrieben macht, ist mit der Hochschule verbunden und trägt dort seit April 2026 eine Professur für Bewegung und Vorbeugung.
+**Was dich unterscheiden würde**, ist kein Code, sondern drei Dinge, die du noch nicht hast: eine Studie mit der Spoho, ein Prüfsiegel der Krankenkassen und ein Partner mit Zugang zu Betrieben. Die Spoho bietet dafür gute Türen: Das Institut, das für die AOK Gesundheitsförderung in Betrieben macht, ist mit der Hochschule verbunden und trägt dort seit April 2026 eine Professur.
 
 **Über welchen Finanzierungsweg?** In drei Stufen:
-1. Ein kleiner Test mit einem Partner (dieses Institut, die TK oder eine Klinik). Bringt kaum Geld, aber Daten.
-2. Ein von den Kassen geprüfter Online-Kurs „Bewegung im Schichtdienst“ mit einer ausgebildeten Fachperson. Etwa 100 € je Teilnahme (Annahme); die Kasse erstattet den größten Teil. Wichtig: Der Kurs hat feste Inhalte, die App legt nur die Termine. Was MyRace besonders macht, hilft dort wenig.
-3. Lizenzen an Arbeitgeber und die Prüfung als eigenständige App. Erst hier zahlt sich die Technik aus. Das braucht ein Team, eine Studie und Fördergeld.
+1. Ein kleiner Test mit einem Partner (dieses Institut, die TK oder eine Klinik). Kaum Geld, aber Daten.
+2. Ein von den Kassen geprüfter Online-Kurs „Bewegung im Schichtdienst“ mit einer ausgebildeten Fachperson, etwa 100 € je Teilnahme (Annahme); die Kasse erstattet den größten Teil. Der Kurs hat feste Inhalte, die App legt nur die Termine – was MyRace besonders macht, hilft dort wenig.
+3. Lizenzen an Arbeitgeber und die Prüfung als eigenständige App. Erst hier zahlt sich die Technik aus. Das braucht Team, Studie und Fördergeld.
 
-Nicht tragfähig: ein Abo für Endkunden als Hauptweg, die Kasse als Zahler eines Abos, eine App auf Rezept. Die Polizei kommt nur über Geld des Landes in Frage, nicht über Krankenkassen.
+Nicht tragfähig: ein Abo für Endkunden als Hauptweg, die Kasse als Zahler eines Abos, eine App auf Rezept. Die Polizei käme nur über Geld des Landes in Frage, nicht über Krankenkassen.
 
-**Größtes Risiko:** Die Zielgruppe nutzt es nicht. Bei Bewegungs-Apps hört mehr als die Hälfte innerhalb von drei Monaten auf, und die Kasse erstattet einen Selbstlernkurs nur, wer ihn ganz abschließt. Das zweitgrößte Risiko bist du selbst: frühes Semester, allein, MyRace noch nicht im Store – und bis zum ersten Kurs wären es mindestens 50 bis 75 volle Arbeitstage.
+**Größtes Risiko:** Die Zielgruppe nutzt es nicht. Bei Bewegungs-Apps hört mehr als die Hälfte innerhalb von drei Monaten auf, und die Kasse erstattet einen Selbstlernkurs nur, wenn man ihn ganz abschließt. Das zweitgrößte Risiko bist du selbst: frühes Semester, allein, MyRace noch nicht im Store – und bis zum ersten Kurs wären es mindestens 50 bis 75 volle Arbeitstage.
 
 **Die nächsten drei Schritte:**
-1. **Bis 06.12. kein Code.** Mindestens fünf Schichtarbeitende befragen (Leitfaden in §6), die Antworten der Kontakte zählen, und selbst in der Kurssuche deiner Krankenkasse nach „Schicht“ suchen. Das Bewerbungsformular fragt genau nach solchen Zahlen.
-2. **Vier Lücken schließen:** Prof. Giurgiu (die neue Professur) und die Studie SHIFT2HEALTH an der Uni Bremen anschreiben; Carefit und AIMO ansehen; über deinen Gateway-Kontakt eine Absolventin oder einen Absolventen der Sportwissenschaft als Fachperson suchen.
+1. **Bis 06.12. kein Code.** Mindestens fünf Schichtarbeitende befragen (Leitfaden in §6), die Antworten der Kontakte auswerten und selbst in der Kurssuche deiner Krankenkasse nach „Schicht“ suchen.
+2. **Lücken schließen:** Prof. Giurgiu (die neue Professur) und die Studie SHIFT2HEALTH in Bremen anschreiben, Carefit und AIMO ansehen, über deinen Gateway-Kontakt eine fertige Sportwissenschaftlerin oder einen Sportwissenschaftler suchen.
 3. **Formular bis 06.12. abschicken** (Entwurf in `ideathlon-entwurf.md`). Am 31.01.2027 nach den Kriterien in §7 entscheiden: weitermachen, umbauen oder lassen.
 
 ---
