@@ -33,9 +33,9 @@ In §5 steht statt der vier Stufen „belegt“ (auf der genannten Seite gelesen
 
 1. **Die Zielgruppe ist groß.** 5,57 Mio. abhängig Beschäftigte arbeiten in Schicht (14,3 %, 2025, amtlich); rund 3 Mio. davon mit Nachtanteil (eigene Rechnung). In Gesundheit und Sozialem sind es rund 1,37 Mio. (2023). (stark)
 2. **„Schichtarbeitende bewegen sich weniger“ ist nicht belegt.** Die Meta-Analyse über 49 Studien findet keinen signifikanten Unterschied. Belegt sind die Barrieren: unregelmäßige Pläne, Erschöpfung, Betriebsangebote zu Tagarbeitszeiten – aus wenigen qualitativen Studien. (mittel bzw. schwach)
-3. **Training hilft vermutlich, die Planung am Dienstplan ist nicht geprüft.** Mehrere kleine randomisierte Studien an echten Schichtarbeitenden zeigen Nutzen für Schlaf und Fitness, fast immer mit angeleitetem Training vor Ort. Die einzige Studie zum Trainingszeitpunkt (n = 24, leichtes Training vor der Nachtschicht) fand keinen Effekt. Keine Studie prüft eine App, die Training am Dienstplan ausrichtet. (schwach–mittel)
-4. **Programme wirken eher im Betrieb als digital, und Apps verlieren schnell ihre Nutzer.** Moderate Evidenz für Aktivität und Gewicht, wenn Zeit, Ort, bezahlte Teilnahme und Rückhalt der Leitung stimmen. Die einzige gefundene Schicht-App/SMS-Studie (51 Bergleute in Botswana, 24 Tage) wirkte an Nacht- und Spätschichten nicht. Im echten Gebrauch hören bei Bewegungs-Apps 54–75 % innerhalb von rund drei Monaten auf. (mittel bzw. schwach)
-5. **Die Idee ist nicht mehr unbesetzt.** Seit 2025/2026 gibt es mehrere kleine englischsprachige Apps, die Training am Schichtplan ausrichten; die stärkste (IronShift) bietet schon Ausdauer- und Kraftpläne. Keine hat erkennbare Verbreitung oder eine Studie. In Deutschland wirbt **Carefit** mit einem dienstplanbasierten Gesundheitsportal für die Pflege und Kassenfinanzierung, ohne Trainingsplan; für Ernährung gibt es schon zertifizierte Kurse für Schichtarbeitende. Die großen Anbieter (WHOOP, Garmin, Runna/Strava, Google, Timeshifter) planen nicht nach Dienstplan, sind technisch aber nur ein Feature entfernt. (stark)
+3. **Training hilft vermutlich, die Planung am Dienstplan ist nicht geprüft.** Mehrere kleine randomisierte Studien an echten Schichtarbeitenden zeigen Nutzen für Schlaf und Fitness, fast immer mit angeleitetem Training vor Ort. Die einzige gefundene randomisierte Studie zum Trainingszeitpunkt an echten Schichtarbeitenden (n = 24, bewusst sehr leichtes Training vor der Nachtschicht) fand keinen Effekt. Keine Studie prüft eine App, die Training am Dienstplan ausrichtet. (schwach–mittel)
+4. **Programme wirken eher im Betrieb als digital, und Apps verlieren schnell ihre Nutzer.** Moderate Evidenz für Aktivität und Gewicht, wenn Zeit, Ort, bezahlte Teilnahme und Rückhalt der Leitung stimmen. Die einzige im Original gelesene Schicht-App/SMS-Studie (51 Bergleute in Botswana, 24 Tage) wirkte an Nacht- und Spätschichten nicht; eine koreanische Pilotstudie mit Mobilprogramm für 57 Pflegekräfte berichtet weniger Schlafstörungen (nur über eine Übersicht bekannt). Im echten Gebrauch hören bei Bewegungs-Apps 54–75 % innerhalb von rund drei Monaten auf. (mittel bzw. schwach)
+5. **Die Idee ist nicht mehr unbesetzt.** Seit 2025/2026 gibt es mehrere kleine englischsprachige Apps, die Training am Schichtplan ausrichten; die stärkste (IronShift) bietet schon Ausdauer- und Kraftpläne. Keine hat erkennbare Verbreitung oder eine Studie. In Deutschland wirbt **Carefit** mit einem dienstplanbasierten Gesundheitsportal für die Pflege und Kassenfinanzierung, ohne Trainingsplan; für Ernährung gibt es schon zertifizierte Kurse für Schichtarbeitende. Die großen Anbieter (WHOOP, Garmin, Runna/Strava, Google, Timeshifter) planen nicht nach Dienstplan (stark); bei Google und WHOOP ist der Abstand technisch aber nur ein Feature (Expertenmeinung).
 6. **SHIFT2HEALTH ist Gesprächspartner, nicht Vorläufer.** Die EU-Studie (u. a. Uni Bremen) prüft ein 24-Wochen-Lebensstilprogramm aus App und Workshops für Nachtschichtarbeitende. Hauptziel ist die Schlafdauer, Bewegung ist ein Baustein von vier; Ergebnisse frühestens 2028. Die Frage „hilft Trainingsplanung am Dienstplan?“ beantwortet sie voraussichtlich nicht. (stark / mittel)
 7. **Ein fortlaufendes Trainings-Abo ist als Präventionskurs nicht erstattungsfähig.** Zertifizierbar wäre ein abgeschlossener Online-Kurs mit 8–12 Modulen und anerkannter Kursleitung (Kapitel 5) oder ein App-Programm mit Studie, ISO 27001 und Fachperson (Kapitel 7). Erstattet wird einmalig, meist 75–150 € je Kurs, höchstens zwei Kurse pro Jahr. (stark)
 8. **Kapitel 7 passt inhaltlich am besten, ist für einen Solo-Gründer im Studium aber derzeit nicht erreichbar:** eigenes ISO-27001-Zertifikat (Pflicht seit 01.01.2025), registrierte Studie mit drei Messzeitpunkten, qualifizierte Person mit 48-Stunden-Antwortpflicht. (stark für die Anforderungen, Expertenmeinung für die Bewertung)
@@ -50,7 +50,7 @@ In §5 steht statt der vier Stufen „belegt“ (auf der genannten Seite gelesen
 
 | Befund | Abgrenzung | Jahr | Quelle | Evidenz |
 |---|---|---|---|---|
-| 14,3 % der Beschäftigten in Schichtarbeit; Nacht 8,7 %; Abend 24,6 % | Mikrozensus/Arbeitskräfteerhebung, „mindestens gelegentlich“ in 4 Wochen | 2025 (Erstergebnis) | Bundesregierung, BT-Drs. 21/5889, Daten Destatis | stark |
+| 14,3 % der abhängig Beschäftigten in Schichtarbeit; Nacht 8,7 %; Abend 24,6 % | Mikrozensus/Arbeitskräfteerhebung, „mindestens gelegentlich“ in 4 Wochen | 2025 (Erstergebnis) | Bundesregierung, BT-Drs. 21/5889, Daten Destatis | stark |
 | Zeitreihe Schichtarbeit: 17,0 % (2010) → 15,3 % (2020) → 14,3 % (2025) | wie oben; Zeitreihenbruch 2017 und 2020 | 2010–2025 | wie oben | stark, Vergleich über die Brüche eingeschränkt |
 | 14,6 % der Arbeitnehmer in Schichtarbeit | Eurostat, 15–64 Jahre | 2025 | Eurostat `lfsa_ewpshi` | stark |
 | 15 % der abhängig Beschäftigten im Schichtsystem; Gesundheits- und Sozialwesen 28 % | mindestens gelegentlich | 2023 | Destatis, berichtet u. a. von ihre-vorsorge.de und der-betrieb.de | stark (Sekundärquelle) |
@@ -78,7 +78,7 @@ In §5 steht statt der vier Stufen „belegt“ (auf der genannten Seite gelesen
 
 | Teilgruppe | Größe | Stichtag | Quelle | Anmerkung |
 |---|---|---|---|---|
-| Pflegeberufe gesamt | 1,76 Mio. sozialversicherungspflichtig Beschäftigte; 49 % Teilzeit; 81 % Frauen | Juni 2025 | Bundesagentur für Arbeit, „Arbeitsmarktsituation in Pflegeberufen“ (Mai 2026) | größte Gruppe |
+| Pflegeberufe gesamt | 1,76 Mio. sozialversicherungspflichtig Beschäftigte; 49 % Teilzeit; 81 % Frauen | Juni 2025 | Bundesagentur für Arbeit, „Arbeitsmarktsituation in Pflegeberufen“ (Mai 2026) | größte der hier aufgeführten Berufsgruppen (alle Beschäftigten, nicht nur Schichtdienst) |
 | – Krankenhaus | 734.000 Pflegekräfte (BA) bzw. 553.396 Köpfe im Pflegedienst (Krankenhausstatistik 2024, vdek-Basisdaten) | 2024/2025 | BA; vdek-Basisdaten 2026/2027 | zwei Abgrenzungen, nicht addieren |
 | – stationäre Pflege | 537.000 Pflegekräfte (BA); 817.711 Personal aller Berufsgruppen in 16.505 Heimen | 2025 / 15.12.2023 | BA; Destatis Pflegestatistik | |
 | – ambulante Pflege | 306.000 Pflegekräfte (BA); 446.425 Personal in 15.549 Diensten | wie oben | wie oben | meist Früh/Spät, selten Nacht (nicht belegt) |
@@ -96,7 +96,7 @@ In §5 steht statt der vier Stufen „belegt“ (auf der genannten Seite gelesen
 
 | Rang | Gruppe | Dafür | Dagegen |
 |---|---|---|---|
-| 1 | Polizei NRW | ein Arbeitgeber, Dienstsport verankert (36 Stunden pro Jahr plus 8 Stunden Zeitgutschrift, Landtag NRW, Vorlage 18/4801), DSHS forscht dort bereits (Goldmann) | kleine Gruppe (rund 12.000 im Wach- und Wechseldienst), langsame Beschaffung, Personalrat auch beim Piloten, Ergebnisse der DSHS-Befragung vertraulich; **kein Kassenweg** (freie Heilfürsorge) |
+| 1 | Polizei NRW | ein Arbeitgeber, Dienstsport verankert (36 Stunden pro Jahr plus 8 Stunden Zeitgutschrift, Landtag NRW, Vorlage 18/4801), die DSHS hat dort geforscht (Goldmann, Projekt bis 02/2024) | kleine Gruppe (rund 12.000 im Wach- und Wechseldienst), langsame Beschaffung, Personalrat auch beim Piloten, Ergebnisse der DSHS-Befragung vertraulich; **kein Kassenweg** (freie Heilfürsorge) |
 | 2 | Berufsfeuerwehr/Rettungsdienst | wenige Arbeitgeber, Fitness ist Berufsvoraussetzung, Köln als Referenz (Schichtprojekt Langhoff) | sehr klein, 24-Stunden-Dienst ist ein Sonderfall |
 | 3 | Industrie-Großbetriebe | Schicht konzentriert sich in Betrieben ab 250 Beschäftigten, dort gibt es BGM, Betriebsräte, Betriebskrankenkassen | die AOK bietet dort schon schichtspezifische Kurse an |
 | 4 | Pflege | große, gut abgrenzbare Gruppe, Belastung gut belegt, eigenes Kassenbudget, Kassenkurs und Kassen-BGF greifen | zersplittert (16.500 Heime, 15.500 Dienste), 49 % Teilzeit, Erschöpfung als Hauptbarriere; Carefit wirbt dort schon |
@@ -113,7 +113,7 @@ Diese Reihung bewertet den **Zugang**. Nimmt man den **Zahler** dazu, dreht sie 
 | Barrieren im Gesundheitswesen (12 Interviews, UK): unregelmäßige Dienstpläne, körperliche und psychische Erschöpfung, belastende Schichten, Familie. Förderlich: Angebote am Arbeitsplatz, Wissen über Trainingsgestaltung, **Zeitmanagement und Planung** | Sweeney et al. (2025), *J Occup Environ Med* 67(9) (nur Abstract im Repositorium gelesen) | schwach |
 | Co-Design-Studie mit 36 jungen Schichtarbeitenden (Australien): gleiche Barrieren, zusätzlich Scham und Schuldgefühle; Ergebnis sind frei zugängliche Materialien, u. a. zum Timing von Bewegung und Schlaf | Sprajcer et al. (2025), *Health Promot Int* 40(6):daaf175 | schwach |
 | 109 Schichtarbeitende in 15 Fokusgruppen: wechselnde Schichten verhindern feste Routinen, Müdigkeit senkt die Motivation | Nea et al. (2017), *J Occup Environ Med* 59(12):1153–1160 | mittel |
-| EU-Projekt Shift2Health, 148 Schichtarbeitende in fünf Ländern (auch Deutschland): Betriebsangebote sind auf Tagarbeit zugeschnitten; technische Lösungen werden teils als Fassade erlebt | Wrzesińska et al. (2026), *Eur J Public Health*, Kongress-Abstract | schwach–mittel |
+| EU-Projekt Shift2Health, 148 Schichtarbeitende in fünf Ländern (auch Deutschland): Betriebsangebote sind auf Tagarbeit zugeschnitten; ein Themenfeld heißt dort „Techno-Fassade“ (im Abstract nicht erläutert) | Wrzesińska et al. (2026), *Eur J Public Health*, Kongress-Abstract | schwach–mittel |
 | Bergbau-Pilot (Diamantenmine in Botswana, n = 51): Erschöpfung als Hauptbarriere; fehlende Einbindung des Managements bremste die Rekrutierung | Monnaatsie et al. (2023), *IJERPH* 20(4):3260 (Prozessevaluation) | schwach |
 
 **Korrektur gegenüber dem Auftrag:** Monnaatsie et al. 2021 erschien in *Preventive Medicine Reports*, nicht im *Scand J Work Environ Health*.
@@ -162,6 +162,7 @@ Diese Reihung bewertet den **Zugang**. Nimmt man den **Zahler** dazu, dreht sie 
 | 65 Publikationen: signifikant nur objektive Schlafdauer (g = 0,73) und Schlafeffizienz (g = 0,48); BMI, Blutdruck, subjektive Schlafqualität nicht | Crowther et al. (2021), *Clocks & Sleep* 3(1) | mittel |
 | 38 Interventionen: nur 4 verhaltensbezogen; Qualität niedrig, Adhärenz oft nicht berichtet | Neil-Sztramko et al. (2014), *Scand J Work Environ Health* 40(6) | schwach–mittel |
 | SMS/App-Programm im Bergbau (Botswana, n = 51, 24 Tage, keine saubere Randomisierung): mehr Aktivität an Tagschichten und freien Tagen, **nicht an Nacht- und Spätschichten** (dieser Teil steht nur im Abstract der Dissertation, nicht im Artikel); 15 % Ausstieg; Antwortquote App-Abfragen 59 %, SMS rund 10 % | Monnaatsie et al. (2023) und Dissertation | schwach |
+| Mobil vermitteltes Trainingsprogramm für 57 Pflegekräfte in Wechselschicht (Südkorea, Cluster-Pilot, 12 Wochen, 2-mal pro Woche): weniger Schlafstörungen und Tagesmüdigkeit | Ha et al., zitiert in Algharbi et al. (2026); Einzelstudie nicht gelesen | schwach |
 | Bewegungs-App für Erwerbstätige (Japan, RCT, n = 793, nur 2 % Nachtschicht): wöchentliche Nutzung 62 % in den Wochen 1–13, 37 % in den Wochen 14–26; kein Unterschied bei der selbst berichteten Aktivität | Watanabe et al. (2026), *J Med Internet Res* 28:e96072 | mittel (kaum Schichtarbeitende) |
 | VBG-Programm für langjährig Wechselschicht-Beschäftigte (stationär, App-Nachsorge mit Trainingsplänen): 286 Teilnehmende 2017–2023; Gesundheitswert nach 6 Monaten wieder gesunken (n = 36) | VBG (2024) | schwach |
 
@@ -418,7 +419,7 @@ Zeiten bis zum ersten Euro und Aufwand sind **Schätzungen dieser Recherche** (E
 |---|---|---|
 | BGM-Budgets: fast die Hälfte der Organisationen hat unter 10.000 € oder kein Budget; 6,6 % über 100.000 € (n = 1.529) | Studie #whatsnext BGM 2025, berichtet von Haufe | mittel |
 | Faustwert eines Beraters: 60–150 €, bis 350 € je Mitarbeitenden und Jahr | Haufe (2024) | Expertenmeinung |
-| Preise: Humanoo ab 249 €/Monat für 1–25 Mitarbeitende (03/2025); Wellhub Starter 1–3 € je Mitarbeitenden und Monat (10/2026); Urban Sports Club 20–49,90 € je aktiver Mitgliedschaft plus 28 € Grundgebühr; Headspace for Work rund 12–36 $ je Mitarbeitenden und Jahr | OMR; Wellhub; USC-Broschüre; Vendr | mittel / stark / mittel / schwach |
+| Preise: Humanoo ab 249 €/Monat für 1–25 Mitarbeitende (03/2025); Wellhub Starter 1–3 € je Mitarbeitenden und Monat (10/2026); Urban Sports Club 20–49,90 € je aktiver Mitgliedschaft plus 28 € Grundgebühr; Headspace für kleine Unternehmen 45–69,99 $ je Mitarbeitenden und Jahr (Anbieterseite 2026) | OMR; Wellhub; USC-Broschüre; Vendr | mittel / stark / mittel / schwach |
 | Weitere Preisanker: internationale Wellness-Apps 0,50–3,29 $ je Nutzer und Monat (Listenpreise, 08/2026); Benefit-Plattformen 0,90–9,00 € je Mitarbeitenden und Monat (11/2026); Firmenfitness mit Studiozugang rund 20–50 €. Für moove, machtfit, Fitbase, 7Mind, Kaia, nilo: kein öffentlicher Pro-Kopf-Preis | People Managing People; emplu; EGYM Wellpass (Beispielrechnung 27,50 €) | mittel / schwach |
 | Reine App-Lizenz 1–3 € je berechtigtem Mitarbeitenden und Monat | **Schätzung** am belegten Band (0,5–3 €); die erste Fassung nannte 2–6 € | Expertenmeinung |
 | Nutzungsquote: Wellhub nennt selbst 15–30 % Anmeldung im günstigsten Tarif; unabhängige Daten zu BGF-Apps in Deutschland nicht gefunden | Wellhub (10/2026) | schwach (Eigenangabe) |
@@ -448,10 +449,10 @@ Zeiten bis zum ersten Euro und Aufwand sind **Schätzungen dieser Recherche** (E
 |---|---|---|
 | 73 % der Smartphone-Nutzenden verwenden mindestens eine Gesundheits-App, 33 % Sport-Apps mit Übungen (n = 1.014) | Bitkom (2025) | mittel |
 | Preise: Strava 10,99 €/Monat bzw. 74,99 €/Jahr; adidas Running Premium 9,99 €/49,99 €; Freeletics 79,99 €/Jahr; Gymondo 99,88 €/Jahr; Runna 19,99 $/Monat bzw. 119,99 $/Jahr; Timeshifter 6,99 $/Monat | Red Bull (10/2026); the5krunner (11/2026); Timeshifter | mittel / stark |
-| Abo-Apps Health & Fitness weltweit: Download → Testphase 6,9 %, Testphase → zahlend 37,7 %, Download → zahlend 2,9 % (Median). 12-Monats-Bindung 28 % bei Jahresabos, 8 % bei Monatsabos (alle Kategorien) | RevenueCat, State of Subscription Apps 2026 | mittel (nicht deutschlandspezifisch) |
+| Abo-Apps Health & Fitness weltweit: Download → Testphase 6,9 %, Testphase → zahlend 37,7 %, Download → zahlend 2,9 % (Median, gemessen an Tag 35; die drei Mediane lassen sich nicht miteinander multiplizieren). 12-Monats-Bindung 28 % bei Jahresabos, 8 % bei Monatsabos (alle Kategorien) | RevenueCat, State of Subscription Apps 2026 | mittel (nicht deutschlandspezifisch) |
 | Timeshifter Shift Work hat im US-App-Store nur 21 Bewertungen | App Store | schwach (Hinweis auf geringe Selbstzahler-Nachfrage) |
 | Zahlungsbereitschaft allgemein: rund 10 % gaben 2024 in zwölf Monaten Geld für Gesundheits-App-Downloads aus; 2026 wollte weniger als die Hälfte für Gesundheits-Apps zahlen (n = 2.000) | Statista (03/2025); Deloitte, Mobile Health Consumer Trends (08/2026) | mittel |
-| Zahlungsbereitschaft von Schichtarbeitenden in Deutschland | **nicht gefunden** – Interviewfrage 8 | – |
+| Zahlungsbereitschaft von Schichtarbeitenden in Deutschland | **nicht gefunden** – Interviewfrage 7 (`entscheidung.md` §6) | – |
 | Oberes Ende bei Selbstzahlern: persönliches Schicht-Coaching 99–169 €/Monat (ALLTAGSKRAFT) | Anbieterseite (11/2026) | schwach (ein Anbieter) |
 
 ### 4.7 DiGA und Medizinprodukt
@@ -486,7 +487,7 @@ Zeiten bis zum ersten Euro und Aufwand sind **Schätzungen dieser Recherche** (E
 
 ### 4.9 Marktgröße bottom-up für die zwei vielversprechendsten Wege
 
-Alle Rechnungen sind **eigene Rechnungen mit offen gelegten Annahmen**, keine Marktstudie. In der Nachprüfung vom 16.11.2026 nachgerechnet (keine Rechenfehler) und an drei Stellen geändert: amtliche Ausgangszahl, Bewegungsanteil als Zwischenschritt, einheitliche Basis und niedrigerer Preis bei den Lizenzen.
+Alle Rechnungen sind **eigene Rechnungen mit offen gelegten Annahmen**, keine Marktstudie. In der Nachprüfung vom 16.11.2026 nachgerechnet (keine Rechenfehler) und an fünf Stellen geändert: amtliche Ausgangszahl, Bewegungsanteil als Zwischenschritt, Kurspreis 99–119 statt 99–129 €, einheitliche Basis und niedrigerer Preis bei den Lizenzen.
 
 **Weg A: Online-Präventionskurs „Bewegung im Schichtdienst“ (Kassenzuschuss)**
 
@@ -497,7 +498,7 @@ Alle Rechnungen sind **eigene Rechnungen mit offen gelegten Annahmen**, keine Ma
 | Kursteilnahmen je Versicherten und Jahr | 2,5 % (1,89 Mio. Teilnahmen bei 74,5 Mio. Versicherten) | Präventionsbericht 2025; Teilnahmen, nicht Personen |
 | davon online | 27 % | Präventionsbericht 2025 |
 | Online-Kursteilnahmen von Schichtarbeitenden pro Jahr, alle Themen | rund 34.000 | **Annahme:** Schichtarbeitende nehmen so häufig teil wie der Durchschnitt (eher optimistisch, weil 77 % der Teilnehmenden Frauen sind und Schichtarbeit männlich geprägt ist) |
-| davon im Handlungsfeld Bewegung | 57 % der Online-Teilnahmen → rund 19.500 | Präventionsbericht 2025, S. 96–97 |
+| davon im Handlungsfeld Bewegung | 57 % der Online-Teilnahmen → rund 19.400 | Präventionsbericht 2025, S. 96–97 |
 | Preis je Teilnahme | 99–119 € | **Annahme** am oberen Rand der Vergleichspreise: 69/90 € (Epassi), 99 € (Gymondo, 2022), 99,99 € und 119 € (zwei Ernährungskurse für Schichtarbeitende, §3.4) |
 
 | Szenario | Teilnahmen pro Jahr | Umsatz pro Jahr | Was das bedeutet |
@@ -510,7 +511,7 @@ Davon ab gehen die Kursleitung, Bezahlabwicklung und die Tatsache, dass die Kass
 
 **Weg D/E: Lizenz über Arbeitgeber bzw. BGF-Partner, Start in Krankenhaus und stationärer Pflege**
 
-Basis einheitlich: **berechtigt sind alle Pflegekräfte eines Hauses** (so würde ein Arbeitgeber lizenzieren). Der Anteil im Schichtdienst liegt je nach Quelle bei 43 % (BAuA 2021, alle Gesundheitsberufe) bis rund 94 % (Krankenpflege, BIBB/BAuA 2018).
+Basis einheitlich: **berechtigt sind alle Pflegekräfte eines Hauses** (so würde ein Arbeitgeber lizenzieren). Der Anteil im Schichtdienst liegt je nach Quelle bei 43 % (BAuA 2021, alle Gesundheitsberufe) bis rund 94 % (Krankenpflege, BIBB/BAuA 2018). Die Summe 1,09 Mio. mischt Krankenhausstatistik und Bundesagentur; mit den Zahlen der Bundesagentur allein (734.000 + 537.000) wären es 1,27 Mio. und 15–46 Mio. €.
 
 | Schritt | Wert | Herkunft |
 |---|---|---|
@@ -838,12 +839,12 @@ Format: Herausgeber/Autor (Jahr). Titel. Link. – Abruf jeweils 15./16.11.2026.
 
 ## 9. Was die Nachprüfung vom 16.11.2026 geändert hat
 
-Sechs unabhängige Prüfungen (Protokolle in `anhang/pruefung/`). Die meisten Zahlen, Paragrafen und Rechnungen der ersten Fassung haben gehalten. Geändert wurde:
+Sechs unabhängige Prüfungen und eine Schlussprüfung der überarbeiteten Fassung (Protokolle in `anhang/pruefung/`, v1 bis v7). Die meisten Zahlen, Paragrafen und Rechnungen der ersten Fassung haben gehalten. Geändert wurde:
 
 | Nr. | Thema | Erste Fassung | Jetzt | Folge |
 |---|---|---|---|---|
 | 1 | Zahl der Schichtarbeitenden | 5,6–5,9 bzw. 5,7 Mio. (eigene Rechnung) | 5,57 Mio., amtlich | in allen Dokumenten „rund 5,6 Mio.“ |
-| 2 | Evidenz zu Training | „einzige RCT an echten Schichtarbeitenden, kein Effekt“ | 10 RCTs mit vorläufigem Nutzen für Schlaf und Fitness; EuRhythDia ist nur die einzige zum Zeitpunkt | stärkt die Idee inhaltlich; die Lücke „App nach Dienstplan“ bleibt |
+| 2 | Evidenz zu Training | „einzige RCT an echten Schichtarbeitenden, kein Effekt“ | eine Übersicht mit 10 RCTs (8 an echten Schichtarbeitenden) mit vorläufigem Nutzen für Schlaf und Kognition, Einzelstudien auch für Fitness; EuRhythDia ist nur die einzige zum Zeitpunkt | stärkt die Idee inhaltlich; die Lücke „App nach Dienstplan“ bleibt |
 | 3 | Wettbewerb in Deutschland | „niemand im Kassen- oder BGF-Kontext“ | Carefit (Pflege, Dienstplan, § 20b), Ernährungskurse für Schichtarbeitende, AIMO als zertifizierte Bewegungs-App | USP enger fassen; Carefit und AIMO im Gespräch kennen |
 | 4 | IronShift | „Kraft und Cardio“ | auch Marathon-, Halbmarathon- und Hyrox-Pläne, Strava-Import | „echter Plan nach Dienstplan“ ist einzeln nicht mehr frei |
 | 5 | SHIFT2HEALTH | „dort entsteht die Evidenz, die dieser Idee fehlt“ | Schlaf als Hauptziel, Bewegung ein Baustein, Ergebnisse frühestens 2028 | Gesprächspartner, kein Vorläufer; kein Zeitdruck von dort |

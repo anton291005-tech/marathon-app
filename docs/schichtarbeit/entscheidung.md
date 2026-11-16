@@ -5,7 +5,7 @@
 
 ## Kurzfassung für Anton
 
-**Lohnt sich die Idee?** Für den Ideathlon ja. Als Unternehmen nur unter Bedingungen. Die Gruppe ist groß: rund 5,6 Millionen Menschen in Deutschland arbeiten in Schicht. Befragungen nennen immer wieder dieselben Hürden für Sport – unregelmäßige Pläne, Erschöpfung, Angebote zu Bürozeiten. Kleine Studien zeigen, dass Training Schichtarbeitenden hilft (Schlaf, Fitness), aber fast nur mit Anleitung vor Ort. Drei Dinge dämpfen: Es ist nicht belegt, dass Schichtarbeitende sich weniger bewegen. Es ist nicht belegt, dass Training nach Dienstplan mehr bringt als allgemeine Tipps. Und als reine App ist die Idee schwach: Seit 2025 gibt es mehrere kleine Apps dafür, und in Deutschland sind zwei Anbieter schon auf dem Weg über die Krankenkassen unterwegs (Carefit für die Pflege, AIMO als geprüfte Bewegungs-App) – beide ohne Trainingsplan nach Dienstplan.
+**Lohnt sich die Idee?** Für den Ideathlon ja. Als Unternehmen nur unter Bedingungen. Die Gruppe ist groß: rund 5,6 Millionen Menschen in Deutschland arbeiten in Schicht. Befragungen nennen immer wieder dieselben Hürden für Sport – unregelmäßige Pläne, Erschöpfung, Angebote zu Bürozeiten. Kleine Studien deuten darauf hin, dass Training Schichtarbeitenden hilft (Schlaf, Fitness), aber fast nur mit Anleitung vor Ort. Drei Dinge dämpfen: Es ist nicht belegt, dass Schichtarbeitende sich weniger bewegen. Es ist nicht belegt, dass Training nach Dienstplan mehr bringt als allgemeine Tipps. Und als reine App ist die Idee schwach: Seit 2025 gibt es mehrere kleine Apps dafür, und in Deutschland sind zwei Anbieter schon auf dem Weg über die Krankenkassen unterwegs (Carefit für die Pflege, AIMO als geprüfte Bewegungs-App) – beide ohne Trainingsplan nach Dienstplan.
 
 **In welcher Form?** Als zweites Produkt auf der Technik von MyRace, nicht als neue App und nicht nur als Schalter in MyRace. Ehrlich gerechnet übernimmst du weniger, als es klingt: den Kalender-Import und die Technik zum Verschieben von Einheiten. Die Regeln für Schichten gibt es noch nicht; die „Tagesform“ ist geplant, aber nicht gebaut. Der erste Bauschritt ist derselbe wie für einen Schicht-Modus in MyRace – du verlierst nichts, wenn es dabei bleibt.
 
@@ -13,17 +13,17 @@
 
 **Über welchen Finanzierungsweg?** In drei Stufen:
 1. Ein kleiner Test mit einem Partner (dieses Institut, die TK oder eine Klinik). Kaum Geld, aber Daten.
-2. Ein von den Kassen geprüfter Online-Kurs „Bewegung im Schichtdienst“ mit einer ausgebildeten Fachperson, etwa 100 € je Teilnahme (Annahme); die Kasse erstattet den größten Teil. Der Kurs hat feste Inhalte, die App legt nur die Termine – was MyRace besonders macht, hilft dort wenig.
+2. Ein von den Kassen geprüfter Online-Kurs „Bewegung im Schichtdienst“ mit einer ausgebildeten Fachperson, etwa 100 bis 120 € je Teilnahme (Annahme); die Kasse erstattet den größten Teil. Der Kurs hat feste Inhalte, die App legt nur die Termine – was MyRace besonders macht, hilft dort wenig.
 3. Lizenzen an Arbeitgeber und die Prüfung als eigenständige App. Erst hier zahlt sich die Technik aus. Das braucht Team, Studie und Fördergeld.
 
 Nicht tragfähig: ein Abo für Endkunden als Hauptweg, die Kasse als Zahler eines Abos, eine App auf Rezept. Die Polizei käme nur über Geld des Landes in Frage, nicht über Krankenkassen.
 
-**Größtes Risiko:** Die Zielgruppe nutzt es nicht. Bei Bewegungs-Apps hört mehr als die Hälfte innerhalb von drei Monaten auf, und die Kasse erstattet einen Selbstlernkurs nur, wenn man ihn ganz abschließt. Das zweitgrößte Risiko bist du selbst: frühes Semester, allein, MyRace noch nicht im Store – und bis zum ersten Kurs wären es mindestens 50 bis 75 volle Arbeitstage.
+**Größtes Risiko:** Die Zielgruppe nutzt es nicht. Bei Bewegungs-Apps hört mehr als die Hälfte innerhalb von drei Monaten auf, und die Kasse erstattet einen Selbstlernkurs nur, wenn man ihn ganz abschließt. Das zweitgrößte Risiko bist du selbst: frühes Semester, allein, MyRace noch nicht im Store – und bis zum ersten Kurs wären es je nach Ausbau rund 40 bis 75 volle Arbeitstage.
 
 **Die nächsten drei Schritte:**
-1. **Bis 06.12. kein Code.** Mindestens fünf Schichtarbeitende befragen (Leitfaden in §6), die Antworten der Kontakte auswerten und selbst in der Kurssuche deiner Krankenkasse nach „Schicht“ suchen.
+1. **Bis zur Abgabe am 04.12. kein Code.** Mindestens fünf Schichtarbeitende befragen (Leitfaden in §6), die Antworten der Kontakte auswerten und selbst in der Kurssuche deiner Krankenkasse nach „Schicht“ suchen.
 2. **Lücken schließen:** Prof. Giurgiu (die neue Professur) und die Studie SHIFT2HEALTH in Bremen anschreiben, Carefit und AIMO ansehen, über deinen Gateway-Kontakt eine fertige Sportwissenschaftlerin oder einen Sportwissenschaftler suchen.
-3. **Formular bis 06.12. abschicken** (Entwurf in `ideathlon-entwurf.md`). Am 31.01.2027 nach den Kriterien in §7 entscheiden: weitermachen, umbauen oder lassen.
+3. **Formular bis Freitag, 04.12., abschicken** (Frist ist der 06.12., ein Sonntag ohne Uhrzeit; Entwurf in `ideathlon-entwurf.md`). Am 31.01.2027 nach den Kriterien in §7 entscheiden: weitermachen, umbauen oder lassen.
 
 ---
 
@@ -71,16 +71,16 @@ In „Arbeitstagen“ wie im Readiness-Plan (ein Tag = ein konzentrierter Auftra
 
 | Paket | Inhalt | Aufwand |
 |---|---|---|
-| Vorlauf | Readiness-Schritte 5–10 und 12, die MyRace ohnehin plant (Schritt 12 setzt 10, 9, 5 und 6 voraus, `docs/readiness-plan.md`) | rund 19–24 Tage |
+| Vorlauf | Readiness-Schritte 5–10 und 12, die MyRace ohnehin plant (Schritt 12 setzt 7, 8 und 10 voraus, Schritt 10 die 9, Schritt 9 die 5, 6 und 7; `docs/readiness-plan.md`) | rund 19–24 Tage |
 | S1 Schicht-Kern | Schichtmodell, Eingabe per Muster oder Kalender-Etikett (erstmals eine Eingabe-Oberfläche), Tageseignung mit Nachtschicht und Tagschlaf, neue Regeln nach Schichttyp, Wochengrenzen, Tests | 8–12 Tage für den Rechenteil; bis zu einem zeigbaren Schicht-Modus mit Vorlauf eher 27–36 Tage plus Gerätetests |
 | S2 Gesundheitsplan | neuer Erzeuger: Plan ohne Rennziel, Kraft- und Einsteiger-Bibliothek, Planung nach Dienstfolge statt Wochentag | 15–25 Tage in der ersten Schätzung; die Nachprüfung hält 25–40 für realistischer (der Lauf-Kern allein war mit 21–25 Tagen geplant). Dazu fachliche Zuarbeit einer ausgebildeten Person |
 | S3 Kursformat | 8–12 Module mit Inhalten, Teilnahmebescheinigung, Nachrichtenkanal zur Fachperson, Verwaltung für die Kursleitung, Bezahlung und Rechnung, Auswertungsfragebögen | 10–15 Tage plus Inhalte (Videos, Texte); eher mehr, weil Bezahlung und Nachrichtenkanal in der ersten Schätzung fehlten |
 | S4 Android | Capacitor-Android, Health Connect statt HealthKit | 10–20 Tage; kein Android-Testgerät vorhanden |
 | S5 Betriebe | Lizenzcodes, Gesamtauswertung mit Mindestgruppe (ab 7 Personen), Datenschutzpaket | 10–15 Tage plus Rechtsprüfung |
 
-**Summen:** Option 3 braucht Vorlauf und S1 (rund 27–36 Tage). Option 2 bis zum ersten Kurs braucht Vorlauf, S1, S2 und S3: **mindestens 52–76 Arbeitstage**, mit der höheren Schätzung für S2 rund 60–90 – neben Studium, Nebenjobs und den offenen MyRace-Punkten. Option 1 braucht alles und zusätzlich eine eigene App-Hülle.
+**Summen:** Option 3 braucht Vorlauf und S1 (rund 27–36 Tage). Option 2 bis zum ersten Kurs: als fester Kurs nach Kapitel 5 (Vorlauf, S1, S3; Inhalte von der Fachperson) **rund 37–51 Arbeitstage**; mit eigenem Gesundheitsplan-Erzeuger (zusätzlich S2) **52–76**, mit der höheren Schätzung für S2 rund 60–90 – neben Studium, Nebenjobs und den offenen MyRace-Punkten. Option 1 braucht alles und zusätzlich eine eigene App-Hülle.
 
-Für einen reinen Kurs nach Kapitel 5 (feste Inhalte, App legt nur Termine) ließe sich S2 stark verkleinern: Dann trägt die Fachperson die Inhalte, und die App braucht nur S1 und S3. Das ist der schnellere Weg zu Stufe 2 – nutzt aber wenig von dem, was MyRace kann (siehe §2).
+Der feste Kurs ist der schnellere Weg zu Stufe 2: Die Fachperson trägt die Inhalte, die App braucht nur S1 und S3. Er nutzt aber wenig von dem, was MyRace kann (siehe §2).
 
 ---
 
@@ -92,7 +92,7 @@ Punkte von 1 (schwach) bis 5 (stark). Die Punkte sind eine Einschätzung; die Be
 |---|---|---|---|
 | **USP (Alleinstellungsmerkmal) jenseits von Code** | 3 – nur wenn Studie und Zertifikat dazukommen; die App allein ist kopierbar | **4** – Studie plus Zertifikat plus Partner; setzt auf Vorhandenem auf. Heute ist davon nichts vorhanden | 1 – ein Feature, das WHOOP, Garmin oder Google jederzeit nachziehen können |
 | **Finanzierbarkeit** | 3 – dieselben Wege wie Option 2, aber später | **3** – Kurs (Kasse erstattet), Arbeitgeber, später Lizenz; der Kurs trägt laut Recherche ein kleines Unternehmen, kein großes | 1 – nur Selbstzahler; Wettkampfvorbereitung passt nicht in die Kassenlogik |
-| **Aufwand bis zu einem zeigbaren Stand** | 1 – alles neu, zwei Apps pflegen | 2–3 – S1 zeigt schon etwas; bis zum Kurs 52–76 Tage | **4** – Vorlauf plus S1 |
+| **Aufwand bis zu einem zeigbaren Stand** | 1 – alles neu, zwei Apps pflegen | 2–3 – S1 zeigt schon etwas; bis zum Kurs je nach Ausbau rund 40–75 Tage | **4** – Vorlauf plus S1 |
 | **Passung zum Ideathlon** | 4 | **5** – Sport, Bewegung, Gesundheit; Anschluss an BGF-Institut und Präventionsforschung; kein vergleichbares Start-up im Spoho-Portfolio. Für StarS zählt zusätzlich Skalierbarkeit; die hat erst Stufe 3 (Lizenzen), nicht der Kurs | 2 – „Feature einer Lauf-App“ ist keine Gründungsidee |
 | **Risiko** (5 = gering) | 1 – höchster Einsatz, MyRace bleibt liegen | 2–3 – hängt an drei Voraussetzungen, die es noch nicht gibt | **4** – wenig Einsatz, wenig Ertrag |
 | **Synergie mit MyRace** | 1 | 3 – Kalender, Tausch-Technik, Einwilligungen, Protokoll; der Plan-Kern selbst hilft kaum. MyRace bekommt den Schicht-Kern mit | **5** |
@@ -121,7 +121,7 @@ Fehlen am 31.01.2027 Fachperson **oder** Institut, bleibt es bei Option 3 als Fu
 | Gruppe | Spricht dafür | Spricht dagegen | Passender Zahler |
 |---|---|---|---|
 | Pflegekräfte im Krankenhaus | große Gruppe (in der Krankenpflege arbeiten rund 94 % in Schicht); Kassenkurs und Kassenbudget für Betriebe greifen beide; MEHRWERT:PFLEGE als Kanal; Krankenhäuser sind weniger zersplittert als Heime | Erschöpfung als Hauptbarriere; 49 % Teilzeit in der Pflege; Carefit wirbt dort schon | Kasse (Kurs, BGF), Arbeitgeber |
-| Polizei NRW, Wach- und Wechseldienst | ein Arbeitgeber; Dienstsport verankert; Spoho forscht dort (Goldmann) | klein (rund 12.000 Stellen, Stand 2021); Personalrat muss auch einem Piloten zustimmen; **kein Kassenweg** – Polizeivollzugsbeamte haben freie Heilfürsorge und sind nicht gesetzlich versichert (geprüft, `research.md` §4.4) | nur das Land NRW direkt |
+| Polizei NRW, Wach- und Wechseldienst | ein Arbeitgeber; Dienstsport verankert; die Spoho hat dort geforscht (Goldmann, Projekt bis 02/2024) | klein (rund 12.000 Stellen, Stand 2021); Personalrat muss auch einem Piloten zustimmen; **kein Kassenweg** – Polizeivollzugsbeamte haben freie Heilfürsorge und sind nicht gesetzlich versichert (geprüft, `research.md` §4.4) | nur das Land NRW direkt |
 
 Für das Bewerbungsformular empfehle ich **Pflegekräfte im Krankenhaus als Start** und die Polizei als zweites Testfeld. Das weicht von der Reihung in `research.md` §2.2 ab (dort Polizei vor Pflege): Dort ging es um den Zugang, hier um den Zahler. Die Krankenhaus-Pflege ist die einzige Gruppe, bei der Kassenkurs und Kassenbudget zusammenpassen. Wenn die Interviews zeigen, dass Pflegekräfte kein strukturiertes Training wollen, die Polizei aber schon, drehst du es um – dann aber ohne Kassen.
 
@@ -133,14 +133,14 @@ Sortiert nach „wenn das falsch ist, ist die Idee tot“.
 
 | Nr. | Annahme | Was dafür spricht | Was dagegen spricht | Wie testen |
 |---|---|---|---|---|
-| A1 | **Schichtarbeitende wollen strukturiert trainieren, nutzen dafür regelmäßig eine App und halten ein Programm über 8–12 Wochen durch** – auch die, die heute wenig Sport machen | Barrieren-Studien nennen Planung als Hürde; Forenwünsche bei Garmin; kleine Studien zeigen Nutzen von Training für Schlaf und Fitness | Erschöpfung ist die Hauptbarriere. Gewirkt haben bisher vor allem angeleitete Programme vor Ort mit bezahlter Zeit und Rückhalt der Leitung, nicht digitale Angebote für die Freizeit (Demou 2018). Bei Bewegungs-Apps hören 54–75 % in rund 100 Tagen auf. In der einzigen Schicht-App-Studie, die die Recherche gefunden hat (51 Bergleute, 24 Tage), stieg die Bewegung an Nacht- und Spätschichten nicht. Die Kasse erstattet einen Selbstlernkurs nur bei vollständigem Abschluss. Forenwünsche kommen von Sportlern, nicht von Wenigbewegten | Interviews; später Pilot mit Nutzungs- und Abschlussquote |
-| A2 | **Planung nach Dienstplan führt zu mehr regelmäßiger Bewegung als allgemeine Tipps** | plausibel aus Schlaf- und Leistungsforschung | nicht belegt; keine Studie prüft eine App, die Training am Dienstplan ausrichtet; die einzige Studie zum Trainingszeitpunkt (leichtes Training vor der Nachtschicht) fand keinen Effekt | Einschätzung der Fachkontakte; Begleitstudie |
+| A1 | **Schichtarbeitende wollen strukturiert trainieren, nutzen dafür regelmäßig eine App und halten ein Programm über 8–12 Wochen durch** – auch die, die heute wenig Sport machen | Barrieren-Studien nennen Planung als Hürde; Forenwünsche bei Garmin; kleine Studien zeigen Nutzen von Training für Schlaf und Fitness | Erschöpfung ist die Hauptbarriere. Gewirkt haben bisher vor allem angeleitete Programme vor Ort mit bezahlter Zeit und Rückhalt der Leitung, nicht digitale Angebote für die Freizeit (Demou 2018). Bei Bewegungs-Apps hören 54–75 % in rund 100 Tagen auf. In der einzigen Schicht-App-Studie, die die Recherche im Original lesen konnte (51 Bergleute, 24 Tage), stieg die Bewegung an Nacht- und Spätschichten nicht. Die Kasse erstattet einen Selbstlernkurs nur bei vollständigem Abschluss. Forenwünsche kommen von Sportlern, nicht von Wenigbewegten | Interviews; später Pilot mit Nutzungs- und Abschlussquote |
+| A2 | **Planung nach Dienstplan führt zu mehr regelmäßiger Bewegung als allgemeine Tipps** | plausibel aus Schlaf- und Leistungsforschung | nicht belegt; keine Studie prüft eine App, die Training am Dienstplan ausrichtet; die einzige gefundene randomisierte Studie zum Trainingszeitpunkt an echten Schichtarbeitenden (bewusst sehr leichtes Training vor der Nachtschicht) fand keinen Effekt | Einschätzung der Fachkontakte; Begleitstudie |
 | A3 | **Ein am Dienstplan ausgerichtetes Programm ist zertifizierbar** (Online-Kurs nach Kapitel 5 mit flexibler Terminierung oder App nach Kapitel 7) | Kapitel 7 erlaubt ausdrücklich KI und starke Individualisierung; AIMO als Präzedenzfall. In Kapitel 5 ist ein abweichender Rhythmus begründbar. Schichtarbeitende kommen im Leitfaden mehrfach vor, im Betriebsteil sogar als Zielgruppe digitaler Angebote | Kapitel 5 erlaubt nur feste Module. Übernimmt die App Aufgaben der Kursleitung, gilt Kapitel 7 mit ISO 27001 und Studie. Wo die Grenze bei automatischer Terminplanung liegt, ist offen. Zum Dienstplan sagt der Leitfaden nichts | ZPP, GKV-Spitzenverband, Klein (TK) |
 | A4 | **Du findest eine anerkannte Fachperson und ein Institut** | Spoho-Umfeld; StarS nennt Mitgründersuche als Ziel; die Arbeitsgruppe Giurgiu arbeitet an Bewegung, die über Uhren im richtigen Moment ausgelöst wird | bisher niemand angesprochen bzw. keine Zusage; das Zertifikat hängt an der Person (wechselt sie, ist ein neuer Kurseintrag nötig) | Gateway-Kontakt, Biallas, Giurgiu |
-| A5 | **Ein Arbeitgeber oder BGF-Partner setzt ein digitales Schicht-Bewegungsangebot ein und zahlt dafür** | Kassen geben in Krankenhaus und Pflege weniger aus als vorgesehen; Bewegung kommt in 62 % der verhaltensbezogenen BGF-Maßnahmen vor (2024); der Leitfaden nennt Schichtarbeitende als Zielgruppe digitaler BGF | Kassen haben eigene Apps und feste Partner; sie kaufen über Ausschreibungen mit Umsatzhürden und langjährige Rahmenverträge (für die Pflege 2026 gerade neu vergeben); isolierte Angebote Externer sind ausgeschlossen; fast die Hälfte der befragten Organisationen hat unter 10.000 € oder kein BGM-Budget; Carefit wirbt um dasselbe Budget | BGF-Institut, Klein, Krämer, Kliniken, Stadt Köln |
+| A5 | **Ein Arbeitgeber oder BGF-Partner setzt ein digitales Schicht-Bewegungsangebot ein und zahlt dafür** | Kassen geben in Krankenhaus und Pflege weniger aus als vorgesehen; Bewegung kommt in 62 % der verhaltensbezogenen BGF-Maßnahmen vor (2024); der Leitfaden nennt Schichtarbeitende als Zielgruppe digitaler BGF | Kassen haben eigene Apps und feste Partner; sie kaufen über Ausschreibungen mit Umsatzhürden und langjährige Rahmenverträge (für die Pflege 2026 gerade neu ausgeschrieben); isolierte Angebote Externer sind ausgeschlossen; fast die Hälfte der befragten Organisationen hat unter 10.000 € oder kein BGM-Budget; Carefit wirbt um dasselbe Budget | BGF-Institut, Klein, Krämer, Kliniken, Stadt Köln |
 | A6 | **Beschäftigte bekommen ihren Dienstplan mit wenig Aufwand in die App** | Schichtkalender-Apps schreiben in den Gerätekalender; Muster sind einfach einzugeben | kein öffentlicher Kalender-Export der Dienstplansysteme gefunden; der Supershift-Export kostet Geld; der Import von MyRace überspringt Ganztagstermine und Kalender-Abos; Pläne ändern sich kurzfristig | Interviewfragen 1 und 2; Supershift-Export selbst ausprobieren |
-| A7 | **Betriebsrat oder Personalrat stimmen zu, und Beschäftigte vertrauen einer vom Arbeitgeber bezahlten Gesundheits-App** | „Arbeitgeber zahlt, sieht aber nichts“ ist rechtlich möglich (Einschätzung) | Gesundheits- und Dienstplandaten sind heikel; laut Shift2Health werden technische Angebote teils als Fassade erlebt; in NRW ist der Personalrat schon beim Piloten zu beteiligen | GdP, Interviewfrage 8, Kliniken |
-| A8 | **Du bist schnell genug und hast die Zeit** – bevor WHOOP, Garmin oder Google die Funktion nachziehen und bevor Carefit oder AIMO das Feld bei den Kassen besetzen | Zertifikat und Studie schützen, sobald sie da sind | frühes Semester, allein, MyRace nicht im Store; mindestens 52–76 Arbeitstage bis zum ersten Kurs; Kapitel 7 kostet 12–18 Monate; eine Studie mit Studierenden nennt fehlende Zeit neben Studium und Job als Hauptgrund, warum aus Gründungsabsicht nichts wird | ehrlicher Zeitplan; Entscheidung am 31.01. |
+| A7 | **Betriebsrat oder Personalrat stimmen zu, und Beschäftigte vertrauen einer vom Arbeitgeber bezahlten Gesundheits-App** | „Arbeitgeber zahlt, sieht aber nichts“ ist rechtlich möglich (Einschätzung) | Gesundheits- und Dienstplandaten sind heikel; im EU-Projekt Shift2Health heißt ein Themenfeld der Befragungen „Techno-Fassade“ (nicht näher erläutert); in NRW ist der Personalrat schon beim Piloten zu beteiligen | GdP, Interviewfrage 8, Kliniken |
+| A8 | **Du bist schnell genug und hast die Zeit** – bevor WHOOP, Garmin oder Google die Funktion nachziehen und bevor Carefit oder AIMO das Feld bei den Kassen besetzen | Zertifikat und Studie schützen, sobald sie da sind | frühes Semester, allein, MyRace nicht im Store; je nach Ausbau rund 40–75 Arbeitstage bis zum ersten Kurs; Kapitel 7 kostet 12–18 Monate; eine Studie mit Studierenden nennt fehlende Zeit neben Studium und Job als Hauptgrund, warum aus Gründungsabsicht nichts wird | ehrlicher Zeitplan; Entscheidung am 31.01. |
 
 ---
 
@@ -179,7 +179,7 @@ Sortiert nach „wenn das falsch ist, ist die Idee tot“.
 | **A1 bei Wenigbewegten** | Das Forum erreicht nur Leute, die schon laufen. Die Kassen bezahlen aber Angebote für Menschen mit Bewegungsmangel | Interviews gezielt über MEHRWERT:PFLEGE, DBfK, GdP gewinnen; mindestens die Hälfte der Befragten sollte keinen regelmäßigen Sport machen |
 | **A4 Fachperson** | Biallas testet nur den Instituts-Teil; die Fachperson testet kein Kontakt, und ohne sie gibt es kein Zertifikat | Gateway-Kontakt fragen; Nachricht an Absolventinnen und Absolventen des M.A. Rehabilitation, Prävention und Gesundheitsmanagement |
 | **Prof. Dr. Marco Giurgiu fehlt** | Stiftungsprofessur für Bewegungsbezogene Präventionsforschung an der Spoho, getragen vom BGF-Institut; arbeitet mit Wearables im Betrieb | anschreiben – inhaltlich der passendste Kontakt an der Hochschule, für Studie (A2, A4) und Brücke zum BGF-Institut (A5) |
-| **SHIFT2HEALTH (Uni Bremen)** | einzige laufende deutsche Studie mit App für Nachtschichtarbeitende; Schlaf ist das Hauptziel, Bewegung ein Baustein | an schichtarbeit@uni-bremen.de schreiben (Dr. Hannah Jilani, Urte Klink): Was planen sie nach Studienende? Welche Erfahrungen mit Teilnahme und Abbruch? |
+| **SHIFT2HEALTH (Uni Bremen)** | einzige gefundene laufende Studie mit App für Nachtschichtarbeitende und deutschen Standorten; Schlaf ist das Hauptziel, Bewegung ein Baustein | an schichtarbeit@uni-bremen.de schreiben (Dr. Hannah Jilani, Urte Klink): Was planen sie nach Studienende? Welche Erfahrungen mit Teilnahme und Abbruch? |
 | **Carefit und AIMO** | die zwei Anbieter, die einer Kasse oder Klinik als „gibt es schon“ einfallen | beide ansehen; im Gespräch erklären können, was dein Angebot anders macht (Trainingsplan nach Dienstplan) – und offen sein für Zusammenarbeit |
 | **Kurssuche der Kassen** | ob es schon einen Bewegungskurs für Schichtarbeitende gibt, ließ sich nicht maschinell prüfen | selbst in der Kurssuche von TK, AOK oder Barmer nach „Schicht“ suchen (10 Minuten) |
 | **Betriebsrat und Datenschutz (A7)** | Nur die GdP deckt die Sicht der Beschäftigtenvertretung ab | in den Klinik-Antworten nach der Mitarbeitervertretung fragen |
@@ -205,7 +205,7 @@ Sortiert nach „wenn das falsch ist, ist die Idee tot“.
 
 ## 6. Interviewleitfaden für Schichtarbeitende
 
-Ziel: zehn Gespräche, mindestens fünf vor dem 06.12. Dauer etwa 15 Minuten. Regeln: nach Erlebtem fragen, nicht nach Wünschen oder Regeln. Die Idee erst am Ende nennen. Mitschreiben, was die Person **getan** hat. Mindestens die Hälfte der Befragten ohne regelmäßigen Sport, mindestens zwei Berufsgruppen, keine Freunde oder Familie.
+Ziel: zehn Gespräche, mindestens fünf vor dem 04.12. Dauer etwa 15 Minuten. Regeln: nach Erlebtem fragen, nicht nach Wünschen oder Regeln. Die Idee erst am Ende nennen. Mitschreiben, was die Person **getan** hat. Mindestens die Hälfte der Befragten ohne regelmäßigen Sport, mindestens zwei Berufsgruppen, keine Freunde oder Familie.
 
 Einstieg: „Ich studiere an der Sporthochschule und möchte verstehen, wie Bewegung und Schichtdienst im Alltag zusammengehen. Es gibt keine richtigen oder falschen Antworten, und ich verkaufe nichts.“
 
@@ -222,13 +222,13 @@ Einstieg: „Ich studiere an der Sporthochschule und möchte verstehen, wie Bewe
 
 Abschluss: Idee in zwei Sätzen nennen. Reaktion wörtlich notieren. Dann: „Würdest du das nutzen, wenn dein Arbeitgeber es bezahlt – und was würde dich abhalten?“, „Dürfte ich dich anschreiben, wenn es etwas zum Ausprobieren gibt?“ und „Wen sollte ich noch fragen?“
 
-**Auswertung je Interview (ja/nein).** „Ungefragt“ heißt: in den Antworten auf Frage 3, 4 oder 5, bevor du Schlaf oder Schichten selbst ansprichst.
+**Auswertung je Interview (ja/nein).** „Ungefragt“ heißt: Die Person nennt den Grund in den Antworten auf Frage 3, 4 oder 5 von sich aus, ohne dass du nach Gründen, Planung oder Schlaf fragst. Dass es um Schichtdienst geht, weiß sie aus Einstieg und Frage 1; das lässt sich nicht vermeiden.
 
 | Merkmal | Aus Frage |
 |---|---|
 | nennt ungefragt Planung, wechselnde Zeiten oder Unregelmäßigkeit als Grund | 3, 4, 5 |
 | nennt ungefragt Erschöpfung oder Schlaf als Grund | 3, 4, 5 |
-| welcher der beiden Gründe wiegt für die Person schwerer? (Planung / Erschöpfung / anderes) | 4, 5, 9 |
+| welcher der beiden Gründe wiegt für die Person schwerer? (Planung / Erschöpfung / anderes) | 4, 5 |
 | hat schon mindestens einen eigenen Lösungsversuch unternommen | 6 |
 | macht derzeit regelmäßig Sport (mindestens einmal pro Woche) | 3 |
 | Dienstplan liegt digital vor oder folgt einem festen Muster | 1, 2 |
@@ -260,6 +260,7 @@ Die Schwellen sind eine Setzung, damit die Entscheidung vorher feststeht und nic
 
 - 30 bis 59 % die Planung nennen: fünf weitere Gespräche führen, dann neu zählen.
 - weniger als vier der 23 Kontakte geantwortet haben: Dann liegt es eher am Zugang als an der Idee – erst nachfassen.
+- das Problem bestätigt ist, aber genau eine der Schwellen Leidensdruck, Bereitschaft, Dienstplan oder Zahler verfehlt wird: fünf weitere Gespräche bzw. einmal nachfassen, dann neu zählen. Werden zwei oder mehr verfehlt: Option 3.
 
 ### Umbauen, wenn das Problem bestätigt ist, aber ein Baustein kippt
 
@@ -273,13 +274,13 @@ Die Schwellen sind eine Setzung, damit die Entscheidung vorher feststeht und nic
 
 ### Lassen, wenn eines davon zutrifft
 
-- Weniger als 30 % der Befragten beschreiben Planung als Problem.
+- Weniger als 30 % der Befragten nennen ungefragt Planung oder Unregelmäßigkeit.
 - Bis 31.01. liegt von keinem Fach- oder Kassenkontakt eine Antwort vor, die eine Bedingung, einen Namen oder einen nächsten Schritt nennt – obwohl mindestens vier geantwortet haben.
 - ZPP und GKV-Spitzenverband schließen das Konzept aus **und** kein Arbeitgeber zeigt Interesse.
 - Am 31.01. fehlt die Fachperson oder das Institut (siehe §2, „Die Bedingung“). Dann bleibt Option 3.
 - MyRace ist bis dahin nicht in TestFlight, und du merkst, dass die Schicht-Idee Zeit vom Launch abzieht. Dann hat MyRace Vorrang.
 
-**Was in jedem Fall bleibt:** die Teilnahme am Ideathlon (frühphasig, Feedback, erspart die StarS-Bewerbung), die Kontakte zu BGF-Institut und TK und der Schicht-Kern als künftige Funktion von MyRace.
+**Was in jedem Fall bleibt:** die Teilnahme am Ideathlon (frühphasig, Feedback, erspart die Ideenskizze für StarS, nicht das Auswahlgespräch), die Kontakte zu BGF-Institut und TK und der Schicht-Kern als künftige Funktion von MyRace.
 
 ---
 
@@ -290,11 +291,11 @@ Getroffen ohne Rückfrage; bitte gezielt widersprechen.
 | Nr. | Annahme oder Entscheidung | Folge, falls falsch |
 |---|---|---|
 | 1 | Du bist zu zehn Interviews und später zu einem kleinen Piloten mit Begleitstudie bereit (bei der Ideensuche hattest du Feldtests zunächst ausgeschlossen – ohne einen kleinen Piloten gibt es aber weder Nutzungsdaten noch Studie) | Ohne Pilot und Studie trägt Option 2 nicht; dann bleibt Option 3 |
-| 2 | Bis zum 06.12. entsteht kein Code für die Schicht-Idee; bis zum Ideathlon höchstens ein klickbarer Entwurf ohne App-Code. Der Fahrplan von MyRace (Readiness, TestFlight) bleibt unberührt | – |
+| 2 | Bis zur Abgabe am 04.12. entsteht kein Code für die Schicht-Idee; bis zum Ideathlon höchstens ein klickbarer Entwurf ohne App-Code. Der Fahrplan von MyRace (Readiness, TestFlight) bleibt unberührt | – |
 | 3 | Der Ableger bekommt einen eigenen Namen; „Race“ passt nicht zu einem Angebot, das die Kassen als Gesundheitssport prüfen | bei Verzicht auf den Kassenweg unerheblich |
-| 4 | Startgruppe im Entwurf: Pflegekräfte im Krankenhaus; Polizei NRW als zweites Testfeld | Formularfelder 2 und 7 anpassen |
+| 4 | Startgruppe im Entwurf: Pflegekräfte im Krankenhaus; Polizei NRW als zweites Testfeld | Formularfelder 3, 7 und 8 anpassen |
 | 5 | Aufwandsschätzungen in §1.3 und alle Zeitangaben bis zum ersten Euro sind Schätzungen | Reihenfolge der Stufen bleibt, Dauer ändert sich |
-| 6 | Preise sind geschätzt: Kurs rund 100 € (Vergleichspreise 69–130 €), Arbeitgeberlizenz 1–3 € je berechtigter Person und Monat (belegtes Band 0,5–3 €) | Marktgröße in `research.md` §4.9 verschiebt sich |
+| 6 | Preise sind geschätzt: Kurs rund 100–120 € (gerechnet mit 99–119 €; Vergleichspreise 69–130 €), Arbeitgeberlizenz 1–3 € je berechtigter Person und Monat (belegtes Band 0,5–3 €) | Marktgröße in `research.md` §4.9 verschiebt sich |
 | 7 | **Semester:** Im Auftrag stand „2. Semester“. Nach deinem Studienbeginn im Wintersemester 2025/26 wäre das laufende Semester das dritte. Die Dokumente schreiben deshalb „frühes Semester“ bzw. im Entwurf einen Platzhalter | bitte selbst eintragen |
 | 8 | Die Punkte im Optionsvergleich und die Schwellen in §7 sind Setzungen | – |
 | 9 | Die erste Fassung entstand ohne zweite Suche (Suchkontingent erschöpft). Am 16.11. haben sechs unabhängige Prüfungen nachgeprüft; die Befunde sind eingearbeitet (`research.md` §9). Alle Zahlen und Zitate sind weiterhin maschinell ausgelesen | Kernzahlen vor dem Poster im Original nachschlagen (`research.md` §8) |

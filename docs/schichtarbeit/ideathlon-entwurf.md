@@ -42,13 +42,13 @@ Genau der scheitert oft am Dienstplan. Befragte Schichtarbeitende nennen wiederh
 
 `[Grafik-Vorschlag: zwei Wochenleisten untereinander. Oben ein üblicher Trainingsplan „Di / Do / So“. Darunter eine echte Schichtwoche aus einem Interview (F F S S N N –). Markiert ist, wo beide zusammenstoßen.]`
 
-Belege: Bundesregierung, BT-Drs. 21/5889 (Daten Destatis, 2025); S2k-Leitlinie AWMF 002-030 (2021; die Gültigkeit ist laut Register abgelaufen, eine Neufassung liegt nicht vor); Sweeney et al. 2025; Nea et al. 2017; Wrzesińska et al. 2026.
+Belege: Bundesregierung, BT-Drs. 21/5889 (Daten Destatis, 2025); S2k-Leitlinie AWMF 002-030 (2021; Gültigkeit vermutlich seit 10/2025 abgelaufen, Stand der Überarbeitung nicht geprüft); Sweeney et al. 2025; Nea et al. 2017; Wrzesińska et al. 2026.
 
 > Nicht schreiben: „Schichtarbeitende bewegen sich weniger.“ Die Meta-Analyse zeigt das nicht. Nicht schreiben: „Schichtarbeit macht krank“ oder „senkt das Risiko für …“. Belegt sind Zusammenhänge, keine Ursachen, und Aussagen über Krankheitsrisiken machen aus einer Trainings-App rechtlich schnell ein Medizinprodukt. Nicht schreiben: „jeder Trainingsplan“ – es gibt kleine Apps, die nach Schichten planen (Feld 3).
 
 ### Feld 3 – „Markt & Wettbewerb“
 
-**Markt.** Rund 5,6 Mio. Schichtarbeitende, davon rund 1,4 Mio. in Gesundheit und Sozialem (2023), dazu Industrie, Handel, Polizei, Feuerwehr und Rettungsdienst. Geld für Vorbeugung ist im System: Die Krankenkassen zählten 2024 rund 1,9 Mio. Teilnahmen an Präventionskursen (27 % online) und gaben 282 Mio. € für Gesundheitsförderung in Betrieben aus. In Krankenhäusern und Pflegeeinrichtungen blieben sie unter dem gesetzlichen Mindestbetrag.
+**Markt.** Rund 5,6 Mio. Schichtarbeitende, davon rund 1,4 Mio. in Gesundheit und Sozialem (2023), dazu Industrie, Handel, Polizei, Feuerwehr und Rettungsdienst. Geld für Vorbeugung ist im System: Die Krankenkassen zählten 2024 rund 1,9 Mio. Teilnahmen an Präventionskursen (27 % online) und wendeten 282 Mio. € für Gesundheitsförderung in Betrieben auf (darin 17 Mio. € nicht ausgegebene Mittel). In Krankenhäusern und Pflegeeinrichtungen blieben sie unter dem gesetzlichen Mindestbetrag.
 
 **Wettbewerb.**
 
@@ -60,7 +60,7 @@ Belege: Bundesregierung, BT-Drs. 21/5889 (Daten Destatis, 2025); S2k-Leitlinie A
 | Kurse und Coachings auf Deutsch (z. B. Ernährungskurse für Schichtarbeitende, PPF Germany für Polizei, persönliches Coaching für 99–169 € im Monat) | vermitteln Regeln oder betreuen einzeln | kein automatischer Plan; kein geprüfter Bewegungskurs für Schichtarbeitende gefunden `[selbst in der Kurssuche geprüft am …]` |
 | Timeshifter | Schlaf, Licht, Koffein für Schichtarbeitende | kein Training |
 | WHOOP, Garmin, Google, Runna/Strava | Trainingspläne, teils Erholungswerte | planen nicht nach Dienstplan – könnten es aber schnell nachbauen |
-| Krankenkassen | Broschüren, Seminare, allgemeine Fitness-Apps | nichts plant Training am Dienstplan |
+| Krankenkassen | Broschüren, Seminare, allgemeine Fitness-Apps; die AOK auch schichtbezogene Kurse im Betrieb | kein Angebot gefunden, das Training am Dienstplan ausrichtet |
 | SHIFT2HEALTH (EU-Studie, u. a. Uni Bremen) | Programm aus App und Workshops für Nachtschichtarbeitende, Hauptziel Schlaf | Forschungsprojekt, Ergebnisse frühestens 2028 |
 
 **Hauptwettbewerber im Vergleich:** Gegenüber Kassen und Kliniken ist es Carefit (gleicher Zugang, anderer Inhalt), gegenüber Selbstzahlern IronShift (gleicher Inhalt, kein Zugang in Deutschland).
@@ -91,9 +91,9 @@ Schichttakt plant Ausdauer- und Krafttraining entlang des Dienstplans statt entl
 1. **Dienstplan rein.** Als wiederkehrendes Muster, von Hand oder über den Handy-Kalender. Ohne Schnittstelle zum Arbeitgeber.
 2. **Plan passt sich an.** Nach der Nachtschicht nur locker oder frei. Vor dem Frühdienst kurz. Fordernde Einheiten auf freie Tage mit genug Schlaf davor. Jede Verschiebung wird erklärt und erst nach Bestätigung übernommen.
 3. **Erholung zählt mit.** Ein Check-in von zehn Sekunden und, wer mag, die Daten der Uhr. Die App schlägt nie mehr Belastung vor, nur weniger oder später.
-4. **Als Programm, nicht als Dauer-Abo.** 8 bis 12 Wochen mit festen Inhalten, begleitet von einer ausgebildeten Fachperson – so, wie Krankenkassen es bezuschussen können.
+4. **Erst als Kurs, später als App.** Stufe 2 ist ein Kurs über 8 bis 12 Wochen mit festen Inhalten und einer ausgebildeten Fachperson; die App legt dort nur die Termine nach Dienstplan – so können Krankenkassen ihn bezuschussen. Die volle Anpassung aus Punkt 2 und 3 prüfen die Kassen nach strengeren Regeln als App (Stufe 3).
 
-**Besonderheit:** Die Regeln sind offen und aus Schlaf- und Trainingsforschung hergeleitet; fachlich geprüft sind sie noch nicht. Die Grundlage existiert in MyRace: Kalender-Import und das Verschieben von Einheiten mit Prüfung und Bestätigung. Neu zu bauen sind das Schichtmodell, die Regeln für Schichten, Kraft- und Einsteigerinhalte und das Kursformat.
+**Besonderheit:** Die Regeln sind offen und aus Schlaf- und Trainingsforschung hergeleitet; fachlich geprüft sind sie noch nicht. Die Grundlage existiert in MyRace: Kalender-Import und das Verschieben von Einheiten mit Prüfung und Bestätigung. Neu zu bauen sind das Schichtmodell, die Regeln für Schichten, die Verrechnung von Check-in und Uhrdaten (Tagesform), Kraft- und Einsteigerinhalte und das Kursformat.
 
 `[2–3 App-Screens: Wochenansicht mit Schichten und verschobener Einheit; Karte „Heute: nach Nachtdienst – 30 Minuten locker statt Intervalle“. Als Mock-up (Entwurfsbild), ausdrücklich als Entwurf beschriftet.]`
 
@@ -126,7 +126,7 @@ Schichttakt plant Ausdauer- und Krafttraining entlang des Dienstplans statt entl
 | | Wer |
 |---|---|
 | **Hat das Problem und nutzt** | Beschäftigte im Wechselschichtdienst. Start: Pflegekräfte im Krankenhaus `[oder nach den Interviews: Polizei im Wach- und Wechseldienst – dann ohne Krankenkassen]` |
-| **Bedürfnisse und Verhalten** | `[aus den Interviews, 2 Zeilen: Wie planen sie heute? Was nutzen sie? Was haben sie probiert und wieder gelassen?]` Aus Studien: Wunsch nach zeitlicher Flexibilität; Erschöpfung nach dem Dienst; Angebote im Betrieb liegen zu Tagzeiten |
+| **Bedürfnisse und Verhalten** | `[aus den Interviews, 2 Zeilen: Wie planen sie heute? Was nutzen sie? Was haben sie probiert und wieder gelassen?]` Aus Studien: wechselnde Schichten verhindern feste Routinen; Erschöpfung nach dem Dienst; Angebote im Betrieb liegen zu Tagzeiten |
 | **Zahlt (Stufe 2)** | die Nutzerin oder der Nutzer – die Krankenkasse erstattet den geprüften Kurs zum größten Teil; oder der Arbeitgeber |
 | **Zahlt (Stufe 3)** | Arbeitgeber mit Schichtbetrieb (Kliniken, Pflegeträger), teils mit Kassenmitteln für betriebliche Gesundheitsförderung |
 | **Entscheidet mit** | Berater der Krankenkassen, betriebliches Gesundheitsmanagement, Betriebs- oder Personalrat |
@@ -138,12 +138,12 @@ Schichttakt plant Ausdauer- und Krafttraining entlang des Dienstplans statt entl
 | Stufe | Angebot | Erlös | Voraussetzung |
 |---|---|---|---|
 | 1 Pilot | Programm mit einer Einrichtung oder einem Partner der betrieblichen Gesundheitsförderung, mit Begleitstudie | keiner oder eine kleine Pauschale; Ziel sind Nutzungsdaten | Pilotpartner, Institut |
-| 2 Kurs | von den Kassen geprüfter Online-Kurs „Bewegung im Schichtdienst“, 8–12 Wochen, feste Inhalte; die App legt die Termine nach Dienstplan | rund 100 € je Teilnahme *(Annahme; Vergleichspreise 69–130 €)*; Kassen erstatten meist 80–100 % bis 75–150 € | anerkannte Fachperson; Zertifizierung durch die Zentrale Prüfstelle Prävention |
+| 2 Kurs | von den Kassen geprüfter Online-Kurs „Bewegung im Schichtdienst“, 8–12 Wochen, feste Inhalte; die App legt die Termine nach Dienstplan | rund 100–120 € je Teilnahme *(Annahme; Vergleichspreise 69–130 €)*; Kassen erstatten meist 80–100 % bis 75–150 € | anerkannte Fachperson; Zertifizierung durch die Zentrale Prüfstelle Prävention |
 | 3 Lizenz | Arbeitgeber stellen das Programm ihren Schichtteams bereit | 1–3 € je berechtigter Person und Monat *(Annahme)* | Datenschutzpaket, Android, Zertifizierung als App mit Studie und Sicherheitszertifikat |
 
-**Ressourcen und Partner:** Kalender- und Verschiebe-Technik aus MyRace (vorhanden); Fachperson (gesucht); wissenschaftliche Begleitung (angefragt: `[Name]`); Zugang zu Betrieben (angefragt: `[Einrichtungen, die geantwortet haben]`).
+**Ressourcen und Partner:** Kalender- und Verschiebe-Technik aus MyRace (als Code vorhanden, Gerätetest offen); Fachperson (gesucht); wissenschaftliche Begleitung (angefragt: `[Name]`); Zugang zu Betrieben (angefragt: `[Einrichtungen, die geantwortet haben]`).
 
-**Größte Kosten und Geldbedarf bis zum Piloten** *(Schätzung)*: vor allem eigene Zeit (mindestens 50–75 Arbeitstage bis zum ersten Kurs), Honorar oder Beteiligung für die Fachperson, Kursinhalte (Videos, Texte). Für die spätere Zertifizierung als App kommen ein Sicherheitszertifikat und eine Studie dazu – das geht nur mit Fördergeld.
+**Größte Kosten und Geldbedarf bis zum Piloten** *(Schätzung)*: vor allem eigene Zeit (je nach Ausbau rund 40–75 Arbeitstage bis zum ersten Kurs), Honorar oder Beteiligung für die Fachperson, Kursinhalte (Videos, Texte). Für die spätere Zertifizierung als App kommen ein Sicherheitszertifikat und eine Studie dazu – das geht nur mit Fördergeld.
 
 **Größenordnung** *(eigene Rechnung mit Annahmen, siehe `research.md` §4.9)*: Kurs rund 340 bis 1.700 Teilnahmen pro Jahr = rund 34.000 bis 200.000 € Umsatz; Lizenzen bei fünf Kliniken rund 18.000 bis 54.000 € pro Jahr. Der Kurs allein trägt ein kleines Unternehmen; wachsen kann das Modell erst über Lizenzen.
 
@@ -153,11 +153,11 @@ Schichttakt plant Ausdauer- und Krafttraining entlang des Dienstplans statt entl
 
 ## 2. Pitch (OpenMic)
 
-Die Dauer ist nicht veröffentlicht; **60 Sekunden sind eine Annahme**. Frag nach. Der Text hat rund 145 Wörter; mit der Pause nach der ersten Frage dauert er eher 65 bis 70 Sekunden. Zum Kürzen den Satz zur Studie streichen.
+Die Dauer ist nicht veröffentlicht; **60 Sekunden sind eine Annahme**. Frag nach. Der Text hat rund 147 Wörter; mit der Pause nach der ersten Frage dauert er eher 65 bis 70 Sekunden. Zum Kürzen den Satz zur Studie streichen.
 
 > Wer von euch hat schon mal nach einer Nachtschicht trainiert?
 >
-> In Deutschland arbeiten mehr als fünfeinhalb Millionen Menschen in Schicht. Die arbeitsmedizinische Leitlinie empfiehlt ihnen Sport. Aber fast alle Trainingspläne und Kurse gehen von festen Wochentagen aus. Wer Früh, Spät und Nacht im Wechsel hat, plant jede Woche neu – oder lässt es.
+> In Deutschland arbeiten mehr als fünfeinhalb Millionen Menschen in Schicht. Die arbeitsmedizinische Leitlinie von 2021 empfiehlt ihnen Sport. Aber fast alle Trainingspläne und Kurse gehen von festen Wochentagen aus. Wer Früh, Spät und Nacht im Wechsel hat, plant jede Woche neu – oder lässt es.
 >
 > Ich bin Anton, studiere hier Sportmanagement und kellnere in Spätschichten. Ich habe eine Lauf-App gebaut, die den Kalender liest und Einheiten nach offenen Regeln verschiebt. Daraus soll Schichttakt werden: ein Programm aus Ausdauer und Kraft, das sich nach dem Dienstplan richtet.
 >
@@ -165,9 +165,9 @@ Die Dauer ist nicht veröffentlicht; **60 Sekunden sind eine Annahme**. Frag nac
 >
 > Als geprüfter Präventionskurs erstattet die Krankenkasse den größten Teil, oder der Arbeitgeber zahlt. Ob es wirkt, will ich mit einer Studie prüfen. Dafür suche ich eine Sportwissenschaftlerin oder einen Sportwissenschaftler und einen Betrieb für den ersten Test. Sprecht mich an.
 
-**Falls drei Minuten erlaubt sind**, dieselbe Reihenfolge mit je einem Zusatz: (1) Problem mit dem Interview-Zitat; (2) Lösung an einem Beispiel („nach dem dritten Nachtdienst: frei; am ersten freien Tag: 30 Minuten locker; am zweiten: die fordernde Einheit“); (3) Wettbewerb in einem Satz („Kleine Apps im Ausland planen schon nach Schichten, in Deutschland gibt es ein Gesundheitsportal für die Pflege – niemand verbindet einen echten Trainingsplan mit dem Weg über die Kassen“); (4) Zahlen aus den Gesprächen; (5) Geschäftsmodell in drei Stufen; (6) was fehlt und wen du suchst.
+**Falls drei Minuten erlaubt sind**, dieselbe Reihenfolge mit je einem Zusatz: (1) Problem mit dem Interview-Zitat; (2) Lösung an einem Beispiel („nach dem dritten Nachtdienst: frei; am ersten freien Tag: 30 Minuten locker; am zweiten: die fordernde Einheit“); (3) Wettbewerb in einem Satz („Kleine Apps im Ausland planen schon nach Schichten, in Deutschland gibt es ein Gesundheitsportal für die Pflege und eine von den Kassen geprüfte Bewegungs-App – einen Trainingsplan nach Dienstplan auf dem Weg über die Kassen habe ich nicht gefunden“); (4) Zahlen aus den Gesprächen; (5) Geschäftsmodell in drei Stufen; (6) was fehlt und wen du suchst.
 
-Kürzere Fassung für das Gespräch am Poster (ein Atemzug): „Schichttakt plant Ausdauer und Kraft nach dem Dienstplan statt nach Wochentagen – als Programm, das Krankenkassen bezuschussen können. Die Technik zum Verschieben läuft schon in meiner Lauf-App; jetzt suche ich eine Fachperson und einen Pilotbetrieb.“
+Kürzere Fassung für das Gespräch am Poster (ein Atemzug): „Schichttakt plant Ausdauer und Kraft nach dem Dienstplan statt nach Wochentagen – zuerst als Kurs mit festen Inhalten, den Krankenkassen bezuschussen können. Die Technik zum Verschieben ist in meiner Lauf-App schon gebaut; jetzt suche ich eine Fachperson und einen Pilotbetrieb.“
 
 ---
 
@@ -189,8 +189,8 @@ Im Finale des StarS-Kaders nennt die Jury Gründe, warum ein Start-up scheitert.
 
 | Frage | Antwort |
 |---|---|
-| „Gibt es das nicht schon?“ | Teile davon, ja. Kleine Apps aus dem Ausland planen seit 2025/26 nach Schichten, auf Englisch und ohne Verbreitung. In Deutschland gibt es Carefit, ein Gesundheitsportal für die Pflege mit Dienstplan, aber ohne Trainingsplan, und AIMO, eine von den Kassen geprüfte Bewegungs-App ohne Dienstplan. Die Verbindung aus beidem gibt es nicht. Die App ist auch nicht mein Schutz – der Schutz wären Studie, Zertifikat und Partner, und die muss ich mir erst erarbeiten. |
-| „Warum sollte jemand nach der Nachtschicht eine App öffnen?“ | Das ist das größte Risiko. Bei Bewegungs-Apps hört mehr als die Hälfte in drei Monaten auf, und in der einzigen Studie zu einer Schicht-App, die ich gefunden habe (51 Bergleute, 24 Tage), stieg die Bewegung an Nachtschichten nicht. Deshalb plant die App an solchen Tagen wenig oder nichts und legt Training auf freie Tage. Ob das reicht, zeigt erst ein Pilot. |
+| „Gibt es das nicht schon?“ | Teile davon, ja. Kleine Apps aus dem Ausland planen seit 2025/26 nach Schichten, auf Englisch und ohne Verbreitung. In Deutschland gibt es Carefit, ein Gesundheitsportal für die Pflege mit Dienstplan, aber ohne Trainingsplan, und AIMO, eine von den Kassen geprüfte Bewegungs-App ohne Dienstplan. Die Verbindung aus beidem habe ich nicht gefunden. Die App ist auch nicht mein Schutz – der Schutz wären Studie, Zertifikat und Partner, und die muss ich mir erst erarbeiten. |
+| „Warum sollte jemand nach der Nachtschicht eine App öffnen?“ | Das ist das größte Risiko. Bei Bewegungs-Apps hört mehr als die Hälfte in drei Monaten auf, und in der einzigen Studie zu einer Schicht-App, die ich im Original lesen konnte (51 Bergleute, 24 Tage), stieg die Bewegung an Nachtschichten nicht. Deshalb plant die App an solchen Tagen wenig oder nichts und legt Training auf freie Tage. Ob das reicht, zeigt erst ein Pilot. |
 | „Ist belegt, dass das wirkt?“ | Dass Training Schichtarbeitenden hilft, zeigen mehrere kleine Studien – meist mit Anleitung vor Ort. Dass Planung nach Dienstplan zu mehr regelmäßiger Bewegung führt, hat noch niemand untersucht. Das will ich mit einer Begleitstudie prüfen; eine solche Studie verlangen die Kassen für Apps ohnehin. |
 | „Du bist noch früh im Studium – darfst du überhaupt Präventionskurse anbieten?“ | Als Anbieter ja, als Kursleitung nein. Dafür braucht es einen abgeschlossenen sportwissenschaftlichen Abschluss. Genau diese Person suche ich. |
 | „Wer zahlt wirklich?“ | Im ersten Schritt die Teilnehmenden, die sich den Kurs von der Kasse zum größten Teil erstatten lassen, oder ihr Arbeitgeber. Ein Abo bezahlt die Kasse nicht. |
@@ -206,7 +206,7 @@ Im Finale des StarS-Kaders nennt die Jury Gründe, warum ein Start-up scheitert.
 ## 5. Vor dem Abschicken prüfen
 
 - [ ] Formular selbst heruntergeladen; Feldnamen, Platz je Feld und etwaige Längenvorgaben geprüft; geklärt, ob Feld 2 eine Grafik erwartet
-- [ ] Jede Zahl im Text steht in `research.md` (§8 oder §4.9) oder ist als Annahme markiert; die Kernzahlen sind einmal im Original nachgeschlagen
+- [ ] Jede Zahl im Text steht in `research.md` (meist §8 oder §4.9; Preise in §3.2 und §4.2; Studien in §2) oder in `entscheidung.md` §1.3 oder ist als Annahme markiert; die Kernzahlen sind einmal im Original nachgeschlagen
 - [ ] Nachgesehen, ob der Präventionsbericht 2026 erschienen ist (üblich: Ende November); falls ja, Zahlen in Feld 3 aktualisieren
 - [ ] Feld 6 enthält echte Zahlen aus mindestens fünf Gesprächen
 - [ ] In der Kurssuche einer Krankenkasse nach „Schicht“ gesucht; Ergebnis in Feld 3 eingetragen

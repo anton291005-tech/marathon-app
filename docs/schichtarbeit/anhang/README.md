@@ -31,5 +31,6 @@ Unter `pruefung/` liegen die Protokolle von sechs unabhängigen Prüfungen der d
 | `pruefung/v4-bgf-b2b.md` | `research.md` §4.3–4.9 (BGF, Arbeitgeber, Steuer, Vergabe, Datenschutz, Marktgröße) |
 | `pruefung/v5-ideathlon-stars.md` | `research.md` §5 und `ideathlon-entwurf.md` |
 | `pruefung/v6-konsistenz-code.md` | Code-Aussagen in `entscheidung.md` §1, Widersprüche zwischen den Dokumenten, Auftragstreue |
+| `pruefung/v7-schlusspruefung.md` | Schlussprüfung der überarbeiteten Fassungen (Widersprüche, Querverweise, Rechnungen); Befunde sind eingearbeitet |
 
-Die Protokolle beziehen sich auf die Fassung vor der Einarbeitung; Zeilen- und Abschnittsangaben können deshalb leicht verschoben sein.
+Die Protokolle v1 bis v6 beziehen sich auf die Fassung vor der Einarbeitung, v7 auf die Fassung vor der letzten Korrekturrunde; Zeilen- und Abschnittsangaben können deshalb leicht verschoben sein.
