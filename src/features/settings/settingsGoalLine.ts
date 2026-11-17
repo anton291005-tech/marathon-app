@@ -41,6 +41,33 @@ export function formatRaceDistanceLabel(km: number | null | undefined): string |
   return `${String(rounded).replace(".", ",")} km`;
 }
 
+/** Pace-Band für eine plausible Zielzeit: 2:30–12:00 min/km. */
+export const PLAUSIBLE_TARGET_PACE_SEC_PER_KM = { min: 150, max: 720 } as const;
+
+/**
+ * „H:MM:SS“ → Sekunden; `null` für alles andere. Zweiteiliges („3:30“, „45:00“) ist mehrdeutig (H:MM oder MM:SS) und
+ * wird nicht geprüft — die Profil-Zielzeit kommt immer dreiteilig (`formatRaceClockGerman`).
+ */
+function clockToSeconds(text: string): number | null {
+  const m = /^(\d{1,2}):(\d{2}):(\d{2})$/.exec(text.trim());
+  if (!m) return null;
+  const seconds = Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+  return seconds > 0 ? seconds : null;
+}
+
+/**
+ * Passt die Zielzeit zur Distanz (Pace im Band 2:30–12:00 min/km)? Ohne Distanz oder ohne eindeutige Uhrzeit
+ * (frei getippter Text, zweiteilige Zeit) gibt es keinen Maßstab → `true` (wie bisher anzeigen). Fängt die nutzerweite Profil-Zielzeit
+ * (`profiles.target_time_seconds`, z. B. 2:50:00 vom Marathon) ab, die sonst an einem 10-km-Plan stünde.
+ */
+export function isPlausibleTargetTime(targetTime: string, distanceKm: number | null | undefined): boolean {
+  const km = positiveKm(distanceKm);
+  const seconds = clockToSeconds(targetTime);
+  if (km == null || seconds == null) return true;
+  const pace = seconds / km;
+  return pace >= PLAUSIBLE_TARGET_PACE_SEC_PER_KM.min && pace <= PLAUSIBLE_TARGET_PACE_SEC_PER_KM.max;
+}
+
 type GoalPreferences = {
   raceDistanceKm?: number | null;
   raceDistanceLabel?: string | null;
@@ -74,6 +101,10 @@ export function preferencesDescribeActivePlan(args: {
  *
  * Zielzeit vor Finish-Ziel: Die Zeile zeigt, was im Feld „Zielzeit" steht. „Ziel: Finishen" erscheint
  * nur, wenn das Finish-Ziel gewählt und keine Zielzeit eingetragen ist.
+ *
+ * Plausibilität: Pläne ohne `meta.goal` bekommen ihre Zielzeit aus dem nutzerweiten Profil
+ * (`profiles.target_time_seconds`) — die kann von einem anderen Plan stammen. Passt sie nicht zur Distanz
+ * (`isPlausibleTargetTime`), erscheint keine Zielzeit (und auch kein Finish-Ziel als Ersatz).
  */
 export function buildSettingsGoalLine(args: {
   raceYmd: string | null | undefined;
@@ -94,6 +125,15 @@ export function buildSettingsGoalLine(args: {
   const prefsLabel = typeof prefs.raceDistanceLabel === "string" ? prefs.raceDistanceLabel.trim() : "";
   const distance = formatRaceDistanceLabel(args.planRaceDistanceKm) ?? (prefsApply && prefsLabel ? prefsLabel : "Rennen");
   const target = typeof prefs.targetTime === "string" ? prefs.targetTime.trim() : "";
-  const goal = !prefsApply ? "" : target ? `Ziel ${target}` : prefs.raceGoal === "finish" ? "Ziel: Finishen" : "";
+  const distanceKm = positiveKm(args.planRaceDistanceKm) ?? (prefsApply ? positiveKm(prefs.raceDistanceKm) : null);
+  const goal = !prefsApply
+    ? ""
+    : target
+      ? isPlausibleTargetTime(target, distanceKm)
+        ? `Ziel ${target}`
+        : ""
+      : prefs.raceGoal === "finish"
+        ? "Ziel: Finishen"
+        : "";
   return [distance, formatRaceCountdown(days), goal].filter(Boolean).join(" · ");
 }

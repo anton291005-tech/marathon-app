@@ -3,6 +3,7 @@ import {
   daysUntilRace,
   formatRaceCountdown,
   formatRaceDistanceLabel,
+  isPlausibleTargetTime,
   preferencesDescribeActivePlan,
 } from "./settingsGoalLine";
 
@@ -117,9 +118,51 @@ describe("buildSettingsGoalLine", () => {
     );
   });
 
+  test("10-km-Plan ohne meta.goal + Marathon-Zielzeit aus dem Profil → keine Zielzeit", () => {
+    // Profil-Zielzeit 2:50:00 (vom Marathon) landet als targetTime in den Preferences; zum 10-km-Plan sind das 17 min/km.
+    const line = buildSettingsGoalLine({
+      ...base,
+      planRaceDistanceKm: 10,
+      preferences: { raceGoal: "time", targetTime: "2:50:00" },
+      preferencesOwned: true,
+    });
+    expect(line).toBe("10 km · noch 51 Tage");
+    expect(line).not.toContain("2:50:00");
+  });
+
+  test("plausible Zielzeit zum 10-km-Plan bleibt", () => {
+    expect(
+      buildSettingsGoalLine({ ...base, planRaceDistanceKm: 10, preferences: { raceGoal: "time", targetTime: "0:48:30" }, preferencesOwned: true }),
+    ).toBe("10 km · noch 51 Tage · Ziel 0:48:30");
+  });
+
   test("ohne Renntag im Plan kein aktives Ziel", () => {
     expect(
       buildSettingsGoalLine({ raceYmd: null, todayYmd: "2026-10-11", planRaceDistanceKm: 42.2, preferences: marathonPrefs, preferencesOwned: true }),
     ).toBeNull();
+  });
+});
+
+describe("isPlausibleTargetTime", () => {
+  test("Pace-Band 2:30–12:00 min/km, Grenzen inklusive", () => {
+    expect(isPlausibleTargetTime("0:25:00", 10)).toBe(true); // 2:30 min/km
+    expect(isPlausibleTargetTime("0:24:59", 10)).toBe(false);
+    expect(isPlausibleTargetTime("2:00:00", 10)).toBe(true); // 12:00 min/km
+    expect(isPlausibleTargetTime("2:00:01", 10)).toBe(false);
+    expect(isPlausibleTargetTime("2:50:00", 42.195)).toBe(true);
+    expect(isPlausibleTargetTime("2:50:00", 10)).toBe(false);
+  });
+
+  test("zweiteilige Eingaben sind mehrdeutig und bleiben sichtbar (z. B. „3:30“ für den Marathon)", () => {
+    expect(isPlausibleTargetTime("3:30", 42.195)).toBe(true);
+    expect(isPlausibleTargetTime("1:45", 21.0975)).toBe(true);
+    expect(
+      buildSettingsGoalLine({ raceYmd: "2026-12-01", todayYmd: "2026-10-11", planRaceDistanceKm: 42.195, preferences: { raceGoal: "time", targetTime: "3:30" }, preferencesOwned: true }),
+    ).toBe("Marathon · noch 51 Tage · Ziel 3:30");
+  });
+
+  test("ohne Distanz oder ohne Uhrzeit kein Maßstab → bleibt sichtbar", () => {
+    expect(isPlausibleTargetTime("2:50:00", null)).toBe(true);
+    expect(isPlausibleTargetTime("unter 4 Stunden", 42.195)).toBe(true);
   });
 });
