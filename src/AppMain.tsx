@@ -130,7 +130,7 @@ import { SessionDetailSheet } from "./features/session/SessionDetailSheet";
 import { AiConsentSheet } from "./features/aiConsent/AiConsentSheet";
 import { CheckInCard } from "./features/checkin/CheckInCard";
 import { CheckInReminderSetting } from "./features/checkin/CheckInReminderSetting";
-import { loadCheckInReminderSettings, saveCheckInReminderSettings, syncCheckInReminder } from "./services/notificationService";
+import { loadCheckInReminderSettings, saveCheckInReminderSettings, supportsLocalReminders, syncCheckInReminder } from "./services/notificationService";
 import { CheckInSheet } from "./features/checkin/CheckInSheet";
 import { canEditCheckIn, carryOverIllness, carryOverPain, shouldOfferCheckIn } from "./features/checkin/checkInState";
 import { useDailyCheckIn } from "./features/checkin/useDailyCheckIn";
@@ -5458,7 +5458,7 @@ export default function AppMain(){
             </div>
             ) : null}
             {/* Web-Fallback: lokale Erinnerungen gibt es nur in der App — im Browser kein Schalter, der nichts tut. */}
-            {!Capacitor.isNativePlatform() ? (
+            {!supportsLocalReminders() ? (
               <div style={{ padding: "16px 0", color: "var(--ink-2)", fontSize: 13 }}>
                 Trainings-Erinnerungen gibt es in der iPhone-App.
               </div>

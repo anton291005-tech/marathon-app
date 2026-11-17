@@ -22,6 +22,11 @@ export const REMINDER_BASE_ID = 1001;
 export const REMINDER_HORIZON_DAYS = 14;
 const REMINDER_IDS = Array.from({ length: REMINDER_HORIZON_DAYS }, (_, i) => REMINDER_BASE_ID + i);
 
+/** Lokale Erinnerungen gibt es nur in der App; im Browser zeigen die Einstellungen statt des Schalters einen Hinweis. */
+export function supportsLocalReminders(): boolean {
+  return Capacitor.isNativePlatform();
+}
+
 export function loadNotificationSettings(): NotificationSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
