@@ -145,23 +145,47 @@ async function refreshStravaAccessToken(refreshToken) {
   });
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Strava token refresh HTTP ${response.status}: ${errText.slice(0, 300)}`);
+    const err = new Error(`Strava token refresh HTTP ${response.status}: ${errText.slice(0, 300)}`);
+    // Status für den Aufrufer (Import): 400/401 = Zugriff entzogen/abgelaufen, 429 = Strava-Limit.
+    err.status = response.status;
+    throw err;
   }
   return response.json();
 }
 
-async function upsertStravaConnection(admin, userId, tokenData) {
-  const { error } = await admin.from("strava_connections").upsert(
-    {
-      user_id: userId,
-      access_token: tokenData.access_token,
-      refresh_token: tokenData.refresh_token,
-      expires_at: new Date(tokenData.expires_at * 1000).toISOString(),
-      strava_athlete_id: tokenData.athlete?.id ?? tokenData.strava_athlete_id,
-      scope: STRAVA_SCOPE,
-    },
-    { onConflict: "user_id" },
-  );
+/** Postgres 42703 / PostgREST PGRST204: Spalte fehlt (Migration noch nicht angewendet). */
+function isMissingColumnError(error) {
+  if (!error) return false;
+  const code = String(error.code || "");
+  return code === "42703" || code === "PGRST204";
+}
+
+/** Von Strava im Callback gemeldete, tatsächlich erteilte Rechte (der Nutzer kann Häkchen abwählen). */
+function normalizeGrantedScope(rawScope) {
+  if (typeof rawScope !== "string" || !rawScope.trim()) return STRAVA_SCOPE;
+  return rawScope
+    .split(/[\s,]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(",");
+}
+
+async function upsertStravaConnection(admin, userId, tokenData, grantedScope = STRAVA_SCOPE) {
+  const base = {
+    user_id: userId,
+    access_token: tokenData.access_token,
+    refresh_token: tokenData.refresh_token,
+    expires_at: new Date(tokenData.expires_at * 1000).toISOString(),
+    strava_athlete_id: tokenData.athlete?.id ?? tokenData.strava_athlete_id,
+    scope: grantedScope,
+  };
+  // Neu verbunden: „getrennt“-Markierung aus Migration 024 zurücksetzen. Ohne 024 ohne diese Spalten.
+  let { error } = await admin
+    .from("strava_connections")
+    .upsert({ ...base, disconnected_at: null, last_sync_status: null }, { onConflict: "user_id" });
+  if (error && isMissingColumnError(error)) {
+    ({ error } = await admin.from("strava_connections").upsert(base, { onConflict: "user_id" }));
+  }
   if (error) {
     throw new Error(`Strava connection upsert failed: ${error.message}`);
   }
@@ -172,7 +196,7 @@ async function upsertStravaConnection(admin, userId, tokenData) {
  * @returns {{ redirectUrl: string }}
  */
 async function handleStravaCallbackRequest(req) {
-  const { code, state, error: stravaError } = req.query || {};
+  const { code, state, scope: grantedScopeRaw, error: stravaError } = req.query || {};
 
   if (stravaError) {
     return { redirectUrl: buildStravaDeepLink("error", { reason: "denied" }) };
@@ -211,7 +235,7 @@ async function handleStravaCallbackRequest(req) {
   }
 
   try {
-    await upsertStravaConnection(admin, userId, tokenData);
+    await upsertStravaConnection(admin, userId, tokenData, normalizeGrantedScope(grantedScopeRaw));
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("[strava] connection save failed", err?.message || err);
@@ -271,6 +295,9 @@ async function getValidStravaAccessToken(userId, adminOverride) {
 }
 
 module.exports = {
+  STRAVA_SCOPE,
+  isMissingColumnError,
+  normalizeGrantedScope,
   handleStravaAuthRequest,
   handleStravaCallbackRequest,
   getValidStravaAccessToken,

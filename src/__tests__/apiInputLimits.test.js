@@ -346,6 +346,7 @@ describe("vercel.json", () => {
       "api/onboarding/generate-plan.js",
       "api/strava/auth.js",
       "api/strava/callback.js",
+      "api/strava/sync.js",
     ]);
     for (const [file, settings] of Object.entries(config.functions)) {
       expect(fs.existsSync(path.resolve(__dirname, "../..", file))).toBe(true);

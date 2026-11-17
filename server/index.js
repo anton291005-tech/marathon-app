@@ -14,6 +14,7 @@ const { guardRequest, sendGuardFailure, coachRateLimitBody } = require("../api/_
 const { COACH_CONSENT_REQUIRED_BODY, COACH_CONSENT_UNAVAILABLE_BODY } = require("../api/_lib/aiConsent");
 const { validateCoachBody } = require("../api/_lib/inputLimits");
 const { handleStravaAuthRequest, handleStravaCallbackRequest } = require("../api/_lib/stravaService");
+const { handleStravaSyncRequest } = require("../api/_lib/stravaActivitySync");
 const {
   AI_RESPONSE_SCHEMA,
   ALLOWED_ACTIONS,
@@ -682,6 +683,19 @@ app.get("/api/strava/callback", async (req, res) => {
     // eslint-disable-next-line no-console
     console.error("[ai-server] /api/strava/callback unhandled error:", err?.message || err);
     return res.redirect(302, "myrace://strava-connected?status=error&reason=internal_error");
+  }
+});
+
+// Same handler as Vercel (api/strava/sync.js → stravaActivitySync.js).
+app.post("/api/strava/sync", async (req, res) => {
+  try {
+    const { status, body, headers } = await handleStravaSyncRequest(req);
+    for (const [name, value] of Object.entries(headers ?? {})) res.setHeader(name, value);
+    return res.status(status).json(body);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[ai-server] /api/strava/sync unhandled error:", err?.message || err);
+    return res.status(500).json({ status: "error" });
   }
 });
 

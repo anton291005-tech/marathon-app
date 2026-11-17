@@ -12,6 +12,12 @@ const API_QUOTAS = {
   ],
   plan_full: [{ windowSeconds: 24 * 60 * 60, limit: 5 }],
   plan_structure: [{ windowSeconds: 24 * 60 * 60, limit: 10 }],
+  // Strava-Import (POST /api/strava/sync): kein KI-Aufruf, aber jeder Aufruf kostet Strava-Kontingent
+  // (app-weit 200 Lese-Anfragen je 15 min). Die App ruft automatisch höchstens alle 15 min auf.
+  strava_sync: [
+    { windowSeconds: 60 * 60, limit: 30 },
+    { windowSeconds: 24 * 60 * 60, limit: 200 },
+  ],
 };
 
 /** Nutzer-IDs ohne Limit (eigener Account beim Testen): `API_QUOTA_EXEMPT_USER_IDS`, durch Komma oder Leerraum getrennt. */

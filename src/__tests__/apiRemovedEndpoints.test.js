@@ -37,6 +37,7 @@ describe("Vercel-Funktionen", () => {
       "onboarding/generate-plan.js",
       "strava/auth.js",
       "strava/callback.js",
+      "strava/sync.js",
     ]);
   });
 

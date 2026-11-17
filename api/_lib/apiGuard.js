@@ -20,7 +20,7 @@ const { readAiConsent } = require("./aiConsent");
  * @param {{ headers?: Record<string, string>, body?: unknown }} req
  * @param {{
  *   validate?: (body: unknown) => { ok: true, payload: object, meta?: object } | { ok: false, status: number, body: { error: string } },
- *   bucket?: "coach_chat" | "plan_full" | "plan_structure",
+ *   bucket?: "coach_chat" | "plan_full" | "plan_structure" | "strava_sync",
  *   rateLimitBody?: (retryAfterSeconds: number) => object,
  *   aiConsent?: "require" | "read",
  *   consentBodies?: { required: object, unavailable: object },
