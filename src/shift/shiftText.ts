@@ -164,15 +164,13 @@ export function moveSentenceDe(args: {
 
 /** Satz, wenn statt Verschieben „locker statt hart“ vorgeschlagen wird. */
 export function softenSentenceDe(args: { sessionType: string; fromDay: ShiftDayAssessment; fromYmd: string; todayYmd: string }): string {
-  const when = args.fromYmd === args.todayYmd ? "heute" : `am ${weekdayLongDe(args.fromYmd)}`;
-  const noun = sessionNounDe(args.sessionType).withArticle;
-  return `${reasonLeadDe(args.fromDay, "hard")} gibt es diese Woche keinen sicheren Tag für ${noun}. Vorschlag: ${when} locker laufen.`;
+  const isToday = args.fromYmd === args.todayYmd;
+  const when = isToday ? "heute" : weekdayLongDe(args.fromYmd);
+  const noun = sessionNounDe(args.sessionType).plain;
+  return `${reasonLeadDe(args.fromDay, "hard")} ist ${when} kein guter Tag für ${noun}, und diese Woche gibt es keinen sicheren anderen Tag. Vorschlag: ${isToday ? "heute" : `am ${when}`} locker laufen.`;
 }
 
-/**
- * Genau ein Satz für „Heute“ an Tagen mit Schichtbezug. `movedToYmd`: falls die harte Einheit dieser Woche schon auf
- * einen anderen Tag gelegt wurde (nur Anzeige).
- */
+/** Genau ein Satz für „Heute“ an Tagen mit Bezug zum Dienstplan. */
 export function todayShiftLineDe(day: ShiftDayAssessment, sessionType: string | null): string {
   const category: ShiftCategory | null =
     !sessionType || sessionType === "rest" ? null : sessionType === "long" ? "long" : ["interval", "tempo", "race"].indexOf(sessionType) >= 0 ? "hard" : "easy";

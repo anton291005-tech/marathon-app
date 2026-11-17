@@ -157,7 +157,7 @@ describe("Schicht-Wochenvorschlag – Szenarien", () => {
     const c = ctx([N("2026-11-21")]);
     const result = proposeShiftWeek({ plan, weekIndex: 1, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY });
     expect(result.status).toBe("hint-only");
-    expect(result.status === "hint-only" ? result.hints.join(" ") : "").toMatch(/den Long Run bleibt/);
+    expect(result.status === "hint-only" ? result.hints.join(" ") : "").toMatch(/„Long Run“ bleibt – nach dem Nachtdienst \(22–6 Uhr\)/);
   });
 
   it("gesperrte Einheiten sind nie Quelle oder Ziel", () => {

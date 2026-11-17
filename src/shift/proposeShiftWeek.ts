@@ -33,7 +33,7 @@ import { validateWeekReassignmentBatch } from "../ai/mutations/validateWeekReass
 import { NO_LOCKED_SESSION_IDS } from "../ai/mutations/lockedSessions";
 import { sessionDayIso } from "../ai/mutations/sessionDayIso";
 import { swapWorkouts } from "../ai/mutations/swapWorkouts";
-import { dayLabelDe, moveSentenceDe, reasonPhraseDe, sessionNounDe, softenSentenceDe, weekdayLongDe } from "./shiftText";
+import { dayLabelDe, moveSentenceDe, reasonPhraseDe, softenSentenceDe, weekdayLongDe } from "./shiftText";
 
 /** Harte Tage für die Abstandsregel: wie `HIGH_INTENSITY_SESSION_TYPES` (Long Run zählt mit). */
 const HARD_TYPES: readonly string[] = ["tempo", "interval", "race", "long"];
@@ -293,7 +293,7 @@ function runGreedy(args: GreedyArgs, order: ShiftConflict[]): GreedyResult {
             category: conflict.category,
             limited: conflict.severity === "weak",
           })
-        : `Am ${weekdayLongDe(conflict.dayYmd)} kollidiert ${sessionNounDe(session.type).withArticle} mit einem Termin. Vorschlag: ${weekdayLongDe(accepted.toYmd)}.`;
+        : `„${session.title}“ am ${weekdayLongDe(conflict.dayYmd)} kollidiert mit einem Termin. Vorschlag: ${weekdayLongDe(accepted.toYmd)}.`;
       proposals.push({ sessionId: session.id, fromDayIso: conflict.dayYmd, toDayIso: accepted.toYmd, reason: sentence, cause });
       moves.push({ sessionId: session.id, fromYmd: conflict.dayYmd, toYmd: accepted.toYmd, sentence, cause });
       return;
@@ -317,9 +317,7 @@ function runGreedy(args: GreedyArgs, order: ShiftConflict[]): GreedyResult {
     }
     if (conflict.shiftDay) {
       const lead = reasonPhraseDe(conflict.shiftDay, conflict.category);
-      hints.push(
-        `${dayLabelDe(conflict.dayYmd)}: ${sessionNounDe(session.type).withArticle} bleibt – ${lead}, und es gibt keinen freien Tag ohne Regelverstoß.`,
-      );
+      hints.push(`${dayLabelDe(conflict.dayYmd)}: „${session.title}“ bleibt – ${lead}, und es gibt keinen freien Tag ohne Regelverstoß.`);
     } else {
       hints.push(`${dayLabelDe(conflict.dayYmd)}: Kalenderkonflikt ohne sicheren Ausweichtag – einzeln über den Kalender-Button bearbeiten.`);
     }
