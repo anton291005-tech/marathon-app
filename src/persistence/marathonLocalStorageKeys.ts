@@ -35,13 +35,19 @@ export const STRAVA_SYNC_STATE_KEY = "marathonStravaSyncState";
 export const SHIFT_ENTRIES_CACHE_KEY = "marathonShiftEntries";
 export const SHIFT_PROFILE_CACHE_KEY = "marathonShiftProfile";
 export const SHIFT_INTRO_DISMISSED_KEY = "marathonShiftIntroDismissed";
+/** Schicht-Modus: vom Nutzer bestätigte Verschiebungen (`<präfix>:<userId>`), siehe `src/shift/shiftAcceptedMoves.ts`. */
+export const SHIFT_ACCEPTED_MOVES_KEY = "marathonShiftAcceptedMoves";
 
 /**
  * Präfixe konto-gebundener Schlüssel je Nutzer (`<präfix><userId>`); `clearMarathonLocalStorage` löscht alle Schlüssel
  * mit diesen Präfixen. Bewusst nicht hier: Schlüssel, die das Abmelden überleben sollen (z. B. W3
  * `marathonUsageEventsEnabled:<userId>`).
  */
-export const ACCOUNT_BOUND_KEY_PREFIXES: readonly string[] = [`${SHIFT_ENTRIES_CACHE_KEY}:`, `${SHIFT_PROFILE_CACHE_KEY}:`];
+export const ACCOUNT_BOUND_KEY_PREFIXES: readonly string[] = [
+  `${SHIFT_ENTRIES_CACHE_KEY}:`,
+  `${SHIFT_PROFILE_CACHE_KEY}:`,
+  `${SHIFT_ACCEPTED_MOVES_KEY}:`,
+];
 
 /**
  * Read-only catalog for docs / debug (order is not normative).
@@ -69,4 +75,5 @@ export const KNOWN_MY_RACE_STORAGE_KEYS: readonly string[] = [
   SHIFT_ENTRIES_CACHE_KEY,
   SHIFT_PROFILE_CACHE_KEY,
   SHIFT_INTRO_DISMISSED_KEY,
+  SHIFT_ACCEPTED_MOVES_KEY,
 ];

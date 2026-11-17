@@ -36,6 +36,7 @@ import { NO_LOCKED_SESSION_IDS } from "../ai/mutations/lockedSessions";
 import { sessionDayIso } from "../ai/mutations/sessionDayIso";
 import { swapWorkouts } from "../ai/mutations/swapWorkouts";
 import { formatReassignmentRow } from "../ai/mutations/reassignmentRow";
+import { acceptedShiftKey } from "./shiftAcceptedMoves";
 import { dayLabelDe, limitedDayNoteDe, moveSentenceDe, reasonPhraseDe, softenSentenceDe, weekdayLongDe } from "./shiftText";
 
 /** Harte Tage für die Abstandsregel: wie `HIGH_INTENSITY_SESSION_TYPES` (Long Run zählt mit). */
@@ -88,7 +89,11 @@ export type ProposeShiftWeekInput = {
   shiftContext: ShiftCapacityContext;
   todayYmd: string;
   lockedSessionIds?: ReadonlySet<string>;
+  /** Bestätigte Verschiebungen (`acceptedShiftKey`), deren Dienstplan sich nicht geändert hat: kein weicher Konflikt. */
+  acceptedKeys?: ReadonlySet<string>;
 };
+
+const NO_ACCEPTED_KEYS: ReadonlySet<string> = new Set<string>();
 
 /**
  * Vorher/Nachher-Zeile im Schicht-Modus: Grund am Ausgangstag, Zieltag nur mit eigenem Hinweis, wenn er für diese Einheit
@@ -208,12 +213,16 @@ function suitabilityOf(capacity: DayCapacityScore, category: ShiftCategory | nul
   return category === "hard" ? capacity.shift.hard : category === "long" ? capacity.shift.long : capacity.shift.easy;
 }
 
-/** Konflikte der Woche: harte (Fit < 0,35) und weiche (Dienstplan „eingeschränkt“ für hart/Long Run). */
+/**
+ * Konflikte der Woche: harte (Fit < 0,35) und weiche (Dienstplan „eingeschränkt“ für hart/Long Run). Ein weicher
+ * Konflikt an einem Tag, auf den der Nutzer die Einheit selbst bestätigt hat (`acceptedKeys`), zählt nicht.
+ */
 export function findShiftConflicts(
   week: AiPlanWeek,
   scheduleBlocks: WeeklyScheduleBlock[],
   shiftContext: ShiftCapacityContext,
   lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
+  acceptedKeys: ReadonlySet<string> = NO_ACCEPTED_KEYS,
 ): ShiftConflict[] {
   const out: ShiftConflict[] = [];
   (week.s ?? []).forEach((session) => {
@@ -225,7 +234,9 @@ export function findShiftConflicts(
     const fit = computeSessionDayFitScore(session, capacity);
     const base = { sessionId: session.id, dayYmd, category, fit, ...(capacity.shift ? { shiftDay: capacity.shift } : {}) };
     if (fit < MIN_FIT_SCORE_THRESHOLD) out.push({ ...base, severity: "strong" });
-    else if (category !== "easy" && suitabilityOf(capacity, category) === "limited") out.push({ ...base, severity: "weak" });
+    else if (category !== "easy" && suitabilityOf(capacity, category) === "limited" && !acceptedKeys.has(acceptedShiftKey(session.id, dayYmd))) {
+      out.push({ ...base, severity: "weak" });
+    }
   });
   return out.sort((a, b) =>
     a.severity !== b.severity ? (a.severity === "strong" ? -1 : 1) : a.fit !== b.fit ? a.fit - b.fit : a.sessionId.localeCompare(b.sessionId),
@@ -508,7 +519,7 @@ export function proposeShiftWeek(input: ProposeShiftWeekInput): ShiftWeekProposa
   const week = plan[weekIndex];
   if (!week) return { status: "no-conflicts" };
 
-  const conflicts = findShiftConflicts(week, scheduleBlocks, shiftContext, locked);
+  const conflicts = findShiftConflicts(week, scheduleBlocks, shiftContext, locked, input.acceptedKeys);
   if (conflicts.length === 0) return { status: "no-conflicts" };
 
   const conflictIds: Record<string, boolean> = {};

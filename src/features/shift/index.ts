@@ -3,6 +3,14 @@ export { ShiftPlanPage } from "./ShiftPlanPage";
 export type { ShiftSaveOutcome } from "./ShiftPlanPage";
 export { ShiftIntroCard, ShiftSettingsRows, ShiftTodayNote, ShiftWizardQuestion } from "./ShiftCards";
 export { useShiftMode } from "../../shift/useShiftMode";
-export { findWeekIndexForYmd, planAfterShiftSave, reportShiftProposalDecision, runShiftWeekScan, shiftTodayHasProposal } from "../../shift/shiftWeekScan";
+export {
+  currentAcceptedShiftKeys,
+  findWeekIndexForYmd,
+  planAfterShiftSave,
+  rememberAcceptedShiftPatches,
+  reportShiftProposalDecision,
+  runShiftWeekScan,
+  shiftTodayHasProposal,
+} from "../../shift/shiftWeekScan";
 export { isShiftChoiceAllowed, proposeShiftSingle } from "../../shift/proposeShiftSingle";
 export { isShiftModeEnabled } from "../../shift/shiftModeFlag";

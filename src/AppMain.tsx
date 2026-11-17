@@ -311,10 +311,12 @@ import {
   ShiftPlanPage,
   ShiftSettingsRows,
   ShiftTodayNote,
+  currentAcceptedShiftKeys,
   findWeekIndexForYmd,
   isShiftChoiceAllowed,
   planAfterShiftSave,
   proposeShiftSingle,
+  rememberAcceptedShiftPatches,
   reportShiftProposalDecision,
   runShiftWeekScan,
   shiftTodayHasProposal,
@@ -2832,13 +2834,15 @@ export default function AppMain(){
 
   // Erledigt/übersprungen/vergangen: weder Quelle noch Ziel eines Kalender-Tauschs.
   const lockedSessionIds = buildLockedSessionIds(displayPlan, logs);
+  // Schicht-Modus: vom Nutzer bestätigte Verschiebungen, deren Dienstplan unverändert ist — kein weicher Konflikt mehr.
+  const shiftAcceptedKeys = shiftMode.context ? currentAcceptedShiftKeys(shiftMode.context) : undefined;
 
   const handleProposeCalendarReassignment = (sessionId, week = w)=>{
     if (!week) return;
     // Schicht-Modus: eigener Einzel-Pfad mit denselben Schutzregeln wie der Wochenvorschlag (src/shift/proposeShiftSingle.ts).
     const shift = !!shiftMode.context;
     const proposal = shiftMode.context
-      ? proposeShiftSingle({ plan: displayPlan, weekIndex: displayPlan.indexOf(week), sessionId, scheduleBlocks, shiftContext: shiftMode.context, todayYmd: getAppTodayYmd(), lockedSessionIds })
+      ? proposeShiftSingle({ plan: displayPlan, weekIndex: displayPlan.indexOf(week), sessionId, scheduleBlocks, shiftContext: shiftMode.context, todayYmd: getAppTodayYmd(), lockedSessionIds, acceptedKeys: shiftAcceptedKeys })
       : proposeSingleSessionCalendarReassignment(displayPlan, week, sessionId, scheduleBlocks, lockedSessionIds);
     if (proposal.status === "locked") return;
     if (proposal.status === "no-conflict") {
@@ -2861,6 +2865,7 @@ export default function AppMain(){
   };
   const handleConfirmCalendarReassignment = ()=>{
     if (pendingCalendarProposal?.patches?.length && !touchesLockedSession(pendingCalendarProposal.patches)) {
+      if (pendingCalendarProposal.shift && shiftMode.context) rememberAcceptedShiftPatches(pendingCalendarProposal.patches, shiftMode.context);
       handleAiApplyPlanPatches(null, null, pendingCalendarProposal.patches);
     }
     setPendingCalendarProposal(null);
@@ -2890,6 +2895,7 @@ export default function AppMain(){
       setPendingCalendarProposal(prev => prev ? { ...prev, action: null, patches: [], mode: "preview", noConflict: false } : prev);
       return;
     }
+    if (pendingCalendarProposal.shift && shiftMode.context) rememberAcceptedShiftPatches(result.patches, shiftMode.context);
     handleAiApplyPlanPatches(null, null, result.patches);
     setPendingCalendarProposal(null);
   };
@@ -2897,7 +2903,7 @@ export default function AppMain(){
   const handleScanWeekForCalendarConflicts = ()=>{
     if (!w) return;
     if (shiftMode.context) {
-      setWeekCalendarBatchProposal(runShiftWeekScan({ plan: displayPlan, weekIndex: safeWIdx, scheduleBlocks, shiftContext: shiftMode.context, todayYmd: getAppTodayYmd(), lockedSessionIds }));
+      setWeekCalendarBatchProposal(runShiftWeekScan({ plan: displayPlan, weekIndex: safeWIdx, scheduleBlocks, shiftContext: shiftMode.context, todayYmd: getAppTodayYmd(), lockedSessionIds, acceptedKeys: shiftAcceptedKeys }));
       return;
     }
     const conflicts = scanWeekForCalendarConflicts(w, scheduleBlocks, lockedSessionIds);
@@ -2918,6 +2924,7 @@ export default function AppMain(){
   const handleConfirmWeekCalendarBatch = ()=>{
     reportShiftProposalDecision(weekCalendarBatchProposal, true);
     if (weekCalendarBatchProposal?.patches?.length && !touchesLockedSession(weekCalendarBatchProposal.patches)) {
+      if (weekCalendarBatchProposal.source === "shift" && shiftMode.context) rememberAcceptedShiftPatches(weekCalendarBatchProposal.patches, shiftMode.context);
       handleAiApplyPlanPatches(null, null, weekCalendarBatchProposal.patches);
     }
     setWeekCalendarBatchProposal(null);
@@ -2945,7 +2952,7 @@ export default function AppMain(){
     if (idx < 0 || !shiftMode.context) return;
     setPendingCalendarProposal(null);
     setWIdx(idx);
-    setWeekCalendarBatchProposal(runShiftWeekScan({ plan: displayPlan, weekIndex: idx, scheduleBlocks, shiftContext: shiftMode.context, todayYmd, lockedSessionIds }));
+    setWeekCalendarBatchProposal(runShiftWeekScan({ plan: displayPlan, weekIndex: idx, scheduleBlocks, shiftContext: shiftMode.context, todayYmd, lockedSessionIds, acceptedKeys: shiftAcceptedKeys }));
     navigateToView("week");
   };
   const doneSessions = ACTIVE_SESSIONS.filter((session) => isSessionLogDone(logs[session.id]));
@@ -4435,7 +4442,7 @@ export default function AppMain(){
           {(() => {
             const shiftTodayYmd = getAppTodayYmd();
             const todaySession = dashboardSession && sessionYmd(dashboardSession) === shiftTodayYmd ? dashboardSession : null;
-            const hasProposal = !!shiftMode.context && shiftTodayHasProposal({ plan: displayPlan, scheduleBlocks, shiftContext: shiftMode.context, todayYmd: shiftTodayYmd, lockedSessionIds, sessionId: todaySession ? todaySession.id : null });
+            const hasProposal = !!shiftMode.context && shiftTodayHasProposal({ plan: displayPlan, scheduleBlocks, shiftContext: shiftMode.context, todayYmd: shiftTodayYmd, lockedSessionIds, acceptedKeys: shiftAcceptedKeys, sessionId: todaySession ? todaySession.id : null });
             const line = shiftMode.todayLine(shiftTodayYmd, todaySession ? todaySession.type : null, hasProposal);
             return line ? <ShiftTodayNote text={line.text} onShowProposal={line.offerProposal ? handleShowShiftProposal : undefined} /> : null;
           })()}

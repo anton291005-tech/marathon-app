@@ -44,6 +44,8 @@ export type ProposeShiftSingleInput = {
   shiftContext: ShiftCapacityContext;
   todayYmd: string;
   lockedSessionIds?: ReadonlySet<string>;
+  /** Wie im Wochenvorschlag: bestätigte Verschiebungen ohne Dienstplan-Änderung sind kein weicher Konflikt. */
+  acceptedKeys?: ReadonlySet<string>;
 };
 
 function findIn(week: AiPlanWeek, id: string): AiPlanSession | null {
@@ -71,7 +73,7 @@ export function proposeShiftSingle(input: ProposeShiftSingleInput): ShiftSingleP
     .map((c) => ({ ...c, isConflict: c.isConflict || !(sourceCapacity && checkCandidate(ctx, current, session, sourceCapacity, c, true)) }));
   const views = buildCalendarReassignmentCandidateViews(week, allowed);
 
-  const conflict = findShiftConflicts(week, scheduleBlocks, shiftContext, locked).find((c) => c.sessionId === sessionId);
+  const conflict = findShiftConflicts(week, scheduleBlocks, shiftContext, locked, input.acceptedKeys).find((c) => c.sessionId === sessionId);
   if (!conflict || !sourceCapacity || !sourceYmd) return { status: "no-conflict", candidates: views, source: "shift" };
 
   const conflictCause = conflict.shiftDay ? reasonPhraseDe(conflict.shiftDay, conflict.category) : "wegen Kalendertermin";

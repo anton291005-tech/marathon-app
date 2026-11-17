@@ -12,6 +12,7 @@ import { reportShiftUsage } from "./shiftUsage";
 import { buildShiftCapacityContext, sortedEntries } from "./shiftAdapter";
 import { isShiftModeEnabled } from "./shiftModeFlag";
 import { getShiftState } from "./shiftStore";
+import { readAcceptedShiftMoves, recordAcceptedShiftMoves, validAcceptedShiftKeys } from "./shiftAcceptedMoves";
 
 export const SHIFT_NO_SAFE_SWAP = "Für diese Woche gibt es keinen sicheren Tausch.";
 export const SHIFT_BLOCKED_HINT = "Ein Tausch würde hier eine Trainingsregel verletzen. Dein Plan bleibt, wie er ist.";
@@ -50,7 +51,21 @@ export type ShiftScanArgs = {
   shiftContext: ShiftCapacityContext;
   todayYmd: string;
   lockedSessionIds: ReadonlySet<string>;
+  /** Bestätigte Verschiebungen (`currentAcceptedShiftKeys`); ohne = keine. */
+  acceptedKeys?: ReadonlySet<string>;
 };
+
+/** Gültige Bestätigungen für den aktuellen Dienstplan (Store-Stand, Konto des Stores). */
+export function currentAcceptedShiftKeys(shiftContext: ShiftCapacityContext | null): ReadonlySet<string> {
+  const state = getShiftState();
+  return validAcceptedShiftKeys(readAcceptedShiftMoves(state.userId), state.entriesByDate, shiftContext);
+}
+
+/** Bestätigte Patches eines Schicht-Vorschlags merken (Store-Stand, Konto des Stores). */
+export function rememberAcceptedShiftPatches(patches: readonly PlanPatch[], shiftContext: ShiftCapacityContext | null): void {
+  const state = getShiftState();
+  recordAcceptedShiftMoves(state.userId, patches, state.entriesByDate, shiftContext);
+}
 
 /** Scan einer Woche; meldet `shift_proposal_shown`, wenn ein bestätigbarer Vorschlag entsteht. */
 export function runShiftWeekScan(args: ShiftScanArgs): ShiftBatchState {
@@ -109,7 +124,14 @@ export function planAfterShiftSave(args: {
     todayYmd: args.todayYmd,
   });
   if (!shiftContext || args.plan.length === 0) return { message: null };
-  const found = scanAfterShiftSave({ plan: args.plan, scheduleBlocks: args.scheduleBlocks, shiftContext, todayYmd: args.todayYmd, lockedSessionIds: args.lockedSessionIds });
+  const found = scanAfterShiftSave({
+    plan: args.plan,
+    scheduleBlocks: args.scheduleBlocks,
+    shiftContext,
+    todayYmd: args.todayYmd,
+    lockedSessionIds: args.lockedSessionIds,
+    acceptedKeys: currentAcceptedShiftKeys(shiftContext),
+  });
   return found ?? { message: "Diese und nächste Woche passen zu deinem Dienstplan." };
 }
 
@@ -136,7 +158,9 @@ let todayProposalCache: { key: string; plan: AiPlanWeek[]; ctx: ShiftCapacityCon
  */
 export function shiftTodayHasProposal(args: Omit<ShiftScanArgs, "weekIndex"> & { sessionId: string | null }): boolean {
   if (!args.sessionId) return false;
-  const key = `${args.todayYmd}|${args.sessionId}|${contentHash(args.scheduleBlocks, args.lockedSessionIds)}`;
+  const accepted: string[] = [];
+  (args.acceptedKeys ?? new Set<string>()).forEach((k) => accepted.push(k));
+  const key = `${args.todayYmd}|${args.sessionId}|${contentHash(args.scheduleBlocks, args.lockedSessionIds)}|${accepted.sort().join(",")}`;
   if (todayProposalCache && todayProposalCache.key === key && todayProposalCache.plan === args.plan && todayProposalCache.ctx === args.shiftContext) {
     return todayProposalCache.value;
   }
