@@ -11,6 +11,7 @@ import { buildShiftCapacityContext } from "../shiftAdapter";
 import { isShiftModeEnabled } from "../shiftModeFlag";
 import { isHardDayType, proposeShiftWeek, type ShiftWeekProposal } from "../proposeShiftWeek";
 import { scanAfterShiftSave } from "../shiftWeekScan";
+import { proposeShiftSingle } from "../proposeShiftSingle";
 import { F, N, OFF, S, week } from "../__fixtures__/shiftFixtures";
 import type { StoredShiftEntry } from "../../lib/supabase/services/shiftEntriesService";
 
@@ -186,6 +187,95 @@ describe("Schicht-Wochenvorschlag – Szenarien", () => {
     // Long Run wird nie gestrichen.
     expect(result.patches.some((p) => p.sessionId === "w1-2" && p.changes.type === "easy")).toBe(false);
     expect(result.softened[0].sentence).toMatch(/Vorschlag: heute locker laufen\.$/);
+  });
+
+  it("Repro A (23.–29.11.): kein freier Tag → Intervalle auf den eingeschränkten Freitag statt „locker statt hart“", () => {
+    // Di+Mi Nacht 22–6, Fr+Sa frei. Do (Intervalle) nach der 2. Nacht ungeeignet; Sa wäre frei, liegt aber vor dem
+    // Long Run am So, Mo nach dem Long Run der Vorwoche. Fr (erster freier Tag nach den Nächten) ist eingeschränkt.
+    const prev = week(0, "2026-11-16", ["easy", "interval", "easy", "tempo", "rest", "easy", "long"], "build", "w0");
+    const cur = week(1, "2026-11-23", ["easy", "easy", "rest", "interval", "easy", "easy", "long"]);
+    const plan = [prev, cur];
+    const c = ctx([N("2026-11-24"), N("2026-11-25"), OFF("2026-11-27"), OFF("2026-11-28")], "2026-11-17");
+    expect(c.byDate["2026-11-27"]).toMatchObject({ hard: "limited", reasonCode: "recovery_after_nights" });
+    const result = expectProposal(proposeShiftWeek({ plan, weekIndex: 1, scheduleBlocks: [], shiftContext: c, todayYmd: "2026-11-17" }));
+    expect(result.softened).toEqual([]);
+    expect(result.moves).toHaveLength(1);
+    expect(result.moves[0]).toMatchObject({ sessionId: "w1-3", toYmd: "2026-11-27", toLimited: true });
+    const after = applyPlanPatches(plan, result.patches);
+    expect(after[1].s.find((s) => s.id === "w1-3")?.type).toBe("interval");
+    expect(hardPairs(after)).toEqual([]);
+    expect(result.moves[0].sentence).toBe(
+      "Nach dem Nachtdienst (22–6 Uhr) ist Donnerstag kein guter Tag für Intervalle. Vorschlag: Freitag – erster freier Tag nach den Nachtdiensten, also auch nur eingeschränkt, aber besser als Donnerstag.",
+    );
+  });
+
+  it("Repro A, Einzel-Pfad: derselbe eingeschränkte Freitag", () => {
+    const prev = week(0, "2026-11-16", ["easy", "interval", "easy", "tempo", "rest", "easy", "long"], "build", "w0");
+    const cur = week(1, "2026-11-23", ["easy", "easy", "rest", "interval", "easy", "easy", "long"]);
+    const plan = [prev, cur];
+    const c = ctx([N("2026-11-24"), N("2026-11-25"), OFF("2026-11-27"), OFF("2026-11-28")], "2026-11-17");
+    const single = proposeShiftSingle({ plan, weekIndex: 1, sessionId: "w1-3", scheduleBlocks: [], shiftContext: c, todayYmd: "2026-11-17" });
+    if (single.status !== "proposal") throw new Error(single.status);
+    expect(dayOf(applyPlanPatches(plan, single.patches), "w1-3")).toBe("2026-11-27");
+  });
+
+  it("weiterhin „locker statt hart“, wenn auch kein eingeschränkter Tag regelkonform ist", () => {
+    // Wie Repro A, aber Fr ist selbst ein Nachtdienst-Folgetag (Nacht Do → Fr ungeeignet), Sa vor dem Long Run.
+    const prev = week(0, "2026-11-16", ["easy", "interval", "easy", "tempo", "rest", "easy", "long"], "build", "w0");
+    const cur = week(1, "2026-11-23", ["easy", "rest", "easy", "interval", "easy", "easy", "long"]);
+    const plan = [prev, cur];
+    const c = ctx(["2026-11-22", "2026-11-23", "2026-11-24", "2026-11-25", "2026-11-26"].map(N), "2026-11-17");
+    const result = expectProposal(proposeShiftWeek({ plan, weekIndex: 1, scheduleBlocks: [], shiftContext: c, todayYmd: "2026-11-17" }));
+    expect(result.moves.some((m) => m.sessionId === "w1-3")).toBe(false);
+    expect(result.softened.map((s) => s.sessionId)).toContain("w1-3");
+  });
+
+  it("Repro B (16.–22.11.): Long Run auf dem ungeeigneten Sonntag tauscht mit dem freien Donnerstag", () => {
+    // Fr+Sa Nacht, So frei (aber nach der Nacht), Do frei mit „Lockerer Lauf mit Steigerungen“. Kein Long Run in der Vorwoche.
+    const cur = week(1, "2026-11-16", ["easy", "easy", "easy", "easy", "easy", "rest", "long"]);
+    cur.s[3].title = "Lockerer Lauf mit Steigerungen";
+    const plan = [cur, week(2, "2026-11-23", ["easy", "interval", "easy", "easy", "rest", "easy", "long"])];
+    const c = ctx([OFF("2026-11-19"), N("2026-11-20"), N("2026-11-21"), OFF("2026-11-22")], "2026-11-17");
+    const locked = buildLockedSessionIds(plan, {}, "2026-11-17");
+    const result = expectProposal(
+      proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: "2026-11-17", lockedSessionIds: locked }),
+    );
+    expect(result.moves).toEqual([expect.objectContaining({ sessionId: "w1-6", toYmd: "2026-11-19" })]);
+    const after = applyPlanPatches(plan, result.patches);
+    expect(dayOf(after, "w1-6")).toBe("2026-11-19");
+    expect(dayOf(after, "w1-3")).toBe("2026-11-22");
+    expect(result.action.preview?.items).toContain("Lockerer Lauf mit Steigerungen: Do → So (22. Nov)");
+  });
+
+  it("Long Run darf auch auf einen eingeschränkten Tag derselben Woche, wenn kein freier Tag regelkonform ist", () => {
+    // Spätdienste bis 0:30 (So–Do) → Mo–Do für den Long Run eingeschränkt; Fr vor der Nacht, Sa zwischen den Nächten und
+    // So nach der Nacht ungeeignet. Kein freier Tag → der nächstgelegene eingeschränkte Tag (Do).
+    const cur = week(1, "2026-11-16", ["easy", "interval", "easy", "easy", "easy", "rest", "long"]);
+    const plan = [cur];
+    const late = (d: string) => S(d, "17:00", "00:30");
+    const c = ctx(
+      [late("2026-11-15"), late("2026-11-16"), late("2026-11-17"), late("2026-11-18"), late("2026-11-19"), N("2026-11-20"), N("2026-11-21")],
+      "2026-11-16",
+    );
+    expect(c.byDate["2026-11-22"]).toMatchObject({ long: "unsuitable" });
+    expect(c.byDate["2026-11-19"]).toMatchObject({ long: "limited" });
+    const result = expectProposal(proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: "2026-11-16" }));
+    expect(result.moves).toEqual([expect.objectContaining({ sessionId: "w1-6", toYmd: "2026-11-19", toLimited: true })]);
+    expect(result.moves[0].sentence).toMatch(/Vorschlag: Donnerstag – nach dem Spätdienst \(17:00–0:30 Uhr\), also auch nur eingeschränkt, aber besser als Sonntag\.$/);
+    expect(hardPairs(applyPlanPatches(plan, result.patches))).toEqual([]);
+  });
+
+  it("Repro B mit Long Run in der Vorwoche: Abstand von 6 Tagen verhindert den Tausch, der Hinweis nennt den Grund", () => {
+    const prev = week(0, "2026-11-09", ["easy", "easy", "interval", "easy", "rest", "easy", "long"], "build", "w0");
+    const cur = week(1, "2026-11-16", ["easy", "easy", "rest", "easy", "easy", "rest", "long"]);
+    const plan = [prev, cur];
+    const c = ctx([OFF("2026-11-19"), N("2026-11-20"), N("2026-11-21"), OFF("2026-11-22")], "2026-11-17");
+    const locked = buildLockedSessionIds(plan, {}, "2026-11-17");
+    const result = proposeShiftWeek({ plan, weekIndex: 1, scheduleBlocks: [], shiftContext: c, todayYmd: "2026-11-17", lockedSessionIds: locked });
+    expect(result.status).toBe("hint-only");
+    expect(result.status === "hint-only" ? result.hints[0] : "").toMatch(
+      /^So, 22\. Nov: „Long Run“ bleibt – nach dem Nachtdienst \(22–6 Uhr\)\. \w+ läge zu nah am Long Run vom So, 15\. Nov \(mindestens 6 Tage Abstand\)\.$/,
+    );
   });
 
   it("nach dem Speichern: aktuelle Woche ohne Konflikt → nächste Woche wird gescannt", () => {

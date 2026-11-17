@@ -2,7 +2,7 @@
  * Einzel-Pfad des Schicht-Modus (Kalender-Knopf an einer Einheit bzw. „An Kalender anpassen“ in der Detailansicht).
  *
  * Bei aktivem Dienstplan läuft der Einzel-Vorschlag durch dieselben Schutzregeln wie der Wochenvorschlag
- * (`checkCandidate` aus `proposeShiftWeek.ts`): Zieltag frei, keine neuen harten Tage in Folge, Long Run in seiner Woche
+ * (`checkCandidate` aus `proposeShiftWeek.ts`): Zieltag frei (bei ungeeignetem Ausgangstag ersatzweise eingeschränkt), keine neuen harten Tage in Folge, Long Run in seiner Woche
  * mit Abstand, Taper/Rennwoche nur früher, Rennen und gesperrte Einheiten nie Quelle oder Ziel. Die alte Engine
  * (`proposeSingleSessionCalendarReassignment`) bekommt den Dienstplan nicht, weil sie diese Regeln nur als Warnung kennt.
  * Auch die Liste für „Trotzdem Tag wählen“ enthält nur Tage, die die harten Regeln einhalten.
@@ -21,7 +21,7 @@ import {
 import { NO_LOCKED_SESSION_IDS } from "../ai/mutations/lockedSessions";
 import { sessionDayIso } from "../ai/mutations/sessionDayIso";
 import { validatePlanIntegrity } from "../ai/validation/validatePlanIntegrity";
-import { checkCandidate, dayCapacity, findShiftConflicts, type CheckedCandidate } from "./proposeShiftWeek";
+import { checkCandidate, closestFirst, dayCapacity, findShiftConflicts, type CheckedCandidate } from "./proposeShiftWeek";
 import { moveSentenceDe, reasonPhraseDe, weekdayLongDe } from "./shiftText";
 
 export type ShiftSingleProposal =
@@ -76,9 +76,17 @@ export function proposeShiftSingle(input: ProposeShiftSingleInput): ShiftSingleP
 
   const conflictCause = conflict.shiftDay ? reasonPhraseDe(conflict.shiftDay, conflict.category) : "wegen Kalendertermin";
   let accepted: CheckedCandidate | null = null;
-  for (const candidate of ranked) {
+  const byCloseness = closestFirst(ranked, sourceYmd);
+  for (const candidate of byCloseness) {
     accepted = checkCandidate(ctx, current, session, sourceCapacity, candidate, true);
     if (accepted) break;
+  }
+  // Wie im Wochenvorschlag: kein freier Tag → bei ungeeignetem Ausgangstag ein eingeschränkter Tag derselben Woche.
+  if (!accepted && conflict.severity === "strong") {
+    for (const candidate of byCloseness) {
+      accepted = checkCandidate(ctx, current, session, sourceCapacity, candidate, true, true);
+      if (accepted) break;
+    }
   }
   if (!accepted) return { status: "proposal", action: null, patches: [], candidates: views, conflictCause, source: "shift" };
 

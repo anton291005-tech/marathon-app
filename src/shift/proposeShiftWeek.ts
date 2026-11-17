@@ -6,10 +6,12 @@
  *   - Long Run bleibt in seiner Kalenderwoche und hält `minDaysBetweenLongRuns` Abstand zu anderen Long Runs
  *   - Rennen nie Quelle oder Ziel; gesperrte Einheiten (erledigt/übersprungen/vergangen) nie
  *   - in Taper- und Rennwoche rückt keine harte Einheit auf einen späteren Tag
- * „Eingeschränkt“ ist ein weicher Konflikt: verschoben wird nur auf einen freien Tag. Gibt es für eine harte Einheit
- * auf einem ungeeigneten Tag keinen sicheren Tag, wird „locker statt hart“ (H3, Spec §8.2) vorgeschlagen — über
- * denselben Patch-Weg wie der Krankheits-Vorschlag (`PlanPatch` mit `type: "easy"`). Nichts wird ohne Bestätigung
- * geschrieben; das Ergebnis ist eine Aktion für die bestehende `AiActionCard`.
+ * „Eingeschränkt“ ist ein weicher Konflikt: von einem eingeschränkten Tag wird nur auf einen freien Tag verschoben.
+ * Liegt eine Einheit auf einem ungeeigneten Tag (starker Konflikt) und gibt es keinen freien Tag ohne Regelverstoß, ist
+ * ein eingeschränkter Tag derselben Woche das Ziel (mit Hinweis im Text) — für harte Einheiten wie für den Long Run.
+ * Erst wenn auch das nicht regelkonform geht, wird für Intervalle/Tempo „locker statt hart“ (H3, Spec §8.2)
+ * vorgeschlagen — über denselben Patch-Weg wie der Krankheits-Vorschlag (`PlanPatch` mit `type: "easy"`). Nichts wird
+ * ohne Bestätigung geschrieben; das Ergebnis ist eine Aktion für die bestehende `AiActionCard`.
  */
 import type { AiAssistantAction, AiPlanSession, AiPlanWeek, PlanPatch } from "../lib/ai/types";
 import type { WeeklyScheduleBlock } from "../lib/supabase/services/weeklyScheduleBlocksService";
@@ -53,7 +55,15 @@ export type ShiftConflict = {
   shiftDay?: ShiftDayAssessment;
 };
 
-export type ShiftMove = { sessionId: string; fromYmd: string; toYmd: string; sentence: string; cause: string };
+export type ShiftMove = {
+  sessionId: string;
+  fromYmd: string;
+  toYmd: string;
+  sentence: string;
+  cause: string;
+  /** Zieltag ist für diese Art selbst nur eingeschränkt geeignet (zweiter Durchgang, kein freier Tag möglich). */
+  toLimited?: boolean;
+};
 export type ShiftSoften = { sessionId: string; dayYmd: string; sentence: string; patch: PlanPatch };
 
 export type ShiftWeekProposal =
@@ -235,6 +245,13 @@ export function isFreeFor(session: AiPlanSession, capacity: DayCapacityScore): b
   return computeSessionDayFitScore(session, capacity) >= MIN_FIT_SCORE_THRESHOLD;
 }
 
+/** Ziel ist für diese Art „eingeschränkt“ (nicht ungeeignet, kein Zeitfenster-Problem) und ohne Kalenderkonflikt. */
+export function isLimitedFor(session: AiPlanSession, capacity: DayCapacityScore): boolean {
+  const category = shiftCategoryOfSession(session);
+  if (!category || suitabilityOf(capacity, category) !== "limited") return false;
+  return computeSessionDayFitScore(session, capacity) >= MIN_FIT_SCORE_THRESHOLD;
+}
+
 /** Ergebnis der Prüfung eines Zieltags: der simulierte Plan nach dem Tausch oder `null` (abgelehnt). */
 export type CheckedCandidate = { toYmd: string; targetId: string; after: AiPlanWeek[] };
 
@@ -242,20 +259,38 @@ export type CheckedCandidate = { toYmd: string; targetId: string; after: AiPlanW
  * Alle Schutzregeln für einen Tausch `session` ↔ Einheit am Zieltag (Wochen- und Einzelpfad nutzen dieselbe Prüfung):
  * Engine-Konflikt (Fit/Micro-Structure), Rennen/gesperrt, Zieltag frei für die verschobene Einheit, Quelltag passt für
  * die verdrängte, keine neuen harten Tage in Folge, Long Run in seiner Woche mit Abstand, Taper/Rennwoche nur früher.
+ * `allowLimited`: Zieltag darf statt „frei“ auch „eingeschränkt“ sein (nur mit `requireFree`, sonst ohne Wirkung).
  */
 export function checkCandidate(
-  ctx: { scheduleBlocks: WeeklyScheduleBlock[]; shiftContext: ShiftCapacityContext; locked: ReadonlySet<string>; week: AiPlanWeek },
+  ctx: CheckContext,
   current: AiPlanWeek[],
   session: AiPlanSession,
   sourceCapacity: DayCapacityScore,
   candidate: { targetSessionId: string; dateIso: string; isConflict: boolean },
   requireFree: boolean,
+  allowLimited = false,
 ): CheckedCandidate | null {
+  const result = evaluateCandidate(ctx, current, session, sourceCapacity, candidate, requireFree, allowLimited);
+  return result && result.problems.length === 0 ? result.checked : null;
+}
+
+type CheckContext = { scheduleBlocks: WeeklyScheduleBlock[]; shiftContext: ShiftCapacityContext; locked: ReadonlySet<string>; week: AiPlanWeek };
+
+/** Wie `checkCandidate`, liefert aber die verletzten Schutzregeln nach dem Tausch (`null` = schon vorher abgelehnt). */
+function evaluateCandidate(
+  ctx: CheckContext,
+  current: AiPlanWeek[],
+  session: AiPlanSession,
+  sourceCapacity: DayCapacityScore,
+  candidate: { targetSessionId: string; dateIso: string; isConflict: boolean },
+  requireFree: boolean,
+  allowLimited: boolean,
+): { checked: CheckedCandidate; problems: string[] } | null {
   if (candidate.isConflict && requireFree) return null;
   const target = findSession(current, candidate.targetSessionId);
   if (!target || target.type === "race" || session.type === "race" || ctx.locked.has(target.id) || ctx.locked.has(session.id)) return null;
   const targetCapacity = dayCapacity(candidate.dateIso, ctx.scheduleBlocks, ctx.shiftContext);
-  if (requireFree && !isFreeFor(session, targetCapacity)) return null;
+  if (requireFree && !isFreeFor(session, targetCapacity) && !(allowLimited && isLimitedFor(session, targetCapacity))) return null;
   if (isHardDayType(target.type) && !isFreeFor(target, sourceCapacity)) return null;
   if (requireFree && computeSessionDayFitScore(target, sourceCapacity) < MIN_FIT_SCORE_THRESHOLD) return null;
   const after = swapWorkouts(current, session.id, target.id);
@@ -265,8 +300,46 @@ export function checkCandidate(
     ...longRunViolations(current, after, moved),
     ...taperViolations(ctx.week, current, after, moved),
   ];
-  if (problems.length > 0) return null;
-  return { toYmd: candidate.dateIso, targetId: target.id, after };
+  return { checked: { toYmd: candidate.dateIso, targetId: target.id, after }, problems };
+}
+
+export type RankedCandidate = ReturnType<typeof rankCalendarReassignmentCandidates>[number];
+
+/**
+ * Rangfolge der Engine (Micro-Structure, Fit); bei Gleichstand der Tag am nächsten zum Ausgangstag statt des frühesten
+ * (die Woche bleibt so nah wie möglich am Plan). Wochen- und Einzelpfad nutzen dieselbe Reihenfolge.
+ */
+export function closestFirst(ranked: RankedCandidate[], fromYmd: string): RankedCandidate[] {
+  return ranked.slice().sort(
+    (a, b) =>
+      a.microStructureSeverity - b.microStructureSeverity ||
+      b.combinedFit - a.combinedFit ||
+      Math.abs(diffDays(a.dateIso, fromYmd)) - Math.abs(diffDays(b.dateIso, fromYmd)) ||
+      a.dateIso.localeCompare(b.dateIso),
+  );
+}
+
+/**
+ * Für den Hinweis beim Long Run, der bleibt: Gäbe es einen freien oder eingeschränkten Tag, an dem nur der Abstand zu
+ * einem anderen Long Run stört? Dann nennt der Hinweis diesen Grund statt „kein freier Tag“.
+ */
+function longRunGapBlocker(
+  ctx: CheckContext,
+  current: AiPlanWeek[],
+  session: AiPlanSession,
+  sourceCapacity: DayCapacityScore,
+  fromYmd: string,
+  ranked: RankedCandidate[],
+): { toYmd: string; otherYmd: string } | null {
+  for (const candidate of closestFirst(ranked, fromYmd)) {
+    const result = evaluateCandidate(ctx, current, session, sourceCapacity, candidate, true, true);
+    if (!result || result.problems.length === 0) continue;
+    if (!result.problems.every((v) => v.indexOf(`long-run-gap:${session.id}>`) === 0)) continue;
+    const other = findSession(current, result.problems[0].slice(result.problems[0].indexOf(">") + 1));
+    const otherYmd = other ? sessionDayIso(other) : null;
+    if (otherYmd) return { toYmd: candidate.dateIso, otherYmd };
+  }
+  return null;
 }
 
 type GreedyResult = {
@@ -298,13 +371,24 @@ function runGreedy(args: GreedyArgs, order: ShiftConflict[]): GreedyResult {
     );
     const ranked = rankCalendarReassignmentCandidates([currentWeek], conflict.sessionId, candidates, sourceCapacity);
 
+    const checkCtx: CheckContext = { scheduleBlocks, shiftContext, locked, week };
     let accepted: CheckedCandidate | null = null;
-    for (const candidate of ranked) {
-      accepted = checkCandidate({ scheduleBlocks, shiftContext, locked, week }, current, session, sourceCapacity, candidate, true);
+    const byCloseness = closestFirst(ranked, conflict.dayYmd);
+    for (const candidate of byCloseness) {
+      accepted = checkCandidate(checkCtx, current, session, sourceCapacity, candidate, true);
       if (accepted) break;
+    }
+    // Kein freier Tag: Liegt die Einheit auf einem ungeeigneten Tag, ist ein eingeschränkter Tag derselben Woche besser
+    // als „locker statt hart“ bzw. ein Long Run, der bleibt. Von einem eingeschränkten Tag aus bringt das nichts.
+    if (!accepted && conflict.severity === "strong") {
+      for (const candidate of byCloseness) {
+        accepted = checkCandidate(checkCtx, current, session, sourceCapacity, candidate, true, true);
+        if (accepted) break;
+      }
     }
 
     if (accepted) {
+      const toLimited = !isFreeFor(session, dayCapacity(accepted.toYmd, scheduleBlocks, shiftContext));
       used[session.id] = true;
       used[accepted.targetId] = true;
       current = accepted.after;
@@ -323,7 +407,7 @@ function runGreedy(args: GreedyArgs, order: ShiftConflict[]): GreedyResult {
           })
         : `„${session.title}“ am ${weekdayLongDe(conflict.dayYmd)} kollidiert mit einem Termin. Vorschlag: ${weekdayLongDe(accepted.toYmd)}.`;
       proposals.push({ sessionId: session.id, fromDayIso: conflict.dayYmd, toDayIso: accepted.toYmd, reason: sentence, cause });
-      moves.push({ sessionId: session.id, fromYmd: conflict.dayYmd, toYmd: accepted.toYmd, sentence, cause });
+      moves.push({ sessionId: session.id, fromYmd: conflict.dayYmd, toYmd: accepted.toYmd, sentence, cause, ...(toLimited ? { toLimited } : {}) });
       return;
     }
 
@@ -348,7 +432,12 @@ function runGreedy(args: GreedyArgs, order: ShiftConflict[]): GreedyResult {
     }
     if (conflict.shiftDay) {
       const lead = reasonPhraseDe(conflict.shiftDay, conflict.category);
-      hints.push(`${dayLabelDe(conflict.dayYmd)}: „${session.title}“ bleibt – ${lead}, und es gibt keinen freien Tag ohne Regelverstoß.`);
+      const gap = session.type === "long" ? longRunGapBlocker(checkCtx, current, session, sourceCapacity, conflict.dayYmd, ranked) : null;
+      hints.push(
+        gap
+          ? `${dayLabelDe(conflict.dayYmd)}: „${session.title}“ bleibt – ${lead}. ${weekdayLongDe(gap.toYmd)} läge zu nah am Long Run vom ${dayLabelDe(gap.otherYmd)} (mindestens ${READINESS_CONFIG.actions.minDaysBetweenLongRuns.value} Tage Abstand).`
+          : `${dayLabelDe(conflict.dayYmd)}: „${session.title}“ bleibt – ${lead}, und es gibt keinen freien Tag ohne Regelverstoß.`,
+      );
     } else {
       hints.push(`${dayLabelDe(conflict.dayYmd)}: Kalenderkonflikt ohne sicheren Ausweichtag – einzeln über den Kalender-Button bearbeiten.`);
     }
@@ -372,7 +461,17 @@ function orders<T>(items: T[], limit: number): T[][] {
   return out;
 }
 
-/** Reihenfolgen probieren, solange nicht alles verschoben ist: zuerst die meisten Verschiebungen, dann die wenigsten „locker statt hart“. */
+/**
+ * Reihenfolgen probieren, solange nicht alles verschoben ist: zuerst die meisten Verschiebungen, dann die wenigsten
+ * „locker statt hart“, dann die wenigsten Ziele, die selbst nur eingeschränkt sind.
+ */
+function better(next: GreedyResult, best: GreedyResult): boolean {
+  if (next.moves.length !== best.moves.length) return next.moves.length > best.moves.length;
+  if (next.softened.length !== best.softened.length) return next.softened.length < best.softened.length;
+  const limited = (r: GreedyResult) => r.moves.filter((m) => m.toLimited).length;
+  return limited(next) < limited(best);
+}
+
 const MAX_PERMUTED_CONFLICTS = 4;
 
 /**
@@ -393,12 +492,13 @@ export function proposeShiftWeek(input: ProposeShiftWeekInput): ShiftWeekProposa
   const original: AiPlanWeek[] = deepClone(plan);
   const args: GreedyArgs = { ...input, locked, week, conflictIds };
 
+  const done = (r: GreedyResult) => r.moves.length === conflicts.length && !r.moves.some((m) => m.toLimited);
   let best = runGreedy(args, conflicts);
-  if (best.moves.length < conflicts.length) {
+  if (!done(best)) {
     orders(conflicts, MAX_PERMUTED_CONFLICTS).forEach((order) => {
-      if (best.moves.length === conflicts.length) return;
+      if (done(best)) return;
       const next = runGreedy(args, order);
-      if (next.moves.length > best.moves.length || (next.moves.length === best.moves.length && next.softened.length < best.softened.length)) best = next;
+      if (better(next, best)) best = next;
     });
   }
   const { proposals, moves, softened, hints } = best;

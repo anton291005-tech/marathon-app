@@ -132,6 +132,19 @@ export function reasonPhraseDe(day: ShiftDayAssessment, category?: ShiftCategory
   return lead.charAt(0).toLowerCase() + lead.slice(1);
 }
 
+/**
+ * Eigener Hinweis eines Tages, der für diese Art nur eingeschränkt geeignet ist: „erster freier Tag nach den
+ * Nachtdiensten“, „vor dem Nachtdienst (22–6 Uhr)“. `null`, wenn der Tag nicht eingeschränkt ist (frei, ohne Aussage
+ * oder ungeeignet — ungeeignete Tage sind nie Ziel).
+ */
+export function limitedDayNoteDe(day: ShiftDayAssessment | undefined, category: ShiftCategory | null): string | null {
+  if (!day || !category) return null;
+  const suit = category === "hard" ? day.hard : category === "long" ? day.long : day.easy;
+  if (suit !== "limited") return null;
+  if (day.reasons[category] === "recovery_after_nights") return "erster freier Tag nach den Nachtdiensten";
+  return reasonPhraseDe(day, category);
+}
+
 /** Warum der Zieltag passt: „da hast du frei“. */
 export function targetReasonDe(day: ShiftDayAssessment | undefined): string | null {
   if (!day) return null;
@@ -158,6 +171,10 @@ export function moveSentenceDe(args: {
   const noun = sessionNounDe(args.sessionType).plain;
   const lead = reasonLeadDe(args.fromDay, args.category);
   const verdict = args.limited ? `ist ${when} nur bedingt ein guter Tag für ${noun}` : `ist ${when} kein guter Tag für ${noun}`;
+  const limitedNote = limitedDayNoteDe(args.toDay, args.category);
+  if (limitedNote) {
+    return `${lead} ${verdict}. Vorschlag: ${weekdayLongDe(args.toYmd)} – ${limitedNote}, also auch nur eingeschränkt, aber besser als ${when}.`;
+  }
   const target = targetReasonDe(args.toDay);
   return `${lead} ${verdict}. Vorschlag: ${weekdayLongDe(args.toYmd)}${target ? ` – ${target}` : ""}.`;
 }
