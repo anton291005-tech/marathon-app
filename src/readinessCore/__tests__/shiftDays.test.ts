@@ -48,6 +48,14 @@ describe("readinessCore/shiftDays – Regeln", () => {
     expect(d.causeShift?.dateYmd).toBe("2026-11-16");
   });
 
+  it("Regel 1a: „Eigene Zeit 0–8 Uhr“ macht den Tag nie frei (wie das Ende einer Nacht)", () => {
+    const d = run([C("2026-11-17", "00:00", "08:00")])["2026-11-17"];
+    expect(d).toMatchObject({ hard: "unsuitable", long: "unsuitable", easy: "limited", reasonCode: "after_night" });
+    expect(run([{ dateYmd: "2026-11-17", kind: "night", start: "00:00", end: "08:00" }])["2026-11-17"].hard).toBe("unsuitable");
+    // Frühdienst ab 5:30 (nur 30 min vor dem Fenster) bleibt frei.
+    expect(run([C("2026-11-17", "05:30", "13:30")])["2026-11-17"].hard).toBe("free");
+  });
+
   it("Regel 2: Tag, an dem der erste Nachtdienst beginnt → hart eingeschränkt, Long Run ungeeignet, locker frei", () => {
     const d = run([N("2026-11-16")])["2026-11-16"];
     expect(d).toMatchObject({ hard: "limited", long: "unsuitable", easy: "free" });

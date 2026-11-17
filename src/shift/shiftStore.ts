@@ -80,18 +80,30 @@ export function resetShiftStateForTests(): void {
   loadToken += 1;
 }
 
+/**
+ * Cache-Schlüssel je Nutzer (`marathonShiftEntries:<userId>`): ausstehende Tage eines Kontos können nie in ein anderes
+ * Konto auf demselben Gerät geschrieben werden. Das Aufräumen beim Kontowechsel übernimmt die Integration (W3).
+ */
+export function shiftEntriesCacheKey(userId: string): string {
+  return `${SHIFT_ENTRIES_CACHE_KEY}:${userId}`;
+}
+
+export function shiftProfileCacheKey(userId: string): string {
+  return `${SHIFT_PROFILE_CACHE_KEY}:${userId}`;
+}
+
 function readEntriesCache(userId: string): EntriesCache {
-  const raw = safeReadLocalStorageJson<Partial<EntriesCache> | null>(SHIFT_ENTRIES_CACHE_KEY, null);
+  const raw = safeReadLocalStorageJson<Partial<EntriesCache> | null>(shiftEntriesCacheKey(userId), null);
   if (!raw || raw.userId !== userId || !raw.entries || typeof raw.entries !== "object") return { userId, entries: {}, pending: [] };
   return { userId, entries: { ...raw.entries }, pending: Array.isArray(raw.pending) ? raw.pending.filter((d) => typeof d === "string") : [] };
 }
 
 function writeEntriesCache(cache: EntriesCache): void {
-  safeWriteLocalStorageJson(SHIFT_ENTRIES_CACHE_KEY, cache);
+  safeWriteLocalStorageJson(shiftEntriesCacheKey(cache.userId), cache);
 }
 
 function readProfileCache(userId: string): ProfileCache {
-  const raw = safeReadLocalStorageJson<Partial<ProfileCache> | null>(SHIFT_PROFILE_CACHE_KEY, null);
+  const raw = safeReadLocalStorageJson<Partial<ProfileCache> | null>(shiftProfileCacheKey(userId), null);
   if (!raw || raw.userId !== userId) return { userId, worksShifts: null, defaults: null, pending: false };
   return {
     userId,
@@ -102,7 +114,7 @@ function readProfileCache(userId: string): ProfileCache {
 }
 
 function writeProfileCache(cache: ProfileCache): void {
-  safeWriteLocalStorageJson(SHIFT_PROFILE_CACHE_KEY, cache);
+  safeWriteLocalStorageJson(shiftProfileCacheKey(cache.userId), cache);
 }
 
 function readIntroDismissed(userId: string): boolean {

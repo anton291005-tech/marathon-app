@@ -26,7 +26,7 @@ export type ShiftModeRuntime = {
   /** Kürzel für den Woche-Tab (nur bei `works_shifts === true`). */
   tagFor: (ymd: string | null | undefined) => { short: string; label: string; night: boolean } | null;
   /** Ein Satz für „Heute“ (nur bei aktivem Schicht-Modus und Bezug des Tages zum Dienstplan). */
-  todayLine: (todayYmd: string, sessionType: string | null) => { text: string; offerProposal: boolean } | null;
+  todayLine: (todayYmd: string, sessionType: string | null, hasProposal: boolean) => { text: string; offerProposal: boolean } | null;
   /** Einmalige Karte „Arbeitest du in Schichten?“ für Bestandsnutzer ohne Antwort. */
   introVisible: boolean;
 };
@@ -66,12 +66,10 @@ export function useShiftMode(userId: string | null | undefined, todayYmd: string
         if (!entry) return null;
         return { short: shiftShortLabel(entry), label: entry.kind === "off" ? "Dienstfrei" : describeShift(entry), night: isNightShift(entry) };
       },
-      todayLine: (todayYmd, sessionType) => {
+      todayLine: (todayYmd, sessionType, hasProposal) => {
         const day = context ? context.byDate[todayYmd] : null;
         if (!day) return null;
-        const hardish = sessionType === "interval" || sessionType === "tempo" || sessionType === "long";
-        const suit = sessionType === "long" ? day.long : day.hard;
-        return { text: todayShiftLineDe(day, sessionType), offerProposal: hardish && suit !== "free" };
+        return { text: todayShiftLineDe(day, sessionType, hasProposal), offerProposal: hasProposal };
       },
       introVisible:
         enabled &&

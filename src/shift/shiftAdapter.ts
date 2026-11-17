@@ -37,6 +37,9 @@ export function buildShiftCapacityContext(args: {
   entries: readonly StoredShiftEntry[];
   todayYmd: string;
 }): ShiftCapacityContext | null {
-  if (!isShiftPlanningActive({ enabled: args.enabled, worksShifts: args.worksShifts, entryCount: args.entries.length })) return null;
+  const range = shiftLoadRange(args.todayYmd);
+  // Nur Einträge im Ladebereich zählen: ein abgelaufener Dienstplan hält den Modus nicht dauerhaft aktiv.
+  const inRange = args.entries.filter((e) => e.dateYmd >= range.fromYmd && e.dateYmd <= range.toYmd).length;
+  if (!isShiftPlanningActive({ enabled: args.enabled, worksShifts: args.worksShifts, entryCount: inRange })) return null;
   return { byDate: indexShiftDays(assessEntries(args.entries, args.todayYmd)) };
 }

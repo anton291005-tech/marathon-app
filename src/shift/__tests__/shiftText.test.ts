@@ -42,8 +42,11 @@ describe("shiftText", () => {
 
   it("Heute: genau ein Satz je Lage", () => {
     const after = days["2026-11-17"];
-    expect(todayShiftLineDe(after, "interval")).toBe(
+    expect(todayShiftLineDe(after, "interval", true)).toBe(
       "Nach dem Nachtdienst (22–6 Uhr) ist heute kein guter Tag für die Intervalle – im Woche-Tab findest du einen Vorschlag.",
+    );
+    expect(todayShiftLineDe(after, "interval")).toBe(
+      "Nach dem Nachtdienst (22–6 Uhr) ist heute kein guter Tag für die Intervalle – nimm dir heute nicht zu viel vor.",
     );
     expect(todayShiftLineDe(after, "easy")).toBe("Nach dem Nachtdienst (22–6 Uhr): heute nur kurz und locker, und erst nach dem Schlafen.");
     expect(todayShiftLineDe(after, "rest")).toBe("Nach dem Nachtdienst (22–6 Uhr) passt der Ruhetag heute gut.");

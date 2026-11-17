@@ -401,6 +401,7 @@ Für Menschen im Schicht- und Gastrodienst ist der Kalender die schlechteste Que
 | Nr. | Regel | hart | Long Run | locker | Code | Herkunft |
 |---|---|---|---|---|---|---|
 | 1 | Tag, an dem ein Nachtdienst morgens endet | ungeeignet | ungeeignet | eingeschränkt („kurz, und erst nach dem Schlafen“) | `after_night` | [E] |
+| 1a | Dienst beginnt mehr als 2 h vor 06:00 (z. B. 0–8 Uhr): wie das Ende einer Nacht an diesem Tag | ungeeignet | ungeeignet | eingeschränkt | `after_night` | [E] |
 | 2 | Tag, an dem der erste Nachtdienst eines Blocks abends beginnt | eingeschränkt | ungeeignet | – | `before_night` | [E] |
 | 3 | Tag zwischen zwei Nachtdiensten (Vorrang vor 1) | ungeeignet | ungeeignet | eingeschränkt | `between_nights` | [E] |
 | 4 | erster freier Tag nach einem Nachtblock (ohne Dienst); zweiter freier Tag ist ausdrücklich frei | eingeschränkt | ungeeignet | – | `recovery_after_nights` / `free_after_nights` | [E] |
@@ -414,7 +415,7 @@ Für Menschen im Schicht- und Gastrodienst ist der Kalender die schlechteste Que
 - **Dauer ohne Plan-Angabe:** hart 75 min, Long Run 150 min, locker 50 min (jeweils + 45 min Umziehen/Weg) [E].
 - **Dienst ohne Regel** (z. B. Frühdienst 6–14 Uhr mit freiem Nachmittag): frei, Grund `shift_fits`; Eintrag „Frei“: frei, Grund `day_off`. Ein Frühdienst von genau 8 h ist bewusst kein „langer Dienst“ (Szenario S4).
 - **Wirkung auf die Planung:** Liegt für einen Tag eine Aussage vor, nutzt die Kapazitäts-Engine (`computeSessionDayFitScore`) den Fit *frei 1,0 · eingeschränkt 0,5 · ungeeignet/passt nicht 0,2* und nimmt das Minimum mit der bisherigen Kalender-Rechnung (Termine wirken weiter). Ungeeignet liegt unter der Konfliktschwelle 0,35 (harter Konflikt), eingeschränkt darüber (weicher Konflikt: nur tauschen, wenn ein freier Tag ohne Regelverstoß existiert, §8.4). Ohne Dienstplan bleibt die Rechnung bit-gleich.
-- **Schutzregeln für Schicht-Vorschläge** (zusätzlich zu §8.5/§8.6): keine zwei harten Tage hintereinander (harte Einheiten und Long Run, auch über die Wochengrenze), Long Run bleibt in seiner Kalenderwoche und hält 6 Tage Abstand zum nächsten Long Run, Rennen nie Quelle oder Ziel, in Taper- und Rennwoche nur auf frühere Tage, gesperrte Einheiten nie. Gibt es keinen sicheren Tag, wird eine harte Einheit (I/T) auf einem ungeeigneten Tag als „locker statt hart“ (H3, §8.2) vorgeschlagen; ein Long Run nie. In der Rennwoche gibt es keinen Vorschlag.
+- **Schutzregeln für Schicht-Vorschläge** (zusätzlich zu §8.5/§8.6): keine zwei harten Tage hintereinander (harte Einheiten und Long Run, auch über die Wochengrenze), Long Run bleibt in seiner Kalenderwoche und hält 6 Tage Abstand zum nächsten Long Run, Rennen nie Quelle oder Ziel, in Taper- und Rennwoche nur auf frühere Tage, gesperrte Einheiten nie. Gibt es keinen sicheren Tag, wird eine harte Einheit (I/T) auf einem ungeeigneten Tag als „locker statt hart“ (H3, §8.2) vorgeschlagen; ein Long Run nie. In der Rennwoche nur auf frühere Tage, kein „locker statt hart“. Der Text der gekürzten Einheit nennt keinen Dienst (Plan-Texte gehen an den Coach, Schichtdaten nicht).
 - **Datenschutz:** Dienstplan-Daten gehen an kein Sprachmodell.
 
 ## 8. Von Readiness zur Handlung

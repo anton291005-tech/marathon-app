@@ -171,12 +171,12 @@ export function softenSentenceDe(args: { sessionType: string; fromDay: ShiftDayA
 }
 
 /** Genau ein Satz für „Heute“ an Tagen mit Bezug zum Dienstplan. */
-export function todayShiftLineDe(day: ShiftDayAssessment, sessionType: string | null): string {
+export function todayShiftLineDe(day: ShiftDayAssessment, sessionType: string | null, hasProposal = false): string {
   const category: ShiftCategory | null =
     !sessionType || sessionType === "rest" ? null : sessionType === "long" ? "long" : ["interval", "tempo", "race"].indexOf(sessionType) >= 0 ? "hard" : "easy";
   if (!category) {
     if (day.reasonCode === "after_night" || day.reasonCode === "between_nights") return `${reasonLeadDe(day)} passt der Ruhetag heute gut.`;
-    if (day.reasonCode === "day_off") return "Heute hast du frei und Ruhetag.";
+    if (day.reasonCode === "day_off") return "Dienstfrei und Ruhetag: heute steht nichts an.";
     return `${reasonLeadDe(day)} – heute steht ohnehin kein Training an.`;
   }
   const suit = category === "hard" ? day.hard : category === "long" ? day.long : day.easy;
@@ -187,7 +187,12 @@ export function todayShiftLineDe(day: ShiftDayAssessment, sessionType: string | 
     if (suit === "no_window") return `${lead} bleibt heute kaum Zeit – lieber kürzen oder auf einen anderen Tag legen.`;
     return `${lead}: heute nur kurz und locker, und erst nach dem Schlafen.`;
   }
-  if (suit === "unsuitable" || suit === "no_window") return `${lead} ist heute kein guter Tag für ${noun} – im Woche-Tab findest du einen Vorschlag.`;
+  if (suit === "unsuitable" || suit === "no_window") {
+    // Den Vorschlag nur nennen, wenn es ihn wirklich gibt (sonst ruhig bleiben).
+    return hasProposal
+      ? `${lead} ist heute kein guter Tag für ${noun} – im Woche-Tab findest du einen Vorschlag.`
+      : `${lead} ist heute kein guter Tag für ${noun} – nimm dir heute nicht zu viel vor.`;
+  }
   return `${lead}: lauf dich 10–15 min ein und mach einen lockeren Lauf daraus, wenn es sich nicht richtig anfühlt.`;
 }
 

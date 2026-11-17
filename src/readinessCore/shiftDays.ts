@@ -10,6 +10,7 @@
  *
  * Regeln (Nummern wie im Arbeitsplan W1, Spec §7.6):
  *  1 Tag, an dem ein Nachtdienst morgens endet → hart + Long Run ungeeignet, locker eingeschränkt („kurz, nach dem Schlafen“)
+ *  1a Dienst beginnt mehr als 2 h vor 06:00 (z. B. 0–8 Uhr) → wie Regel 1 an diesem Tag
  *  2 Tag, an dem der erste Nachtdienst eines Blocks abends beginnt → hart eingeschränkt, Long Run ungeeignet
  *  3 Tag zwischen zwei Nachtdiensten → hart + Long Run ungeeignet, locker eingeschränkt (Vorrang vor 1)
  *  4 erster freier Tag nach einem Nachtblock → hart eingeschränkt, Long Run ungeeignet; zweiter freier Tag → frei
@@ -290,6 +291,18 @@ export function assessShiftDays(input: ShiftDaysInput): ShiftDayAssessment[] {
       // Regel 2: erster Nachtdienst eines Blocks beginnt abends.
       mark(w.day, "hard", { suit: "limited", code: "before_night", cause: w.entry });
       mark(w.day, "long", { suit: "unsuitable", code: "before_night", cause: w.entry });
+    }
+  }
+
+  // Regel 1a: Dienst beginnt mehr als 2 h vor dem Tagesfenster (z. B. „Eigene Zeit 0–8 Uhr“) — die Nacht davor war
+  // Arbeit, auch wenn der Dienst kalendarisch erst an diesem Tag beginnt. Wirkt wie das Ende einer Nacht.
+  for (let i = 0; i < works.length; i += 1) {
+    const w = works[i];
+    const startOfDay = w.start - w.day * DAY_MIN;
+    if (ws - startOfDay > CONFIG.calendar.overnightMinHoursNextDay.value * 60) {
+      mark(w.day, "hard", { suit: "unsuitable", code: "after_night", cause: w.entry });
+      mark(w.day, "long", { suit: "unsuitable", code: "after_night", cause: w.entry });
+      mark(w.day, "easy", { suit: "limited", code: "after_night", cause: w.entry });
     }
   }
 
