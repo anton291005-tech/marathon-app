@@ -170,6 +170,7 @@ export function ShiftPlanPage({ todayYmd, onClose, onSaved }: Props) {
       if (e) upserts.push(e);
       else deletes.push(d);
     });
+    // ENTSCHEIDUNG (Anton absegnen): Wer einen Dienstplan speichert, arbeitet in Schichten → works_shifts = true.
     if (state.worksShifts !== true) void setWorksShifts(true);
     const result = await saveShiftChanges({ upserts, deletes });
     setSaving(false);

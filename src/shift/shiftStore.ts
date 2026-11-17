@@ -4,6 +4,9 @@
  * Lokal zuerst, dann Supabase — wie der Morgen-Check-in: Einträge landen sofort im lokalen Cache und gelten sofort;
  * der Server-Stand gewinnt beim Laden, außer für Tage, die lokal noch nicht gespeichert sind (`pending`). Fehlt die
  * Tabelle (Migration 023 nicht angewendet), bleibt alles lokal und die Seite zeigt einen ruhigen Hinweis.
+ *
+ * ENTSCHEIDUNG (Anton absegnen): Ohne Tabelle wirkt der Dienstplan trotzdem (nur auf diesem Gerät) statt gar nicht;
+ * sobald die Tabelle da ist, werden ausstehende Tage beim nächsten Laden nachgereicht.
  */
 import {
   deleteShiftEntries,

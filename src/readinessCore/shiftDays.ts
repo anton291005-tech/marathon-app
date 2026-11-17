@@ -145,6 +145,8 @@ export function minutesIntoNextDay(entry: ShiftEntry): number {
  * Nachtdienst = Art `night` oder ein Dienst, der mehr als `overnightMinHoursNextDay` (2 h) in den neuen Tag reicht.
  * Ein Spätdienst bis 0:30 Uhr ist damit kein Nachtdienst, sondern Regel 6.
  */
+// ENTSCHEIDUNG (Anton absegnen): Ob ein Dienst als Nacht zählt, entscheiden die Zeiten (mehr als 2 h im neuen Tag),
+// nicht nur die Art — „Eigene Zeit 20–4 Uhr“ ist eine Nacht, „Spät 17–0:30“ nicht.
 export function isNightShift(entry: ShiftEntry): boolean {
   if (entry.kind === "off") return false;
   const into = minutesIntoNextDay(entry);
@@ -291,6 +293,8 @@ export function assessShiftDays(input: ShiftDaysInput): ShiftDayAssessment[] {
     }
   }
 
+  // ENTSCHEIDUNG (Anton absegnen): Regeln 5, 6 und 8 schränken laut Plan „hart“ ein; der Long Run zählt in den
+  // Schutzregeln als hart, deshalb wird er hier ebenfalls eingeschränkt (nie ungeeignet).
   // Regel 5: kurze Ruhezeit vor einem Dienst.
   for (let i = 1; i < works.length; i += 1) {
     const prev = works[i - 1];

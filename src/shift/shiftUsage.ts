@@ -8,10 +8,12 @@
  *   setShiftUsageListener((event, detail) => trackUsage(event, detail));
  *
  * Aufgerufen wird `reportShiftUsage` an diesen Stellen (sonst nirgends):
- *   - `shift_entries_saved`      → `useShiftRuntime.saveEntries` nach erfolgreichem Speichern (detail.count, detail.remote)
+ *   - `shift_entries_saved`      → `src/shift/shiftStore.ts` `saveShiftChanges` nach dem Speichern (detail.count, detail.remote)
  *   - `shift_proposal_shown`     → `src/shift/shiftWeekScan.ts` `runShiftWeekScan`, wenn ein Vorschlag entsteht
- *   - `shift_proposal_accepted`  → `src/shift/shiftWeekScan.ts` `reportShiftProposalDecision(…, true)` (AppMain: Übernehmen)
- *   - `shift_proposal_declined`  → `src/shift/shiftWeekScan.ts` `reportShiftProposalDecision(…, false)` (AppMain: Verwerfen)
+ *   - `shift_proposal_accepted`  → `src/shift/shiftWeekScan.ts` `reportShiftProposalDecision(…, true)`
+ *                                  (AppMain `handleConfirmWeekCalendarBatch`, „Übernehmen“)
+ *   - `shift_proposal_declined`  → `src/shift/shiftWeekScan.ts` `reportShiftProposalDecision(…, false)`
+ *                                  (AppMain `handleCancelWeekCalendarBatch`, „Verwerfen“)
  *
  * Inhalt: nur Zähler und Codes (keine Dienstzeiten, keine Titel). Schichtdaten gehen an kein Sprachmodell.
  */

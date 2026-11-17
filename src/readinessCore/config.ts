@@ -216,7 +216,11 @@ export const CONFIG = {
    * `windowExtraMin`) und die Grenze „über Nacht“ (`overnightMinHoursNextDay`) kommen aus `calendar` (§7.2).
    */
   shift: {
-    /** Dienst gilt als lang, wenn er länger dauert als so viele Stunden (> 8 h; ein Frühdienst 6–14 Uhr ist nicht lang). */
+    /**
+     * Dienst gilt als lang, wenn er länger dauert als so viele Stunden (> 8 h; ein Frühdienst 6–14 Uhr ist nicht lang).
+     * ENTSCHEIDUNG (Anton absegnen): Plan W1 sagt „≥ 8 h“; das hätte jeden Standard-Frühdienst eingeschränkt und
+     * Szenario S4 („nur Frühdienste → kein Konflikt“) gebrochen. Deshalb „länger als 8 h“.
+     */
     longShiftHours: p(8, "E", "§7.6"),
     /** Angenommene Dauer, wenn der Plan keine kennt (Minuten, ohne Umziehen/Weg). */
     defaultHardMin: p(75, "E", "§7.6"),

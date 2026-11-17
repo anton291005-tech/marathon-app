@@ -150,7 +150,11 @@ export function longRunViolations(before: AiPlanWeek[], after: AiPlanWeek[], mov
   return out;
 }
 
-/** In Taper-/Rennwoche: keine harte Einheit auf einen späteren Tag. */
+/**
+ * In Taper-/Rennwoche: keine harte Einheit auf einen späteren Tag.
+ * ENTSCHEIDUNG (Anton absegnen): Spec §8.7 sieht in der Rennwoche gar keine planändernden Vorschläge vor; Plan W1
+ * erlaubt „nur auf frühere Tage“. Umgesetzt ist W1 (Verschieben nach vorn erlaubt, „locker statt hart“ nicht).
+ */
 function taperViolations(week: AiPlanWeek, before: AiPlanWeek[], after: AiPlanWeek[], movedIds: string[]): string[] {
   if (!isTaperOrRaceWeek(week)) return [];
   const out: string[] = [];
