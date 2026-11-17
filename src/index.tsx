@@ -87,7 +87,9 @@ function AppRoot() {
           </span>
         </div>
       ) : null}
-      <AppMain />
+      {/* key: Wechselt das Konto ohne Abmelden (Bestätigungslink eines anderen Kontos), startet AppMain neu —
+          sonst blieben Plan, Logs und Preferences des ersten Kontos im React-State. */}
+      <AppMain key={user.id} />
     </>
   );
 }
