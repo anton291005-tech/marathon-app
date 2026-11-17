@@ -140,8 +140,9 @@ export async function saveHealthWorkout(userId: string, run: StoredHealthRun): P
 /**
  * Löscht alle importierten Strava-Läufe des Nutzers (beim Trennen; Strava API Policy §7.4 verlangt das
  * Löschen nach Widerruf). Geplante Einheiten, die schon als erledigt gelten, bleiben erledigt.
- * Scheitert es, bleiben die Zeilen in der Tabelle; der Client ordnet sie ohne aktive Verbindung nicht zu
- * und verwirft sie lokal nach 7 Tagen (`selectRunsForAutoAssignment`, `dropExpiredLocalStravaRuns`).
+ * Scheitert es, bricht `disconnectStrava` ab (Verbindung bleibt, „Konnte nicht vollständig trennen“).
+ * Übrig gebliebene Zeilen ohne Verbindung ordnet der Client nicht zu und verwirft sie lokal nach 7 Tagen
+ * (`selectRunsForAutoAssignment`, `dropExpiredLocalStravaRuns`).
  */
 export async function deleteStravaHealthWorkouts(userId: string): Promise<{ ok: boolean }> {
   const { error } = await supabase

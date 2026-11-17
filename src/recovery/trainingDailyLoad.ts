@@ -33,6 +33,9 @@ export function buildDailyTrainingLoadByDate(plan: PlanWeek[], logs: Record<stri
       if (!isSessionLogDone(logs[session.id])) continue;
       const key = sessionDayIso(session);
       if (!key) continue;
+      // ENTSCHEIDUNG (Anton absegnen): Die Tageslast nutzt die Ist-km aus `assignedRun` – auch von Strava-Läufen
+      // (`strava:`). Über `recoveryDomain` erreicht diese abgeleitete Zahl den Coach (Strava API Policy §5.3,
+      // Grauzone: aggregierte Last, kein Rohwert). Bewusst nicht umgebaut; Folgeaufgabe im W2-Bericht.
       const raw = getEffectiveKm(session, logs[session.id]);
       const km = sanitizeDistance(raw, { weeklyAvgKm, rollingRef: rolling });
       const load = km * intensityFactor(session.type);

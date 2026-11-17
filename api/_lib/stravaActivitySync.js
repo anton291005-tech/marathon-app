@@ -21,8 +21,12 @@ const STRAVA_API_BASE = "https://www.strava.com/api/v3";
 const STRAVA_SOURCE_PREFIX = "strava:";
 /** Nur diese Sportarten werden importiert (`sport_type`, Rückfall auf das ältere `type`). */
 const STRAVA_RUN_SPORT_TYPES = new Set(["Run", "TrailRun", "VirtualRun"]);
-/** Erster Abgleich (oder ohne Spalte `last_synced_at`): so viele Tage zurück. */
-const FIRST_SYNC_DAYS = 28;
+/**
+ * Erster Abgleich (oder ohne Spalte `last_synced_at`): so viele Tage zurück. 10 = Fenster der
+ * automatischen Zuordnung (`applyAppleHealthTrainingSync` maxAgeDays) – ältere Läufe würden nie
+ * zugeordnet und lokal ohnehin nach 7 Tagen verworfen (Datensparsamkeit).
+ */
+const FIRST_SYNC_DAYS = 10;
 /**
  * `after` filtert nach Startzeit, nicht nach Upload-Zeit: ein Lauf, der vor dem letzten Abgleich begann,
  * aber erst danach von der Uhr zu Strava kam, fiele sonst durch.
@@ -33,7 +37,7 @@ const RESYNC_OVERLAP_HOURS = 72;
 /** ENTSCHEIDUNG (Anton absegnen): Strava API Policy §6.2 – Strava-Daten höchstens 7 Tage im Cache. */
 const STRAVA_CACHE_MAX_DAYS = 7;
 const PER_PAGE = 100;
-/** Schutz gegen Endlos-Pagination: 5 × 100 Aktivitäten reichen für 28 Tage weit. */
+/** Schutz gegen Endlos-Pagination: 5 × 100 Aktivitäten reichen für das 10-Tage-Fenster weit. */
 const MAX_PAGES = 5;
 
 class StravaHttpError extends Error {

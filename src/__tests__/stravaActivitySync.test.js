@@ -92,16 +92,16 @@ describe("Mapping Strava → health_workouts", () => {
 });
 
 describe("Zeitfenster", () => {
-  test("erstes Mal 28 Tage, danach letzter Abgleich minus 72 h, nie weiter als 28 Tage", () => {
-    expect(FIRST_SYNC_DAYS).toBe(28);
+  test("erstes Mal 10 Tage, danach letzter Abgleich minus 72 h, nie weiter als 10 Tage", () => {
+    expect(FIRST_SYNC_DAYS).toBe(10);
     expect(RESYNC_OVERLAP_HOURS).toBe(72);
-    expect(syncWindowStartEpochSeconds({}, NOW_MS)).toBe(Math.floor((NOW_MS - 28 * 86400000) / 1000));
+    expect(syncWindowStartEpochSeconds({}, NOW_MS)).toBe(Math.floor((NOW_MS - 10 * 86400000) / 1000));
     const last = "2026-11-15T12:00:00.000Z";
     expect(syncWindowStartEpochSeconds({ last_synced_at: last }, NOW_MS)).toBe(
       Math.floor((Date.parse(last) - 72 * 3600000) / 1000),
     );
     expect(syncWindowStartEpochSeconds({ last_synced_at: "2026-01-01T00:00:00.000Z" }, NOW_MS)).toBe(
-      Math.floor((NOW_MS - 28 * 86400000) / 1000),
+      Math.floor((NOW_MS - 10 * 86400000) / 1000),
     );
   });
 
@@ -150,7 +150,7 @@ describe("syncStravaActivitiesForUser", () => {
     expect(url.origin + url.pathname).toBe("https://www.strava.com/api/v3/athlete/activities");
     expect(url.searchParams.get("per_page")).toBe("100");
     expect(url.searchParams.get("page")).toBe("1");
-    expect(Number(url.searchParams.get("after"))).toBe(Math.floor((NOW_MS - 28 * 86400000) / 1000));
+    expect(Number(url.searchParams.get("after"))).toBe(Math.floor((NOW_MS - 10 * 86400000) / 1000));
     expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBe("Bearer token-abc");
 
     await syncStravaActivitiesForUser({ admin, userId: USER_ID, fetchImpl, now, getAccessToken });
@@ -254,7 +254,7 @@ describe("syncStravaActivitiesForUser", () => {
     expect(getAccessToken).not.toHaveBeenCalled();
   });
 
-  test("ohne Migration 024: Import läuft trotzdem (28 Tage), Status wird nicht gespeichert", async () => {
+  test("ohne Migration 024: Import läuft trotzdem (10 Tage), Status wird nicht gespeichert", async () => {
     const { admin, db } = createFakeStravaAdmin({ connection: connected(), syncColumns: false });
     const fetchImpl = jest.fn(async () => jsonResponse(200, activities));
     const res = await syncStravaActivitiesForUser({ admin, userId: USER_ID, fetchImpl, now, getAccessToken: async () => "t" });
@@ -262,7 +262,7 @@ describe("syncStravaActivitiesForUser", () => {
     expect(db.workouts).toHaveLength(4);
     expect(db.calls.some((c) => c.op === "update")).toBe(false);
     expect(Number(new URL(fetchImpl.mock.calls[0][0]).searchParams.get("after"))).toBe(
-      Math.floor((NOW_MS - 28 * 86400000) / 1000),
+      Math.floor((NOW_MS - 10 * 86400000) / 1000),
     );
 
     const refreshFails = await syncStravaActivitiesForUser({

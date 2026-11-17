@@ -137,6 +137,9 @@ export function applyAppleHealthTrainingSync(args: {
       };
     } else {
       const km = (stored.distanceMeters || 0) / 1000;
+      // ENTSCHEIDUNG (Anton absegnen): „erledigt“ + Ist-Distanz/Dauer/Puls aus einem Strava-Lauf bleiben dauerhaft
+      // im Session-Log, auch nachdem der Strava-Lauf nach 7 Tagen gelöscht ist (Plan-Status des Athleten).
+      // Vorschlag als Folgeaufgabe: Puls und `runEvaluation` von `strava:`-Zuordnungen nach 7 Tagen streichen.
       merged = {
         ...prev,
         suggestedHealthRunId: undefined,
