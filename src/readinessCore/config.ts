@@ -25,7 +25,7 @@ export type Range = { readonly min: number; readonly max: number };
 
 const p = <T>(value: T, source: ParamSource, spec: string): Param<T> => ({ value, source, spec });
 
-export const CONFIG_VERSION = "0.1.0";
+export const CONFIG_VERSION = "0.2.0";
 
 export const CONFIG = {
   /** §3 Plausibilitätsgrenzen: Werte außerhalb werden verworfen, nicht geklammert. */
@@ -209,6 +209,35 @@ export const CONFIG = {
     suitabilityHorizonDays: p(14, "E", "§7.5"),
     examPhaseCount: p(2, "E", "§7.5"),
     examPhaseDays: p(7, "E", "§7.5"),
+  },
+
+  /**
+   * §7.6 Dienstplan (Schicht-Modus). Ruhezeit (`quickReturnHours`), Trainingsfenster (`windowStart`/`windowEnd`/
+   * `windowExtraMin`) und die Grenze „über Nacht“ (`overnightMinHoursNextDay`) kommen aus `calendar` (§7.2).
+   */
+  shift: {
+    /** Dienst gilt als lang, wenn er länger dauert als so viele Stunden (> 8 h; ein Frühdienst 6–14 Uhr ist nicht lang). */
+    longShiftHours: p(8, "E", "§7.6"),
+    /** Angenommene Dauer, wenn der Plan keine kennt (Minuten, ohne Umziehen/Weg). */
+    defaultHardMin: p(75, "E", "§7.6"),
+    defaultLongRunMin: p(150, "E", "§7.6"),
+    defaultEasyMin: p(50, "E", "§7.6"),
+    /** So viele freie Tage nach einem Nachtblock sind für harte Einheiten eingeschränkt (danach frei). */
+    recoveryDaysAfterNights: p(1, "E", "§7.6"),
+    /** Fit-Wert je Eignung für die Kapazitäts-Engine; unter 0,35 (`MIN_FIT_SCORE_THRESHOLD`) = Konflikt. */
+    fit: p({ free: 1, limited: 0.5, unsuitable: 0.2, no_window: 0.2 }, "E", "§7.6"),
+    /** Standardzeiten der Chips; änderbar je Nutzer (`profiles.shift_defaults`). */
+    defaultTimes: p(
+      {
+        early: { start: "06:00", end: "14:00" },
+        late: { start: "14:00", end: "22:00" },
+        night: { start: "22:00", end: "06:00" },
+      },
+      "E",
+      "§7.6",
+    ),
+    /** Dienstplan-Seite und Wochen-Scan schauen so weit voraus (= Import-Fenster des Kalenders). */
+    horizonDays: p(28, "E", "§7.6"),
   },
 
   /** §8 Von Readiness zur Handlung. */

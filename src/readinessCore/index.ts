@@ -6,6 +6,27 @@
 export * from "./types";
 export { CONFIG, CONFIG_VERSION } from "./config";
 export type { Param, ParamSource, Range, ReadinessConfig } from "./config";
+export {
+  SHIFT_REASON_TEXT,
+  assessShiftDays,
+  indexShiftDays,
+  isNightShift,
+  minutesIntoNextDay,
+  reasonFor,
+  resolveShiftTimes,
+  shiftDurationMin,
+  suitabilityFor,
+  timeToMinutes,
+} from "./shiftDays";
+export type {
+  ShiftCategory,
+  ShiftDayAssessment,
+  ShiftDaysInput,
+  ShiftEntry,
+  ShiftKind,
+  ShiftReasonCode,
+  ShiftSuitability,
+} from "./shiftDays";
 
 /** Platzhalter, damit Server und App den Import schon prüfen können (Plan Schritt 1). */
 export const READINESS_CORE_PING = "readiness-core" as const;
