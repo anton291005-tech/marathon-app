@@ -1,6 +1,7 @@
 import { ArrowLeftRight, ArrowRight, Navigation, SlidersHorizontal } from "lucide-react";
 import type { AiAssistantAction } from "../../lib/ai/types";
 import { ICON_SIZE_S, ICON_STROKE } from "../../ui/icons";
+import { REASSIGNMENT_NOTE_SEPARATOR } from "../../ai/mutations/reassignmentRow";
 
 type Props = {
   action: AiAssistantAction;
@@ -14,6 +15,16 @@ type Props = {
 function splitChange(item: string): [string, string] | null {
   const parts = item.split(" → ");
   return parts.length === 2 && parts[0].trim() && parts[1].trim() ? [parts[0], parts[1]] : null;
+}
+
+/**
+ * Linke Seite „Titel: Do – Grund" (`formatReassignmentRow`): durchgestrichen wird nur „Titel: Do", der Grund am
+ * Ausgangstag bleibt lesbar. Nur Zeilen der Form „Titel: Tag – …" werden getrennt.
+ */
+function splitOld(left: string): [string, string | null] {
+  const at = left.indexOf(REASSIGNMENT_NOTE_SEPARATOR);
+  if (at <= 0 || left.lastIndexOf(":", at) < 0) return [left, null];
+  return [left.slice(0, at), left.slice(at + REASSIGNMENT_NOTE_SEPARATOR.length)];
 }
 
 /**
@@ -42,9 +53,13 @@ export default function AiActionCard({ action, disabled, onConfirm, onCancel, on
         <div className="mr-diff">
           {preview.items.map((item) => {
             const change = splitChange(item);
-            return change ? (
+            const old = change ? splitOld(change[0]) : null;
+            return change && old ? (
               <div key={item} className="mr-diff__row">
-                <span className="mr-diff__old">{change[0]}</span>
+                <span>
+                  <span className="mr-diff__old">{old[0]}</span>
+                  {old[1] ? <span className="mr-diff__note"> – {old[1]}</span> : null}
+                </span>
                 <ArrowRight aria-label="wird zu" size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />
                 <span>{change[1]}</span>
               </div>

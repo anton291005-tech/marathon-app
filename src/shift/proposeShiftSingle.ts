@@ -21,7 +21,7 @@ import {
 import { NO_LOCKED_SESSION_IDS } from "../ai/mutations/lockedSessions";
 import { sessionDayIso } from "../ai/mutations/sessionDayIso";
 import { validatePlanIntegrity } from "../ai/validation/validatePlanIntegrity";
-import { checkCandidate, closestFirst, dayCapacity, findShiftConflicts, type CheckedCandidate } from "./proposeShiftWeek";
+import { checkCandidate, closestFirst, dayCapacity, findShiftConflicts, shiftChangeRow, type CheckedCandidate } from "./proposeShiftWeek";
 import { moveSentenceDe, reasonPhraseDe, weekdayLongDe } from "./shiftText";
 
 export type ShiftSingleProposal =
@@ -107,11 +107,12 @@ export function proposeShiftSingle(input: ProposeShiftSingleInput): ShiftSingleP
         limited: conflict.severity === "weak",
       })
     : `„${session.title}“ am ${weekdayLongDe(sourceYmd)} kollidiert mit einem Termin. Vorschlag: ${weekdayLongDe(accepted.toYmd)}.`;
+  const afterSwap = accepted.after;
   const items: string[] = [sentence];
   patches.forEach((patch) => {
     const base = findIn(week, patch.sessionId);
     if (!base) return;
-    items.push(`${base.title}: ${base.day} → ${patch.changes.day ?? base.day} (${patch.changes.date ?? base.date})${patch.sessionId === sessionId ? ` – ${conflictCause}` : ""}`);
+    items.push(shiftChangeRow(base, patch, afterSwap, shiftContext, patch.sessionId === sessionId ? conflictCause : null));
   });
   const action: AiAssistantAction = {
     type: "reassign_session_to_calendar",

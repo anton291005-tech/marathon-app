@@ -78,7 +78,7 @@ describe("Einzel-Tag-Kalender: Grund im Vorschlag", () => {
     if (proposal.status !== "proposal") return;
     expect(proposal.conflictCause).toBe("wegen Fußballturnier");
     const items = proposal.action?.preview?.items ?? [];
-    expect(items[0]).toMatch(/^Long Run: Sonntag → .+ – wegen Fußballturnier$/);
+    expect(items[0]).toMatch(/^Long Run: Sonntag – wegen Fußballturnier → [^–]+$/);
     expect(items.slice(1).some((item) => item.includes("wegen"))).toBe(false);
   });
 
@@ -89,7 +89,7 @@ describe("Einzel-Tag-Kalender: Grund im Vorschlag", () => {
     expect(proposal.status).toBe("proposal");
     if (proposal.status !== "proposal") return;
     expect(proposal.conflictCause).toBe("wegen Kalendertermin");
-    expect(proposal.action?.preview?.items[0]).toMatch(/– wegen Kalendertermin$/);
+    expect(proposal.action?.preview?.items[0]).toMatch(/^Long Run: Sonntag – wegen Kalendertermin → [^–]+$/);
   });
 
   test("Keine Alternative gefunden: action null, Grund trotzdem vorhanden", () => {
@@ -134,13 +134,13 @@ describe("Wochen-Batch: Grund im Diff-Screen", () => {
 
   test("Stichwort-Treffer: Quell-Zeile nennt das Fußballturnier, verdrängte Zeile nicht", () => {
     const items = batchItems([TOURNAMENT]);
-    expect(items[0]).toMatch(/^Long Run: Sonntag → .+ – wegen Fußballturnier$/);
+    expect(items[0]).toMatch(/^Long Run: Sonntag – wegen Fußballturnier → [^–]+$/);
     expect(items.filter((item) => item.includes("wegen"))).toHaveLength(1);
   });
 
   test("Ohne Stichwort-Treffer: generischer Grund", () => {
     const items = batchItems([FULL_DAY_APPOINTMENT]);
-    expect(items[0]).toMatch(/^Long Run: Sonntag → .+ – wegen Kalendertermin$/);
+    expect(items[0]).toMatch(/^Long Run: Sonntag – wegen Kalendertermin → [^–]+$/);
   });
 
   test("Ungelöste Konflikt-Session als verdrängte Session trägt keinen Grund", () => {
@@ -157,7 +157,7 @@ describe("Wochen-Batch: Grund im Diff-Screen", () => {
       ],
     };
     const items = buildWeekCalendarReassignmentBatchAction(proposals, validation, week)?.preview?.items ?? [];
-    expect(items[0]).toBe("Long Run: Sonntag → Samstag (19. Sep) – wegen Fußballturnier");
+    expect(items[0]).toBe("Long Run: Sonntag – wegen Fußballturnier → Samstag (19. Sep)");
     expect(items[1]).toBe("Easy Run: Samstag → Sonntag (20. Sep)");
   });
 });

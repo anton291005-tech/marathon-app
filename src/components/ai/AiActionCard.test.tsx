@@ -27,6 +27,22 @@ describe("AiActionCard", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
+  test("Grund am Ausgangstag: nur „Titel: Tag“ durchgestrichen, Grund und Zieltag lesbar", () => {
+    render(
+      <AiActionCard
+        action={action({ title: "Woche anpassen", items: ["Intervalle: Do – nach dem Dienst (17:00–0:30 Uhr) → Fr (4. Dez)"] }, "reassign_week_calendar_batch")}
+        onConfirm={() => {}}
+        onCancel={() => {}}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.getByText("Intervalle: Do")).toHaveClass("mr-diff__old");
+    const note = screen.getByText(/nach dem Dienst \(17:00–0:30 Uhr\)/);
+    expect(note).toHaveClass("mr-diff__note");
+    expect(note).not.toHaveClass("mr-diff__old");
+    expect(screen.getByText("Fr (4. Dez)")).toBeInTheDocument();
+  });
+
   test("Navigation: kein Bearbeiten, Beschriftungen aus der Vorschau gewinnen", () => {
     render(
       <AiActionCard

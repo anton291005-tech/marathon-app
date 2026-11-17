@@ -1,4 +1,5 @@
 import type { AiPlanWeek, AiAssistantAction, AiActionPreview } from "../../lib/ai/types";
+import { formatReassignmentRow } from "./reassignmentRow";
 import type { WeekCalendarReassignmentProposal } from "./proposeWeekCalendarReassignments";
 import type { WeekReassignmentBatchResult } from "./validateWeekReassignmentBatch";
 import { findSessionById } from "./assignSessionToBestCapacityDay";
@@ -31,7 +32,7 @@ export function buildWeekCalendarReassignmentBatchAction(
     const newDay = patch.changes.day ?? base.day;
     const newDate = patch.changes.date ?? base.date;
     const cause = causeBySourceSessionId.get(patch.sessionId);
-    items.push(`${base.title}: ${base.day} → ${newDay} (${newDate})${cause ? ` – ${cause}` : ""}`);
+    items.push(formatReassignmentRow({ title: base.title, fromDay: base.day, toDay: newDay, toDate: newDate, cause }));
   }
   if (items.length === 0) return null;
 

@@ -35,7 +35,8 @@ import { validateWeekReassignmentBatch } from "../ai/mutations/validateWeekReass
 import { NO_LOCKED_SESSION_IDS } from "../ai/mutations/lockedSessions";
 import { sessionDayIso } from "../ai/mutations/sessionDayIso";
 import { swapWorkouts } from "../ai/mutations/swapWorkouts";
-import { dayLabelDe, moveSentenceDe, reasonPhraseDe, softenSentenceDe, weekdayLongDe } from "./shiftText";
+import { formatReassignmentRow } from "../ai/mutations/reassignmentRow";
+import { dayLabelDe, limitedDayNoteDe, moveSentenceDe, reasonPhraseDe, softenSentenceDe, weekdayLongDe } from "./shiftText";
 
 /** Harte Tage für die Abstandsregel: wie `HIGH_INTENSITY_SESSION_TYPES` (Long Run zählt mit). */
 const HARD_TYPES: readonly string[] = ["tempo", "interval", "race", "long"];
@@ -88,6 +89,29 @@ export type ProposeShiftWeekInput = {
   todayYmd: string;
   lockedSessionIds?: ReadonlySet<string>;
 };
+
+/**
+ * Vorher/Nachher-Zeile im Schicht-Modus: Grund am Ausgangstag, Zieltag nur mit eigenem Hinweis, wenn er für diese Einheit
+ * selbst eingeschränkt ist (gilt auch für die verdrängte Einheit).
+ */
+export function shiftChangeRow(
+  base: AiPlanSession,
+  patch: PlanPatch,
+  after: AiPlanWeek[],
+  shiftContext: ShiftCapacityContext,
+  cause: string | null,
+): string {
+  const moved = findSession(after, base.id);
+  const toYmd = moved ? sessionDayIso(moved) : null;
+  return formatReassignmentRow({
+    title: base.title,
+    fromDay: base.day,
+    toDay: patch.changes.day ?? base.day,
+    toDate: patch.changes.date ?? base.date,
+    cause,
+    targetNote: toYmd ? limitedDayNoteDe(shiftContext.byDate[toYmd], shiftCategoryOfSession(base)) : null,
+  });
+}
 
 function allSessions(plan: AiPlanWeek[]): AiPlanSession[] {
   const out: AiPlanSession[] = [];
@@ -531,7 +555,7 @@ export function proposeShiftWeek(input: ProposeShiftWeekInput): ShiftWeekProposa
     const base = findSession(original, patch.sessionId);
     if (!base) return;
     const move = moves.find((m) => m.sessionId === patch.sessionId);
-    items.push(`${base.title}: ${base.day} → ${patch.changes.day ?? base.day} (${patch.changes.date ?? base.date})${move ? ` – ${move.cause}` : ""}`);
+    items.push(shiftChangeRow(base, patch, finalPlan, shiftContext, move ? move.cause : null));
   });
   softened.forEach((s) => {
     const base = findSession(original, s.sessionId);

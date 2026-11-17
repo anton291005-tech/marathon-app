@@ -244,7 +244,9 @@ describe("Schicht-Wochenvorschlag – Szenarien", () => {
     const after = applyPlanPatches(plan, result.patches);
     expect(dayOf(after, "w1-6")).toBe("2026-11-19");
     expect(dayOf(after, "w1-3")).toBe("2026-11-22");
-    expect(result.action.preview?.items).toContain("Lockerer Lauf mit Steigerungen: Do → So (22. Nov)");
+    // Grund am Ausgangstag; der verdrängte lockere Lauf landet auf dem Tag nach der Nacht (für locker eingeschränkt).
+    expect(result.action.preview?.items).toContain("Long Run: So – nach dem Nachtdienst (22–6 Uhr) → Do (19. Nov)");
+    expect(result.action.preview?.items).toContain("Lockerer Lauf mit Steigerungen: Do → So (22. Nov) – nach dem Nachtdienst (22–6 Uhr)");
   });
 
   it("Long Run darf auch auf einen eingeschränkten Tag derselben Woche, wenn kein freier Tag regelkonform ist", () => {
@@ -276,6 +278,31 @@ describe("Schicht-Wochenvorschlag – Szenarien", () => {
     expect(result.status === "hint-only" ? result.hints[0] : "").toMatch(
       /^So, 22\. Nov: „Long Run“ bleibt – nach dem Nachtdienst \(22–6 Uhr\)\. \w+ läge zu nah am Long Run vom So, 15\. Nov \(mindestens 6 Tage Abstand\)\.$/,
     );
+  });
+
+  it("Vorher/Nachher-Liste: Grund am Ausgangstag, Zieltag ohne fremden Grund (Mo Spät, Di Früh/Tempo, Mi 17:00–0:30, Do Intervalle)", () => {
+    const prev = week(0, "2026-11-23", ["easy", "interval", "easy", "tempo", "rest", "easy", "long"], "build", "w0");
+    const cur = week(1, "2026-11-30", ["easy", "tempo", "easy", "interval", "easy", "rest", "long"]);
+    const plan = [prev, cur];
+    const c = ctx([S("2026-11-30"), F("2026-12-01"), { dateYmd: "2026-12-02", kind: "custom", start: "17:00", end: "00:30", label: null }]);
+    const result = expectProposal(proposeShiftWeek({ plan, weekIndex: 1, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY }));
+    const items = result.action.preview?.items ?? [];
+    expect(items).toContain("Intervalle: Do – nach dem Dienst (17:00–0:30 Uhr) → Fr (4. Dez)");
+    expect(items).toContain("Tempolauf: Di – mit weniger als 11 Stunden Ruhe nach dem Spätdienst (14–22 Uhr) → Mi (2. Dez)");
+    // Der Zieltag Fr trägt nie den Grund des Ausgangstags.
+    expect(items.some((i) => /Fr \(4\. Dez\) – /.test(i))).toBe(false);
+  });
+
+  it("Vorher/Nachher-Liste: eingeschränkter Zieltag mit eigenem Hinweis (Repro A)", () => {
+    const prev = week(0, "2026-11-16", ["easy", "interval", "easy", "tempo", "rest", "easy", "long"], "build", "w0");
+    const plan = [prev, week(1, "2026-11-23", ["easy", "easy", "rest", "interval", "easy", "easy", "long"])];
+    const c = ctx([N("2026-11-24"), N("2026-11-25"), OFF("2026-11-27"), OFF("2026-11-28")], "2026-11-17");
+    const result = expectProposal(proposeShiftWeek({ plan, weekIndex: 1, scheduleBlocks: [], shiftContext: c, todayYmd: "2026-11-17" }));
+    expect(result.action.preview?.items).toContain(
+      "Intervalle: Do – nach dem Nachtdienst (22–6 Uhr) → Fr (27. Nov) – erster freier Tag nach den Nachtdiensten",
+    );
+    // Verdrängter lockerer Lauf auf Do (nach der Nacht, für locker eingeschränkt): eigener Hinweis am Zieltag.
+    expect(result.action.preview?.items).toContain("Lockerer Lauf: Fr → Do (26. Nov) – nach dem Nachtdienst (22–6 Uhr)");
   });
 
   it("nach dem Speichern: aktuelle Woche ohne Konflikt → nächste Woche wird gescannt", () => {

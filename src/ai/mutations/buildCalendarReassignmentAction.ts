@@ -1,4 +1,5 @@
 import type { AiPlanWeek, AiPlanSession, AiAssistantAction, AiActionPreview, PlanPatch } from "../../lib/ai/types";
+import { formatReassignmentRow } from "./reassignmentRow";
 import type { SessionAssignmentCandidate, SessionAssignmentResult, RankedCalendarCandidate } from "./assignSessionToBestCapacityDay";
 import {
   assignSessionToBestCapacityDay,
@@ -85,8 +86,8 @@ export function buildCalendarReassignmentAction(
     if (!base) continue;
     const newDay = patch.changes.day ?? base.day;
     const newDate = patch.changes.date ?? base.date;
-    const cause = conflictCause && patch.sessionId === sessionId ? ` – ${conflictCause}` : "";
-    items.push(`${base.title}: ${base.day} → ${newDay} (${newDate})${cause}`);
+    const cause = conflictCause && patch.sessionId === sessionId ? conflictCause : null;
+    items.push(formatReassignmentRow({ title: base.title, fromDay: base.day, toDay: newDay, toDate: newDate, cause }));
   }
   if (items.length === 0) return null;
 

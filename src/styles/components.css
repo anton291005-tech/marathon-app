@@ -280,6 +280,7 @@ textarea.mr-field { height: auto; min-height: 92px; padding: var(--space-3) 14px
 .mr-diff__row--plain { display: block; color: var(--ink-2); }
 .mr-diff__row + .mr-diff__row { border-top: 1px solid var(--line); }
 .mr-diff__old { color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1px; }
+.mr-diff__note { color: var(--ink-2); }
 .mr-diff__row svg { color: var(--ink-3); }
 .mr-action__buttons { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: 14px; }
 .mr-action__buttons .mr-btn { flex: 1 1 auto; padding: 0 10px; }
