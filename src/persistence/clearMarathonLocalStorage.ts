@@ -21,10 +21,10 @@ export const ACCOUNT_BOUND_EXTRA_KEYS = [
   "calendarSyncAnchors",
   "calendarImportConnected",
   "myrace-checkin-reminder",
-  // ENTSCHEIDUNG (Anton absegnen): Feedback-Eintrag auf „Heute" und die Wahl „Nutzungsdaten" gehören zur Person,
-  // nicht zum Gerät — nach Abmelden/Kontowechsel gilt wieder der Standard.
+  // ENTSCHEIDUNG (Anton absegnen): Der weggeklickte Feedback-Eintrag auf „Heute" gilt nur bis zum Abmelden.
+  // Die Wahl „Nutzungsdaten" gehört zur Person und liegt je Nutzer-ID (`marathonUsageEventsEnabled:<userId>`,
+  // siehe telemetry/usageEvents.ts) — sie steht bewusst NICHT hier und übersteht Abmelden und Wiederanmelden.
   "marathonFeedbackEntryDismissed",
-  "marathonUsageEventsEnabled",
   "marathonUsageEventsThrottle",
   STORAGE_OWNER_USER_ID_KEY,
 ] as const;

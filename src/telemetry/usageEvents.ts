@@ -47,8 +47,24 @@ export type UsageEventProps = {
 
 export type UsageEventRow = { name: UsageEventName; props: Record<string, string | number> };
 
-/** Wahl „Nutzungsdaten teilen" (`"1"` an, `"0"` aus, fehlt = Standard). */
+/**
+ * Wahl „Nutzung zählen" (`"1"` an, `"0"` aus, fehlt = Standard), je Person: `marathonUsageEventsEnabled:<userId>`.
+ * Steht nicht in der Löschliste beim Abmelden — wer ausschaltet, bleibt nach Ab- und Wiederanmelden aus; ein
+ * anderes Konto auf demselben Gerät hat seine eigene Wahl.
+ */
 export const USAGE_EVENTS_ENABLED_KEY = "marathonUsageEventsEnabled";
+
+export function usageEventsEnabledKey(userId: string | null | undefined): string {
+  const id = typeof userId === "string" ? userId.trim() : "";
+  return id ? `${USAGE_EVENTS_ENABLED_KEY}:${id}` : USAGE_EVENTS_ENABLED_KEY;
+}
+
+let usageUserId: string | null = null;
+
+/** Angemeldete Person für die Wahl „Nutzung zählen" (AppMain über `useAppOpenTracking`). */
+export function setUsageEventsUser(userId: string | null | undefined): void {
+  usageUserId = typeof userId === "string" && userId.trim() ? userId.trim() : null;
+}
 /** Zeitpunkte der gedrosselten Ereignisse, `{ app_open: epochMs }`. */
 export const USAGE_EVENTS_THROTTLE_KEY = "marathonUsageEventsThrottle";
 
@@ -80,15 +96,15 @@ export function sanitizeUsageEventProps(name: UsageEventName, props: unknown): R
   return {};
 }
 
-export function isUsageEventsEnabled(): boolean {
-  const raw = safeReadLocalStorageItem(USAGE_EVENTS_ENABLED_KEY);
+export function isUsageEventsEnabled(userId: string | null | undefined = usageUserId): boolean {
+  const raw = safeReadLocalStorageItem(usageEventsEnabledKey(userId));
   if (raw === "1") return true;
   if (raw === "0") return false;
   return USAGE_EVENTS_DEFAULT_ENABLED;
 }
 
-export function setUsageEventsEnabled(enabled: boolean): void {
-  safeWriteLocalStorageItem(USAGE_EVENTS_ENABLED_KEY, enabled ? "1" : "0");
+export function setUsageEventsEnabled(enabled: boolean, userId: string | null | undefined = usageUserId): void {
+  safeWriteLocalStorageItem(usageEventsEnabledKey(userId), enabled ? "1" : "0");
 }
 
 function readThrottle(): Record<string, number> {
@@ -136,6 +152,7 @@ let sink: UsageEventSink = supabaseSink;
 export function __setUsageEventSinkForTests(next: UsageEventSink | null): void {
   sink = next ?? supabaseSink;
   tableMissing = false;
+  usageUserId = null;
 }
 
 /**

@@ -1,5 +1,8 @@
 import { freezeTimeForTests } from "../core/time/timeSystem";
+import { clearMarathonLocalStorage } from "../persistence/clearMarathonLocalStorage";
+import { claimLocalStorageForUser } from "../persistence/storageOwner";
 import {
+  setUsageEventsUser,
   __setUsageEventSinkForTests,
   countNewlyCompletedSessions,
   isUsageEventsEnabled,
@@ -121,5 +124,43 @@ describe("trackUsageEvent", () => {
       { name: "session_completed", props: { source: "apple_health" } },
       { name: "session_completed", props: { source: "apple_health" } },
     ]);
+  });
+});
+
+describe("Wahl „Nutzung zählen“ je Person", () => {
+  let sent: UsageEventRow[];
+
+  beforeEach(() => {
+    localStorage.clear();
+    sent = [];
+    __setUsageEventSinkForTests(async (row) => {
+      sent.push(row);
+    });
+  });
+
+  afterEach(() => __setUsageEventSinkForTests(null));
+
+  it("Aus → Abmelden (clearMarathonLocalStorage) → erneut anmelden → weiterhin aus", async () => {
+    setUsageEventsUser("user-a");
+    claimLocalStorageForUser("user-a", clearMarathonLocalStorage);
+    setUsageEventsEnabled(false);
+
+    // Abmelden über die Einstellungen
+    clearMarathonLocalStorage();
+    setUsageEventsUser(null);
+
+    // dasselbe Konto meldet sich wieder an
+    claimLocalStorageForUser("user-a", clearMarathonLocalStorage);
+    setUsageEventsUser("user-a");
+    expect(isUsageEventsEnabled()).toBe(false);
+    trackUsageEvent("onboarding_done");
+    await flush();
+    expect(sent).toEqual([]);
+  });
+
+  it("ein anderes Konto auf demselben Gerät hat seine eigene Wahl (Standard)", () => {
+    setUsageEventsEnabled(false, "user-a");
+    expect(isUsageEventsEnabled("user-a")).toBe(false);
+    expect(isUsageEventsEnabled("user-b")).toBe(true);
   });
 });

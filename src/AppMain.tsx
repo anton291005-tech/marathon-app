@@ -5573,7 +5573,7 @@ export default function AppMain(){
                     }}
                   />
                 </SettingsGroup>
-                <UsageEventsSetting />
+                <UsageEventsSetting userId={user?.id ?? null} />
                 <SettingsGroup>
                   <SettingsRow label={t("settings.privacy_policy")} href={PRIVACY_POLICY_URL} external />
                   <SettingsRow label="Welche Daten MyRace nutzt" onClick={() => openSettingsPage("dataUsage")} />
