@@ -5,9 +5,9 @@
  * - C: «mit»-Halbsegmente + Typ-Filtern statt blind erste Zeile pro Tag.
  */
 
-import { sessionDate } from "../../core/time/sessionDate";
+import { nextOccurrenceYmd, sessionDate } from "../../core/time/sessionDate";
 import type { AiPlanSession, AiPlanWeek } from "../../lib/ai/types";
-import { getAppNow } from "../../core/time/timeSystem";
+import { getAppCalendarYmd, getAppNow } from "../../core/time/timeSystem";
 
 function startOfLocalDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -164,16 +164,16 @@ function monthIndexFromToken(tok: string): number | null {
   return v === undefined ? null : v;
 }
 
-/** Closest future local calendar date (roll year) for month/day vs coach «today». */
-function closestFutureMonthDay(day: number, month0: number, today: Date): Date {
-  let y = today.getFullYear();
-  let candidate = new Date(y, month0, day, 12, 0, 0, 0);
-  const t0 = startOfLocalDay(today).getTime();
-  while (startOfLocalDay(candidate).getTime() < t0) {
-    y += 1;
-    candidate = new Date(y, month0, day, 12, 0, 0, 0);
-  }
-  return startOfLocalDay(candidate);
+/**
+ * Nächstes Vorkommen von Tag+Monat ab Coach-„heute" (Jahreswechsel: am 17.11. ist „3. Januar" im Folgejahr).
+ * Über `nextOccurrenceYmd`: ein unmögliches Datum („31. April", „29. Februar" ohne Schaltjahr) rollt nicht mehr
+ * in den Folgemonat, sondern ergibt `null`.
+ */
+function closestFutureMonthDay(day: number, month0: number, today: Date): Date | null {
+  const ymd = nextOccurrenceYmd(day, month0, getAppCalendarYmd(today));
+  if (!ymd) return null;
+  const [y, m, d] = ymd.split("-").map(Number);
+  return startOfLocalDay(new Date(y, m - 1, d, 12, 0, 0, 0));
 }
 
 type DateHit = { idx: number; d: Date };
@@ -205,7 +205,7 @@ function extractOrderedAbsoluteDates(norm: string, today: Date): DateHit[] {
       const dt = m[3]
         ? startOfLocalDay(new Date(yr, mo0, d, 12, 0, 0, 0))
         : closestFutureMonthDay(d, mo0, today);
-      tryAdd(m.index, dt);
+      if (dt) tryAdd(m.index, dt);
     }
   }
 
@@ -214,7 +214,8 @@ function extractOrderedAbsoluteDates(norm: string, today: Date): DateHit[] {
   while ((m = re2.exec(norm)) !== null) {
     const d = Number(m[1]);
     const mo0 = monthIndexFromToken(m[2]);
-    if (mo0 !== null && d >= 1 && d <= 31) tryAdd(m.index, closestFutureMonthDay(d, mo0, today));
+    const dt = mo0 !== null ? closestFutureMonthDay(d, mo0, today) : null;
+    if (dt) tryAdd(m.index, dt);
   }
 
   const re3 =
@@ -222,7 +223,8 @@ function extractOrderedAbsoluteDates(norm: string, today: Date): DateHit[] {
   while ((m = re3.exec(norm)) !== null) {
     const mo0 = monthIndexFromToken(m[1]);
     const d = Number(m[2]);
-    if (mo0 !== null && d >= 1 && d <= 31) tryAdd(m.index, closestFutureMonthDay(d, mo0, today));
+    const dt = mo0 !== null ? closestFutureMonthDay(d, mo0, today) : null;
+    if (dt) tryAdd(m.index, dt);
   }
 
   hits.sort((a, b) => a.idx - b.idx);
