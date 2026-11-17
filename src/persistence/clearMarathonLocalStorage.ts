@@ -21,7 +21,8 @@ export const ACCOUNT_BOUND_EXTRA_KEYS = [
   "calendarSyncAnchors",
   "calendarImportConnected",
   "myrace-checkin-reminder",
-  // Feedback-Eintrag auf „Heute" und Nutzungsdaten (Wahl + Drossel) gehören zur Person, nicht zum Gerät.
+  // ENTSCHEIDUNG (Anton absegnen): Feedback-Eintrag auf „Heute" und die Wahl „Nutzungsdaten" gehören zur Person,
+  // nicht zum Gerät — nach Abmelden/Kontowechsel gilt wieder der Standard.
   "marathonFeedbackEntryDismissed",
   "marathonUsageEventsEnabled",
   "marathonUsageEventsThrottle",
