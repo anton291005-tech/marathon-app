@@ -6,6 +6,10 @@ import type { TrainingPlanV2 } from "../../planV2/types";
 import { getAppCalendarYmd, getAppNow } from "../../core/time/timeSystem";
 import { buildRecoverySummaryFromDomain } from "./recoverySummary";
 import { isStravaRunId, isStravaSourcedRun } from "../../strava/stravaRunSource";
+import { isPlausibleTargetTime } from "../../goalTimePlausibility";
+import { findGoalRaceSession } from "../../prepRecap/prepCompletionState";
+import { resolveRaceDistanceKm } from "../../prepRecap/raceResultPresentation";
+import type { PlanWeek } from "../../marathonPrediction";
 
 type BuildAiContextArgs = {
   plan: AiPlanWeek[];
@@ -29,6 +33,16 @@ function inNext14Days(session: AiPlanSession, now: Date): boolean {
   const diffMs = date.getTime() - now.getTime();
   const diffDays = diffMs / (24 * 60 * 60 * 1000);
   return diffDays >= 0 && diffDays <= 14;
+}
+
+/**
+ * Distanz des Zielrennens wie in der App (`resolveActivePlanGoal`): das späteste Rennen (`findGoalRaceSession`),
+ * Distanz über `resolveRaceDistanceKm`. Ein Vorbereitungsrennen über 10 km macht so keine Marathon-Zielzeit unplausibel.
+ */
+export function findRaceDistanceKm(plan: AiPlanWeek[]): number | null {
+  const race = findGoalRaceSession(plan as unknown as PlanWeek[]);
+  const km = race ? resolveRaceDistanceKm(race.session, null) : null;
+  return typeof km === "number" && Number.isFinite(km) && km > 0 ? km : null;
 }
 
 function findRaceDateIso(plan: AiPlanWeek[]): string | null {
@@ -173,7 +187,8 @@ export function getAiContext(args: BuildAiContextArgs): AiContext {
     todayIso: now.toISOString(),
     raceDateIso: args.raceDateIso ?? findRaceDateIso(args.plan),
     goals: {
-      targetTime: args.targetTime,
+      // Dieselbe Plausibilität wie in der App: eine fremde Profil-Zielzeit (Marathon an einem 10-km-Plan) geht nicht an den Coach.
+      targetTime: args.targetTime && !isPlausibleTargetTime(args.targetTime, findRaceDistanceKm(args.plan)) ? undefined : args.targetTime,
     },
     plan: args.plan,
     planV2: args.planV2,

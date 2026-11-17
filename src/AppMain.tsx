@@ -4737,9 +4737,9 @@ export default function AppMain(){
             </div>
 
             <RaceCalculator
-              key={`${activePlanId ?? "plan"}:${activeRaceDistanceKm ?? "none"}:${raceGoalFinish ? "" : activeTargetTime}`}
+              key={`${activePlanId ?? "plan"}:${activeRaceDistanceKm ?? "none"}:${activeGoal.displayTargetTime}`}
               raceDistanceKm={activeRaceDistanceKm}
-              initialTime={raceGoalFinish ? "" : activeTargetTime}
+              initialTime={activeGoal.displayTargetTime}
             />
           </div>
       ):activeView==="overview"?(

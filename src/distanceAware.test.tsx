@@ -117,10 +117,14 @@ describe.each(DISTANCES)("Distanz $label", ({ km, title, name, marathon }) => {
 
   it("Plan-Ziel: Zielzeit gehört zum Plan, Nur finishen und fehlendes Ziel haben keinen Zielwert", () => {
     const base = { plan: raceWeek(km), planName: "Lauf – Test", planId: "p1", ownerPlanId: "p1" };
-    const withTime = resolveActivePlanGoal({ ...base, preferences: { targetTime: "1:30:00", raceGoal: "time", raceDistanceKm: km } });
+    // Zur Distanz passende Zielzeit (5:00 min/km).
+    const seconds = Math.round(km * 300);
+    const clock = `${Math.floor(seconds / 3600)}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+    const withTime = resolveActivePlanGoal({ ...base, preferences: { targetTime: clock, raceGoal: "time", raceDistanceKm: km } });
     expect(withTime.raceDistanceKm).toBeCloseTo(km);
-    expect(withTime.targetSeconds).toBe(5400);
-    expect(withTime.targetTimeLabel).toBe("1:30:00");
+    expect(withTime.targetSeconds).toBe(seconds);
+    expect(withTime.targetTimeLabel).toBe(clock);
+    expect(withTime.displayTargetTime).toBe(clock);
 
     const finish = resolveActivePlanGoal({ ...base, preferences: { targetTime: "1:30:00", raceGoal: "finish", raceDistanceKm: km } });
     expect(finish.finishOnly).toBe(true);
@@ -175,5 +179,43 @@ describe("Planwechsel", () => {
     expect(f.ready).toBe(false);
     expect(f.predictedTime).toBeNull();
     expect(forecastTitle(null)).toBe("Prognose");
+  });
+});
+
+describe("Zielzeit-Plausibilität (Plan ohne meta.goal, Profil-Zielzeit vom Marathon)", () => {
+  const profileMarathon = { targetTime: "2:50:00", raceGoal: "time" };
+  const tenK = () => resolveActivePlanGoal({ plan: raceWeek(10), planName: "10 km", planId: "t", ownerPlanId: "t", preferences: profileMarathon });
+
+  it("Prognosekarte und Leistung-Tab: keine Zielzeile, kein Zielwert für die Prognose", () => {
+    const goal = tenK();
+    expect(goal.preferencesApply).toBe(true);
+    expect(goal.targetTime).toBe("2:50:00"); // roh bleibt sie im Eingabefeld
+    expect(goal.displayTargetTime).toBe("");
+    expect(goal.targetSeconds).toBeNull();
+    expect(goal.targetTimeLabel).toBeUndefined();
+    render(
+      <MarathonPredictionCard
+        variant="full"
+        prediction={getMarathonPrediction({ plan: raceWeek(10), logs: {}, healthRuns: [], targetSeconds: goal.targetSeconds, raceDistanceKm: 10, now: NOW })}
+        raceDistanceKm={10}
+        targetTimeLabel={goal.targetTimeLabel}
+        confidenceLabel="niedrig"
+        targetSeconds={goal.targetSeconds}
+      />,
+    );
+    expect(screen.queryByText(/2:50:00/)).not.toBeInTheDocument();
+  });
+
+  it("Rennrechner startet ohne die fremde Zielzeit", () => {
+    const goal = tenK();
+    render(<RaceCalculator raceDistanceKm={10} initialTime={goal.displayTargetTime} />);
+    expect(screen.queryByDisplayValue("2:50:00")).not.toBeInTheDocument();
+  });
+
+  it("plausible Zielzeit am 10-km-Plan bleibt überall", () => {
+    const goal = resolveActivePlanGoal({ plan: raceWeek(10), planName: "10 km", planId: "t", ownerPlanId: "t", preferences: { targetTime: "0:48:00", raceGoal: "time" } });
+    expect(goal.displayTargetTime).toBe("0:48:00");
+    expect(goal.targetSeconds).toBe(2880);
+    expect(goal.targetTimeLabel).toBe("0:48:00");
   });
 });

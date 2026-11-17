@@ -4,6 +4,7 @@
  */
 
 import { parseTargetTimeToSeconds } from "./appSmartFeatures";
+import { plausibleTargetTimeText } from "./goalTimePlausibility";
 import { preferencesDescribeActivePlan } from "./features/settings/settingsGoalLine";
 import { findGoalRaceSession, preferencesBelongToPlan } from "./prepRecap/prepCompletionState";
 import { resolveRaceDistanceKm } from "./prepRecap/raceResultPresentation";
@@ -17,8 +18,14 @@ export type ActivePlanGoal = {
   /** Gehören die Preferences (Ziel, Zielzeit) zum aktiven Plan? */
   preferencesApply: boolean;
   finishOnly: boolean;
-  /** Eingetragene Zielzeit (Text) des aktiven Plans; "" = kein Ziel. */
+  /** Eingetragene Zielzeit (Text) des aktiven Plans; "" = kein Ziel. Roh, für das Eingabefeld und den Plan-Sync. */
   targetTime: string;
+  /**
+   * Zielzeit zum Anzeigen und Rechnen (Prognosekarte, Leistung-Tab, Rennrechner): `targetTime`, wenn sie zur Distanz
+   * passt (`isPlausibleTargetTime`), sonst "". Fängt die fremde Profil-Zielzeit an einem Plan ohne `meta.goal` ab.
+   */
+  displayTargetTime: string;
+  /** Sekunden von `displayTargetTime`; null ohne (plausible) Zielzeit. */
   targetSeconds: number | null;
   /** Text für die Prognosekarte; undefined = keine Zielzeile. */
   targetTimeLabel: string | undefined;
@@ -54,15 +61,18 @@ export function resolveActivePlanGoal(args: {
   });
   const finishOnly = preferencesApply && prefs.raceGoal === "finish";
   const targetTime = preferencesApply && typeof prefs.targetTime === "string" ? prefs.targetTime : "";
-  const parsed = finishOnly ? null : parseTargetTimeToSeconds(targetTime);
+  const raceDistanceKm = canonicalRaceDistanceKm(planRaceKm ?? (preferencesApply ? prefs.raceDistanceKm : null));
+  const displayTargetTime = finishOnly ? "" : plausibleTargetTimeText(targetTime, raceDistanceKm);
+  const parsed = displayTargetTime ? parseTargetTimeToSeconds(displayTargetTime) : null;
   const targetSeconds = parsed && parsed > 0 ? parsed : null;
   return {
     raceYmd: race?.ymd ?? null,
-    raceDistanceKm: canonicalRaceDistanceKm(planRaceKm ?? (preferencesApply ? prefs.raceDistanceKm : null)),
+    raceDistanceKm,
     preferencesApply,
     finishOnly,
     targetTime,
+    displayTargetTime,
     targetSeconds,
-    targetTimeLabel: finishOnly ? "Ziel: Finishen" : targetSeconds != null ? targetTime : undefined,
+    targetTimeLabel: finishOnly ? "Ziel: Finishen" : targetSeconds != null ? displayTargetTime : undefined,
   };
 }

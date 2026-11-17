@@ -1,4 +1,6 @@
 import { isSessionLogDone } from "../../appSmartFeatures";
+import { isPlausibleTargetTime } from "../../goalTimePlausibility";
+import { findRaceDistanceKm } from "./getAiContext";
 import { sessionDate, sessionYmd } from "../../core/time/sessionDate";
 import { computePlanAdherenceScore } from "../../coach/adherenceScore";
 import type { StoredHealthRun } from "../../healthRuns";
@@ -97,7 +99,9 @@ export function buildCoachRuntimeSnapshot(args: {
     knowledgeVersion: COACH_APP_KNOWLEDGE_VERSION,
     platform,
     preferences: {
-      targetTime: preferences.targetTime,
+      // Wie im Coach-Kontext: eine Zielzeit, die nicht zur Plan-Distanz passt (fremde Profil-Zielzeit), fällt weg.
+      targetTime:
+        preferences.targetTime && !isPlausibleTargetTime(preferences.targetTime, findRaceDistanceKm(plan)) ? undefined : preferences.targetTime,
       maxHeartRateBpm: preferences.maxHeartRateBpm ?? null,
     },
     appleHealth: {
