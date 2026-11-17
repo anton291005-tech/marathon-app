@@ -72,9 +72,21 @@ export const FEEDBACK_DATA_ITEMS: readonly string[] = [
 export const USAGE_DATA_ITEMS: readonly string[] = [
   "App geöffnet (höchstens einmal pro Stunde)",
   "Trainingsplan erstellt",
-  "Einheit erledigt, mit Quelle (selbst eingetragen oder Apple Health)",
+  "Einheit erledigt, mit Quelle (selbst eingetragen, Apple Health oder Strava)",
+  "Dienstplan gespeichert (nur die Anzahl der Tage)",
   "Vorschlag gezeigt, angenommen oder abgelehnt",
   "Feedback gesendet",
+];
+
+/** Was der Schicht-Modus speichert (`shift_entries`, `profiles.works_shifts`/`shift_defaults`, Migration 023). */
+export const SHIFT_DATA_ITEMS: readonly string[] = [
+  "Ob du in Schichten arbeitest und deine Standardzeiten für Früh, Spät und Nacht",
+  "Je Tag deines Dienstplans: Art des Dienstes (Früh, Spät, Nacht, Frei oder eigene Zeit), Beginn und Ende",
+];
+
+/** Was der Strava-Import speichert (`health_workouts` mit `strava:`-ID, Migration 024, `api/_lib/stravaActivitySync.js`). */
+export const STRAVA_DATA_ITEMS: readonly string[] = [
+  "Deine Läufe der letzten 10 Tage: Startzeit, Dauer, Distanz, Durchschnittspuls, falls vorhanden Kalorien",
 ];
 
 export const AI_DATA_USES: readonly AiDataUse[] = [

@@ -1,6 +1,14 @@
 import type { CSSProperties, ReactNode } from "react";
 import { SettingsGroup } from "./SettingsList";
-import { AI_DATA_USES, CHECKIN_DATA_ITEMS, FEEDBACK_DATA_ITEMS, USAGE_DATA_ITEMS, listAppleHealthDataTypes } from "./dataUsage";
+import {
+  AI_DATA_USES,
+  CHECKIN_DATA_ITEMS,
+  FEEDBACK_DATA_ITEMS,
+  SHIFT_DATA_ITEMS,
+  STRAVA_DATA_ITEMS,
+  USAGE_DATA_ITEMS,
+  listAppleHealthDataTypes,
+} from "./dataUsage";
 
 const textStyle: CSSProperties = { fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.5, margin: 0 };
 
@@ -52,6 +60,29 @@ export function SettingsDataUsagePage({ showCheckIn = false }: { showCheckIn?: b
           </Block>
         </SettingsGroup>
       ) : null}
+
+      <SettingsGroup title="Dienstplan" padded>
+        <Block>
+          <p style={textStyle}>Wenn du den Schicht-Modus nutzt, speichert MyRace in deinem Konto:</p>
+          <BulletList items={SHIFT_DATA_ITEMS} />
+          <p style={{ ...textStyle, marginTop: 12 }}>
+            Damit schlägt MyRace passende Trainingstage vor. Dein Dienstplan geht an keinen KI-Dienst und wird mit
+            deinem Konto gelöscht.
+          </p>
+        </Block>
+      </SettingsGroup>
+
+      <SettingsGroup title="Strava" padded>
+        <Block>
+          <p style={textStyle}>Wenn du Strava verbindest, holt MyRace auf dem iPhone:</p>
+          <BulletList items={STRAVA_DATA_ITEMS} />
+          <p style={{ ...textStyle, marginTop: 12 }}>
+            Damit werden geplante Einheiten automatisch als erledigt markiert. Importierte Läufe werden höchstens 7 Tage
+            gespeichert, gehen an keinen KI-Dienst und werden beim Trennen gelöscht. Den Zugriff kannst du auch in Strava
+            widerrufen.
+          </p>
+        </Block>
+      </SettingsGroup>
 
       <SettingsGroup title="Feedback" padded>
         <Block>
