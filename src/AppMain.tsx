@@ -1867,7 +1867,8 @@ export default function AppMain(){
 
   const checkStravaConnectionStatus = async () => {
     try {
-      // null bei Netzfehler: unbekannt, nicht „getrennt“ – lokale Strava-Läufe bleiben, der Import läuft weiter.
+      // null bei Netzfehler: unbekannt, nicht „getrennt“ – lokale Strava-Läufe bleiben erhalten. Der Import
+      // pausiert, bis die nächste Prüfung (Rückkehr in den Vordergrund, useStravaSync.recheckConnection) „verbunden“ ergibt.
       const connected = await fetchStravaConnectionStatus();
       setStravaConnected((prev) => (connected === null ? (prev === true ? true : null) : connected));
     } catch (err) {
@@ -1888,6 +1889,8 @@ export default function AppMain(){
     connected: stravaConnected,
     onStravaRunsLoaded: (runs) => setHealthRuns((prev) => replaceStravaRuns(prev, runs)),
     onReconnectRequired: () => setHealthRuns((prev) => dropExpiredLocalStravaRuns(prev)),
+    // Nur iOS prüft den Strava-Status (wie beim Start); bei unbekanntem Status erneut beim Vordergrund.
+    recheckConnection: Capacitor.getPlatform() === "ios" ? () => void checkStravaConnectionStatus() : undefined,
   });
   const stravaSyncRef = useRef(stravaSync);
   stravaSyncRef.current = stravaSync;

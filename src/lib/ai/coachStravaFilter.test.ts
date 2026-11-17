@@ -57,6 +57,9 @@ describe("Strava-Daten im Coach-Kontext (Strava API Policy §5.3)", () => {
         at: "2026-11-15T08:00:00.000Z",
         assignedRun: { runId: "strava:987654321", distanceKm: 9.12, duration: 2777, avgHeartRateBpm: 139 },
         runEvaluation: { status: "on_target", feedback: "Gut gelaufen", distanceDeltaKm: -0.9 },
+        // Beim Übernehmen des Strava-Vorschlags gesetzt bzw. aus assignedRun abgeleitet.
+        actualKm: "9.12",
+        durationMin: 46,
       },
       "w2-do": {
         done: true,
@@ -70,6 +73,7 @@ describe("Strava-Daten im Coach-Kontext (Strava API Policy §5.3)", () => {
     expect(json).not.toContain("strava:");
     expect(json).not.toContain("9.12");
     expect(json).not.toContain("2777");
+    expect(json).not.toContain("durationMin");
     expect(json).not.toContain("Gut gelaufen");
     expect(p.logsLast30Days).toEqual([
       { sessionId: "w2-do", log: logs["w2-do"] },

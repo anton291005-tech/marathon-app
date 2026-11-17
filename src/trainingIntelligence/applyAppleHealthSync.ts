@@ -139,8 +139,10 @@ export function applyAppleHealthTrainingSync(args: {
       const km = (stored.distanceMeters || 0) / 1000;
       // ENTSCHEIDUNG (Anton absegnen): „erledigt“ + Ist-Distanz/Dauer/Puls aus einem Strava-Lauf bleiben dauerhaft
       // im Session-Log, auch nachdem der Strava-Lauf nach 7 Tagen gelöscht ist (Plan-Status des Athleten).
-      // Folge: `buildPrepRecapSnapshot` legt in `prep_recaps.stats` Ist-km ab, die auch aus solchen Strava-Zuordnungen
-      // stammen können (aggregiert, dauerhaft).
+      // Folge: `buildPrepRecapSnapshot` (Volumen-Ist-km, längster Lauf) legt in `prep_recaps.stats` dauerhaft Werte ab,
+      // die aus solchen Strava-Zuordnungen stammen können. Diese Stats gehen NICHT an den Coach (`buildCoachPrepStatus`
+      // nutzt nur Abschluss, Zielzeit-Whitelist, Ziel und Renndistanz); die Tageslast für den Coach nimmt bei
+      // Strava-Zuordnungen die geplanten km (`logForTrainingLoad`).
       // Vorschlag als Folgeaufgabe: Puls und `runEvaluation` von `strava:`-Zuordnungen nach 7 Tagen streichen.
       merged = {
         ...prev,

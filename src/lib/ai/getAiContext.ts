@@ -85,10 +85,14 @@ export function stripStravaDerivedLogFields(log: unknown): unknown {
   const fromStrava = isStravaRunId(assigned?.runId);
   const suggestedFromStrava = isStravaRunId(entry.suggestedHealthRunId);
   if (!fromStrava && !suggestedFromStrava) return log;
-  const { assignedRun, runEvaluation, suggestedHealthRunId, ...rest } = entry;
+  const { assignedRun, runEvaluation, suggestedHealthRunId, actualKm, durationMin, ...rest } = entry;
   return {
     ...rest,
+    // Bei einer Strava-Zuordnung stammen km und Dauer aus dem Strava-Lauf (Übernehmen im Eintragen-Sheet,
+    // Ableitung in sessionLogsService) – sie fallen mit weg.
     ...(fromStrava ? {} : { assignedRun }),
+    ...(fromStrava || actualKm === undefined ? {} : { actualKm }),
+    ...(fromStrava || durationMin === undefined ? {} : { durationMin }),
     ...(fromStrava || suggestedFromStrava ? {} : { runEvaluation }),
     ...(suggestedFromStrava ? {} : suggestedHealthRunId !== undefined ? { suggestedHealthRunId } : {}),
   };

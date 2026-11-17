@@ -57,6 +57,11 @@ export function useStravaSync(args: {
   onStravaRunsLoaded: (runs: StoredHealthRun[]) => void;
   /** Strava lehnt den Zugriff ab: lokale Strava-Läufe älter als 7 Tage verwerfen (Policy §6.2). */
   onReconnectRequired?: () => void;
+  /**
+   * Verbindungsstatus erneut prüfen. Der Hook ruft das bei jeder Rückkehr in den Vordergrund auf, solange der
+   * Status unbekannt ist (`connected === null`, z. B. nach einem Offline-Start) – erst danach kann der Import laufen.
+   */
+  recheckConnection?: () => void;
   deps?: UseStravaSyncDeps;
 }): StravaSyncUiState {
   const { userId, connected } = args;
@@ -169,6 +174,33 @@ export function useStravaSync(args: {
     return () => document.removeEventListener("visibilitychange", onVisibility);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Plattform ändert sich zur Laufzeit nicht
   }, [enabled, run]);
+
+  // Status unbekannt (Offline-Start): bei Rückkehr in den Vordergrund erneut prüfen.
+  const recheckRef = useRef(args.recheckConnection);
+  recheckRef.current = args.recheckConnection;
+  const statusUnknown = Boolean(userId) && connected === null && Boolean(args.recheckConnection);
+  useEffect(() => {
+    if (!statusUnknown) return;
+    const recheck = () => recheckRef.current?.();
+    const native = (args.deps?.isNativePlatform ?? (() => Capacitor.isNativePlatform()))();
+    if (native) {
+      const listenerPromise = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+        if (isActive) recheck();
+      });
+      return () => {
+        void listenerPromise
+          .then((l) => l.remove())
+          .catch((e) => console.warn("[stravaSync] listener cleanup failed", e));
+      };
+    }
+    if (typeof document === "undefined") return;
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") recheck();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Plattform ändert sich zur Laufzeit nicht
+  }, [statusUnknown]);
 
   const syncNow = useCallback(() => run("manual"), [run]);
   const clearReconnectRequired = useCallback(() => {

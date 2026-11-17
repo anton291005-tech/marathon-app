@@ -43,10 +43,12 @@ function stripStravaDerivedLogFields(entry) {
     const fromStrava = isStravaRunId(log.assignedRun?.runId);
     const suggestedFromStrava = isStravaRunId(log.suggestedHealthRunId);
     if (!fromStrava && !suggestedFromStrava) return log;
-    const { assignedRun, runEvaluation, suggestedHealthRunId, ...rest } = log;
+    const { assignedRun, runEvaluation, suggestedHealthRunId, actualKm, durationMin, ...rest } = log;
     return {
       ...rest,
       ...(fromStrava ? {} : { assignedRun }),
+      ...(fromStrava || actualKm === undefined ? {} : { actualKm }),
+      ...(fromStrava || durationMin === undefined ? {} : { durationMin }),
       ...(fromStrava || suggestedFromStrava ? {} : { runEvaluation }),
       ...(suggestedFromStrava || suggestedHealthRunId === undefined ? {} : { suggestedHealthRunId }),
     };

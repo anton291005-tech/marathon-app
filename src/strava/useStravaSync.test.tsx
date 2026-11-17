@@ -52,6 +52,7 @@ function setup(opts: { native?: boolean; connected?: boolean | null; result?: an
   const loadStravaRuns = jest.fn(async () => [stravaRow]);
   const onStravaRunsLoaded = jest.fn();
   const onReconnectRequired = jest.fn();
+  const recheckConnection = jest.fn();
   const view = renderHook(
     ({ connected }) =>
       useStravaSync({
@@ -59,11 +60,12 @@ function setup(opts: { native?: boolean; connected?: boolean | null; result?: an
         connected,
         onStravaRunsLoaded,
         onReconnectRequired,
+        recheckConnection,
         deps: { runSync, loadStravaRuns, isNativePlatform: () => opts.native ?? false },
       }),
     { initialProps: { connected: opts.connected === undefined ? true : opts.connected } },
   );
-  return { ...view, runSync, loadStravaRuns, onStravaRunsLoaded, onReconnectRequired };
+  return { ...view, runSync, loadStravaRuns, onStravaRunsLoaded, onReconnectRequired, recheckConnection };
 }
 
 describe("useStravaSync", () => {
@@ -121,6 +123,32 @@ describe("useStravaSync", () => {
     await act(async () => mockListeners[0]({ isActive: true }));
     await flush();
     expect(runSync).toHaveBeenCalledTimes(2);
+  });
+
+  test("Status unbekannt (Offline-Start): Rückkehr in den Vordergrund prüft die Verbindung erneut", async () => {
+    const { recheckConnection, runSync, rerender } = setup({ connected: null });
+    await flush();
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(recheckConnection).toHaveBeenCalledTimes(1);
+    expect(runSync).not.toHaveBeenCalled();
+    // Prüfung ergibt „verbunden“ → Import läuft, weitere Rückkehr prüft nicht mehr.
+    rerender({ connected: true });
+    await flush();
+    expect(runSync).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(recheckConnection).toHaveBeenCalledTimes(1);
+  });
+
+  test("iOS: Status unbekannt → appStateChange prüft erneut", async () => {
+    const { recheckConnection } = setup({ connected: null, native: true });
+    await flush();
+    await act(async () => mockListeners.forEach((cb) => cb({ isActive: true })));
+    expect(recheckConnection).toHaveBeenCalledTimes(1);
   });
 
   test("„Jetzt synchronisieren“ ohne Drossel", async () => {

@@ -67,7 +67,13 @@ describe("handleAiCoach — Strava-Daten im Claude-Request", () => {
         logsLast30Days: [
           {
             sessionId: "w2-sa",
-            log: { done: true, assignedRun: { runId: "strava:987654321", distanceKm: 9.12, duration: 2777 }, runEvaluation: { feedback: "ZZ-STRAVA-AUSWERTUNG" } },
+            log: {
+              done: true,
+              actualKm: "9.12",
+              durationMin: 46,
+              assignedRun: { runId: "strava:987654321", distanceKm: 9.12, duration: 2777 },
+              runEvaluation: { feedback: "ZZ-STRAVA-AUSWERTUNG" },
+            },
           },
         ],
       },
@@ -75,7 +81,7 @@ describe("handleAiCoach — Strava-Daten im Claude-Request", () => {
     expect(status).toBe(200);
     const request = JSON.stringify(mockCreate.mock.calls[0][0]);
     expect(request).toContain("2026-11-14T07:00:00.000Z");
-    for (const forbidden of ["2026-11-15T07:00:00.000Z", "9123", "2777", "strava:", "ZZ-STRAVA-AUSWERTUNG", "9.12"]) {
+    for (const forbidden of ["2026-11-15T07:00:00.000Z", "9123", "2777", "strava:", "ZZ-STRAVA-AUSWERTUNG", "9.12", "durationMin"]) {
       expect(request).not.toContain(forbidden);
     }
   });
