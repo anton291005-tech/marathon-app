@@ -5,6 +5,7 @@ import {
   parseTargetTimeToSeconds,
 } from "../../appSmartFeatures";
 import { sessionYmd } from "../../core/time/sessionDate";
+import { raceDistanceKind } from "../../raceDistance";
 import type { StoredHealthRun } from "../../healthRuns";
 import { getStoredHealthRunCanonicalType, storedHealthRunDistanceKmNumeric } from "../../healthRuns";
 import type { PlanSession, PlanWeek, SessionLog } from "../../marathonPrediction";
@@ -434,6 +435,15 @@ function buildInterpretation(args: {
   return body.replace(/\s+/g, " ").trim();
 }
 
+/** Zielrennen = letzte Race-Session des Plans; nur bei Marathon-Distanz taugt die Zielzeit als Bezug. */
+function goalRaceIsMarathon(context: AiContext): boolean {
+  const races = (Array.isArray(context.plan) ? context.plan : [])
+    .flatMap((week) => (Array.isArray(week?.s) ? week.s : []))
+    .filter((session) => session?.type === "race");
+  const goalRace = races[races.length - 1];
+  return raceDistanceKind(typeof goalRace?.km === "number" ? goalRace.km : null) === "marathon";
+}
+
 export function computePaceBasedPrediction(context: AiContext): PaceBasedPrediction | null {
   const now = new Date(context.todayIso);
   const healthRuns: StoredHealthRun[] = Array.isArray(context.healthRuns) ? context.healthRuns : [];
@@ -544,6 +554,8 @@ export function computePaceBasedPrediction(context: AiContext): PaceBasedPredict
     displayLongWindowCount: longRecent.length,
     race,
     goalSeconds: (() => {
+      // Die Prognose ist eine Marathonzeit: Eine HM-/10-km-Zielzeit als Marathonziel ergäbe „2:29/km Marathonpace".
+      if (!goalRaceIsMarathon(context)) return null;
       const raw = context.goals?.targetTime;
       const sec = typeof raw === "string" && raw.trim() ? parseTargetTimeToSeconds(raw) : null;
       return sec != null && Number.isFinite(sec) && sec > 0 ? sec : null;
