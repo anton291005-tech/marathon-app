@@ -82,7 +82,8 @@ export function resetShiftStateForTests(): void {
 
 /**
  * Cache-Schlüssel je Nutzer (`marathonShiftEntries:<userId>`): ausstehende Tage eines Kontos können nie in ein anderes
- * Konto auf demselben Gerät geschrieben werden. Das Aufräumen beim Kontowechsel übernimmt die Integration (W3).
+ * Konto auf demselben Gerät geschrieben werden. Abmelden und Konto löschen räumen sie über
+ * `ACCOUNT_BOUND_KEY_PREFIXES` in `clearMarathonLocalStorage` auf.
  */
 export function shiftEntriesCacheKey(userId: string): string {
   return `${SHIFT_ENTRIES_CACHE_KEY}:${userId}`;

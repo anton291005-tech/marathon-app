@@ -294,12 +294,14 @@ export function assessShiftDays(input: ShiftDaysInput): ShiftDayAssessment[] {
     }
   }
 
-  // Regel 1a: Dienst beginnt mehr als 2 h vor dem Tagesfenster (z. B. „Eigene Zeit 0–8 Uhr“) — die Nacht davor war
-  // Arbeit, auch wenn der Dienst kalendarisch erst an diesem Tag beginnt. Wirkt wie das Ende einer Nacht.
+  // Regel 1a: Dienst beginnt mehr als `earlyStartNightHours` (2 h) vor dem Tagesfenster (z. B. „Eigene Zeit 0–8 Uhr“) —
+  // die Nacht davor war Arbeit, auch wenn der Dienst kalendarisch erst an diesem Tag beginnt.
+  // ENTSCHEIDUNG (Anton absegnen): wirkt wie das Ende einer Nacht (hart + Long Run ungeeignet, locker eingeschränkt);
+  // nicht im Plan W1, ergänzt nach der Prüfung (ein 0–8-Uhr-Dienst darf den Tag nicht „frei“ machen).
   for (let i = 0; i < works.length; i += 1) {
     const w = works[i];
     const startOfDay = w.start - w.day * DAY_MIN;
-    if (ws - startOfDay > CONFIG.calendar.overnightMinHoursNextDay.value * 60) {
+    if (ws - startOfDay > shiftCfg.earlyStartNightHours.value * 60) {
       mark(w.day, "hard", { suit: "unsuitable", code: "after_night", cause: w.entry });
       mark(w.day, "long", { suit: "unsuitable", code: "after_night", cause: w.entry });
       mark(w.day, "easy", { suit: "limited", code: "after_night", cause: w.entry });

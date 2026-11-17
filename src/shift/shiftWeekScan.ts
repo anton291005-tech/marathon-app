@@ -112,6 +112,21 @@ export function planAfterShiftSave(args: {
   return found ?? { message: "Diese und nächste Woche passen zu deinem Dienstplan." };
 }
 
+/** Kleiner Hash (djb2) über Inhalt der Termine (ID, Tag, Zeiten) und die gesperrten IDs — nicht nur deren Anzahl. */
+function contentHash(blocks: WeeklyScheduleBlock[], locked: ReadonlySet<string>): string {
+  const parts: string[] = blocks.map((b) =>
+    [b.id, b.isRecurring ? `r${b.dayOfWeek}:${b.recurrenceStartDate ?? ""}-${b.recurrenceEndDate ?? ""}` : b.specificDate, b.startTime, b.endTime, b.title].join("/"),
+  );
+  parts.sort();
+  const lockedIds: string[] = [];
+  locked.forEach((id) => lockedIds.push(id));
+  lockedIds.sort();
+  const text = `${parts.join("|")}#${lockedIds.join(",")}`;
+  let hash = 5381;
+  for (let i = 0; i < text.length; i += 1) hash = ((hash << 5) + hash + text.charCodeAt(i)) | 0;
+  return `${text.length}:${hash >>> 0}`;
+}
+
 let todayProposalCache: { key: string; plan: AiPlanWeek[]; ctx: ShiftCapacityContext; value: boolean } | null = null;
 
 /**
@@ -120,7 +135,7 @@ let todayProposalCache: { key: string; plan: AiPlanWeek[]; ctx: ShiftCapacityCon
  */
 export function shiftTodayHasProposal(args: Omit<ShiftScanArgs, "weekIndex"> & { sessionId: string | null }): boolean {
   if (!args.sessionId) return false;
-  const key = `${args.todayYmd}|${args.sessionId}|${args.scheduleBlocks.length}|${args.lockedSessionIds.size}`;
+  const key = `${args.todayYmd}|${args.sessionId}|${contentHash(args.scheduleBlocks, args.lockedSessionIds)}`;
   if (todayProposalCache && todayProposalCache.key === key && todayProposalCache.plan === args.plan && todayProposalCache.ctx === args.shiftContext) {
     return todayProposalCache.value;
   }

@@ -41,7 +41,8 @@ describe("Einzel-Pfad mit Dienstplan (proposeShiftSingle)", () => {
     expect(dayOf(after, "w1-5")).toBe("2026-11-21");
     // Auch die manuelle Tageswahl bietet keinen späteren Tag an.
     const offered = result.status === "proposal" ? result.candidates.map((v) => dayOf(plan, v.targetSessionId)) : [];
-    expect(offered.every((d) => d < "2026-11-17")).toBe(true);
+    // Genau ein zulässiger Tag (Mo, früher); alle späteren fallen weg — eine leere Liste besteht den Test nicht.
+    expect(offered).toEqual(["2026-11-16"]);
   });
 
   it("legt Intervalle nie auf den Tag des ersten Nachtdienstes (eingeschränkt ist kein freier Zieltag)", () => {

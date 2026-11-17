@@ -401,7 +401,7 @@ Für Menschen im Schicht- und Gastrodienst ist der Kalender die schlechteste Que
 | Nr. | Regel | hart | Long Run | locker | Code | Herkunft |
 |---|---|---|---|---|---|---|
 | 1 | Tag, an dem ein Nachtdienst morgens endet | ungeeignet | ungeeignet | eingeschränkt („kurz, und erst nach dem Schlafen“) | `after_night` | [E] |
-| 1a | Dienst beginnt mehr als 2 h vor 06:00 (z. B. 0–8 Uhr): wie das Ende einer Nacht an diesem Tag | ungeeignet | ungeeignet | eingeschränkt | `after_night` | [E] |
+| 1a | Dienst beginnt mehr als 2 h vor 06:00 (`earlyStartNightHours`, z. B. 0–8 Uhr): wie das Ende einer Nacht an diesem Tag | ungeeignet | ungeeignet | eingeschränkt | `after_night` | [E] |
 | 2 | Tag, an dem der erste Nachtdienst eines Blocks abends beginnt | eingeschränkt | ungeeignet | – | `before_night` | [E] |
 | 3 | Tag zwischen zwei Nachtdiensten (Vorrang vor 1) | ungeeignet | ungeeignet | eingeschränkt | `between_nights` | [E] |
 | 4 | erster freier Tag nach einem Nachtblock (ohne Dienst); zweiter freier Tag ist ausdrücklich frei | eingeschränkt | ungeeignet | – | `recovery_after_nights` / `free_after_nights` | [E] |
@@ -897,6 +897,7 @@ Wireframe-Beispiel aus §10.1 zur Kontrolle: A = −1,1 · B = −1,6 · C = −
 21. **Dienstplan (Schicht-Modus, §7.6):** Tag nach einer Nacht ungeeignet (hart, Long Run) und locker nur „kurz, nach dem Schlafen“; Tag vor der ersten Nacht hart eingeschränkt, Long Run ungeeignet; zwischen zwei Nächten ungeeignet; erster freier Tag nach einem Nachtblock hart eingeschränkt und Long Run ungeeignet, zweiter frei (`recoveryDaysAfterNights` 1). Reicht ein freier Tag, oder braucht es nach drei und mehr Nächten zwei?
 22. **Schicht-Schwellen (§7.6):** „Nacht“ ab mehr als 2 h im neuen Tag; Spätdienst nach Mitternacht → Folgetag eingeschränkt; Dienst **länger als** 8 h → eingeschränkt (`longShiftHours`; bewusst nicht „ab 8 h“, sonst wäre jeder Frühdienst 6–14 Uhr eingeschränkt); Ruhezeit < 11 h auch für den Long Run eingeschränkt.
 23. **Angenommene Dauern ohne Plan-Angabe (§7.6):** hart 75 min, Long Run 150 min, locker 50 min, jeweils + 45 min (`defaultHardMin`, `defaultLongRunMin`, `defaultEasyMin`).
+25. **Früher Dienstbeginn (§7.6, Regel 1a):** Beginnt ein Dienst mehr als 2 h vor 06:00 (`earlyStartNightHours`, z. B. 0–8 Uhr), zählt der Tag wie nach einer Nacht (hart und Long Run ungeeignet, locker eingeschränkt). Passt die Grenze, oder sollte z. B. ein Dienst ab 4 Uhr nur „eingeschränkt“ sein?
 24. **Fit-Werte der Engine (§7.6):** frei 1,0 · eingeschränkt 0,5 · ungeeignet 0,2 (Schwelle 0,35); Standardzeiten Früh 6–14, Spät 14–22, Nacht 22–6 (`defaultTimes`); Vorausschau 28 Tage (`horizonDays`).
 19. **Validierungsplan** (§13): Welche Auswertung des Freundes-Tests würde die DSHS als ersten Beleg akzeptieren? Wäre eine begleitende Bachelorarbeit möglich?
 

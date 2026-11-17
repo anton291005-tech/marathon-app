@@ -25,7 +25,7 @@ export type Range = { readonly min: number; readonly max: number };
 
 const p = <T>(value: T, source: ParamSource, spec: string): Param<T> => ({ value, source, spec });
 
-export const CONFIG_VERSION = "0.2.0";
+export const CONFIG_VERSION = "0.2.1";
 
 export const CONFIG = {
   /** §3 Plausibilitätsgrenzen: Werte außerhalb werden verworfen, nicht geklammert. */
@@ -222,6 +222,8 @@ export const CONFIG = {
      * Szenario S4 („nur Frühdienste → kein Konflikt“) gebrochen. Deshalb „länger als 8 h“.
      */
     longShiftHours: p(8, "E", "§7.6"),
+    /** Regel 1a: Beginnt ein Dienst mehr als so viele Stunden vor dem Tagesfenster (06:00), wirkt er wie das Ende einer Nacht. */
+    earlyStartNightHours: p(2, "E", "§7.6"),
     /** Angenommene Dauer, wenn der Plan keine kennt (Minuten, ohne Umziehen/Weg). */
     defaultHardMin: p(75, "E", "§7.6"),
     defaultLongRunMin: p(150, "E", "§7.6"),

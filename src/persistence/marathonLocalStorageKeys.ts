@@ -35,6 +35,13 @@ export const SHIFT_PROFILE_CACHE_KEY = "marathonShiftProfile";
 export const SHIFT_INTRO_DISMISSED_KEY = "marathonShiftIntroDismissed";
 
 /**
+ * Präfixe konto-gebundener Schlüssel je Nutzer (`<präfix><userId>`); `clearMarathonLocalStorage` löscht alle Schlüssel
+ * mit diesen Präfixen. Bewusst nicht hier: Schlüssel, die das Abmelden überleben sollen (z. B. W3
+ * `marathonUsageEventsEnabled:<userId>`).
+ */
+export const ACCOUNT_BOUND_KEY_PREFIXES: readonly string[] = [`${SHIFT_ENTRIES_CACHE_KEY}:`, `${SHIFT_PROFILE_CACHE_KEY}:`];
+
+/**
  * Read-only catalog for docs / debug (order is not normative).
  * Writers: App.tsx (core), recovery helpers, BackupControls, etc.
  */
