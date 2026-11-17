@@ -14,10 +14,23 @@ import { matchWorkoutToPlannedSession } from "./matchRunToPlannedSession";
 import { normalizeAppleHealthRun } from "./normalizeAppleHealthRun";
 import type { NormalizedAppleRun } from "./types";
 import { getAppNow } from "../core/time/timeSystem";
+import { isStravaSourcedRun } from "../strava/stravaRunSource";
+
+/** Eine Einheit, die dieser Lauf neu als erledigt markiert hat – mit Quelle (für Nutzungsereignisse). */
+export type AppleHealthSyncCompletion = {
+  sessionId: string;
+  runId: string;
+  source: "apple_health" | "strava";
+};
 
 export type AppleHealthSyncResult = {
   logs: Record<string, SessionLog>;
   changed: boolean;
+  /**
+   * Einheiten, die in diesem Durchlauf auf „erledigt“ gesprungen sind. Hier ist die Quelle bekannt
+   * (`session_completed` mit `source: "strava" | "apple_health"` hängt sich an diese Liste).
+   */
+  completions: AppleHealthSyncCompletion[];
 };
 
 type HealthSyncPair = { stored: StoredHealthRun; norm: Pick<NormalizedAppleRun, "startTime"> };
@@ -51,6 +64,7 @@ export function applyAppleHealthTrainingSync(args: {
 
   let next: Record<string, SessionLog> = { ...args.logs };
   let changed = false;
+  const completions: AppleHealthSyncCompletion[] = [];
 
   const bySession = new Map<string, PlanSession>();
   for (const s of args.planSessions) {
@@ -88,7 +102,14 @@ export function applyAppleHealthTrainingSync(args: {
     if (!decision.shouldWrite) continue;
 
     const prev = next[session.id] ?? {};
-    if (prev.assignedRun?.runId && prev.assignedRun.runId !== run.id) {
+    // Die Einheit hängt schon an einem Strava-Lauf, der in diesem Apple-Health-Lauf aufgegangen ist
+    // (`dedupeAppleHealthAndStravaRuns`): Apple Health übernimmt die Zuordnung, ohne erneut zu zählen.
+    const replacesMergedDuplicate =
+      !!prev.assignedRun?.runId &&
+      prev.assignedRun.runId !== run.id &&
+      Array.isArray(stored.mergedRunIds) &&
+      stored.mergedRunIds.includes(prev.assignedRun.runId);
+    if (prev.assignedRun?.runId && prev.assignedRun.runId !== run.id && !replacesMergedDuplicate) {
       continue;
     }
     if (prev.done && prev.assignedRun?.runId === run.id) {
@@ -126,7 +147,9 @@ export function applyAppleHealthTrainingSync(args: {
           distanceKm: Math.round(km * 100) / 100,
           ...(run.avgHeartRate !== null ? { avgHeartRateBpm: run.avgHeartRate } : {}),
         },
-        ...(decision.setDone ? { done: true, skipped: false, at: getAppNow().toISOString() } : {}),
+        ...(decision.setDone && !(replacesMergedDuplicate && prev.done)
+          ? { done: true, skipped: false, at: getAppNow().toISOString() }
+          : {}),
         runEvaluation: evalBlock,
       };
     }
@@ -135,8 +158,15 @@ export function applyAppleHealthTrainingSync(args: {
       next = { ...next, [session.id]: merged };
       changed = true;
       touchedSessionIds.add(session.id);
+      if (merged.done === true && prev.done !== true) {
+        completions.push({
+          sessionId: session.id,
+          runId: stored.runId,
+          source: isStravaSourcedRun(stored) ? "strava" : "apple_health",
+        });
+      }
     }
   }
 
-  return { logs: changed ? next : args.logs, changed };
+  return { logs: changed ? next : args.logs, changed, completions };
 }

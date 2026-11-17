@@ -9,6 +9,8 @@ import {
   isSyncedCanonicalType,
   type CanonicalWorkoutType,
 } from "./appleHealth/workoutTypeClassifier";
+import { dedupeAppleHealthAndStravaRuns } from "./strava/crossSourceRunDedup";
+import { isStravaSourcedRun } from "./strava/stravaRunSource";
 
 export const HEALTH_RUNS_STORAGE_KEY = "healthRuns";
 
@@ -74,6 +76,13 @@ export type StoredHealthRun = {
   laps?: HealthRunLap[];
   gpsStream?: unknown;
   intervalIntensitySnapshot?: IntervalIntensitySnapshot;
+  /** kcal, nur wenn die Quelle sie eindeutig liefert (Strava-Import); sonst nicht gesetzt. */
+  calories?: number;
+  /**
+   * IDs von Duplikaten aus einer anderen Quelle (Strava), die in diesen Lauf aufgegangen sind
+   * (`dedupeAppleHealthAndStravaRuns`). Nur lokal, wird nicht nach Supabase geschrieben.
+   */
+  mergedRunIds?: string[];
 };
 
 /** Kanonischer Typ für Anzeige / Aggregat (fehlender `workoutType` → `other`, kein stiller Lauf-Fallback). */
@@ -312,7 +321,11 @@ export function mergeHealthRuns(existing: StoredHealthRun[], incoming: StoredHea
   const list: StoredHealthRun[] = [...existing];
   for (const r of incoming) {
     if (!storedHealthRunIsSyncedActivity(r)) continue;
-    const dupIdx = list.findIndex((e) => isSameHealthRunWorkout(e, r));
+    // Quellenübergreifende Duplikate (Apple Health ↔ Strava) entscheidet `dedupeAppleHealthAndStravaRuns` unten,
+    // damit Apple Health gewinnt und die Strava-ID als Alias erhalten bleibt.
+    const dupIdx = list.findIndex(
+      (e) => isSameHealthRunWorkout(e, r) && isStravaSourcedRun(e) === isStravaSourcedRun(r),
+    );
     if (dupIdx >= 0) {
       list[dupIdx] = preferRicherStoredHealthRun(list[dupIdx], r);
     } else {
@@ -347,7 +360,7 @@ export function mergeHealthRuns(existing: StoredHealthRun[], incoming: StoredHea
       deduped.map((w) => classifyWorkoutType(String(w.workoutType || ""))),
     );
   }
-  return deduped;
+  return dedupeAppleHealthAndStravaRuns(deduped);
 }
 
 function migrateStoredHealthRunRow(r: StoredHealthRun): StoredHealthRun {
@@ -387,8 +400,10 @@ export function loadHealthRunsFromStorage(
   const raw = readItem(HEALTH_RUNS_STORAGE_KEY);
   const parsed = parseJson(raw || "null", []);
   if (!Array.isArray(parsed)) return [];
-  return parsed
-    .filter((r) => r && typeof r.runId === "string")
-    .map((r) => migrateStoredHealthRunRow(r as StoredHealthRun))
-    .filter((r) => storedHealthRunIsSyncedActivity(r));
+  return dedupeAppleHealthAndStravaRuns(
+    parsed
+      .filter((r) => r && typeof r.runId === "string")
+      .map((r) => migrateStoredHealthRunRow(r as StoredHealthRun))
+      .filter((r) => storedHealthRunIsSyncedActivity(r)),
+  );
 }
