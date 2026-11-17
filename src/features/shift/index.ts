@@ -4,5 +4,5 @@ export type { ShiftSaveOutcome } from "./ShiftPlanPage";
 export { ShiftIntroCard, ShiftSettingsRows, ShiftTodayNote, ShiftWizardQuestion } from "./ShiftCards";
 export { useShiftMode } from "../../shift/useShiftMode";
 export { findWeekIndexForYmd, planAfterShiftSave, reportShiftProposalDecision, runShiftWeekScan, shiftTodayHasProposal } from "../../shift/shiftWeekScan";
-export { proposeShiftSingle } from "../../shift/proposeShiftSingle";
+export { isShiftChoiceAllowed, proposeShiftSingle } from "../../shift/proposeShiftSingle";
 export { isShiftModeEnabled } from "../../shift/shiftModeFlag";

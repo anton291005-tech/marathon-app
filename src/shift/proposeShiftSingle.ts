@@ -112,3 +112,21 @@ export function proposeShiftSingle(input: ProposeShiftSingleInput): ShiftSingleP
   };
   return { status: "proposal", action, patches, candidates: views, conflictCause, source: "shift" };
 }
+
+/**
+ * Manuelle Tageswahl („Trotzdem Tag wählen“) im Schicht-Modus: beim Antippen erneut gegen den aktuellen Plan prüfen
+ * (harte Regeln, „frei“ nicht Pflicht). `false` = kein Tausch, die App zeigt den ruhigen Hinweis.
+ */
+export function isShiftChoiceAllowed(input: ProposeShiftSingleInput & { targetSessionId: string }): boolean {
+  const locked = input.lockedSessionIds ?? NO_LOCKED_SESSION_IDS;
+  const weekIndex = input.weekIndex >= 0 ? input.weekIndex : input.plan.findIndex((w) => !!findIn(w, input.sessionId));
+  const week = input.plan[weekIndex];
+  const session = week ? findIn(week, input.sessionId) : null;
+  const target = week ? findIn(week, input.targetSessionId) : null;
+  const sourceYmd = session ? sessionDayIso(session) : null;
+  const targetYmd = target ? sessionDayIso(target) : null;
+  if (!week || !session || !target || !sourceYmd || !targetYmd) return false;
+  const sourceCapacity = dayCapacity(sourceYmd, input.scheduleBlocks, input.shiftContext);
+  const ctx = { scheduleBlocks: input.scheduleBlocks, shiftContext: input.shiftContext, locked, week };
+  return !!checkCandidate(ctx, deepClone(input.plan), session, sourceCapacity, { targetSessionId: target.id, dateIso: targetYmd, isConflict: false }, false);
+}

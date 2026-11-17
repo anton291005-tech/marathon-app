@@ -56,6 +56,21 @@ describe("readinessCore/shiftDays – Regeln", () => {
     expect(run([C("2026-11-17", "05:30", "13:30")])["2026-11-17"].hard).toBe("free");
   });
 
+  it("Regel 1a vor Regel 2: Nachtdienst 0–8 Uhr ist „nach der Nacht“, nicht „vor der Nacht“, und Regel 4 greift", () => {
+    const days = run([{ dateYmd: "2026-11-17", kind: "night", start: "00:00", end: "08:00" }]);
+    expect(days["2026-11-17"]).toMatchObject({ hard: "unsuitable", long: "unsuitable", easy: "limited", reasonCode: "after_night" });
+    expect(days["2026-11-17"].reasons).toEqual({ hard: "after_night", long: "after_night", easy: "after_night" });
+    expect(days["2026-11-18"]).toMatchObject({ hard: "limited", long: "unsuitable", reasonCode: "recovery_after_nights" });
+    expect(days["2026-11-19"].reasonCode).toBe("free_after_nights");
+    // Eigene Zeit 0–8 Uhr ebenso.
+    expect(run([C("2026-11-17", "00:00", "08:00")])["2026-11-18"].reasonCode).toBe("recovery_after_nights");
+  });
+
+  it("Regel 2 nur für Dienste, die abends beginnen", () => {
+    expect(run([N("2026-11-17", "20:00", "04:00")])["2026-11-17"].reasons.hard).toBe("before_night");
+    expect(run([{ dateYmd: "2026-11-17", kind: "night", start: "01:00", end: "07:00" }])["2026-11-17"].reasons.long).not.toBe("before_night");
+  });
+
   it("Regel 2: Tag, an dem der erste Nachtdienst beginnt → hart eingeschränkt, Long Run ungeeignet, locker frei", () => {
     const d = run([N("2026-11-16")])["2026-11-16"];
     expect(d).toMatchObject({ hard: "limited", long: "unsuitable", easy: "free" });

@@ -292,6 +292,7 @@ import {
   ShiftSettingsRows,
   ShiftTodayNote,
   findWeekIndexForYmd,
+  isShiftChoiceAllowed,
   planAfterShiftSave,
   proposeShiftSingle,
   reportShiftProposalDecision,
@@ -2816,6 +2817,15 @@ export default function AppMain(){
 
   const handleSelectCalendarReassignmentTarget = (targetSessionId)=>{
     if (!pendingCalendarProposal) return;
+    // Schicht-Modus: beim Antippen erneut gegen die Schutzregeln prüfen; bei Ablehnung kein Tausch, nur der Hinweis.
+    if (pendingCalendarProposal.shift && shiftMode.context) {
+      const week = displayPlan.find((wk) => (wk.s ?? []).some((s) => s.id === pendingCalendarProposal.sessionId));
+      const allowed = isShiftChoiceAllowed({ plan: displayPlan, weekIndex: week ? displayPlan.indexOf(week) : -1, sessionId: pendingCalendarProposal.sessionId, targetSessionId, scheduleBlocks, shiftContext: shiftMode.context, todayYmd: getAppTodayYmd(), lockedSessionIds });
+      if (!allowed) {
+        setPendingCalendarProposal(prev => prev ? { ...prev, action: null, patches: [], mode: "preview", noConflict: false } : prev);
+        return;
+      }
+    }
     const result = assignSessionToChosenDay(displayPlan, pendingCalendarProposal.sessionId, targetSessionId, undefined, lockedSessionIds);
     if (!result.ok || !result.patches.length) {
       setPendingCalendarProposal(prev => prev ? { ...prev, action: null, patches: [], mode: "preview", noConflict: false } : prev);
@@ -4516,7 +4526,6 @@ export default function AppMain(){
                 </div>
               ) : weekCalendarBatchProposal.status === "shift-hints" ? (
                 <div data-layout-week-card="1" className="mr-panel">
-                  <span>Für diese Woche gibt es keinen sicheren Tausch.</span>
                   {(weekCalendarBatchProposal.hints || []).map((hint) => <span key={hint}>{hint}</span>)}
                   <div className="mr-panel__actions">
                     <button type="button" className="mr-btn mr-btn--ghost mr-btn--small" onClick={handleCancelWeekCalendarBatch}>OK</button>

@@ -13,6 +13,7 @@ import { buildShiftCapacityContext, sortedEntries } from "./shiftAdapter";
 import { isShiftModeEnabled } from "./shiftModeFlag";
 import { getShiftState } from "./shiftStore";
 
+export const SHIFT_NO_SAFE_SWAP = "Für diese Woche gibt es keinen sicheren Tausch.";
 export const SHIFT_BLOCKED_HINT = "Ein Tausch würde hier eine Trainingsregel verletzen. Dein Plan bleibt, wie er ist.";
 
 /** Form des AppMain-State `weekCalendarBatchProposal` (plus `source`/`hints` für den Schicht-Pfad). */
@@ -29,7 +30,7 @@ export function toShiftBatchState(result: ShiftWeekProposal): ShiftBatchState {
       // Interne Prüf-Codes (z. B. „taper-later:<id>“) nie anzeigen: ein ruhiger Satz statt der Verstoß-Liste.
       return { action: null, patches: [], status: "shift-hints", hints: [SHIFT_BLOCKED_HINT], source: "shift" };
     case "hint-only":
-      return { action: null, patches: [], status: "shift-hints", hints: result.hints, source: "shift" };
+      return { action: null, patches: [], status: "shift-hints", hints: [SHIFT_NO_SAFE_SWAP, ...result.hints], source: "shift" };
     default:
       return {
         action: result.action,

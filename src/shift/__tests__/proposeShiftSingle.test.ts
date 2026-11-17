@@ -5,8 +5,8 @@ import { sessionDayIso } from "../../ai/mutations/sessionDayIso";
 import type { StoredShiftEntry } from "../../lib/supabase/services/shiftEntriesService";
 import { buildShiftCapacityContext } from "../shiftAdapter";
 import { buildSoftenPatch, isHardDayType, proposeShiftWeek } from "../proposeShiftWeek";
-import { proposeShiftSingle } from "../proposeShiftSingle";
-import { SHIFT_BLOCKED_HINT, shiftTodayHasProposal, toShiftBatchState } from "../shiftWeekScan";
+import { isShiftChoiceAllowed, proposeShiftSingle } from "../proposeShiftSingle";
+import { SHIFT_BLOCKED_HINT, SHIFT_NO_SAFE_SWAP, shiftTodayHasProposal, toShiftBatchState } from "../shiftWeekScan";
 import { N, session, week } from "../__fixtures__/shiftFixtures";
 
 const { toCoachSessionObject } = require("../../../api/_lib/coachHandlers");
@@ -60,6 +60,15 @@ describe("Einzel-Pfad mit Dienstplan (proposeShiftSingle)", () => {
     expect(c.byDate[to] ? c.byDate[to].hard : "free").toBe("free");
     expect(hardPairs(after)).toEqual([]);
     expect(action?.preview?.items[0]).toMatch(/^Nach dem Nachtdienst \(22–6 Uhr\) ist Mittwoch kein guter Tag für Intervalle\./);
+  });
+
+  it("manuelle Wahl wird beim Antippen erneut geprüft: später im Taper und Rennen abgelehnt, früher erlaubt", () => {
+    const plan = [week(1, TODAY, ["easy", "interval", "easy", "easy", "rest", "race", "rest"], "taper")];
+    const c = ctx([N("2026-11-15"), N("2026-11-16")]);
+    const base = { plan, weekIndex: 0, sessionId: "w1-1", scheduleBlocks: [], shiftContext: c, todayYmd: TODAY };
+    expect(isShiftChoiceAllowed({ ...base, targetSessionId: "w1-2" })).toBe(false);
+    expect(isShiftChoiceAllowed({ ...base, targetSessionId: "w1-5" })).toBe(false);
+    expect(isShiftChoiceAllowed({ ...base, targetSessionId: "w1-0" })).toBe(true);
   });
 
   it("Rennen und gesperrte Einheiten: kein Vorschlag", () => {
@@ -124,6 +133,9 @@ describe("Anzeige ohne interne Codes", () => {
   it("blockierter Wochenvorschlag → ruhiger Hinweis statt Prüf-Codes", () => {
     const state = toShiftBatchState({ status: "blocked", reasons: ["taper-later:w1-4", "2026-11-17>2026-11-18"] });
     expect(state).toEqual({ action: null, patches: [], status: "shift-hints", hints: [SHIFT_BLOCKED_HINT], source: "shift" });
+    // Ohne sicheren Tausch: genau ein Einleitungssatz, keine Dopplung.
+    const hintsOnly = toShiftBatchState({ status: "hint-only", hints: ["Mi, 18. Nov: …"], conflicts: [] });
+    expect(hintsOnly.status === "shift-hints" ? hintsOnly.hints : []).toEqual([SHIFT_NO_SAFE_SWAP, "Mi, 18. Nov: …"]);
     expect(JSON.stringify(state)).not.toMatch(/taper-later|>/);
   });
 

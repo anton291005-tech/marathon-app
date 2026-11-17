@@ -251,6 +251,41 @@ export function assessShiftDays(input: ShiftDaysInput): ShiftDayAssessment[] {
   // Tage mit Eintrag haben immer Bezug.
   Object.keys(byDay).forEach((key) => touch(Number(key)));
 
+  /** Regel 4: freie Tage nach dem Ende einer Nacht am Tag `endDay` (ohne Dienst bzw. mit „frei“). */
+  const markRecovery = (endDay: number, cause: ShiftEntry) => {
+    const recoveryDays = shiftCfg.recoveryDaysAfterNights.value;
+    let free = 0;
+    for (let d = endDay + 1; d <= endDay + recoveryDays + 1; d += 1) {
+      if (workOn(d)) break;
+      free += 1;
+      if (free <= recoveryDays) {
+        mark(d, "hard", { suit: "limited", code: "recovery_after_nights", cause });
+        mark(d, "long", { suit: "unsuitable", code: "recovery_after_nights", cause });
+        mark(d, "easy", { suit: "free", code: "recovery_after_nights", cause });
+      } else {
+        mark(d, "hard", { suit: "free", code: "free_after_nights", cause });
+        mark(d, "long", { suit: "free", code: "free_after_nights", cause });
+        mark(d, "easy", { suit: "free", code: "free_after_nights", cause });
+      }
+    }
+  };
+  /** Beginnt der Dienst mehr als `earlyStartNightHours` vor dem Tagesfenster (z. B. 0–8 Uhr)? */
+  const startsInTheNight = (w: Work) => ws - (w.start - w.day * DAY_MIN) > shiftCfg.earlyStartNightHours.value * 60;
+
+  // Regel 1a: Dienst beginnt mehr als `earlyStartNightHours` (2 h) vor dem Tagesfenster (z. B. „Eigene Zeit 0–8 Uhr“) —
+  // die Nacht davor war Arbeit, auch wenn der Dienst kalendarisch erst an diesem Tag beginnt. Vor den Regeln 1–4
+  // ausgewertet, damit sie bei gleicher Strenge gewinnt; danach gilt Regel 4 (Erholungstag) wie nach einer Nacht.
+  // ENTSCHEIDUNG (Anton absegnen): wirkt wie das Ende einer Nacht (hart + Long Run ungeeignet, locker eingeschränkt);
+  // nicht im Plan W1, ergänzt nach der Prüfung (ein 0–8-Uhr-Dienst darf den Tag nicht „frei“ machen).
+  for (let i = 0; i < works.length; i += 1) {
+    const w = works[i];
+    if (!startsInTheNight(w)) continue;
+    mark(w.day, "hard", { suit: "unsuitable", code: "after_night", cause: w.entry });
+    mark(w.day, "long", { suit: "unsuitable", code: "after_night", cause: w.entry });
+    mark(w.day, "easy", { suit: "limited", code: "after_night", cause: w.entry });
+    if (!nightOn(w.day + 1)) markRecovery(w.day, w.entry);
+  }
+
   // Regeln 1–4: Nachtblöcke. Reihenfolge der `mark`-Aufrufe = Vorrang bei gleicher Strenge.
   for (let i = 0; i < works.length; i += 1) {
     const w = works[i];
@@ -270,41 +305,13 @@ export function assessShiftDays(input: ShiftDaysInput): ShiftDayAssessment[] {
         mark(endDay, "long", { suit: "unsuitable", code: "after_night", cause: w.entry });
         mark(endDay, "easy", { suit: "limited", code: "after_night", cause: w.entry });
         // Regel 4: freie Tage nach dem Block (ohne Dienst bzw. mit „frei“).
-        const recoveryDays = shiftCfg.recoveryDaysAfterNights.value;
-        let free = 0;
-        for (let d = endDay + 1; d <= endDay + recoveryDays + 1; d += 1) {
-          if (workOn(d)) break;
-          free += 1;
-          if (free <= recoveryDays) {
-            mark(d, "hard", { suit: "limited", code: "recovery_after_nights", cause: w.entry });
-            mark(d, "long", { suit: "unsuitable", code: "recovery_after_nights", cause: w.entry });
-            mark(d, "easy", { suit: "free", code: "recovery_after_nights", cause: w.entry });
-          } else {
-            mark(d, "hard", { suit: "free", code: "free_after_nights", cause: w.entry });
-            mark(d, "long", { suit: "free", code: "free_after_nights", cause: w.entry });
-            mark(d, "easy", { suit: "free", code: "free_after_nights", cause: w.entry });
-          }
-        }
+        markRecovery(endDay, w.entry);
       }
     }
-    if (!prevNight) {
-      // Regel 2: erster Nachtdienst eines Blocks beginnt abends.
+    if (!prevNight && !startsInTheNight(w)) {
+      // Regel 2: erster Nachtdienst eines Blocks beginnt abends (nicht ein Dienst, der schon in der Nacht beginnt).
       mark(w.day, "hard", { suit: "limited", code: "before_night", cause: w.entry });
       mark(w.day, "long", { suit: "unsuitable", code: "before_night", cause: w.entry });
-    }
-  }
-
-  // Regel 1a: Dienst beginnt mehr als `earlyStartNightHours` (2 h) vor dem Tagesfenster (z. B. „Eigene Zeit 0–8 Uhr“) —
-  // die Nacht davor war Arbeit, auch wenn der Dienst kalendarisch erst an diesem Tag beginnt.
-  // ENTSCHEIDUNG (Anton absegnen): wirkt wie das Ende einer Nacht (hart + Long Run ungeeignet, locker eingeschränkt);
-  // nicht im Plan W1, ergänzt nach der Prüfung (ein 0–8-Uhr-Dienst darf den Tag nicht „frei“ machen).
-  for (let i = 0; i < works.length; i += 1) {
-    const w = works[i];
-    const startOfDay = w.start - w.day * DAY_MIN;
-    if (ws - startOfDay > shiftCfg.earlyStartNightHours.value * 60) {
-      mark(w.day, "hard", { suit: "unsuitable", code: "after_night", cause: w.entry });
-      mark(w.day, "long", { suit: "unsuitable", code: "after_night", cause: w.entry });
-      mark(w.day, "easy", { suit: "limited", code: "after_night", cause: w.entry });
     }
   }
 
