@@ -15,8 +15,27 @@ type Props = {
   confidenceLabel?: string | null;
   /** Coach-Zeilen unter der Prognose */
   coachHints?: string[];
+  /**
+   * Zielzeit des aktiven Plans in Sekunden. Steuert, ob die Marken „Unter 3:00" / „Unter 2:50" erscheinen —
+   * für eine 4:00-Läuferin sind sie bedeutungslos (0 %). `undefined` = alte Anzeige (beide Marken).
+   */
+  targetSeconds?: number | null;
   style?: CSSProperties;
 };
+
+/** Spielraum über der Marke, in dem sie noch als Bezug taugt (Ziel 3:10 → „Unter 3:00" bleibt sichtbar). */
+const MARK_RELEVANCE_SECONDS = 15 * 60;
+
+// ENTSCHEIDUNG (Anton absegnen): Sub-3/Sub-2:50 nur zeigen, wenn die Zielzeit höchstens 15 min darüber liegt;
+// ohne Zielzeit keine Marken. Antons Ziel (Sub 2:50) sieht beide wie bisher.
+export function visibleMarathonMarks(targetSeconds: number | null | undefined): { sub3: boolean; sub250: boolean } {
+  if (targetSeconds === undefined) return { sub3: true, sub250: true };
+  if (targetSeconds == null || !Number.isFinite(targetSeconds) || targetSeconds <= 0) return { sub3: false, sub250: false };
+  return {
+    sub3: targetSeconds <= 3 * 3600 + MARK_RELEVANCE_SECONDS,
+    sub250: targetSeconds <= 2 * 3600 + 50 * 60 + MARK_RELEVANCE_SECONDS,
+  };
+}
 
 /** Prognose-Karte, Titel nach Plan-Distanz (docs/design-system/mockups/leistung.html). */
 export default function MarathonPredictionCard({
@@ -25,11 +44,14 @@ export default function MarathonPredictionCard({
   targetTimeLabel,
   confidenceLabel,
   coachHints = [],
+  targetSeconds,
   style,
 }: Props) {
-  const sub3 = prediction.sub3ProbabilityPercent != null ? Math.min(100, Math.max(0, prediction.sub3ProbabilityPercent)) : null;
+  const marks = visibleMarathonMarks(targetSeconds);
+  const sub3 =
+    marks.sub3 && prediction.sub3ProbabilityPercent != null ? Math.min(100, Math.max(0, prediction.sub3ProbabilityPercent)) : null;
   const ready = prediction.ready && !!prediction.predictedTime;
-  const hasSub250 = prediction.sub250ProbabilityPercent != null;
+  const hasSub250 = marks.sub250 && prediction.sub250ProbabilityPercent != null;
   const probabilityCols = 1 + (sub3 != null ? 1 : 0) + (hasSub250 ? 1 : 0);
 
   return (

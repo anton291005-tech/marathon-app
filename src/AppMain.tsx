@@ -4579,6 +4579,7 @@ export default function AppMain(){
                 targetTimeLabel={targetTimeDisplay}
                 confidenceLabel={marathonConfidenceLabel}
                 coachHints={coachHints}
+                targetSeconds={targetSeconds}
               />
               )}
             </div>
