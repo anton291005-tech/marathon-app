@@ -150,6 +150,7 @@ import { useAppOpenTracking } from "./telemetry/useAppOpenTracking";
 import { FreshAccountBootCover, shouldCoverForFreshAccount } from "./app/boot/FreshAccountBootCover";
 import { applyPlanGoalToPreferences, planGoalFromPreferences, withPlanGoalMeta } from "./planV2/planGoalMeta";
 import { usePlanGoalSync } from "./planV2/usePlanGoalSync";
+import { useResetScrollOnViewChange } from "./layout/useResetScrollOnViewChange";
 import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
 import { buildHealthRunSuggestion, buildSessionFlow, estimateDurationMin, parseKmInput } from "./features/session/sessionDetailModel";
 import { getCoachFeedback } from "./coachFeedback";
@@ -3516,6 +3517,7 @@ export default function AppMain(){
     ? {}
     : { animation: `${viewMotionDir > 0 ? "viewSlideNext" : "viewSlidePrev"} .34s cubic-bezier(0.22, 1, 0.36, 1)` };
   const activeView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
+  useResetScrollOnViewChange(mainContentAreaRef, activeView);
   const resetOnboardingFlag =
     typeof localStorage !== "undefined" && localStorage.getItem(RESET_ONBOARDING_STORAGE_KEY) === "1";
   useEffect(() => {
