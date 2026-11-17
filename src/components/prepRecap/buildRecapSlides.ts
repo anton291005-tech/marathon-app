@@ -54,6 +54,8 @@ export type RecapSlide = {
   body?: Array<{ label: string; first: string; last: string }>;
   /** Nur Outro: kompakte Zusammenfassung. */
   summary?: string[];
+  /** „strava“: die Zeit ist ein unbestätigter Vorschlag aus dem Strava-Import → „Powered by Strava“-Logo. */
+  attribution?: "strava";
 };
 
 export type RecapSlidesInput = {
@@ -262,6 +264,7 @@ function raceSlide(input: RecapSlidesInput): RecapSlide | null {
     // Ziel nur als Abstand bei erreichtem Ziel (subline); verpasst → keine Zielzeile.
     detail: joinDetail([pace, sourceNote]),
     celebration: reached ? "goal" : "base",
+    ...(input.finishOrigin === "strava" && !finishConfirmed ? { attribution: "strava" as const } : {}),
   };
 }
 
@@ -276,7 +279,15 @@ function outroSlide(input: RecapSlidesInput): RecapSlide {
   }
 
   const ran = recapRaceWasRun(stats, finishSeconds);
-  const base = { id: "outro" as const, eyebrow: "Das bleibt", hero: null, detail: null, celebration: null, summary };
+  const base = {
+    id: "outro" as const,
+    eyebrow: "Das bleibt",
+    hero: null,
+    detail: null,
+    celebration: null,
+    summary,
+    ...(finishSeconds != null && input.finishOrigin === "strava" && !input.finishConfirmed ? { attribution: "strava" as const } : {}),
+  };
   if (ran && isWithinRecoveryWindow(stats.race.ymd, input.todayYmd)) {
     return {
       ...base,

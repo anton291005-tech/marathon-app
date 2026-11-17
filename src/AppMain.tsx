@@ -200,6 +200,7 @@ import { dropExpiredLocalStravaRuns, replaceStravaRuns } from "./strava/crossSou
 import { isStravaRunId, isStravaSourcedRun, selectRunsForAutoAssignment } from "./strava/stravaRunSource";
 import { StravaConnectionPanel } from "./features/strava/StravaConnectionPanel";
 import { StravaRunAttribution } from "./features/strava/StravaRunAttribution";
+import { resolvePrepFinishDisplay } from "./prepRecap/resolvePrepFinishDisplay";
 import { GarminAppleHealthHelp } from "./features/settings/GarminAppleHealthHelp";
 import { assignSessionToChosenDay } from "./ai/mutations/assignSessionToBestCapacityDay";
 import { proposeSingleSessionCalendarReassignment } from "./ai/mutations/buildCalendarReassignmentAction";
@@ -1866,10 +1867,12 @@ export default function AppMain(){
 
   const checkStravaConnectionStatus = async () => {
     try {
+      // null bei Netzfehler: unbekannt, nicht „getrennt“ – lokale Strava-Läufe bleiben, der Import läuft weiter.
       const connected = await fetchStravaConnectionStatus();
-      setStravaConnected(connected);
+      setStravaConnected((prev) => (connected === null ? (prev === true ? true : null) : connected));
     } catch (err) {
       console.error("[Strava] connection status check failed", err);
+      setStravaConnected((prev) => (prev === true ? true : null));
     }
   };
 
@@ -1903,7 +1906,11 @@ export default function AppMain(){
       const userId = data.session?.user?.id;
       if (!userId) throw new Error("Nicht angemeldet");
       const result = await disconnectStrava(userId);
-      if (!result.ok) throw new Error("delete failed");
+      if (!result.ok) {
+        // Läufe nicht gelöscht → Verbindung bleibt; nie „gelöscht“ melden, wenn nichts gelöscht wurde.
+        setStravaFeedback({ tone: "err", text: "Konnte nicht vollständig trennen, bitte erneut versuchen." });
+        return;
+      }
       setStravaConnected(false);
       setHealthRuns((prev) => replaceStravaRuns(prev, []));
       stravaSync.clearReconnectRequired();
@@ -3029,16 +3036,8 @@ export default function AppMain(){
   }, [prepRaceYmd, prepRecapUserId, activePlanId]);
   const prepFinishDisplay = useMemo(() => {
     if (!prepCompleted) return null;
-    // Unbestätigter Vorschlag aus Strava → „laut Strava“ und nicht an den Coach (buildCoachPrepStatus).
-    const stravaOrigin = prepDetectedFinish?.origin === "strava" ? { origin: "strava" as const } : {};
-    if (prepRecapRecord?.raceDate === prepCompleted.raceYmd && prepRecapRecord.finishTimeSeconds != null) {
-      return {
-        seconds: prepRecapRecord.finishTimeSeconds,
-        confirmed: prepRecapRecord.finishTimeConfirmed,
-        ...(prepRecapRecord.finishTimeConfirmed ? {} : stravaOrigin),
-      };
-    }
-    return prepDetectedFinish ? { seconds: prepDetectedFinish.seconds, confirmed: false, ...stravaOrigin } : null;
+    // Strava-Vorschläge stehen nie im Datensatz; live „laut Strava“, nicht an den Coach (resolvePrepFinishDisplay).
+    return resolvePrepFinishDisplay({ record: prepRecapRecord, raceYmd: prepCompleted.raceYmd, detected: prepDetectedFinish });
   }, [prepCompleted, prepRecapRecord, prepDetectedFinish]);
   /** Coach-Kontext nach Plan-Ende: Abschluss + Rennergebnis des AKTIVEN Plans statt aktueller Woche. */
   const coachPrepStatus = useMemo(
@@ -3065,7 +3064,8 @@ export default function AppMain(){
       planId: activePlanId,
       raceName: completed.raceName,
       raceDate: completed.raceYmd,
-      detectedFinish: prepDetectedFinish,
+      // Strava-Vorschläge nie speichern (Policy §6.2/§5.3); decidePrepRecapAction prüft das zusätzlich.
+      detectedFinish: prepDetectedFinish?.origin === "strava" ? null : prepDetectedFinish,
       buildStats: () =>
         buildPrepRecapSnapshot({
           plan: displayPlan,
@@ -5688,7 +5688,11 @@ export default function AppMain(){
           <PrepRecapExperience
             record={prepRecapRecord}
             entry={prepRecapOverlay}
-            finishOrigin={prepFinishDisplay?.origin}
+            stravaSuggestion={
+              prepFinishDisplay?.origin === "strava" && !prepFinishDisplay.confirmed
+                ? { seconds: prepFinishDisplay.seconds }
+                : null
+            }
             onSaveFinish={handlePrepRecapSaveFinish}
             onClose={() => setPrepRecapOverlay(null)}
             onStartNewPrep={

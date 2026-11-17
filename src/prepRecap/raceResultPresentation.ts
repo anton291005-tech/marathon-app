@@ -17,8 +17,12 @@ export type RaceFinishDisplay = {
   seconds: number;
   /** false → Vorschlag aus Apple Health (bzw. Strava), noch nicht vom Athleten bestätigt. */
   confirmed: boolean;
-  /** „strava“, wenn der unbestätigte Vorschlag aus dem Strava-Import stammt. */
-  origin?: "strava";
+  /**
+   * Herkunft eines unbestätigten Vorschlags: „strava“ (Strava-Import, nur live, nie gespeichert) oder
+   * „apple_health“ (HealthKit bzw. gespeicherter Vorschlag, der nie aus Strava stammt). Bestätigte Zeiten
+   * brauchen keine Herkunft – sie sind die Angabe des Athleten.
+   */
+  origin?: "strava" | "apple_health";
 };
 
 const MONTHS_DE = [

@@ -2,7 +2,7 @@
  * Prüfungs-Nachbesserung W2: Strava-Herkunft an Zielzeit-Vorschlag, Coach-Kontext und Beschriftungen;
  * lokale Strava-Läufe nur 7 Tage und nur mit Verbindung.
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { freezeTimeForTests } from "../core/time/timeSystem";
 import type { StoredHealthRun } from "../healthRuns";
 import type { PlanSession, PlanWeek } from "../marathonPrediction";
@@ -17,6 +17,19 @@ import { buildHealthRunSuggestion } from "../features/session/sessionDetailModel
 import { StravaRunAttribution } from "../features/strava/StravaRunAttribution";
 import { dropExpiredLocalStravaRuns, replaceStravaRuns } from "./crossSourceRunDedup";
 import { selectRunsForAutoAssignment } from "./stravaRunSource";
+import { decidePrepRecapAction } from "../prepRecap/prepRecapRecord";
+import { resolvePrepFinishDisplay } from "../prepRecap/resolvePrepFinishDisplay";
+import PrepRecapExperience from "../components/prepRecap/PrepRecapExperience";
+import PrepCompleteHeroCard from "../components/prepRecap/PrepCompleteHeroCard";
+import { fullRecapStats, recapRecord } from "../components/prepRecap/recapTestFixtures";
+
+jest.mock("../native/haptics", () => ({
+  hapticImpactLight: jest.fn().mockResolvedValue(undefined),
+  hapticSuccess: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock("../components/prepRecap/celebration", () => ({
+  launchCelebration: () => ({ done: new Promise(() => {}), cancel: () => {} }),
+}));
 
 const raceSession = {
   id: "w25-so",
@@ -82,6 +95,7 @@ describe("Zielzeit-Vorschlag aus Strava", () => {
       />,
     );
     expect(screen.getByText("Laut Strava: 3:13:57 — stimmt das?")).toBeInTheDocument();
+    expect(screen.getByAltText("Powered by Strava")).toBeInTheDocument();
   });
 
   test("Rückblick-Slides tragen die Herkunft", () => {
@@ -98,6 +112,131 @@ describe("Zielzeit-Vorschlag aus Strava", () => {
     });
     expect(JSON.stringify(slides)).toContain("laut Strava");
     expect(JSON.stringify(slides)).not.toContain("laut Apple Health");
+    // Logo-Kennzeichnung an Rennen- und Outro-Slide.
+    expect(slides.filter((sl) => sl.attribution === "strava").map((sl) => sl.id)).toEqual(["race", "outro"]);
+    const apple = buildRecapSlides({ stats, raceName: "Warschau", finishSeconds: 11637, finishConfirmed: false, todayYmd: "2026-11-16" });
+    expect(apple.some((sl) => sl.attribution)).toBe(false);
+  });
+
+  test("Rückblick-Datensatz speichert einen Strava-Vorschlag nie (Policy §6.2/§5.3)", () => {
+    const strava = { seconds: 11637, distanceKm: 42.63, source: "health" as const, origin: "strava" as const };
+    const created = decidePrepRecapAction({
+      existing: null,
+      buildStats: () => fullRecapStats(),
+      detectedFinish: strava,
+      planId: "p",
+      raceName: "Warschau",
+      raceDate: "2026-09-27",
+    });
+    expect(created.kind).toBe("create");
+    expect(created.kind === "create" && created.record).toMatchObject({
+      finishTimeSeconds: null,
+      finishTimeSource: null,
+      finishTimeConfirmed: false,
+    });
+    const existing = recapRecord({ finishTimeSeconds: null, finishTimeSource: null, finishTimeConfirmed: false });
+    expect(
+      decidePrepRecapAction({ existing, buildStats: () => fullRecapStats(), detectedFinish: strava, planId: "p", raceName: null, raceDate: "2026-09-27" }),
+    ).toEqual({ kind: "none" });
+    // Apple Health wird wie bisher als Vorschlag übernommen.
+    const fromApple = decidePrepRecapAction({
+      existing: null,
+      buildStats: () => fullRecapStats(),
+      detectedFinish: { seconds: 11637, distanceKm: 42.63, source: "health" },
+      planId: "p",
+      raceName: null,
+      raceDate: "2026-09-27",
+    });
+    expect(fromApple.kind === "create" && fromApple.record.finishTimeSeconds).toBe(11637);
+  });
+
+  test("Datensatz vorhanden, Strava-Lauf weg, keine Zuordnung am Rennen → keine Zeit, kein „laut Apple Health“, nichts an den Coach", () => {
+    // Datensatz entstand, als der Strava-Lauf noch da war → ohne Zeit gespeichert.
+    const created = decidePrepRecapAction({
+      existing: null,
+      buildStats: () => fullRecapStats(),
+      detectedFinish: { seconds: 11637, distanceKm: 42.63, source: "health", origin: "strava" },
+      planId: "p",
+      raceName: "Warschau Marathon",
+      raceDate: "2026-09-27",
+    });
+    if (created.kind !== "create") throw new Error("expected create");
+    const record = created.record;
+    expect(record.finishTimeSeconds).toBeNull();
+    // Später: Strava-Lauf weg (Trennen / 7 Tage), Rennen ohne Zuordnung → nichts erkannt.
+    const display = resolvePrepFinishDisplay({ record, raceYmd: "2026-09-27", detected: null });
+    expect(display).toBeNull();
+
+    const plan = [
+      { wn: 12, s: [{ id: "w12-so", type: "race", title: "WARSCHAU MARATHON", km: 42.2, date: "27. Sep", dateIso: "2026-09-27" }] },
+    ] as unknown as PlanWeek[];
+    const completion = getPrepCompletionState({
+      plan,
+      logs: { "w12-so": { done: true } } as any,
+      todayYmd: "2026-09-29",
+      preferences: { raceDate: "27.09.2026" } as any,
+    });
+    const status = buildCoachPrepStatus({ completion, finish: display, goalSeconds: null, raceDistanceKm: 42.195, todayYmd: "2026-09-29" });
+    expect(status?.result).toMatchObject({ finishTime: null, finishTimeSeconds: null, pacePerKm: null });
+
+    render(<PrepCompleteHeroCard raceName="Warschau Marathon" raceYmd="2026-09-27" goalSeconds={null} finish={display} raceDistanceKm={42.195} />);
+    expect(screen.queryByText(/laut Apple Health/)).toBeNull();
+  });
+
+  test("gespeicherter unbestätigter Apple-Health-Vorschlag geht mit Herkunft apple_health weiter", () => {
+    const record = recapRecord({ finishTimeSeconds: 11500, finishTimeSource: "health", finishTimeConfirmed: false });
+    expect(resolvePrepFinishDisplay({ record, raceYmd: "2026-09-27", detected: null })).toEqual({
+      seconds: 11500,
+      confirmed: false,
+      origin: "apple_health",
+    });
+    expect(
+      resolvePrepFinishDisplay({ record: { ...record, finishTimeConfirmed: true }, raceYmd: "2026-09-27", detected: null }),
+    ).toEqual({ seconds: 11500, confirmed: true });
+  });
+
+  test("solange der Strava-Lauf da ist: live „laut Strava“ + Logo, Datensatz bleibt leer", () => {
+    const record = recapRecord({ finishTimeSeconds: null, finishTimeSource: null, finishTimeConfirmed: false });
+    const display = resolvePrepFinishDisplay({
+      record,
+      raceYmd: "2026-09-27",
+      detected: { seconds: 11637, distanceKm: 42.63, source: "health", origin: "strava" },
+    });
+    expect(display).toEqual({ seconds: 11637, confirmed: false, origin: "strava" });
+    render(<PrepCompleteHeroCard raceName="Warschau Marathon" raceYmd="2026-09-27" goalSeconds={null} finish={display} raceDistanceKm={42.195} />);
+    expect(screen.getByText(/laut Strava/)).toBeInTheDocument();
+    expect(screen.getByAltText("Powered by Strava")).toBeInTheDocument();
+  });
+
+  test("Rückblick: Strava-Vorschlag bestätigen speichert die Zeit als eigene Angabe", async () => {
+    const onSaveFinish = jest.fn().mockResolvedValue(undefined);
+    render(
+      <PrepRecapExperience
+        record={recapRecord({ finishTimeSeconds: null, finishTimeSource: null, finishTimeConfirmed: false })}
+        entry="story"
+        onSaveFinish={onSaveFinish}
+        onClose={jest.fn()}
+        stravaSuggestion={{ seconds: 11637 }}
+      />,
+    );
+    expect(screen.getByText("Laut Strava: 3:13:57 — stimmt das?")).toBeInTheDocument();
+    expect(screen.getByAltText("Powered by Strava")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Stimmt" }));
+    await waitFor(() => expect(onSaveFinish).toHaveBeenCalledWith({ seconds: 11637, source: "manual", confirmed: true }));
+  });
+
+  test("Rückblick: Datensatz mit eigener Zeit ignoriert den Strava-Vorschlag", () => {
+    render(
+      <PrepRecapExperience
+        record={recapRecord({ finishTimeSeconds: 11500, finishTimeSource: "health", finishTimeConfirmed: false })}
+        entry="story"
+        onSaveFinish={jest.fn()}
+        onClose={jest.fn()}
+        stravaSuggestion={{ seconds: 11637 }}
+      />,
+    );
+    expect(screen.getByText(/Laut Apple Health: 3:11:40/)).toBeInTheDocument();
+    expect(screen.queryByAltText("Powered by Strava")).toBeNull();
   });
 
   test("Coach: unbestätigte Strava-Zeit fehlt im prepStatus, bestätigte bleibt", () => {
@@ -117,7 +256,9 @@ describe("Zielzeit-Vorschlag aus Strava", () => {
     expect(strava?.result).toMatchObject({ finishTime: null, finishTimeSeconds: null, pacePerKm: null });
     expect(JSON.stringify(strava)).not.toContain("3:13:57");
     expect(build({ seconds: 11637, confirmed: true, origin: "strava" })?.result.finishTimeSeconds).toBe(11637);
-    expect(build({ seconds: 11637, confirmed: false })?.result.finishTimeSeconds).toBe(11637);
+    // Whitelist: unbestätigt nur mit Herkunft Apple Health; unbekannte Herkunft geht nicht mit.
+    expect(build({ seconds: 11637, confirmed: false, origin: "apple_health" })?.result.finishTimeSeconds).toBe(11637);
+    expect(build({ seconds: 11637, confirmed: false })?.result.finishTimeSeconds).toBeNull();
   });
 });
 

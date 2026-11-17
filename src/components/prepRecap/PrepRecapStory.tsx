@@ -6,6 +6,7 @@ import { formatFinishTime } from "../../prepRecap/raceResultPresentation";
 import { formatRecapHero, formatRecapNumber, type RecapHero, type RecapSlide } from "./buildRecapSlides";
 import { launchCelebration, type CelebrationHandle } from "./celebration";
 import CountUp from "./CountUp";
+import { PoweredByStrava } from "../../features/strava/PoweredByStrava";
 import { prefersReducedMotion } from "./motion";
 import { recapThemeFor } from "./recapTheme";
 import {
@@ -490,6 +491,7 @@ export default function PrepRecapStory({
               ))}
             </div>
           ) : null}
+          {slide.attribution === "strava" ? <PoweredByStrava height={14} style={{ marginTop: 16 }} /> : null}
         </div>
 
         {/* Fuß: Outro-Aktionen bzw. dezenter Bedienhinweis auf der ersten Slide. */}

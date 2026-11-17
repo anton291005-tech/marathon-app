@@ -42,17 +42,18 @@ export function buildCoachPrepStatus(args: {
   completion: PrepCompletionState;
   /**
    * Zeit des aktiven Plans (Snapshot bzw. Health-Vorschlag) — nie die eines archivierten Plans.
-   * Ein unbestätigter Vorschlag aus Strava (`origin: "strava"`) geht nicht an den Coach (Strava API
-   * Policy §5.3); erst eine vom Athleten bestätigte Zeit ist seine eigene Angabe.
+   * Whitelist (Strava API Policy §5.3): eine UNBESTÄTIGTE Zeit geht nur mit `origin: "apple_health"` an den
+   * Coach; Strava-Vorschläge und Vorschläge unbekannter Herkunft nicht. Eine bestätigte Zeit ist die
+   * Angabe des Athleten und geht immer mit.
    */
-  finish: { seconds: number; confirmed: boolean; origin?: "strava" } | null;
+  finish: { seconds: number; confirmed: boolean; origin?: "strava" | "apple_health" } | null;
   goalSeconds: number | null;
   raceDistanceKm: number | null;
   todayYmd: string;
 }): CoachPrepStatus | null {
   const { completion, goalSeconds, raceDistanceKm, todayYmd } = args;
   if (completion.status !== "completed") return null;
-  const finish = args.finish && !args.finish.confirmed && args.finish.origin === "strava" ? null : args.finish;
+  const finish = args.finish && !args.finish.confirmed && args.finish.origin !== "apple_health" ? null : args.finish;
   const raceRun = recapRaceWasRun(
     { race: { completedBy: completion.completedBy } } as PrepRecapStats,
     finish ? finish.seconds : null,

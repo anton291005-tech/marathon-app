@@ -19,6 +19,7 @@ import {
   recapSecondaryButtonStyle,
   recapTextButtonStyle,
 } from "./recapStyles";
+import { PoweredByStrava } from "../../features/strava/PoweredByStrava";
 
 export type FinishTimeCurrent = {
   seconds: number;
@@ -197,6 +198,7 @@ export default function FinishTimeInputStep({
             <p style={{ margin: "22px 0 0", fontSize: 22, fontWeight: 750, lineHeight: 1.25, letterSpacing: "-0.01em" }}>
               {suggestionOrigin === "strava" ? "Laut Strava" : "Laut Apple Health"}: {suggestionText} — stimmt das?
             </p>
+            {suggestionOrigin === "strava" ? <PoweredByStrava height={14} style={{ marginTop: 10 }} /> : null}
             <p style={{ margin: "10px 0 0", fontSize: 15, lineHeight: 1.45, color: "rgba(226,232,240,0.68)" }}>
               Die Uhr misst von Start bis Stopp. Deine offizielle Chipzeit kann davon leicht abweichen.
             </p>

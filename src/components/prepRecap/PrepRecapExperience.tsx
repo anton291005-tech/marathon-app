@@ -16,8 +16,12 @@ type Props = {
   onClose: () => void;
   /** Nur vom Home-Rückblick. Aus dem Archiv (Einstellungen) weglassen: dort nur „Fertig" + Zeit. */
   onStartNewPrep?: () => void;
-  /** „strava“, wenn der unbestätigte Zeit-Vorschlag aus dem Strava-Import stammt („laut Strava“). */
-  finishOrigin?: "strava";
+  /**
+   * Zeit-Vorschlag aus dem Strava-Import, der bewusst NICHT im Datensatz steht (prepRecapRecord.ts).
+   * Wird nur genutzt, solange der Datensatz keine eigene Zeit hat: „Laut Strava: … — stimmt das?“;
+   * „Stimmt“ speichert die Zeit als eigene Angabe (`source: "manual"`, bestätigt).
+   */
+  stravaSuggestion?: { seconds: number } | null;
 };
 
 type Step =
@@ -43,7 +47,10 @@ function initialStep(record: PrepRecapRecord, entry: PrepRecapEntry): Step {
  * Ablauf „Rückblick ansehen": solange die Zielzeit unbestätigt ist, zuerst die Bestätigung
  * (überspringbar, Überspringen bestätigt nicht), dann die Story aus dem Snapshot.
  */
-export default function PrepRecapExperience({ record, entry, onSaveFinish, onClose, onStartNewPrep, finishOrigin }: Props) {
+export default function PrepRecapExperience({ record, entry, onSaveFinish, onClose, onStartNewPrep, stravaSuggestion }: Props) {
+  // ENTSCHEIDUNG (Anton absegnen): eine bestätigte Strava-Zeit wird als `manual` gespeichert – sie ist ab
+  // dann die Angabe des Athleten, nicht mehr ein Wert aus der Strava-API.
+  const suggestion = record.finishTimeSeconds == null && stravaSuggestion ? stravaSuggestion : null;
   const [step, setStep] = useState<Step>(() => initialStep(record, entry));
 
   const slides = useMemo(
@@ -51,12 +58,12 @@ export default function PrepRecapExperience({ record, entry, onSaveFinish, onClo
       buildRecapSlides({
         stats: record.stats,
         raceName: record.raceName ?? record.stats.race.name,
-        finishSeconds: record.finishTimeSeconds,
-        finishConfirmed: record.finishTimeConfirmed,
-        ...(finishOrigin ? { finishOrigin } : {}),
+        finishSeconds: record.finishTimeSeconds ?? suggestion?.seconds ?? null,
+        finishConfirmed: suggestion ? false : record.finishTimeConfirmed,
+        ...(suggestion ? { finishOrigin: "strava" as const } : {}),
         todayYmd: getAppTodayYmd(),
       }),
-    [record, finishOrigin],
+    [record, suggestion],
   );
 
   if (step.kind === "input") {
@@ -75,10 +82,12 @@ export default function PrepRecapExperience({ record, entry, onSaveFinish, onClo
                 source: record.finishTimeSource,
                 confirmed: record.finishTimeConfirmed,
               }
-            : null
+            : suggestion
+              ? { seconds: suggestion.seconds, source: "manual", confirmed: false }
+              : null
         }
         dismissLabel={step.dismissLabel}
-        suggestionOrigin={finishOrigin}
+        suggestionOrigin={suggestion ? "strava" : undefined}
         startInEdit={step.startInEdit}
         onSubmit={async (patch) => {
           await onSaveFinish(patch);
