@@ -1,4 +1,5 @@
 import { supabase } from "../client";
+import { deleteStravaHealthWorkouts } from "./healthWorkoutsService";
 
 /**
  * Verbindungsstatus + Trennen für `strava_connections` (Muster: weeklyScheduleBlocksService.ts).
@@ -27,7 +28,12 @@ export async function fetchStravaConnectionStatus(): Promise<boolean> {
   return deriveStravaConnected(data);
 }
 
-/** Löscht die Connection-Row. Historische, bereits importierte Daten werden nicht angefasst. */
+/**
+ * Löscht die Connection-Row und die importierten Strava-Läufe (`health_workouts`, `source_id 'strava:%'`) –
+ * Strava API Policy §7.4: nach Widerruf Strava-Daten löschen. Erledigt-Haken an geplanten Einheiten
+ * bleiben (Plan-Status). Scheitert nur das Löschen der Läufe, gilt die Trennung trotzdem; der Server
+ * räumt Strava-Zeilen ohnehin nach 7 Tagen weg.
+ */
 export async function disconnectStrava(userId: string): Promise<{ ok: boolean }> {
   const { error } = await supabase.from("strava_connections").delete().eq("user_id", userId);
   if (error) {
@@ -35,5 +41,6 @@ export async function disconnectStrava(userId: string): Promise<{ ok: boolean }>
     console.error("[Strava] disconnect failed", error);
     return { ok: false };
   }
+  await deleteStravaHealthWorkouts(userId);
   return { ok: true };
 }

@@ -195,6 +195,10 @@ import {
   fetchStravaConnectionStatus,
   disconnectStrava,
 } from "./lib/supabase/services/stravaConnectionService";
+import { useStravaSync } from "./strava/useStravaSync";
+import { replaceStravaRuns } from "./strava/crossSourceRunDedup";
+import { StravaConnectionPanel } from "./features/strava/StravaConnectionPanel";
+import { GarminAppleHealthHelp } from "./features/settings/GarminAppleHealthHelp";
 import { assignSessionToChosenDay } from "./ai/mutations/assignSessionToBestCapacityDay";
 import { proposeSingleSessionCalendarReassignment } from "./ai/mutations/buildCalendarReassignmentAction";
 import { buildLockedSessionIds } from "./ai/mutations/lockedSessions";
@@ -1873,6 +1877,15 @@ export default function AppMain(){
     // eslint-disable-next-line react-hooks/exhaustive-deps -- check once on mount for iOS
   }, []);
 
+  /** Strava-Import: App-Start, Vordergrund (gedrosselt 15 min), „Jetzt synchronisieren“ → healthRuns → Zuordnung. */
+  const stravaSync = useStravaSync({
+    userId: user?.id,
+    connected: stravaConnected,
+    onStravaRunsLoaded: (runs) => setHealthRuns((prev) => replaceStravaRuns(prev, runs)),
+  });
+  const stravaSyncRef = useRef(stravaSync);
+  stravaSyncRef.current = stravaSync;
+
   const handleStravaDisconnect = async () => {
     setStravaFeedback(null);
     setStravaConnectBusy(true);
@@ -1884,7 +1897,9 @@ export default function AppMain(){
       const result = await disconnectStrava(userId);
       if (!result.ok) throw new Error("delete failed");
       setStravaConnected(false);
-      setStravaFeedback({ tone: "ok", text: "Strava getrennt." });
+      setHealthRuns((prev) => replaceStravaRuns(prev, []));
+      stravaSync.clearReconnectRequired();
+      setStravaFeedback({ tone: "ok", text: "Strava getrennt. Importierte Strava-Läufe sind gelöscht." });
     } catch (err) {
       console.error("[Strava] disconnect failed", err);
       setStravaFeedback({ tone: "err", text: "Strava konnte nicht getrennt werden." });
@@ -1960,7 +1975,8 @@ export default function AppMain(){
       const status = event?.detail?.status;
       if (status === "connected") {
         setStravaFeedback({ tone: "ok", text: "Mit Strava verbunden." });
-        void checkStravaConnectionStatus();
+        stravaSyncRef.current.clearReconnectRequired();
+        void checkStravaConnectionStatus().then(() => stravaSyncRef.current.syncNow());
       } else {
         setStravaFeedback({ tone: "err", text: "Strava-Verbindung fehlgeschlagen. Bitte erneut versuchen." });
       }
@@ -4971,6 +4987,7 @@ export default function AppMain(){
                   {appleHealthLoadFeedback.text}
                 </div>
               ) : null}
+              <GarminAppleHealthHelp />
                       </div>
                     </SettingsGroup>
                     <SettingsGroup>
@@ -4981,71 +4998,17 @@ export default function AppMain(){
                       />
                     </SettingsGroup>
                     <SettingsGroup title="Strava" padded>
-              <div style={{marginTop:12}}>
-                <div
-                  style={{
-                    fontSize:13,
-                    fontWeight:700,
-                    marginBottom:8,
-                    color:stravaConnected ? "#86efac" : "var(--text-secondary)",
-                    lineHeight:1.45,
-                  }}
-                >
-                  {stravaConnected ? "Mit Strava verbunden" : "Nicht verbunden"}
-                </div>
-                {!stravaConnected ? (
-                  <button
-                    type="button"
-                    onClick={() => handleStravaConnect()}
-                    disabled={stravaConnectBusy}
-                    style={{
-                      background:"rgba(252,76,2,0.16)",
-                      border:"1px solid rgba(252,76,2,0.4)",
-                      borderRadius:12,
-                      padding:"10px 14px",
-                      color:"#fdba8c",
-                      fontSize:13,
-                      fontWeight:700,
-                      cursor:stravaConnectBusy ? "default" : "pointer",
-                      opacity:stravaConnectBusy ? 0.55 : 1,
-                    }}
-                  >
-                    {stravaConnectBusy ? "Verbinde…" : "Mit Strava verbinden"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleStravaDisconnect()}
-                    disabled={stravaConnectBusy}
-                    style={{
-                      background:"rgba(15,23,42,0.85)",
-                      border:"1px solid var(--border-default)",
-                      borderRadius:12,
-                      padding:"10px 14px",
-                      color:"#cbd5e1",
-                      fontSize:13,
-                      fontWeight:700,
-                      cursor:stravaConnectBusy ? "default" : "pointer",
-                      opacity:stravaConnectBusy ? 0.55 : 1,
-                    }}
-                  >
-                    {stravaConnectBusy ? "Trenne…" : "Trennen"}
-                  </button>
-                )}
-                {stravaFeedback ? (
-                  <div
-                    style={{
-                      fontSize:12,
-                      lineHeight:1.45,
-                      marginTop:8,
-                      color:stravaFeedback.tone === "ok" ? "#86efac" : "#fca5a5",
-                      fontWeight:650,
-                    }}
-                  >
-                    {stravaFeedback.text}
-                  </div>
-                ) : null}
-              </div>
+                      <StravaConnectionPanel
+                        connected={stravaConnected}
+                        connectBusy={stravaConnectBusy}
+                        feedback={stravaFeedback}
+                        onConnect={() => handleStravaConnect()}
+                        onDisconnect={() => handleStravaDisconnect()}
+                        syncBusy={stravaSync.busy}
+                        lastResult={stravaSync.lastResult}
+                        reconnectRequired={stravaSync.reconnectRequired}
+                        onSyncNow={() => void stravaSync.syncNow()}
+                      />
                     </SettingsGroup>
                     {(() => {
             const display = computeCalendarConnectionDisplay(

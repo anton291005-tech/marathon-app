@@ -29,6 +29,8 @@ export const DAILY_CHECKINS_CACHE_KEY = "marathonDailyCheckins";
 export const CHECKIN_SKIPPED_DAY_KEY = "marathonCheckinSkippedDay";
 /** Session-IDs, bei denen die Nachfrage „Wie anstrengend war …?“ mit „Später“ beendet wurde. */
 export const RPE_PROMPT_DISMISSED_KEY = "marathonRpePromptDismissed";
+/** Strava-Import: letzter automatischer Versuch, Wartezeit nach `rate_limited`, letzter Status. */
+export const STRAVA_SYNC_STATE_KEY = "marathonStravaSyncState";
 
 /**
  * Read-only catalog for docs / debug (order is not normative).
@@ -52,4 +54,5 @@ export const KNOWN_MY_RACE_STORAGE_KEYS: readonly string[] = [
   DAILY_CHECKINS_CACHE_KEY,
   CHECKIN_SKIPPED_DAY_KEY,
   RPE_PROMPT_DISMISSED_KEY,
+  STRAVA_SYNC_STATE_KEY,
 ];
