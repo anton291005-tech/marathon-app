@@ -198,8 +198,11 @@ export function trackCompletedSessions(
   before: Parameters<typeof countNewlyCompletedSessions>[0],
   after: Parameters<typeof countNewlyCompletedSessions>[1],
   source: SessionCompletedSource,
+  /** `logsRemoteReady: false` = Logs aus Supabase noch nicht geladen → nichts zählen (alte Einheiten wären „neu"). */
+  opts?: { logsRemoteReady?: boolean },
 ): void {
   try {
+    if (opts && opts.logsRemoteReady === false) return;
     const n = Math.min(20, countNewlyCompletedSessions(before, after));
     for (let i = 0; i < n; i += 1) trackUsageEvent("session_completed", { source });
   } catch {

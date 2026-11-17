@@ -2561,7 +2561,8 @@ export default function AppMain(){
       logs: logsRef.current,
     });
     if (!result.changed) return;
-    trackCompletedSessions(logsRef.current, result.logs, "apple_health");
+    // Erst wenn die Logs aus Supabase da sind: sonst zählten nach dem Anmelden alte Einheiten als neu erledigt.
+    trackCompletedSessions(logsRef.current, result.logs, "apple_health", { logsRemoteReady });
     const syncKeys = marathonLogRecordsDiffSyncKeys(logsRef.current, result.logs);
     void save(result.logs, syncKeys);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Apple-Run-Merge nur bei neuen Health-Daten

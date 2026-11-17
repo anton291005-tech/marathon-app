@@ -164,3 +164,25 @@ describe("Wahl „Nutzung zählen“ je Person", () => {
     expect(isUsageEventsEnabled("user-b")).toBe(true);
   });
 });
+
+describe("session_completed aus Apple Health erst nach logsRemoteReady", () => {
+  let sent: UsageEventRow[];
+  beforeEach(() => {
+    localStorage.clear();
+    sent = [];
+    __setUsageEventSinkForTests(async (row) => {
+      sent.push(row);
+    });
+  });
+  afterEach(() => __setUsageEventSinkForTests(null));
+
+  it("zählt nichts, solange die Logs aus Supabase fehlen", async () => {
+    const after = { a: { done: true }, b: { done: true } };
+    trackCompletedSessions({}, after, "apple_health", { logsRemoteReady: false });
+    await flush();
+    expect(sent).toEqual([]);
+    trackCompletedSessions({ a: { done: true } }, after, "apple_health", { logsRemoteReady: true });
+    await flush();
+    expect(sent).toEqual([{ name: "session_completed", props: { source: "apple_health" } }]);
+  });
+});
