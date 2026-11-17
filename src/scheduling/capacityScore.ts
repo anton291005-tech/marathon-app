@@ -1,5 +1,7 @@
 import type { WeeklyScheduleBlock } from "../lib/supabase/services/weeklyScheduleBlocksService";
 import type { SessionType } from "../lib/ai/types";
+import { CONFIG as READINESS_CONFIG } from "../readinessCore/config";
+import type { ShiftCategory, ShiftDayAssessment } from "../readinessCore/shiftDays";
 
 export type DayCapacityScore = {
   dateIso: string;
@@ -13,6 +15,16 @@ export type DayCapacityScore = {
   isFullyFree: boolean;
   /** Titles of blocks on this day that look like physical exertion (see `isPhysicalLoadTitle`); empty when none. */
   physicalLoadBlockTitles: string[];
+  /**
+   * Tageseignung aus dem Dienstplan (Schicht-Modus, Spec §7.6). Nur gesetzt, wenn ein `ShiftCapacityContext`
+   * übergeben wurde und er für diesen Tag eine Aussage hat — sonst fehlt das Feld (Verhalten bit-gleich wie ohne).
+   */
+  shift?: ShiftDayAssessment;
+};
+
+/** Dienstplan-Aussagen je Kalendertag (`YYYY-MM-DD`), optionaler letzter Parameter der Kapazitäts-Kette. */
+export type ShiftCapacityContext = {
+  readonly byDate: Readonly<Record<string, ShiftDayAssessment>>;
 };
 
 const WEEKDAY_WINDOW = { startMinutes: 6 * 60, endMinutes: 22 * 60 }; // 06:00-22:00
@@ -124,7 +136,11 @@ function mergedBusyMinutes(intervals: Array<[number, number]>, windowStart: numb
  * Deterministic capacity score for a single calendar day, derived from weekly_schedule_blocks.
  * capacityScore = freeMinutes / windowMinutes, clamped to [0, 1].
  */
-export function computeDayCapacityScore(dateIso: string, blocks: WeeklyScheduleBlock[]): DayCapacityScore {
+export function computeDayCapacityScore(
+  dateIso: string,
+  blocks: WeeklyScheduleBlock[],
+  shiftContext?: ShiftCapacityContext | null,
+): DayCapacityScore {
   const dayOfWeek = dayOfWeekFromIso(dateIso);
   const weekend = isWeekendDay(dayOfWeek);
   const window = weekend ? WEEKEND_WINDOW : WEEKDAY_WINDOW;
@@ -146,7 +162,7 @@ export function computeDayCapacityScore(dateIso: string, blocks: WeeklyScheduleB
   const freeMinutes = Math.max(0, windowMinutes - busyMinutes);
   const capacityScore = windowMinutes > 0 ? Math.min(1, Math.max(0, freeMinutes / windowMinutes)) : 0;
 
-  return {
+  const score: DayCapacityScore = {
     dateIso: dateIso.slice(0, 10),
     isWeekend: weekend,
     windowMinutes,
@@ -157,6 +173,9 @@ export function computeDayCapacityScore(dateIso: string, blocks: WeeklyScheduleB
     isFullyFree: busyMinutes === 0,
     physicalLoadBlockTitles,
   };
+  const shift = shiftContext?.byDate[score.dateIso];
+  if (shift) score.shift = shift;
+  return score;
 }
 
 /** interval/tempo/race need real free time; "long" is treated the same way for now — its volume alone is already a load, finer per-type grading is a later iteration. */
@@ -184,9 +203,36 @@ export function isPhysicalLoadConflict(session: { type: SessionType }, dayCapaci
  * sessions are not — a busy day is still an acceptable home for a recovery run. High-intensity
  * sessions on a physical-load day are additionally capped at `PHYSICAL_LOAD_DAY_FIT_SCORE`.
  */
-export function computeSessionDayFitScore(session: { type: SessionType }, dayCapacity: DayCapacityScore): number {
+function calendarDayFitScore(session: { type: SessionType }, dayCapacity: DayCapacityScore): number {
   const capacity = dayCapacity.capacityScore;
   if (isPhysicalLoadConflict(session, dayCapacity)) return Math.min(capacity, PHYSICAL_LOAD_DAY_FIT_SCORE);
   if (HIGH_INTENSITY_SESSION_TYPES.has(session.type)) return capacity;
   return 1 - (1 - capacity) * LOW_INTENSITY_CAPACITY_WEIGHT;
+}
+
+/**
+ * Art der Einheit für die Dienstplan-Eignung: tempo/interval/race → hart, long → Long Run, Ruhetag → keine
+ * (Schichten betreffen keinen Ruhetag), alles andere locker.
+ */
+export function shiftCategoryOfSession(session: { type: SessionType }): ShiftCategory | null {
+  if (session.type === "rest") return null;
+  if (session.type === "tempo" || session.type === "interval" || session.type === "race") return "hard";
+  if (session.type === "long") return "long";
+  return "easy";
+}
+
+/** Fit aus der Dienstplan-Eignung (frei 1,0 · eingeschränkt 0,5 · ungeeignet/passt nicht 0,2); `null` ohne Aussage. */
+export function shiftDayFitScore(session: { type: SessionType }, dayCapacity: DayCapacityScore): number | null {
+  if (!dayCapacity.shift) return null;
+  const category = shiftCategoryOfSession(session);
+  if (!category) return null;
+  const suitability = category === "hard" ? dayCapacity.shift.hard : category === "long" ? dayCapacity.shift.long : dayCapacity.shift.easy;
+  return READINESS_CONFIG.shift.fit.value[suitability];
+}
+
+export function computeSessionDayFitScore(session: { type: SessionType }, dayCapacity: DayCapacityScore): number {
+  const calendarFit = calendarDayFitScore(session, dayCapacity);
+  const shiftFit = shiftDayFitScore(session, dayCapacity);
+  // Termine bleiben wirksam: beide Seiten per Math.min. Ohne `shift` ist das Ergebnis bit-gleich wie bisher.
+  return shiftFit == null ? calendarFit : Math.min(calendarFit, shiftFit);
 }

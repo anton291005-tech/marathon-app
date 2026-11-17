@@ -3,7 +3,7 @@ import type { WeeklyScheduleBlock } from "../../lib/supabase/services/weeklySche
 import type { WeeklyCalendarConflict } from "./scanWeekForCalendarConflicts";
 import { buildCalendarReassignmentCandidates, computeSourceDayCapacity } from "./buildCalendarReassignmentAction";
 import { rankCalendarReassignmentCandidates } from "./assignSessionToBestCapacityDay";
-import { computeSessionDayFitScore } from "../../scheduling/capacityScore";
+import { computeSessionDayFitScore, type ShiftCapacityContext } from "../../scheduling/capacityScore";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 
 export type WeekCalendarReassignmentProposal =
@@ -19,9 +19,14 @@ function findSessionInWeek(week: AiPlanWeek, sessionId: string) {
  * = schwerer unterzubringen. Fehlt Session/Kapazität (bei Eingabe aus Schritt 1 ausgeschlossen),
  * wird 0 (am schwersten) angenommen statt die Sortierung stillschweigend zu verzerren.
  */
-function conflictFitScore(conflict: WeeklyCalendarConflict, week: AiPlanWeek, scheduleBlocks: WeeklyScheduleBlock[]): number {
+function conflictFitScore(
+  conflict: WeeklyCalendarConflict,
+  week: AiPlanWeek,
+  scheduleBlocks: WeeklyScheduleBlock[],
+  shiftContext?: ShiftCapacityContext | null,
+): number {
   const session = findSessionInWeek(week, conflict.sessionId);
-  const sourceDayCapacity = computeSourceDayCapacity(week, conflict.sessionId, scheduleBlocks);
+  const sourceDayCapacity = computeSourceDayCapacity(week, conflict.sessionId, scheduleBlocks, shiftContext);
   if (!session || !sourceDayCapacity) return 0;
   return computeSessionDayFitScore(session, sourceDayCapacity);
 }
@@ -31,9 +36,10 @@ function sortConflictsBySeverity(
   conflicts: WeeklyCalendarConflict[],
   week: AiPlanWeek,
   scheduleBlocks: WeeklyScheduleBlock[],
+  shiftContext?: ShiftCapacityContext | null,
 ): WeeklyCalendarConflict[] {
   return conflicts
-    .map((conflict) => ({ conflict, fitScore: conflictFitScore(conflict, week, scheduleBlocks) }))
+    .map((conflict) => ({ conflict, fitScore: conflictFitScore(conflict, week, scheduleBlocks, shiftContext) }))
     .sort((a, b) => (a.fitScore !== b.fitScore ? a.fitScore - b.fitScore : a.conflict.sessionId.localeCompare(b.conflict.sessionId)))
     .map((entry) => entry.conflict);
 }
@@ -59,16 +65,17 @@ export function proposeWeekCalendarReassignments(
   week: AiPlanWeek,
   scheduleBlocks: WeeklyScheduleBlock[],
   lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
+  shiftContext?: ShiftCapacityContext | null,
 ): WeekCalendarReassignmentProposal[] {
   const plan: AiPlanWeek[] = [week];
-  const ordered = sortConflictsBySeverity(conflicts, week, scheduleBlocks);
+  const ordered = sortConflictsBySeverity(conflicts, week, scheduleBlocks, shiftContext);
   const takenTargetSessionIds = new Set<string>();
   const proposals: WeekCalendarReassignmentProposal[] = [];
 
   for (const conflict of ordered) {
-    const allCandidates = buildCalendarReassignmentCandidates(week, conflict.sessionId, scheduleBlocks, lockedSessionIds);
+    const allCandidates = buildCalendarReassignmentCandidates(week, conflict.sessionId, scheduleBlocks, lockedSessionIds, shiftContext);
     const availableCandidates = allCandidates.filter((c) => !takenTargetSessionIds.has(c.targetSessionId));
-    const sourceDayCapacity = computeSourceDayCapacity(week, conflict.sessionId, scheduleBlocks);
+    const sourceDayCapacity = computeSourceDayCapacity(week, conflict.sessionId, scheduleBlocks, shiftContext);
     const ranked = rankCalendarReassignmentCandidates(plan, conflict.sessionId, availableCandidates, sourceDayCapacity);
     const winner = ranked.find((r) => !r.isConflict);
 

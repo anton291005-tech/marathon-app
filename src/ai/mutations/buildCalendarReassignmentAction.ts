@@ -8,7 +8,7 @@ import {
 } from "./assignSessionToBestCapacityDay";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 import type { WeeklyScheduleBlock } from "../../lib/supabase/services/weeklyScheduleBlocksService";
-import { computeDayCapacityScore, type DayCapacityScore } from "../../scheduling/capacityScore";
+import { computeDayCapacityScore, type DayCapacityScore, type ShiftCapacityContext } from "../../scheduling/capacityScore";
 import { sessionDayIso } from "./sessionDayIso";
 
 function findSessionById(plan: AiPlanWeek[], id: string): AiPlanSession | null {
@@ -31,6 +31,7 @@ export function buildCalendarReassignmentCandidates(
   sessionId: string,
   blocks: WeeklyScheduleBlock[],
   lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
+  shiftContext?: ShiftCapacityContext | null,
 ): SessionAssignmentCandidate[] {
   const candidates: SessionAssignmentCandidate[] = [];
   for (const session of week.s ?? []) {
@@ -38,7 +39,7 @@ export function buildCalendarReassignmentCandidates(
     if (lockedSessionIds.has(session.id)) continue;
     const dateIso = sessionDayIso(session);
     if (!dateIso) continue;
-    candidates.push({ targetSessionId: session.id, capacity: computeDayCapacityScore(dateIso, blocks) });
+    candidates.push({ targetSessionId: session.id, capacity: computeDayCapacityScore(dateIso, blocks, shiftContext) });
   }
   return candidates;
 }
@@ -53,12 +54,13 @@ export function computeSourceDayCapacity(
   week: AiPlanWeek,
   sessionId: string,
   blocks: WeeklyScheduleBlock[],
+  shiftContext?: ShiftCapacityContext | null,
 ): DayCapacityScore | null {
   const session = findSessionById([week], sessionId);
   if (!session) return null;
   const dateIso = sessionDayIso(session);
   if (!dateIso) return null;
-  return computeDayCapacityScore(dateIso, blocks);
+  return computeDayCapacityScore(dateIso, blocks, shiftContext);
 }
 
 /**
@@ -159,11 +161,12 @@ export function proposeSingleSessionCalendarReassignment(
   sessionId: string,
   blocks: WeeklyScheduleBlock[],
   lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
+  shiftContext?: ShiftCapacityContext | null,
 ): SingleSessionCalendarProposal {
   if (lockedSessionIds.has(sessionId)) return { status: "locked" };
 
-  const candidates = buildCalendarReassignmentCandidates(week, sessionId, blocks, lockedSessionIds);
-  const sourceDayCapacity = computeSourceDayCapacity(week, sessionId, blocks);
+  const candidates = buildCalendarReassignmentCandidates(week, sessionId, blocks, lockedSessionIds, shiftContext);
+  const sourceDayCapacity = computeSourceDayCapacity(week, sessionId, blocks, shiftContext);
   const ranked = rankCalendarReassignmentCandidates(plan, sessionId, candidates, sourceDayCapacity);
   const candidateViews = buildCalendarReassignmentCandidateViews(week, ranked);
 

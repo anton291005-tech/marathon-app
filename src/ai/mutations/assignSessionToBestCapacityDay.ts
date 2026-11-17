@@ -7,7 +7,14 @@ import type { ValidationContext } from "../validation/validationContext";
 import { normalizeTrainingPlan } from "../../planV2/normalizeTrainingPlan";
 import { swapWorkouts } from "./swapWorkouts";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
-import { computeSessionDayFitScore, isPhysicalLoadConflict, type DayCapacityScore } from "../../scheduling/capacityScore";
+import {
+  computeSessionDayFitScore,
+  isPhysicalLoadConflict,
+  shiftCategoryOfSession,
+  shiftDayFitScore,
+  type DayCapacityScore,
+} from "../../scheduling/capacityScore";
+import { reasonPhraseDe } from "../../shift/shiftText";
 
 /**
  * A candidate day to move `sessionId` into, identified by the session currently
@@ -71,6 +78,12 @@ export function describeCalendarConflictCause(session: Pick<AiPlanSession, "type
   if (isPhysicalLoadConflict(session, dayCapacity)) {
     const titles = dayCapacity.physicalLoadBlockTitles.map((t) => (t ?? "").trim()).filter(Boolean);
     if (titles.length > 0) return `wegen ${titles.join(", ")}`;
+  }
+  // Schicht-Modus: liegt der Konflikt am Dienstplan, nennt der Grund Dienst und Merkmal („nach dem Nachtdienst (22–6 Uhr)“).
+  const shiftFit = shiftDayFitScore(session, dayCapacity);
+  const category = shiftCategoryOfSession(session);
+  if (dayCapacity.shift && category && shiftFit != null && shiftFit < MIN_FIT_SCORE_THRESHOLD) {
+    return reasonPhraseDe(dayCapacity.shift, category);
   }
   return "wegen Kalendertermin";
 }

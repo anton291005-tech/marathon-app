@@ -1,6 +1,12 @@
 import type { AiPlanWeek, AiPlanSession } from "../../lib/ai/types";
 import type { WeeklyScheduleBlock } from "../../lib/supabase/services/weeklyScheduleBlocksService";
-import { computeDayCapacityScore, computeSessionDayFitScore, isPhysicalLoadConflict } from "../../scheduling/capacityScore";
+import {
+  computeDayCapacityScore,
+  computeSessionDayFitScore,
+  isPhysicalLoadConflict,
+  shiftDayFitScore,
+  type ShiftCapacityContext,
+} from "../../scheduling/capacityScore";
 import { describeCalendarConflictCause, isSessionInCalendarConflict } from "./assignSessionToBestCapacityDay";
 import { NO_LOCKED_SESSION_IDS } from "./lockedSessions";
 import { sessionDayIso } from "./sessionDayIso";
@@ -16,6 +22,10 @@ export type WeeklyCalendarConflict = {
 function describeConflict(session: AiPlanSession, fitScore: number, dayCapacity: ReturnType<typeof computeDayCapacityScore>): string {
   if (dayCapacity.isFullyBooked) {
     return `Tag ist durch Kalender-Termine komplett belegt (0 von ${dayCapacity.windowMinutes} Min. frei).`;
+  }
+  const shiftFit = shiftDayFitScore(session, dayCapacity);
+  if (dayCapacity.shift && shiftFit != null && shiftFit <= fitScore && !isPhysicalLoadConflict(session, dayCapacity)) {
+    return `Dienstplan: ${dayCapacity.shift.reasonText} – "${session.title}" passt an diesem Tag nicht (Fit-Score ${fitScore.toFixed(2)}).`;
   }
   if (isPhysicalLoadConflict(session, dayCapacity)) {
     return `Körperlich belastender Termin am selben Tag (${dayCapacity.physicalLoadBlockTitles.map((t) => `"${t}"`).join(", ")}) – "${session.title}" ist eine harte Einheit (Fit-Score ${fitScore.toFixed(2)}).`;
@@ -43,6 +53,7 @@ export function scanWeekForCalendarConflicts(
   week: AiPlanWeek,
   scheduleBlocks: WeeklyScheduleBlock[],
   lockedSessionIds: ReadonlySet<string> = NO_LOCKED_SESSION_IDS,
+  shiftContext?: ShiftCapacityContext | null,
 ): WeeklyCalendarConflict[] {
   const conflicts: WeeklyCalendarConflict[] = [];
   for (const session of week.s ?? []) {
@@ -50,7 +61,7 @@ export function scanWeekForCalendarConflicts(
     const dayIso = sessionDayIso(session);
     if (!dayIso) continue;
 
-    const dayCapacity = computeDayCapacityScore(dayIso, scheduleBlocks);
+    const dayCapacity = computeDayCapacityScore(dayIso, scheduleBlocks, shiftContext);
     if (!isSessionInCalendarConflict(session, dayCapacity)) continue;
     const fitScore = computeSessionDayFitScore(session, dayCapacity);
 
