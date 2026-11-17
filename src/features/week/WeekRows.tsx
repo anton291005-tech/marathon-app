@@ -1,7 +1,8 @@
 import type { KeyboardEvent, ReactNode } from "react";
-import { CalendarDays, Check, ChevronRight } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, Check, ChevronRight } from "lucide-react";
 import { ICON_SIZE_S, ICON_STROKE, SessionTypeIcon } from "../../ui/icons";
 import { formatKmDe } from "../../ui/formatDe";
+import "../shift/shift.css";
 
 type WeekSummaryCardProps = {
   actualKm: number;
@@ -10,6 +11,10 @@ type WeekSummaryCardProps = {
   plannedSessions: number;
   /** Schlanke Zeile „Mit meinem Kalender abgleichen"; ohne Handler keine Zeile. */
   onSyncCalendar?: () => void;
+  /** Beschriftung der Abgleich-Zeile (Schicht-Modus: „Mit meinem Dienstplan abgleichen"). */
+  syncLabel?: string;
+  /** Schicht-Modus: Zeile „Dienste eintragen"; ohne Handler keine Zeile. */
+  onEnterShifts?: () => void;
 };
 
 /** Kopfkarte der Woche: Ist/Soll-km mit Balken und der Kalenderabgleich als Zeile. */
@@ -19,11 +24,13 @@ export function WeekSummaryCard({
   doneSessions,
   plannedSessions,
   onSyncCalendar,
+  syncLabel = "Mit meinem Kalender abgleichen",
+  onEnterShifts,
   ...rest
 }: WeekSummaryCardProps & { "data-tour"?: string }) {
   const pct = plannedKm > 0 ? Math.max(0, Math.min(100, (actualKm / plannedKm) * 100)) : 0;
   return (
-    <section className={onSyncCalendar ? "mr-card mr-week-summary mr-week-summary--action" : "mr-card mr-week-summary"} {...rest}>
+    <section className={onSyncCalendar || onEnterShifts ? "mr-card mr-week-summary mr-week-summary--action" : "mr-card mr-week-summary"} {...rest}>
       <div className="mr-week-summary__top">
         <div className="mr-km">
           <span className="mr-km__value">{formatKmDe(actualKm)}</span>
@@ -39,7 +46,14 @@ export function WeekSummaryCard({
       {onSyncCalendar ? (
         <button type="button" className="mr-week-action" onClick={onSyncCalendar}>
           <CalendarDays aria-hidden size={18} strokeWidth={ICON_STROKE} />
-          <span>Mit meinem Kalender abgleichen</span>
+          <span>{syncLabel}</span>
+          <ChevronRight aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />
+        </button>
+      ) : null}
+      {onEnterShifts ? (
+        <button type="button" className="mr-week-action" onClick={onEnterShifts}>
+          <BriefcaseBusiness aria-hidden size={18} strokeWidth={ICON_STROKE} />
+          <span>Dienste eintragen</span>
           <ChevronRight aria-hidden size={ICON_SIZE_S} strokeWidth={ICON_STROKE} />
         </button>
       ) : null}
@@ -61,6 +75,8 @@ type WeekDayRowProps = {
   isToday?: boolean;
   /** Öffnet die Einheit; ohne Handler ist die Zeile nicht bedienbar (Ruhetag). */
   onOpen?: () => void;
+  /** Schicht-Modus: dezentes Kürzel des Dienstes an diesem Tag (F · S · N · frei). */
+  shiftTag?: { short: string; label: string; night?: boolean } | null;
 };
 
 /** Eine Tageszeile: Wochentag + Datum, Sport-Icon, Titel, rechts km oder Erledigt-Häkchen. */
@@ -74,6 +90,7 @@ export function WeekDayRow({
   state = "open",
   isToday = false,
   onOpen,
+  shiftTag,
 }: WeekDayRowProps) {
   const isRest = type === "rest";
   const className = [
@@ -107,7 +124,14 @@ export function WeekDayRow({
         <SessionTypeIcon type={type} size={20} />
       </span>
       <div className="mr-week-row__text">
-        <div className="mr-week-row__title">{title}</div>
+        <div className="mr-week-row__title">
+          {shiftTag ? (
+            <span className={shiftTag.night ? "mr-shift-tag mr-shift-tag--night" : "mr-shift-tag"} role="img" aria-label={shiftTag.label}>
+              {shiftTag.short}
+            </span>
+          ) : null}
+          {title}
+        </div>
         {subtitle ? <div className="mr-week-row__sub">{subtitle}</div> : null}
       </div>
       {state === "done" ? (

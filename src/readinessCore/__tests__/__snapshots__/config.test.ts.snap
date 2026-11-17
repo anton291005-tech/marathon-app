@@ -769,6 +769,71 @@ Object {
         "value": 0.5,
       },
     },
+    "shift": Object {
+      "defaultEasyMin": Object {
+        "source": "E",
+        "spec": "§7.6",
+        "value": 50,
+      },
+      "defaultHardMin": Object {
+        "source": "E",
+        "spec": "§7.6",
+        "value": 75,
+      },
+      "defaultLongRunMin": Object {
+        "source": "E",
+        "spec": "§7.6",
+        "value": 150,
+      },
+      "defaultTimes": Object {
+        "source": "E",
+        "spec": "§7.6",
+        "value": Object {
+          "early": Object {
+            "end": "14:00",
+            "start": "06:00",
+          },
+          "late": Object {
+            "end": "22:00",
+            "start": "14:00",
+          },
+          "night": Object {
+            "end": "06:00",
+            "start": "22:00",
+          },
+        },
+      },
+      "earlyStartNightHours": Object {
+        "source": "E",
+        "spec": "§7.6",
+        "value": 2,
+      },
+      "fit": Object {
+        "source": "E",
+        "spec": "§7.6",
+        "value": Object {
+          "free": 1,
+          "limited": 0.5,
+          "no_window": 0.2,
+          "unsuitable": 0.2,
+        },
+      },
+      "horizonDays": Object {
+        "source": "E",
+        "spec": "§7.6",
+        "value": 28,
+      },
+      "longShiftHours": Object {
+        "source": "E",
+        "spec": "§7.6",
+        "value": 8,
+      },
+      "recoveryDaysAfterNights": Object {
+        "source": "E",
+        "spec": "§7.6",
+        "value": 1,
+      },
+    },
     "sleep": Object {
       "absoluteFloorHours": Object {
         "source": "E",
@@ -891,6 +956,6 @@ Object {
       },
     },
   },
-  "CONFIG_VERSION": "0.1.0",
+  "CONFIG_VERSION": "0.2.1",
 }
 `;

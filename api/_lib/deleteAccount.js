@@ -8,6 +8,8 @@ const USER_DATA_TABLES = [
   "api_usage",
   "prep_recaps",
   "daily_checkins",
+  // Schicht-Modus (Migration 023); fehlt die Tabelle noch, landet sie nur in failedTables, die Löschung läuft weiter.
+  "shift_entries",
   "plan_patches",
   "session_logs",
   "training_plans",

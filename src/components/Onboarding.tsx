@@ -64,6 +64,8 @@ import {
 import { SCHEDULE_PRESETS, presetToScheduleBlocks, type SchedulePresetId } from "../calendar/presets";
 import { insertPresetBlocks } from "../lib/supabase/services/weeklyScheduleBlocksService";
 import { pluralDe } from "../utils/pluralDe";
+import { ShiftWizardQuestion } from "../features/shift/ShiftCards";
+import { isShiftModeEnabled } from "../shift/shiftModeFlag";
 
 // ---------------------------------------------------------------------------
 
@@ -1032,6 +1034,11 @@ export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInp
               <p style={fieldErrorStyle} role="alert">
                 {trainingWeekProblem}
               </p>
+            ) : null}
+
+            {/* Schicht-Modus (Arbeitsplan W1): Frage nach den Lauftagen; die Antwort ist optional und blockiert nichts. */}
+            {isShiftModeEnabled() && userId ? (
+              <ShiftWizardQuestion todayYmd={getAppTodayYmd()} chipStyle={chipButtonStyle} labelStyle={labelStyle} />
             ) : null}
           </>
         ) : null}

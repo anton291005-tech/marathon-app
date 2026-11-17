@@ -392,6 +392,32 @@ Die Tageseignung ersetzt die heutige 65-%-Regel und die Stichwort-Deckelung in `
 
 **Prüfungsphase:** ≥ 2 Prüfungen/Abgaben (Etikett) in 7 Tagen → in dieser Woche entfällt Q2 (wird E + Strides), Q1 und Long Run bleiben, sofern sie auf freie oder eingeschränkte Tage passen. [E]
 
+### 7.6 Dienstplan (Schicht-Modus)
+
+Für Menschen im Schicht- und Gastrodienst ist der Kalender die schlechteste Quelle: Nachtdienste werden um Mitternacht geteilt (`eventToScheduleBlocks.ts`), eine Nacht 22–6 Uhr belegt werktags 0 Minuten im Tagesfenster, und Ruhezeiten zwischen zwei Diensten sind unsichtbar. Der Schicht-Modus nimmt deshalb einen **Dienstplan** als eigene Eingabe (`shift_entries`, Migration 023): je Tag höchstens ein Eintrag, `shift_date` = Tag des Dienstbeginns, Art *Früh · Spät · Nacht · Frei · Eigene Zeit*, Zeiten `HH:MM`; `Ende ≤ Beginn` heißt „endet am Folgetag“. Gerechnet wird in `src/readinessCore/shiftDays.ts`, rein über Kalendertage und Wanduhr-Minuten (zeitzonen- und sommerzeitfest; eine Nacht 22–6 Uhr zählt in der Umstellungsnacht weiter als 8 h).
+
+**Ausgabe:** je Kalendertag mit Bezug zum Dienstplan (Eintrag vorhanden oder Nachwirkung einer Regel) die Eignung für **hart** (I/T/R, Rennen), **Long Run** und **locker**, je *frei · eingeschränkt · ungeeignet · passt zeitlich nicht*, mit Grund-Code. Tage ohne Bezug bekommen **keine** Aussage (nicht „frei“).
+
+| Nr. | Regel | hart | Long Run | locker | Code | Herkunft |
+|---|---|---|---|---|---|---|
+| 1 | Tag, an dem ein Nachtdienst morgens endet | ungeeignet | ungeeignet | eingeschränkt („kurz, und erst nach dem Schlafen“) | `after_night` | [E] |
+| 1a | Dienst beginnt mehr als 2 h vor 06:00 (`earlyStartNightHours`, z. B. 0–8 Uhr): wie das Ende einer Nacht an diesem Tag | ungeeignet | ungeeignet | eingeschränkt | `after_night` | [E] |
+| 2 | Tag, an dem der erste Nachtdienst eines Blocks abends beginnt | eingeschränkt | ungeeignet | – | `before_night` | [E] |
+| 3 | Tag zwischen zwei Nachtdiensten (Vorrang vor 1) | ungeeignet | ungeeignet | eingeschränkt | `between_nights` | [E] |
+| 4 | erster freier Tag nach einem Nachtblock (ohne Dienst); zweiter freier Tag ist ausdrücklich frei | eingeschränkt | ungeeignet | – | `recovery_after_nights` / `free_after_nights` | [E] |
+| 5 | Ruhezeit < 11 h zwischen Dienstende und nächstem Dienstbeginn → Tag des Folgedienstes | eingeschränkt | eingeschränkt | – | `quick_return` | [L: Vedaa 2015, Definition „quick return“] |
+| 6 | Dienst endet nach Mitternacht, aber höchstens 2 h im neuen Tag (z. B. Gastro 17:00–0:30) → Folgetag | eingeschränkt | eingeschränkt | – | `late_shift` | [E] |
+| 7 | größte freie Lücke 06–22 Uhr (aus echten Dienstzeiten, inkl. Morgen-Teil eines Dienstes über Mitternacht) < geplante Dauer + 45 min | ungeeignet | ungeeignet | passt zeitlich nicht | `no_window` | §7.2 [E] |
+| 8 | Dienst länger als 8 h, außer ein ausreichendes Fenster liegt vor Dienstbeginn | eingeschränkt | eingeschränkt | – | `long_shift` | [E] |
+| 9 | Eine Schicht zählt nie als Training. Mehrere Regeln: die strengste Eignung gilt, mit ihrem Grund (Gleichstand: Reihenfolge der Tabelle) | | | | | |
+
+- **Nachtdienst** ist die Art „Nacht“ oder ein Dienst, der mehr als 2 h (`calendar.overnightMinHoursNextDay`) in den neuen Tag reicht. Ein Spätdienst bis 0:30 Uhr ist kein Nachtdienst, sondern Regel 6.
+- **Dauer ohne Plan-Angabe:** hart 75 min, Long Run 150 min, locker 50 min (jeweils + 45 min Umziehen/Weg) [E].
+- **Dienst ohne Regel** (z. B. Frühdienst 6–14 Uhr mit freiem Nachmittag): frei, Grund `shift_fits`; Eintrag „Frei“: frei, Grund `day_off`. Ein Frühdienst von genau 8 h ist bewusst kein „langer Dienst“ (Szenario S4).
+- **Wirkung auf die Planung:** Liegt für einen Tag eine Aussage vor, nutzt die Kapazitäts-Engine (`computeSessionDayFitScore`) den Fit *frei 1,0 · eingeschränkt 0,5 · ungeeignet/passt nicht 0,2* und nimmt das Minimum mit der bisherigen Kalender-Rechnung (Termine wirken weiter). Ungeeignet liegt unter der Konfliktschwelle 0,35 (harter Konflikt), eingeschränkt darüber (weicher Konflikt: nur tauschen, wenn ein freier Tag ohne Regelverstoß existiert, §8.4). Ohne Dienstplan bleibt die Rechnung bit-gleich.
+- **Schutzregeln für Schicht-Vorschläge** (zusätzlich zu §8.5/§8.6): keine zwei harten Tage hintereinander (harte Einheiten und Long Run, auch über die Wochengrenze), Long Run bleibt in seiner Kalenderwoche und hält 6 Tage Abstand zum nächsten Long Run, Rennen nie Quelle oder Ziel, in Taper- und Rennwoche nur auf frühere Tage, gesperrte Einheiten nie. Gibt es keinen sicheren Tag, wird eine harte Einheit (I/T) auf einem ungeeigneten Tag als „locker statt hart“ (H3, §8.2) vorgeschlagen; ein Long Run nie. In der Rennwoche nur auf frühere Tage, kein „locker statt hart“. Der Text der gekürzten Einheit nennt keinen Dienst (Plan-Texte gehen an den Coach, Schichtdaten nicht).
+- **Datenschutz:** Dienstplan-Daten gehen an kein Sprachmodell.
+
 ## 8. Von Readiness zur Handlung
 
 ### 8.1 Grundregeln
@@ -868,6 +894,11 @@ Wireframe-Beispiel aus §10.1 zur Kontrolle: A = −1,1 · B = −1,6 · C = −
 17. **Einsichten** (§11): 10/10 Tage, 90-%-Intervall, Benjamini-Hochberg 10 % – streng genug für Aussagen gegenüber Laien?
 18. **Frauen:** Zykluseffekte auf Temperatur (0,3 °C), HRV und Ruhepuls sind nur über das 28-Tage-Fenster abgefedert. Reicht das, oder braucht es ein freiwilliges Zyklus-Etikett?
 20. **Schutzregeln aus der Prüfung** (v0.2): Kennenlernphase 14 Tage (§4.7), HRV-Deckel −1,0 (§4.3), „nur aus dem Check-in wird nicht gestrichen“ (§8.3), Lastdruck höchstens 1 in den ersten 14 Tagen (§5). Zu vorsichtig oder passend?
+21. **Dienstplan (Schicht-Modus, §7.6):** Tag nach einer Nacht ungeeignet (hart, Long Run) und locker nur „kurz, nach dem Schlafen“; Tag vor der ersten Nacht hart eingeschränkt, Long Run ungeeignet; zwischen zwei Nächten ungeeignet; erster freier Tag nach einem Nachtblock hart eingeschränkt und Long Run ungeeignet, zweiter frei (`recoveryDaysAfterNights` 1). Reicht ein freier Tag, oder braucht es nach drei und mehr Nächten zwei?
+22. **Schicht-Schwellen (§7.6):** „Nacht“ ab mehr als 2 h im neuen Tag; Spätdienst nach Mitternacht → Folgetag eingeschränkt; Dienst **länger als** 8 h → eingeschränkt (`longShiftHours`; bewusst nicht „ab 8 h“, sonst wäre jeder Frühdienst 6–14 Uhr eingeschränkt); Ruhezeit < 11 h auch für den Long Run eingeschränkt.
+23. **Angenommene Dauern ohne Plan-Angabe (§7.6):** hart 75 min, Long Run 150 min, locker 50 min, jeweils + 45 min (`defaultHardMin`, `defaultLongRunMin`, `defaultEasyMin`).
+25. **Früher Dienstbeginn (§7.6, Regel 1a):** Beginnt ein Dienst mehr als 2 h vor 06:00 (`earlyStartNightHours`, z. B. 0–8 Uhr), zählt der Tag wie nach einer Nacht (hart und Long Run ungeeignet, locker eingeschränkt). Passt die Grenze, oder sollte z. B. ein Dienst ab 4 Uhr nur „eingeschränkt“ sein?
+24. **Fit-Werte der Engine (§7.6):** frei 1,0 · eingeschränkt 0,5 · ungeeignet 0,2 (Schwelle 0,35); Standardzeiten Früh 6–14, Spät 14–22, Nacht 22–6 (`defaultTimes`); Vorausschau 28 Tage (`horizonDays`).
 19. **Validierungsplan** (§13): Welche Auswertung des Freundes-Tests würde die DSHS als ersten Beleg akzeptieren? Wäre eine begleitende Bachelorarbeit möglich?
 
 **Gerätepunkte (vor Umsetzungsschritt 4 klären, iPhone 13 + Antons Uhr):** (1) Wie viele SDNN-Werte fallen pro Nacht an? (2) Liefert `@capgo/capacitor-health` Herzfrequenz-Samples im Schlaffenster, Schlag-zu-Schlag-Serien, `appleSleepingWristTemperature`, `workoutEffortScore`? (3) Liefert eine Series 12 Nacht-rMSSD über HealthKit?

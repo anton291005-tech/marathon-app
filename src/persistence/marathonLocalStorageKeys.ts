@@ -31,6 +31,17 @@ export const CHECKIN_SKIPPED_DAY_KEY = "marathonCheckinSkippedDay";
 export const RPE_PROMPT_DISMISSED_KEY = "marathonRpePromptDismissed";
 /** Strava-Import: letzter automatischer Versuch, Wartezeit nach `rate_limited`, letzter Status. */
 export const STRAVA_SYNC_STATE_KEY = "marathonStravaSyncState";
+/** Schicht-Modus: lokaler Dienstplan-Cache (inkl. noch nicht gespeicherter Tage), Profil-Rückfall, weggeklickte Karte. */
+export const SHIFT_ENTRIES_CACHE_KEY = "marathonShiftEntries";
+export const SHIFT_PROFILE_CACHE_KEY = "marathonShiftProfile";
+export const SHIFT_INTRO_DISMISSED_KEY = "marathonShiftIntroDismissed";
+
+/**
+ * Präfixe konto-gebundener Schlüssel je Nutzer (`<präfix><userId>`); `clearMarathonLocalStorage` löscht alle Schlüssel
+ * mit diesen Präfixen. Bewusst nicht hier: Schlüssel, die das Abmelden überleben sollen (z. B. W3
+ * `marathonUsageEventsEnabled:<userId>`).
+ */
+export const ACCOUNT_BOUND_KEY_PREFIXES: readonly string[] = [`${SHIFT_ENTRIES_CACHE_KEY}:`, `${SHIFT_PROFILE_CACHE_KEY}:`];
 
 /**
  * Read-only catalog for docs / debug (order is not normative).
@@ -55,4 +66,7 @@ export const KNOWN_MY_RACE_STORAGE_KEYS: readonly string[] = [
   CHECKIN_SKIPPED_DAY_KEY,
   RPE_PROMPT_DISMISSED_KEY,
   STRAVA_SYNC_STATE_KEY,
+  SHIFT_ENTRIES_CACHE_KEY,
+  SHIFT_PROFILE_CACHE_KEY,
+  SHIFT_INTRO_DISMISSED_KEY,
 ];
