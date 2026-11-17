@@ -139,6 +139,15 @@ import { CHECKIN_SKIPPED_DAY_KEY } from "./persistence/marathonLocalStorageKeys"
 import { RpePromptCard } from "./features/session/RpePromptCard";
 import { pickRpePromptSession, readRpePromptDismissed, writeRpePromptDismissed } from "./features/session/rpePrompt";
 import { useAiConsent } from "./features/aiConsent/useAiConsent";
+// Freundes-Test (W3): Feedback, Nutzungsdaten, Boot-Abdeckung — Logik in eigenen Modulen, hier nur verdrahtet.
+import { FeedbackEntryCard } from "./features/feedback/FeedbackEntryCard";
+import { FeedbackSheet } from "./features/feedback/FeedbackSheet";
+import { useFeedback } from "./features/feedback/useFeedback";
+import { submitFeedback } from "./lib/supabase/services/feedbackService";
+import { UsageEventsSetting } from "./features/settings/UsageEventsSetting";
+import { trackCompletedSessions, trackUsageEvent } from "./telemetry/usageEvents";
+import { useAppOpenTracking } from "./telemetry/useAppOpenTracking";
+import { FreshAccountBootCover, shouldCoverForFreshAccount } from "./app/boot/FreshAccountBootCover";
 import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
 import { buildHealthRunSuggestion, buildSessionFlow, estimateDurationMin, parseKmInput } from "./features/session/sessionDetailModel";
 import { getCoachFeedback } from "./coachFeedback";
@@ -2171,6 +2180,7 @@ export default function AppMain(){
 
   const quickCompleteSession=async(session)=>{
     const existing = logs[session.id] || {};
+    if (!existing.done) trackUsageEvent("session_completed", { source: "manual" });
     await save({
       ...logs,
       [session.id]: {
@@ -2301,6 +2311,7 @@ export default function AppMain(){
       skipped: false,
       at: getAppNow().toISOString(),
     };
+    trackCompletedSessions(logs, { [modal.id]: nextLogs[modal.id] }, "manual");
     await save(nextLogs, syncSessionIds);
     closeModal();
   };
@@ -2547,6 +2558,7 @@ export default function AppMain(){
       logs: logsRef.current,
     });
     if (!result.changed) return;
+    trackCompletedSessions(logsRef.current, result.logs, "apple_health");
     const syncKeys = marathonLogRecordsDiffSyncKeys(logsRef.current, result.logs);
     void save(result.logs, syncKeys);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Apple-Run-Merge nur bei neuen Health-Daten
@@ -3513,6 +3525,8 @@ export default function AppMain(){
   // KI-Einwilligung (Migration 015): einmal nach dem Onboarding fragen (auch Bestandsnutzer), sonst auf Wunsch
   // aus Coach oder Einstellungen. Ohne Zustimmung geht kein Request an /api/ai.
   const aiConsent = useAiConsent(user?.id ?? null);
+  useAppOpenTracking(user?.id ?? null);
+  const feedback = useFeedback(user?.created_at ?? null);
   const [aiConsentSheetRequested, setAiConsentSheetRequested] = useState(false);
   const [aiConsentFeedback, setAiConsentFeedback] = useState<"revoked" | "revoke-failed" | null>(null);
   const aiConsentSheetVisible =
@@ -3766,6 +3780,7 @@ export default function AppMain(){
               if (validateTrainingPlanV2Integrity(normalizedPlan) && normalizedPlan.workouts.length > 0) {
                 setTrainingPlanV2(normalizedPlan);
                 setHasUserTrainingPlan(true);
+                trackUsageEvent("onboarding_done");
                 if (user?.id) {
                   const plansAfterSave = await loadAllTrainingPlans(user.id);
                   setAllTrainingPlans(plansAfterSave);
@@ -4364,6 +4379,9 @@ export default function AppMain(){
             quality={{ done: doneHardSessions, total: hardSessions }}
             streakDays={consistencyStats.sessionStreak}
           />
+          {feedback.entryVisible ? (
+            <FeedbackEntryCard onOpen={() => feedback.open("home")} onDismiss={feedback.dismissEntry} />
+          ) : null}
         </div>
         )
       ):activeView==="week"?(
@@ -5522,6 +5540,7 @@ export default function AppMain(){
                     }}
                   />
                 </SettingsGroup>
+                <UsageEventsSetting />
                 <SettingsGroup>
                   <SettingsRow label={t("settings.privacy_policy")} href={PRIVACY_POLICY_URL} external />
                   <SettingsRow label="Welche Daten MyRace nutzt" onClick={() => openSettingsPage("dataUsage")} />
@@ -5553,8 +5572,9 @@ export default function AppMain(){
                     <SettingsRow label={t("settings.logout")} onClick={() => void handleSignOut()} chevron={false} />
                   </SettingsGroup>
                   <SettingsGroup title="Hilfe">
+                    <SettingsRow label="Feedback geben" onClick={() => feedback.open("settings")} />
                     <SettingsRow
-                      label="Hilfe & Feedback"
+                      label="Hilfe per Mail"
                       href={buildFeedbackMailto({ appVersion: appVersionLabel, userAgent: navigator.userAgent })}
                     />
                     <SettingsRow
@@ -5691,6 +5711,21 @@ export default function AppMain(){
       ) : null}
 
       {aiConsentSheetVisible ? <AiConsentSheet onGrant={handleAiConsentGrant} onDecline={handleAiConsentDecline} /> : null}
+
+      {feedback.sheetScreen ? (
+        <FeedbackSheet
+          screen={feedback.sheetScreen}
+          appVersion={appVersionLabel}
+          userAgent={typeof navigator !== "undefined" ? navigator.userAgent : null}
+          platform={Capacitor.getPlatform()}
+          submit={(record) => submitFeedback(user?.id ?? null, record)}
+          onClose={feedback.close}
+        />
+      ) : null}
+
+      <FreshAccountBootCover
+        visible={shouldCoverForFreshAccount({ signedIn: !!user, hasUserTrainingPlan, hydrationReady: onboardingHydrationReady })}
+      />
 
       {!showOnboarding && !aiConsentSheetVisible && aiConsent.status !== "loading" && showTour && user ? (
         <AppTour

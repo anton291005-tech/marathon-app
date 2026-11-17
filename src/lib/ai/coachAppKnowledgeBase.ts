@@ -14,7 +14,7 @@ export const COACH_APP_KNOWLEDGE_MARKDOWN = `
 - **Leistung**: Auswertungen, Kilometer, Trends, Zuordnung zu Apple-Health-Läufen wo vorhanden, Rennrechner.
 - **Übersicht**: Phasen-/Wochenüberblick über den gesamten Plan, Zusammenfassung zum Teilen.
 - **Coach** (Tab „Coach“): Chat für Training, App-Hilfe, Datenübersicht und strukturierte Plan-Aktionen (immer mit Bestätigung bei Planänderungen).
-- **Einstellungen** (sechs Bereiche): **Profil** (Marathon-PR, optionale Max-Herzfrequenz) · **Training** (Zielzeit, Pläne) · **Verbindungen** (Apple Health verbinden/aktualisieren, Aktivitäten zuordnen, Strava, Kalender) · **App** (Trainings-Erinnerung) · **Datenschutz & Daten** (Datenschutzerklärung, Datennutzung, Datenexport anfordern) · **Konto & Hilfe** (Konto, Hilfe & Feedback, Fehler melden, Version).
+- **Einstellungen** (sechs Bereiche): **Profil** (Marathon-PR, optionale Max-Herzfrequenz) · **Training** (Zielzeit, Pläne) · **Verbindungen** (Apple Health verbinden/aktualisieren, Aktivitäten zuordnen, Strava, Kalender) · **App** (Trainings-Erinnerung) · **Datenschutz & Daten** (KI-Coach an/aus, Nutzungsdaten an/aus, Datenschutzerklärung, Datennutzung, Datenexport anfordern) · **Konto & Hilfe** (Konto, Feedback geben, Hilfe per Mail, Fehler melden, Version).
 
 ## Trainingsplan — Speicher & Logik
 - Der Plan (**training_plan_v2**: Workouts + Wochenmeta mit Phasen wie BASE, BUILD, TAPER …) wird im Konto gespeichert (Supabase) und auf dem Gerät zwischengespeichert.
