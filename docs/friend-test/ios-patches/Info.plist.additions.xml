@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Info.plist – Ergänzungen und Ersetzungen für den TestFlight-Build.
+  Ziel: ios/App/App/Info.plist (Target "App"). Inhalt identisch mit Info.plist.patch.
+  Wer lieber von Hand arbeitet: jeden Block hier in Xcode (Info.plist -> Rechtsklick
+  "Open As" -> "Source Code") an der passenden Stelle innerhalb des obersten <dict> einfügen
+  bzw. den vorhandenen <string> ersetzen. Reihenfolge der Schlüssel ist egal.
+  Danach: plutil -lint ios/App/App/Info.plist
+-->
+<plist version="1.0">
+<dict>
+
+	<!-- 1) NEU · Pflicht · Exportkonformität. MyRace nutzt nur HTTPS/System-Verschlüsselung
+	     (ausgenommen). Erspart die Frage "Missing Compliance" bei jedem Build. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+	<!-- 2) ERSETZEN · Pflicht · Kalender (iOS 17+ fragt FullAccess, ältere iOS den zweiten Schlüssel).
+	     Die App liest nur (requestFullCalendarAccess, listEventsInRange), schreibt nie. -->
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>MyRace liest deine Kalendertermine, zum Beispiel Dienste und Schichten, um deine Laufeinheiten auf Tage und Uhrzeiten mit genug freier Zeit zu legen. MyRace ändert und löscht keine Termine.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>MyRace liest deine Kalendertermine, zum Beispiel Dienste und Schichten, um deine Laufeinheiten auf Tage und Uhrzeiten mit genug freier Zeit zu legen. MyRace ändert und löscht keine Termine.</string>
+
+	<!-- 3) ERSETZEN · Pflicht · Apple Health lesen. Alt: "Diese App liest deine Trainingsdaten, um dein
+	     Training zu analysieren." (zu vage, nennt weder Daten noch Nutzen). Liste = APPLE_HEALTH_READ_TYPES
+	     in src/appleHealth/appleHealthService.ts. Kommt dort ein Typ dazu, Text nachziehen. -->
+	<key>NSHealthShareUsageDescription</key>
+	<string>MyRace liest deine Trainings, Distanzen, Herzfrequenz, Energieverbrauch, Schlaf und Ruhewerte (Ruhepuls, Herzfrequenzvariabilität, Atemfrequenz, Körpertemperatur) aus Apple Health. Damit hakt MyRace erledigte Einheiten in deinem Plan ab und schlägt dir passende Trainingstage vor.</string>
+
+	<!-- 4) ERSETZEN · Pflicht · Apple Health schreiben. Die App fragt nie Schreibrechte an, aber das Plugin
+	     @capgo/capacitor-health enthält saveSample -> Schlüssel muss bleiben (sonst droht ITMS-90683 beim
+	     Upload). Der alte Text versprach etwas, das die App nicht tut. -->
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Diese Version von MyRace liest nur aus Apple Health und schreibt keine Daten hinein. Sollte eine spätere Version Trainings in Health speichern, fragt sie dich vorher um Erlaubnis.</string>
+
+	<!-- 5) ERSETZEN · Empfohlen · Entwicklungssprache Deutsch (App läuft fest auf Deutsch). -->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>de</string>
+
+	<!-- 6) ERSETZEN · Empfohlen · iPhone nur Hochformat (vorher zusätzlich Querformat links/rechts).
+	     Der Schlüssel UISupportedInterfaceOrientations~ipad bleibt unverändert. -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+
+	<!-- 7) ERSETZEN · Optional · armv7 ist ein Überbleibsel der alten Capacitor-Vorlage; jedes Gerät
+	     mit iOS 15+ ist arm64. Harmlos, aber sauberer. -->
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+
+	<!-- 8) NUR FALLS NÖTIG · Wenn nach dem Upload eine Mail "ITMS-90683: Missing purpose string ...
+	     NSRemindersFullAccessUsageDescription" (oder NSRemindersUsageDescription) kommt: Das Kalender-Plugin
+	     @ebarooni/capacitor-calendar enthält auch Erinnerungen-APIs. Dann diese beiden Schlüssel ergänzen,
+	     Build-Nummer erhöhen, neu hochladen. Vorher NICHT einfügen (Plugin-README: nur nötige Schlüssel).
+	<key>NSRemindersUsageDescription</key>
+	<string>MyRace nutzt deine Erinnerungen nicht. Die App fragt diesen Zugriff nie an.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>MyRace nutzt deine Erinnerungen nicht. Die App fragt diesen Zugriff nie an.</string>
+	-->
+
+</dict>
+</plist>
