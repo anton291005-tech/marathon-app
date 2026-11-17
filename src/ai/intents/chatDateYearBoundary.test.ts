@@ -78,8 +78,7 @@ describe("Chat: „Tausche 30. Dezember und 3. Januar“ über den Jahreswechsel
     freezeTimeForTests(now);
     const res = resolveSwap(plan, "Tausche das Training vom 30. Dezember mit dem vom 3. Januar", { now });
     expect(res.status).toBe("ok");
-    if (res.status === "ok") {
-      expect([res.source.id, res.target.id].sort()).toEqual(["dec30", "jan03"]);
-    }
+    const ids = res.status === "ok" ? [res.source.id, res.target.id].sort() : [];
+    expect(ids).toEqual(["dec30", "jan03"]);
   });
 });

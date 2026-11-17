@@ -1,11 +1,12 @@
+import { submitFeedback } from "./feedbackService";
+
+// jest.mock wird vor die Imports gehoben; `mockInsert` wird erst beim Aufruf gelesen.
 const mockInsert = jest.fn();
 
 jest.mock("../client", () => ({
   isSupabaseConfigured: true,
   supabase: { from: () => ({ insert: (row: unknown) => mockInsert(row) }) },
 }));
-
-import { submitFeedback } from "./feedbackService";
 
 const record = { category: null, message: "Hallo", appVersion: "1.0.0", screen: "home" as const, device: "Web" };
 
