@@ -545,13 +545,50 @@ function normalizeCalendarDay(d) {
   return new Date(x.getFullYear(), x.getMonth(), x.getDate());
 }
 
+const WEEKDAY_NAMES_DE = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+
+/**
+ * „Heute" des Nutzers als lokaler Kalendertag des Servers. `todayYmd` kommt vom Gerät (lokaler Kalendertag);
+ * `todayIso` ist ein UTC-Zeitstempel — zwischen 0 und 1/2 Uhr deutscher Zeit liegt er noch auf gestern,
+ * dann rutschte die Einheit von gestern als „heutige" in next14Days. Ältere Clients senden nur `todayIso`.
+ */
+function resolveCoachToday(context) {
+  const ymd = dateIsoToYmd(context?.todayYmd);
+  if (ymd) {
+    const [y, m, d] = ymd.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+  const raw = typeof context?.todayIso === "string" ? context.todayIso : "";
+  const now = raw ? new Date(raw) : new Date();
+  return normalizeCalendarDay(Number.isFinite(now.getTime()) ? now : new Date());
+}
+
+function ymdOfLocalDay(day) {
+  return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+}
+
+/** Ganze Kalendertage zwischen zwei lokalen Tagen (Sommerzeit-Wechsel ergibt 23/25 h → gerundet). */
+function calendarDayDiff(fromDay, toDay) {
+  return Math.round((normalizeCalendarDay(toDay).getTime() - normalizeCalendarDay(fromDay).getTime()) / 86400000);
+}
+
+/** Deterministischer Tagesbezug für den Coach-Text: „heute", „morgen", „gestern", „in 3 Tagen", „vor 4 Tagen". */
+function relativeDayLabelDe(diffDays) {
+  if (diffDays === 0) return "heute";
+  if (diffDays === 1) return "morgen";
+  if (diffDays === 2) return "übermorgen";
+  if (diffDays === -1) return "gestern";
+  if (diffDays === -2) return "vorgestern";
+  return diffDays > 0 ? `in ${diffDays} Tagen` : `vor ${-diffDays} Tagen`;
+}
+
 function collectIncomingPlanWeeks(context) {
   const trainingPlan =
     context?.trainingPlan && typeof context.trainingPlan === "object" ? context.trainingPlan : null;
   return Array.isArray(trainingPlan?.weeks) ? trainingPlan.weeks : [];
 }
 
-function toCoachSessionObject(session) {
+function toCoachSessionObject(session, diffDays) {
   return {
     date: session?.date ?? "",
     // Das Label trägt kein Jahr; der Coach bekommt den echten Kalendertag mit (Plan über Neujahr).
@@ -561,6 +598,13 @@ function toCoachSessionObject(session) {
     km: typeof session?.km === "number" ? session.km : 0,
     type: session?.type ?? "",
     pace: session?.pace ?? null,
+    // Tagesbezug zu „heute", damit der Coach Vergangenheit und Zukunft nicht vertauscht.
+    ...(typeof diffDays === "number" && Number.isFinite(diffDays)
+      ? {
+          relativeDay: relativeDayLabelDe(Math.round(diffDays)),
+          ...(diffDays >= 0 ? { inDays: Math.round(diffDays) } : { daysAgo: -Math.round(diffDays) }),
+        }
+      : {}),
   };
 }
 
@@ -684,9 +728,7 @@ function computeAvgWeeklyKmRemaining(weeks, today, year) {
 
 function buildTrimmedTrainingPlan(context) {
   const weeks = collectIncomingPlanWeeks(context);
-  const todayIso = typeof context?.todayIso === "string" ? context.todayIso : "";
-  const now = todayIso ? new Date(todayIso) : new Date();
-  const today = normalizeCalendarDay(Number.isFinite(now.getTime()) ? now : new Date());
+  const today = resolveCoachToday(context);
   const year = today.getFullYear();
   const goals = context?.goals && typeof context.goals === "object" ? context.goals : {};
   const raceDateIso =
@@ -717,10 +759,7 @@ function buildTrimmedTrainingPlan(context) {
       return {
         session,
         parsed,
-        diffDays:
-          parsed == null
-            ? null
-            : (normalizeCalendarDay(parsed).getTime() - today.getTime()) / 86400000,
+        diffDays: parsed == null ? null : calendarDayDiff(today, parsed),
       };
     }),
   );
@@ -728,12 +767,12 @@ function buildTrimmedTrainingPlan(context) {
   const next14Days = datedSessions
     .filter((entry) => entry.diffDays != null && entry.diffDays >= 0 && entry.diffDays <= 14)
     .sort((a, b) => a.diffDays - b.diffDays || String(a.session.id).localeCompare(String(b.session.id)))
-    .map((entry) => toCoachSessionObject(entry.session));
+    .map((entry) => toCoachSessionObject(entry.session, entry.diffDays));
 
   const last7Days = datedSessions
     .filter((entry) => entry.diffDays != null && entry.diffDays >= -7 && entry.diffDays < 0)
     .sort((a, b) => a.diffDays - b.diffDays || String(a.session.id).localeCompare(String(b.session.id)))
-    .map((entry) => toCoachSessionObject(entry.session));
+    .map((entry) => toCoachSessionObject(entry.session, entry.diffDays));
 
   return {
     next14Days,
@@ -813,6 +852,7 @@ function buildStaticCoachSystemPrompt() {
     "Wenn eine Action nötig ist: antworte NUR mit dem JSON-Block, kein Text davor/danach.",
     "Wenn du eine Action vorschlägst, erkläre kurz warum in message.",
     "Sei direkt, kein Smalltalk, kein Auffüllen.",
+    "ZEITBEZUG: Heute ist der Tag aus der Zeile 'Heute ist …' im Kontext. Einheiten in last7Days (daysAgo) und erledigte Workouts liegen in der Vergangenheit — sprich darüber in der Vergangenheitsform. Einheiten in next14Days (inDays) liegen in der Zukunft. Nutze 'morgen' nur für inDays = 1 und 'gestern' nur für daysAgo = 1; übernimm sonst den Tagesbezug aus relativeDay.",
     "Nutze recoveryDomain + recoverySummary für Sicherheit; widersprich niedrigem Recovery nicht.",
   ].join("\n");
 }
@@ -846,9 +886,7 @@ function trimRecoveryDomainSeriesForCache(domain, maxDays = 21) {
 function trimRecoveryDomainRollupsForCache(domain, context, maxWeeks = 4) {
     if (!domain || typeof domain !== "object" || !Array.isArray(domain.rollups)) return domain;
         const weeks = collectIncomingPlanWeeks(context);
-    const rawTodayIso = typeof context?.todayIso === "string" ? context.todayIso : "";
-    const now = rawTodayIso ? new Date(rawTodayIso) : new Date();
-    const today = normalizeCalendarDay(Number.isFinite(now.getTime()) ? now : new Date());
+    const today = resolveCoachToday(context);
     const currentWeek = weeks.length ? findCurrentPlanWeek(weeks, today, today.getFullYear()) : null;
     const currentIndex = currentWeek ? weeks.indexOf(currentWeek) : -1;
     const cutoffIndex = currentIndex >= 0 ? currentIndex : domain.rollups.length - 1;
@@ -863,7 +901,10 @@ function trimRecoveryDomainRollupsForCache(domain, context, maxWeeks = 4) {
 
 function buildCoachContextData(context) {
     const rawTodayIso = typeof context?.todayIso === "string" ? context.todayIso : "";
-    const todayIso = rawTodayIso ? rawTodayIso.slice(0, 10) : ""; // Tag-Granularitaet statt Millisekunden-Timestamp -- sonst invalidiert jeder Call den Prompt-Cache
+    // Tag-Granularitaet statt Millisekunden-Timestamp -- sonst invalidiert jeder Call den Prompt-Cache.
+    // Lokaler Kalendertag des Geraets (todayYmd) vor dem UTC-Datum aus todayIso (nachts um 0-2 Uhr sonst gestern).
+    const todayIso = dateIsoToYmd(context?.todayYmd) || (rawTodayIso ? rawTodayIso.slice(0, 10) : "");
+    const todayWeekday = todayIso ? WEEKDAY_NAMES_DE[resolveCoachToday(context).getDay()] : "";
     const recoveryDomain = trimRecoveryDomainRollupsForCache(trimRecoveryDomainSeriesForCache(pickRecoveryDomain(context)), context);
   const availableScreens = Array.isArray(context?.availableScreens) ? context.availableScreens : [];
   const raceDateIso = context?.raceDateIso === null || typeof context?.raceDateIso === "string" ? context.raceDateIso : null;
@@ -877,6 +918,7 @@ function buildCoachContextData(context) {
   const healthRunsLast10Days = trimHealthRunsLast10Days(context);
   return {
     todayIso,
+    ...(todayWeekday ? { todayWeekday } : {}),
     prepStatus: pickPrepStatus(context),
     raceDateIso,
     goals,
@@ -916,6 +958,8 @@ function buildContextSummary(context) {
   const goals = context?.goals && typeof context.goals === "object" ? context.goals : {};
   const targetTime = goals.targetTime || "nicht gesetzt";
   const raceDateIso = context?.raceDateIso || "unbekannt";
+  const today = resolveCoachToday(context);
+  lines.push(`Heute ist ${WEEKDAY_NAMES_DE[today.getDay()]}, ${ymdOfLocalDay(today)} (Kalendertag des Users).`);
   lines.push(`Rennziel: ${targetTime}, Renn-Datum: ${raceDateIso}`);
 
   const trimmedPlan = buildTrimmedTrainingPlan(context);
@@ -949,8 +993,9 @@ function buildContextSummary(context) {
       trimmedPlan.next14Days.find((s) => s && s.type !== "rest") ||
       trimmedPlan.next14Days[0];
     if (next) {
+      const when = next.relativeDay ? `${next.relativeDay}, ` : "";
       lines.push(
-        `Nächste/heutige Einheit: ${next.weekday || ""} ${next.date || ""} — ${next.title || next.type} (${next.km ?? "?"} km)`,
+        `Nächste/heutige Einheit (${when}${next.weekday || ""} ${next.date || ""}): ${next.title || next.type} (${next.km ?? "?"} km)`.replace(/\s+\)/, ")"),
       );
     }
   } else {
@@ -985,14 +1030,30 @@ function buildContextSummary(context) {
     })
     .slice(-3);
   if (done.length) {
-    lines.push(
-      `Letzte erledigte Workouts: ${done.map((e) => e.sessionId || "?").join(", ")}`,
-    );
+    lines.push(`Letzte erledigte Workouts (Vergangenheit): ${done.map((e) => describeDoneWorkout(e, context, today)).join("; ")}`);
   } else {
     lines.push("Letzte erledigte Workouts: keine in den letzten 10 Tagen geloggt.");
   }
 
   return lines.join("\n");
+}
+
+/** „Long Run 24 km (gestern, So 15. Nov)" statt einer nackten Session-ID — ohne Datum riet der Coach den Tag. */
+function describeDoneWorkout(entry, context, today) {
+  const sessionId = entry && typeof entry.sessionId === "string" ? entry.sessionId : "";
+  if (!sessionId) return "?";
+  const year = today.getFullYear();
+  for (const week of collectIncomingPlanWeeks(context)) {
+    for (const session of Array.isArray(week?.s) ? week.s : []) {
+      if (!session || String(session.id) !== sessionId) continue;
+      const parsed = sessionDate(session, year);
+      const label = `${session.title || session.type || sessionId}${typeof session.km === "number" && session.km > 0 ? ` ${session.km} km` : ""}`;
+      if (!parsed) return label;
+      const when = relativeDayLabelDe(calendarDayDiff(today, parsed));
+      return `${label} (${when}, ${session.day || ""} ${session.date || ""})`.replace(/\s+\)/, ")");
+    }
+  }
+  return sessionId;
 }
 
 function buildSystemPrompt(context) {
