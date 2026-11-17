@@ -286,6 +286,17 @@ import { StatusChip } from "./ui/StatusChip";
 import { ScreenHeader } from "./ui/ScreenHeader";
 import { formatDateRangeDe, formatDayDateDe, formatHrFactDe, formatKmDe } from "./ui/formatDe";
 import { PrepCard, TodayHero, WeekProgressCard } from "./features/today/TodayCards";
+import {
+  ShiftIntroCard,
+  ShiftPlanPage,
+  ShiftSettingsRows,
+  ShiftTodayNote,
+  findWeekIndexForYmd,
+  planAfterShiftSave,
+  reportShiftProposalDecision,
+  runShiftWeekScan,
+  useShiftMode,
+} from "./features/shift";
 import { WeekDayRow, WeekPlaceholderRow, WeekSummaryCard } from "./features/week/WeekRows";
 import { PlanProgressCard, PlanTiles, ShareRow } from "./features/overview/OverviewCards";
 import {
@@ -2332,6 +2343,9 @@ export default function AppMain(){
   const checkInTodayYmd = getAppTodayYmd();
   const dailyCheckIn = useDailyCheckIn(checkInEnabled ? user?.id ?? null : null, checkInTodayYmd);
   const [checkInSheetOpen, setCheckInSheetOpen] = useState(false);
+  // Schicht-Modus (Arbeitsplan W1): Dienstplan → Tageseignung → Kapazitäts-Engine; ohne works_shifts/Einträge wirkungslos.
+  const shiftMode = useShiftMode(user?.id ?? null, checkInTodayYmd);
+  const [shiftPlanOpen, setShiftPlanOpen] = useState(false);
   const [checkInSkippedDay, setCheckInSkippedDay] = useState<string | null>(() => safeReadLocalStorageItem(CHECKIN_SKIPPED_DAY_KEY));
   const checkInSessionDoneToday = ALL_SESSIONS.some((s) => sessionYmd(s) === checkInTodayYmd && logs[s.id]?.done === true);
   const [checkInReminder, setCheckInReminder] = useState(() => loadCheckInReminderSettings());
@@ -2759,7 +2773,7 @@ export default function AppMain(){
 
   const handleProposeCalendarReassignment = (sessionId, week = w)=>{
     if (!week) return;
-    const proposal = proposeSingleSessionCalendarReassignment(displayPlan, week, sessionId, scheduleBlocks, lockedSessionIds);
+    const proposal = proposeSingleSessionCalendarReassignment(displayPlan, week, sessionId, scheduleBlocks, lockedSessionIds, shiftMode.context);
     if (proposal.status === "locked") return;
     if (proposal.status === "no-conflict") {
       setPendingCalendarProposal({ sessionId, action: null, patches: [], candidates: proposal.candidates, mode: "preview", noConflict: true });
@@ -2807,6 +2821,10 @@ export default function AppMain(){
 
   const handleScanWeekForCalendarConflicts = ()=>{
     if (!w) return;
+    if (shiftMode.context) {
+      setWeekCalendarBatchProposal(runShiftWeekScan({ plan: displayPlan, weekIndex: safeWIdx, scheduleBlocks, shiftContext: shiftMode.context, todayYmd: getAppTodayYmd(), lockedSessionIds }));
+      return;
+    }
     const conflicts = scanWeekForCalendarConflicts(w, scheduleBlocks, lockedSessionIds);
     if (conflicts.length === 0) {
       setWeekCalendarBatchProposal({ action: null, patches: [], status: "no-conflicts" });
@@ -2823,6 +2841,7 @@ export default function AppMain(){
   };
 
   const handleConfirmWeekCalendarBatch = ()=>{
+    reportShiftProposalDecision(weekCalendarBatchProposal, true);
     if (weekCalendarBatchProposal?.patches?.length && !touchesLockedSession(weekCalendarBatchProposal.patches)) {
       handleAiApplyPlanPatches(null, null, weekCalendarBatchProposal.patches);
     }
@@ -2830,7 +2849,29 @@ export default function AppMain(){
   };
 
   const handleCancelWeekCalendarBatch = ()=>{
+    reportShiftProposalDecision(weekCalendarBatchProposal, false);
     setWeekCalendarBatchProposal(null);
+  };
+
+  /** Schicht-Modus: nach dem Speichern aktuelle/nächste Woche prüfen und einen Vorschlag im Woche-Tab zeigen. */
+  const handleShiftsSaved = ()=>{
+    const result = planAfterShiftSave({ plan: displayPlan, scheduleBlocks, todayYmd: getAppTodayYmd(), lockedSessionIds });
+    if (!("weekIndex" in result)) return { handled: false, message: result.message };
+    setPendingCalendarProposal(null);
+    setWIdx(result.weekIndex);
+    setWeekCalendarBatchProposal(result.batch);
+    setShiftPlanOpen(false);
+    navigateToView("week");
+    return { handled: true };
+  };
+  const handleShowShiftProposal = ()=>{
+    const todayYmd = getAppTodayYmd();
+    const idx = findWeekIndexForYmd(displayPlan, todayYmd);
+    if (idx < 0 || !shiftMode.context) return;
+    setPendingCalendarProposal(null);
+    setWIdx(idx);
+    setWeekCalendarBatchProposal(runShiftWeekScan({ plan: displayPlan, weekIndex: idx, scheduleBlocks, shiftContext: shiftMode.context, todayYmd, lockedSessionIds }));
+    navigateToView("week");
   };
   const doneSessions = ACTIVE_SESSIONS.filter((session) => isSessionLogDone(logs[session.id]));
   const doneSess=doneSessions.length;
@@ -4291,6 +4332,13 @@ export default function AppMain(){
               }}
             />
           ) : null}
+          {shiftMode.introVisible && !showOnboarding ? <ShiftIntroCard onYes={() => setShiftPlanOpen(true)} /> : null}
+          {(() => {
+            const shiftTodayYmd = getAppTodayYmd();
+            const todaySession = dashboardSession && sessionYmd(dashboardSession) === shiftTodayYmd ? dashboardSession : null;
+            const line = shiftMode.todayLine(shiftTodayYmd, todaySession ? todaySession.type : null);
+            return line ? <ShiftTodayNote text={line.text} onShowProposal={line.offerProposal ? handleShowShiftProposal : undefined} /> : null;
+          })()}
           {rpePromptSession ? (
             <RpePromptCard
               title={typeof rpePromptSession.title === "string" && rpePromptSession.title.trim() ? rpePromptSession.title : "Training"}
@@ -4387,10 +4435,12 @@ export default function AppMain(){
               doneSessions={weekAnalysis.doneSessions}
               plannedSessions={weekAnalysis.plannedTrainSessions}
               onSyncCalendar={
-                scheduleBlocks.length > 0 && w && !pendingCalendarProposal && !weekCalendarBatchProposal
+                (scheduleBlocks.length > 0 || shiftMode.active) && w && !pendingCalendarProposal && !weekCalendarBatchProposal
                   ? handleScanWeekForCalendarConflicts
                   : undefined
               }
+              syncLabel={shiftMode.active ? (scheduleBlocks.length > 0 ? "Mit Dienstplan und Kalender abgleichen" : "Mit meinem Dienstplan abgleichen") : undefined}
+              onEnterShifts={shiftMode.enabled && shiftMode.state.worksShifts === true ? () => setShiftPlanOpen(true) : undefined}
             />
 
             {pendingCalendarProposal && (
@@ -4442,7 +4492,7 @@ export default function AppMain(){
             {weekCalendarBatchProposal && (
               weekCalendarBatchProposal.status === "no-conflicts" ? (
                 <div data-layout-week-card="1" className="mr-panel mr-panel--row">
-                  <span>Keine Kalenderkonflikte in dieser Woche gefunden.</span>
+                  <span>{weekCalendarBatchProposal.source === "shift" ? "Diese Woche passt zu deinem Dienstplan." : "Keine Kalenderkonflikte in dieser Woche gefunden."}</span>
                   <div className="mr-panel__actions">
                     <button type="button" className="mr-btn mr-btn--ghost mr-btn--small" onClick={handleCancelWeekCalendarBatch}>OK</button>
                   </div>
@@ -4453,6 +4503,14 @@ export default function AppMain(){
                     Konnte nicht automatisch aufgelöst werden: {(weekCalendarBatchProposal.blockedReasons || []).join(" ")}
                   </span>
                   <span>Bitte einzelne Konflikte über „An Kalender anpassen" in der jeweiligen Einheit bearbeiten.</span>
+                  <div className="mr-panel__actions">
+                    <button type="button" className="mr-btn mr-btn--ghost mr-btn--small" onClick={handleCancelWeekCalendarBatch}>OK</button>
+                  </div>
+                </div>
+              ) : weekCalendarBatchProposal.status === "shift-hints" ? (
+                <div data-layout-week-card="1" className="mr-panel">
+                  <span>Für diese Woche gibt es keinen sicheren Tausch.</span>
+                  {(weekCalendarBatchProposal.hints || []).map((hint) => <span key={hint}>{hint}</span>)}
                   <div className="mr-panel__actions">
                     <button type="button" className="mr-btn mr-btn--ghost mr-btn--small" onClick={handleCancelWeekCalendarBatch}>OK</button>
                   </div>
@@ -4515,6 +4573,7 @@ export default function AppMain(){
                       state={isRest ? "open" : status}
                       isToday={isToday}
                       onOpen={isRest ? undefined : ()=>openModal(session)}
+                      shiftTag={shiftMode.tagFor(sessionYmd(session))}
                     />
                   );
                 })}
@@ -4829,6 +4888,7 @@ export default function AppMain(){
               onOpenArchived={openArchivedPrepRecap}
             />
                   </SettingsGroup>
+                  {shiftMode.enabled ? <ShiftSettingsRows onOpenPlan={() => setShiftPlanOpen(true)} /> : null}
                 </>
               ) : settingsPage === "connections" ? (
                 Capacitor.getPlatform() === "ios" ? (
@@ -5643,7 +5703,7 @@ export default function AppMain(){
           result={modalResult}
           onClose={closeModal}
           onAdjustToCalendar={
-            modal.type !== "rest" && scheduleBlocks.length > 0 && !lockedSessionIds.has(modal.id)
+            modal.type !== "rest" && (scheduleBlocks.length > 0 || shiftMode.active) && !lockedSessionIds.has(modal.id)
               ? () => handleProposeCalendarReassignmentFromDetail(modal, modalWeek)
               : undefined
           }
@@ -5675,6 +5735,10 @@ export default function AppMain(){
           initialPlanInputs={readPlanInputsFromPreferences(preferences)}
           onCancel={onboardingForNewPlan || newPrepWizardOpen ? handleOnboardingCancel : undefined}
         />
+      ) : null}
+
+      {shiftPlanOpen && shiftMode.enabled ? (
+        <ShiftPlanPage todayYmd={checkInTodayYmd} onClose={() => setShiftPlanOpen(false)} onSaved={handleShiftsSaved} />
       ) : null}
 
       {checkInSheetOpen && checkInEnabled ? (
