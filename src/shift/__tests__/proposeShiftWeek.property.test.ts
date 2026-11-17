@@ -91,8 +91,8 @@ describe("Schicht-Wochenvorschlag – Property-Test über P1–P6", () => {
           .filter((pair) => before.indexOf(pair) < 0)
           .forEach((pair) => violations.push(`${tag} neue harte Tage in Folge ${pair}`));
 
-        const byIdBefore: Record<string, { type: string; ymd: string }> = {};
-        plan.forEach((w) => w.s.forEach((s) => (byIdBefore[s.id] = { type: s.type, ymd: sessionDayIso(s) as string })));
+        const byIdBefore: Record<string, { type: string; ymd: string; km: number }> = {};
+        plan.forEach((w) => w.s.forEach((s) => (byIdBefore[s.id] = { type: s.type, ymd: sessionDayIso(s) as string, km: s.km })));
         after.forEach((w) =>
           w.s.forEach((s) => {
             const was = byIdBefore[s.id];
@@ -101,8 +101,9 @@ describe("Schicht-Wochenvorschlag – Property-Test über P1–P6", () => {
             if (was.type === "long" && mondayOf(now) !== mondayOf(was.ymd)) violations.push(`${tag} Long Run ${s.id} aus der Woche`);
             // 3. Rennen und gesperrte Einheiten bleiben unangetastet
             if ((was.type === "race" || locked.has(s.id)) && (now !== was.ymd || s.type !== was.type)) violations.push(`${tag} gesperrt/Rennen ${s.id} verändert`);
-            // 4. nichts wird härter
+            // 4. nichts wird härter und keine Einheit länger
             if (!isHardDayType(was.type) && isHardDayType(s.type)) violations.push(`${tag} ${s.id} härter geworden`);
+            if (Number(s.km) > Number(was.km)) violations.push(`${tag} ${s.id} länger geworden (${was.km} → ${s.km} km)`);
           }),
         );
         if (result.patches.some((p) => locked.has(p.sessionId))) violations.push(`${tag} Patch auf gesperrter Einheit`);

@@ -293,8 +293,10 @@ import {
   ShiftTodayNote,
   findWeekIndexForYmd,
   planAfterShiftSave,
+  proposeShiftSingle,
   reportShiftProposalDecision,
   runShiftWeekScan,
+  shiftTodayHasProposal,
   useShiftMode,
 } from "./features/shift";
 import { WeekDayRow, WeekPlaceholderRow, WeekSummaryCard } from "./features/week/WeekRows";
@@ -2773,13 +2775,17 @@ export default function AppMain(){
 
   const handleProposeCalendarReassignment = (sessionId, week = w)=>{
     if (!week) return;
-    const proposal = proposeSingleSessionCalendarReassignment(displayPlan, week, sessionId, scheduleBlocks, lockedSessionIds, shiftMode.context);
+    // Schicht-Modus: eigener Einzel-Pfad mit denselben Schutzregeln wie der Wochenvorschlag (src/shift/proposeShiftSingle.ts).
+    const shift = !!shiftMode.context;
+    const proposal = shiftMode.context
+      ? proposeShiftSingle({ plan: displayPlan, weekIndex: displayPlan.indexOf(week), sessionId, scheduleBlocks, shiftContext: shiftMode.context, todayYmd: getAppTodayYmd(), lockedSessionIds })
+      : proposeSingleSessionCalendarReassignment(displayPlan, week, sessionId, scheduleBlocks, lockedSessionIds);
     if (proposal.status === "locked") return;
     if (proposal.status === "no-conflict") {
-      setPendingCalendarProposal({ sessionId, action: null, patches: [], candidates: proposal.candidates, mode: "preview", noConflict: true });
+      setPendingCalendarProposal({ sessionId, action: null, patches: [], candidates: proposal.candidates, mode: "preview", noConflict: true, shift });
       return;
     }
-    setPendingCalendarProposal({ sessionId, action: proposal.action, patches: proposal.patches, candidates: proposal.candidates, mode: "preview", conflictCause: proposal.conflictCause });
+    setPendingCalendarProposal({ sessionId, action: proposal.action, patches: proposal.patches, candidates: proposal.candidates, mode: "preview", conflictCause: proposal.conflictCause, shift });
   };
 
   // Zwischen Vorschlag und Bestätigung kann eine Session erledigt/übersprungen worden sein (✓-Button bleibt aktiv).
@@ -4336,7 +4342,8 @@ export default function AppMain(){
           {(() => {
             const shiftTodayYmd = getAppTodayYmd();
             const todaySession = dashboardSession && sessionYmd(dashboardSession) === shiftTodayYmd ? dashboardSession : null;
-            const line = shiftMode.todayLine(shiftTodayYmd, todaySession ? todaySession.type : null);
+            const hasProposal = !!shiftMode.context && shiftTodayHasProposal({ plan: displayPlan, scheduleBlocks, shiftContext: shiftMode.context, todayYmd: shiftTodayYmd, lockedSessionIds, sessionId: todaySession ? todaySession.id : null });
+            const line = shiftMode.todayLine(shiftTodayYmd, todaySession ? todaySession.type : null, hasProposal);
             return line ? <ShiftTodayNote text={line.text} onShowProposal={line.offerProposal ? handleShowShiftProposal : undefined} /> : null;
           })()}
           {rpePromptSession ? (
@@ -4479,7 +4486,7 @@ export default function AppMain(){
                 </div>
               ) : (
                 <div data-layout-week-card="1" className="mr-panel mr-panel--row">
-                  <span>{pendingCalendarProposal.noConflict ? "Kein Konflikt an diesem Tag." : `Keine sinnvolle Alternative im Kalender gefunden.${pendingCalendarProposal.conflictCause ? ` Konflikt ${pendingCalendarProposal.conflictCause}.` : ""}`}</span>
+                  <span>{pendingCalendarProposal.noConflict ? "Kein Konflikt an diesem Tag." : pendingCalendarProposal.shift ? `Kein sicherer anderer Tag in dieser Woche${pendingCalendarProposal.conflictCause ? ` – ${pendingCalendarProposal.conflictCause}` : ""}. Dein Plan bleibt, wie er ist.` : `Keine sinnvolle Alternative im Kalender gefunden.${pendingCalendarProposal.conflictCause ? ` Konflikt ${pendingCalendarProposal.conflictCause}.` : ""}`}</span>
                   <div className="mr-panel__actions">
                     {pendingCalendarProposal.noConflict && (
                       <button type="button" className="mr-btn mr-btn--ghost mr-btn--small" onClick={handleEditCalendarReassignment}>Trotzdem Tag wählen</button>

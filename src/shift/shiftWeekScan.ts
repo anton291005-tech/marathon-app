@@ -13,10 +13,11 @@ import { buildShiftCapacityContext, sortedEntries } from "./shiftAdapter";
 import { isShiftModeEnabled } from "./shiftModeFlag";
 import { getShiftState } from "./shiftStore";
 
+export const SHIFT_BLOCKED_HINT = "Ein Tausch würde hier eine Trainingsregel verletzen. Dein Plan bleibt, wie er ist.";
+
 /** Form des AppMain-State `weekCalendarBatchProposal` (plus `source`/`hints` für den Schicht-Pfad). */
 export type ShiftBatchState =
   | { action: null; patches: []; status: "no-conflicts"; source: "shift" }
-  | { action: null; patches: []; status: "blocked"; blockedReasons: string[]; source: "shift" }
   | { action: null; patches: []; status: "shift-hints"; hints: string[]; source: "shift" }
   | { action: AiAssistantAction; patches: PlanPatch[]; status: "proposal"; source: "shift"; moves: number; softened: number };
 
@@ -25,7 +26,8 @@ export function toShiftBatchState(result: ShiftWeekProposal): ShiftBatchState {
     case "no-conflicts":
       return { action: null, patches: [], status: "no-conflicts", source: "shift" };
     case "blocked":
-      return { action: null, patches: [], status: "blocked", blockedReasons: result.reasons, source: "shift" };
+      // Interne Prüf-Codes (z. B. „taper-later:<id>“) nie anzeigen: ein ruhiger Satz statt der Verstoß-Liste.
+      return { action: null, patches: [], status: "shift-hints", hints: [SHIFT_BLOCKED_HINT], source: "shift" };
     case "hint-only":
       return { action: null, patches: [], status: "shift-hints", hints: result.hints, source: "shift" };
     default:
@@ -108,4 +110,23 @@ export function planAfterShiftSave(args: {
   if (!shiftContext || args.plan.length === 0) return { message: null };
   const found = scanAfterShiftSave({ plan: args.plan, scheduleBlocks: args.scheduleBlocks, shiftContext, todayYmd: args.todayYmd, lockedSessionIds: args.lockedSessionIds });
   return found ?? { message: "Diese und nächste Woche passen zu deinem Dienstplan." };
+}
+
+let todayProposalCache: { key: string; plan: AiPlanWeek[]; ctx: ShiftCapacityContext; value: boolean } | null = null;
+
+/**
+ * Gibt es diese Woche einen bestätigbaren Vorschlag, der die heutige Einheit betrifft? Für den Satz auf „Heute“
+ * („im Woche-Tab findest du einen Vorschlag“ nur, wenn es stimmt). Ohne Nutzungsereignis; gemerkt je Plan/Kontext/Tag.
+ */
+export function shiftTodayHasProposal(args: Omit<ShiftScanArgs, "weekIndex"> & { sessionId: string | null }): boolean {
+  if (!args.sessionId) return false;
+  const key = `${args.todayYmd}|${args.sessionId}|${args.scheduleBlocks.length}|${args.lockedSessionIds.size}`;
+  if (todayProposalCache && todayProposalCache.key === key && todayProposalCache.plan === args.plan && todayProposalCache.ctx === args.shiftContext) {
+    return todayProposalCache.value;
+  }
+  const weekIndex = findWeekIndexForYmd(args.plan, args.todayYmd);
+  const result = weekIndex >= 0 ? proposeShiftWeek({ ...args, weekIndex }) : null;
+  const value = !!result && result.status === "proposal" && result.patches.some((p) => p.sessionId === args.sessionId);
+  todayProposalCache = { key, plan: args.plan, ctx: args.shiftContext, value };
+  return value;
 }

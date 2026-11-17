@@ -1271,4 +1271,5 @@ async function handleAiCoach(rawBody) {
   }
 }
 
-module.exports = { handleAiCoach };
+// toCoachSessionObject nur für Tests exportiert (Schicht-Modus: keine Dienstplan-Daten im Coach-Payload).
+module.exports = { handleAiCoach, toCoachSessionObject };

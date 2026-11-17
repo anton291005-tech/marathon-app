@@ -198,35 +198,75 @@ export function findShiftConflicts(
   );
 }
 
-/** H3 „locker statt hart“: gleiche Einheit, Typ locker, höchstens so lang wie geplant und ~60 min (Spec §8.2). */
-export function buildSoftenPatch(session: AiPlanSession, reason: string): PlanPatch {
+/**
+ * H3 „locker statt hart“: gleiche Einheit, Typ locker, nie länger als geplant und höchstens ~60 min (Spec §8.2, §8.6).
+ * Die Distanz wird nur gekürzt (abgerundet auf die Obergrenze), nie erhöht. Ohne gültige Distanz (≤ 0, fehlt) gibt es
+ * keinen Patch (`null`) — der Aufrufer zeigt dann nur einen Hinweis. Der Text nennt bewusst keinen Dienst: Plan-Texte
+ * gehen mit dem Plan an den Coach, Schichtdaten nicht.
+ */
+export function buildSoftenPatch(session: AiPlanSession): PlanPatch | null {
+  const km = Number(session.km);
+  if (!Number.isFinite(km) || km <= 0) return null;
   const maxKm = Math.floor(READINESS_CONFIG.actions.easyInsteadMaxMinutes.value / READINESS_CONFIG.load.fallbackPaceMinPerKm.value);
-  const km = Number.isFinite(session.km) && session.km > 0 ? Math.max(1, Math.min(Math.round(session.km), maxKm)) : maxKm;
   return {
     sessionId: session.id,
     changes: {
       type: "easy",
       kind: "E",
       title: "Lockerer Lauf",
-      km,
+      km: Math.min(km, maxKm),
       pace: "locker",
-      desc: `Statt „${session.title}“: ruhig laufen, Puls niedrig halten – ${reason}.`,
+      desc: "Locker statt hart.",
     },
-    reason: "Schicht-Modus: locker statt hart",
+    reason: "Locker statt hart",
   };
 }
 
-function dayCapacity(ymd: string, blocks: WeeklyScheduleBlock[], ctx: ShiftCapacityContext): DayCapacityScore {
+export function dayCapacity(ymd: string, blocks: WeeklyScheduleBlock[], ctx: ShiftCapacityContext): DayCapacityScore {
   return computeDayCapacityScore(ymd, blocks, ctx);
 }
 
 /** Ziel ist „frei“ für diese Art (Dienstplan frei oder ohne Aussage) und ohne Kalenderkonflikt. */
-function isFreeFor(session: AiPlanSession, capacity: DayCapacityScore): boolean {
+export function isFreeFor(session: AiPlanSession, capacity: DayCapacityScore): boolean {
   const category = shiftCategoryOfSession(session);
   if (!category) return true;
   const suit = suitabilityOf(capacity, category);
   if (suit && suit !== "free") return false;
   return computeSessionDayFitScore(session, capacity) >= MIN_FIT_SCORE_THRESHOLD;
+}
+
+/** Ergebnis der Prüfung eines Zieltags: der simulierte Plan nach dem Tausch oder `null` (abgelehnt). */
+export type CheckedCandidate = { toYmd: string; targetId: string; after: AiPlanWeek[] };
+
+/**
+ * Alle Schutzregeln für einen Tausch `session` ↔ Einheit am Zieltag (Wochen- und Einzelpfad nutzen dieselbe Prüfung):
+ * Engine-Konflikt (Fit/Micro-Structure), Rennen/gesperrt, Zieltag frei für die verschobene Einheit, Quelltag passt für
+ * die verdrängte, keine neuen harten Tage in Folge, Long Run in seiner Woche mit Abstand, Taper/Rennwoche nur früher.
+ */
+export function checkCandidate(
+  ctx: { scheduleBlocks: WeeklyScheduleBlock[]; shiftContext: ShiftCapacityContext; locked: ReadonlySet<string>; week: AiPlanWeek },
+  current: AiPlanWeek[],
+  session: AiPlanSession,
+  sourceCapacity: DayCapacityScore,
+  candidate: { targetSessionId: string; dateIso: string; isConflict: boolean },
+  requireFree: boolean,
+): CheckedCandidate | null {
+  if (candidate.isConflict && requireFree) return null;
+  const target = findSession(current, candidate.targetSessionId);
+  if (!target || target.type === "race" || session.type === "race" || ctx.locked.has(target.id) || ctx.locked.has(session.id)) return null;
+  const targetCapacity = dayCapacity(candidate.dateIso, ctx.scheduleBlocks, ctx.shiftContext);
+  if (requireFree && !isFreeFor(session, targetCapacity)) return null;
+  if (isHardDayType(target.type) && !isFreeFor(target, sourceCapacity)) return null;
+  if (requireFree && computeSessionDayFitScore(target, sourceCapacity) < MIN_FIT_SCORE_THRESHOLD) return null;
+  const after = swapWorkouts(current, session.id, target.id);
+  const moved = [session.id, target.id];
+  const problems = [
+    ...newAdjacentHardDays(current, after, moved),
+    ...longRunViolations(current, after, moved),
+    ...taperViolations(ctx.week, current, after, moved),
+  ];
+  if (problems.length > 0) return null;
+  return { toYmd: candidate.dateIso, targetId: target.id, after };
 }
 
 type GreedyResult = {
@@ -258,26 +298,10 @@ function runGreedy(args: GreedyArgs, order: ShiftConflict[]): GreedyResult {
     );
     const ranked = rankCalendarReassignmentCandidates([currentWeek], conflict.sessionId, candidates, sourceCapacity);
 
-    let accepted: { toYmd: string; targetId: string; after: AiPlanWeek[] } | null = null;
+    let accepted: CheckedCandidate | null = null;
     for (const candidate of ranked) {
-      if (candidate.isConflict) continue;
-      const target = findSession(current, candidate.targetSessionId);
-      if (!target || target.type === "race" || locked.has(target.id)) continue;
-      const targetCapacity = dayCapacity(candidate.dateIso, scheduleBlocks, shiftContext);
-      // Zieltag muss für die verschobene Einheit frei sein; die verdrängte muss auf dem Quelltag passen.
-      if (!isFreeFor(session, targetCapacity)) continue;
-      if (isHardDayType(target.type) && !isFreeFor(target, sourceCapacity)) continue;
-      if (computeSessionDayFitScore(target, sourceCapacity) < MIN_FIT_SCORE_THRESHOLD) continue;
-      const after = swapWorkouts(current, session.id, target.id);
-      const moved = [session.id, target.id];
-      const problems = [
-        ...newAdjacentHardDays(current, after, moved),
-        ...longRunViolations(current, after, moved),
-        ...taperViolations(week, current, after, moved),
-      ];
-      if (problems.length > 0) continue;
-      accepted = { toYmd: candidate.dateIso, targetId: target.id, after };
-      break;
+      accepted = checkCandidate({ scheduleBlocks, shiftContext, locked, week }, current, session, sourceCapacity, candidate, true);
+      if (accepted) break;
     }
 
     if (accepted) {
@@ -306,16 +330,19 @@ function runGreedy(args: GreedyArgs, order: ShiftConflict[]): GreedyResult {
     // Kein sicherer Tag.
     const shiftFit = shiftDayFitScore(session, sourceCapacity);
     const shiftUnsuitable = shiftFit != null && shiftFit < MIN_FIT_SCORE_THRESHOLD;
-    if (conflict.severity === "strong" && shiftUnsuitable && conflict.shiftDay && (session.type === "interval" || session.type === "tempo") && !raceWeek) {
+    const softenPatch =
+      conflict.severity === "strong" && shiftUnsuitable && conflict.shiftDay && (session.type === "interval" || session.type === "tempo") && !raceWeek
+        ? buildSoftenPatch(session)
+        : null;
+    if (softenPatch && conflict.shiftDay) {
       // ENTSCHEIDUNG (Anton absegnen): H3 „locker statt hart“ auch im Wochenvorschlag (nicht nur für heute), nur für
       // Intervalle/Tempo auf ungeeigneten Tagen, nie für Long Run (wird laut §8.5 nie gestrichen) und nie in der Rennwoche.
-      const reason = reasonPhraseDe(conflict.shiftDay, "hard");
       used[session.id] = true;
       softened.push({
         sessionId: session.id,
         dayYmd: conflict.dayYmd,
         sentence: softenSentenceDe({ sessionType: session.type, fromDay: conflict.shiftDay, fromYmd: conflict.dayYmd, todayYmd }),
-        patch: buildSoftenPatch(session, reason),
+        patch: softenPatch,
       });
       return;
     }
