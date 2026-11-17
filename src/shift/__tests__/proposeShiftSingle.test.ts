@@ -7,7 +7,7 @@ import { buildShiftCapacityContext } from "../shiftAdapter";
 import { buildSoftenPatch, isHardDayType, proposeShiftWeek } from "../proposeShiftWeek";
 import { isShiftChoiceAllowed, proposeShiftSingle } from "../proposeShiftSingle";
 import { SHIFT_BLOCKED_HINT, SHIFT_NO_SAFE_SWAP, shiftTodayHasProposal, toShiftBatchState } from "../shiftWeekScan";
-import { N, session, week } from "../__fixtures__/shiftFixtures";
+import { N, OFF, S, session, week } from "../__fixtures__/shiftFixtures";
 
 const { toCoachSessionObject } = require("../../../api/_lib/coachHandlers");
 
@@ -30,6 +30,39 @@ function hardPairs(plan: AiPlanWeek[]): string[] {
 }
 
 describe("Einzel-Pfad mit Dienstplan (proposeShiftSingle)", () => {
+  it("„Trotzdem Tag wählen“: der empfohlene eingeschränkte Tag ist nicht ungünstig, sondern neutral „eingeschränkt“ (Repro A)", () => {
+    const plan = [
+      week(0, "2026-11-16", ["easy", "interval", "easy", "tempo", "rest", "easy", "long"], "build", "w0"),
+      week(1, "2026-11-23", ["easy", "easy", "rest", "interval", "easy", "easy", "long"]),
+    ];
+    const c = ctx([N("2026-11-24"), N("2026-11-25"), OFF("2026-11-27"), OFF("2026-11-28")], "2026-11-17");
+    const result = proposeShiftSingle({ plan, weekIndex: 1, sessionId: "w1-3", scheduleBlocks: [], shiftContext: c, todayYmd: "2026-11-17" });
+    if (result.status !== "proposal") throw new Error(result.status);
+    // Vorschlag: Fr (w1-4).
+    expect(dayOf(applyPlanPatches(plan, result.patches), "w1-3")).toBe("2026-11-27");
+    const fr = result.candidates.find((v) => v.targetSessionId === "w1-4");
+    expect(fr).toMatchObject({ isConflict: false, limitedNote: "erster freier Tag nach den Nachtdiensten" });
+    // Der Tag vor der Nacht (Di) ist ebenfalls nur eingeschränkt → neutral, nicht ungünstig.
+    const di = result.candidates.find((v) => v.targetSessionId === "w1-1");
+    expect(di).toMatchObject({ isConflict: false, limitedNote: "vor dem Nachtdienst (22–6 Uhr)" });
+  });
+
+  it("„Trotzdem Tag wählen“: freier Tag ohne Zusatz, ungeeigneter Tag bleibt „ungünstig“", () => {
+    const plan = [week(1, TODAY, ["easy", "easy", "interval", "easy", "rest", "easy", "long"])];
+    // Mo Spät bis 0:30 → Di eingeschränkt; Mi Nacht → Do nach der Nacht ungeeignet. Intervalle Mi (vor der Nacht, eingeschränkt).
+    const c = ctx([S("2026-11-16", "17:00", "00:30"), N("2026-11-18")]);
+    const result = proposeShiftSingle({ plan, weekIndex: 0, sessionId: "w1-2", scheduleBlocks: [], shiftContext: c, todayYmd: TODAY });
+    const views = result.status === "locked" ? [] : result.candidates;
+    const byId = (id: string) => views.find((v) => v.targetSessionId === id);
+    expect(byId("w1-3")).toMatchObject({ isConflict: true }); // Do nach der Nacht
+    expect(byId("w1-3")?.limitedNote ?? null).toBeNull();
+    expect(byId("w1-1")).toMatchObject({ isConflict: false, limitedNote: "nach dem Spätdienst (17:00–0:30 Uhr)" }); // Di
+    expect(byId("w1-4")).toMatchObject({ isConflict: false, limitedNote: "erster freier Tag nach den Nachtdiensten" }); // Fr
+    expect(c.byDate["2026-11-16"].hard).toBe("free"); // Mo: Dienst erst ab 17 Uhr
+    expect(byId("w1-0")).toMatchObject({ isConflict: false });
+    expect(byId("w1-0")?.limitedNote ?? null).toBeNull();
+  });
+
   it("Taper, Rennen am Samstag, Nachtdienst So/Mo, Intervall am Dienstag: nie später, nie näher ans Rennen", () => {
     const plan = [week(1, TODAY, ["easy", "interval", "easy", "easy", "rest", "race", "rest"], "taper")];
     const c = ctx([N("2026-11-15"), N("2026-11-16")]);

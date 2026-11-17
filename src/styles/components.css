@@ -164,6 +164,7 @@
 .mr-panel__error { color: var(--status-low); }
 .mr-panel__option { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin: 0; padding: 10px var(--space-3); border: 0; border-radius: var(--radius-m); background: var(--surface-2); color: var(--ink); font: 600 15px/20px var(--font-sans); text-align: left; cursor: pointer; }
 .mr-panel__option small { font-size: 13px; line-height: 18px; font-weight: 400; color: var(--status-low); }
+.mr-panel__option small.mr-panel__option-note { color: var(--ink-2); }
 
 /* ── Schritt 3: Leistung, Übersicht, Coach, Detailansicht ─────────────────────────────────────── */
 

@@ -4567,11 +4567,13 @@ export default function AppMain(){
                       onClick={()=>handleSelectCalendarReassignmentTarget(candidate.targetSessionId)}
                     >
                       {candidate.label}
-                      {candidate.isConflict && (
+                      {candidate.isConflict ? (
                         <small>
                           Ungünstig{candidate.warningReason ? `: ${candidate.warningReason}` : ""}
                         </small>
-                      )}
+                      ) : candidate.limitedNote ? (
+                        <small className="mr-panel__option-note">Eingeschränkt: {candidate.limitedNote}</small>
+                      ) : null}
                     </button>
                   ))}
                   <div className="mr-panel__actions">

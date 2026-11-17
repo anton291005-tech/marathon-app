@@ -22,7 +22,8 @@ import { NO_LOCKED_SESSION_IDS } from "../ai/mutations/lockedSessions";
 import { sessionDayIso } from "../ai/mutations/sessionDayIso";
 import { validatePlanIntegrity } from "../ai/validation/validatePlanIntegrity";
 import { checkCandidate, closestFirst, dayCapacity, findShiftConflicts, shiftChangeRow, type CheckedCandidate } from "./proposeShiftWeek";
-import { moveSentenceDe, reasonPhraseDe, weekdayLongDe } from "./shiftText";
+import { limitedDayNoteDe, moveSentenceDe, reasonPhraseDe, weekdayLongDe } from "./shiftText";
+import { shiftCategoryOfSession } from "../scheduling/capacityScore";
 
 export type ShiftSingleProposal =
   | { status: "locked" }
@@ -67,11 +68,18 @@ export function proposeShiftSingle(input: ProposeShiftSingleInput): ShiftSingleP
 
   const candidates = buildCalendarReassignmentCandidates(week, sessionId, scheduleBlocks, locked, shiftContext);
   const ranked = sourceCapacity ? rankCalendarReassignmentCandidates([week], sessionId, candidates, sourceCapacity) : [];
-  // Manuelle Wahl: nur Tage ohne Verstoß gegen eine harte Regel; „nicht frei“ bleibt sichtbar, aber als ungünstig markiert.
-  const allowed = ranked
-    .filter((c) => sourceCapacity && checkCandidate(ctx, current, session, sourceCapacity, c, false))
-    .map((c) => ({ ...c, isConflict: c.isConflict || !(sourceCapacity && checkCandidate(ctx, current, session, sourceCapacity, c, true)) }));
-  const views = buildCalendarReassignmentCandidateViews(week, allowed);
+  // Manuelle Wahl: nur Tage ohne Verstoß gegen eine harte Regel. Frei → ohne Zusatz; eingeschränkt (regelkonform wie der
+  // zweite Durchgang des Vorschlags) → neutral „Eingeschränkt: …“; sonst sichtbar, aber als ungünstig markiert.
+  const category = shiftCategoryOfSession(session);
+  const views: CalendarReassignmentCandidateView[] = [];
+  ranked.forEach((c) => {
+    if (!sourceCapacity || !checkCandidate(ctx, current, session, sourceCapacity, c, false)) return;
+    const free = !!checkCandidate(ctx, current, session, sourceCapacity, c, true);
+    const limited = !free && !!checkCandidate(ctx, current, session, sourceCapacity, c, true, true);
+    const [view] = buildCalendarReassignmentCandidateViews(week, [{ ...c, isConflict: c.isConflict || (!free && !limited) }]);
+    const note = limited ? limitedDayNoteDe(shiftContext.byDate[c.dateIso], category) : null;
+    views.push(limited ? { ...view, isConflict: false, limitedNote: note ?? "nur eingeschränkt geeignet" } : view);
+  });
 
   const conflict = findShiftConflicts(week, scheduleBlocks, shiftContext, locked, input.acceptedKeys).find((c) => c.sessionId === sessionId);
   if (!conflict || !sourceCapacity || !sourceYmd) return { status: "no-conflict", candidates: views, source: "shift" };

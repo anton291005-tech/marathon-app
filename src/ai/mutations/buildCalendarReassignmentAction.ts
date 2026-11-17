@@ -114,6 +114,8 @@ export type CalendarReassignmentCandidateView = {
   label: string;
   isConflict: boolean;
   warningReason: string | null;
+  /** Schicht-Modus: Tag ist regelkonform, aber nur eingeschränkt geeignet — neutral anzeigen, nicht „ungünstig“. */
+  limitedNote?: string | null;
 };
 
 /**
