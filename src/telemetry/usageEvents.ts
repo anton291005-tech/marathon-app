@@ -6,7 +6,8 @@
  * - Nur die Namen aus `USAGE_EVENT_NAMES`; Props werden je Ereignis auf eine Positivliste gekürzt
  *   (`count` als ganze Zahl, `source` aus einer festen Liste). Alles andere fällt weg.
  * - `trackUsageEvent` wirft nie und blockiert nie (Senden läuft im Hintergrund, Fehler werden geschluckt).
- * - `app_open` höchstens einmal pro Stunde (lokal gemerkt).
+ * - `app_open` höchstens einmal pro Stunde (lokal gemerkt). Gemerkt wird erst, wenn das Insert geklappt hat — ein
+ *   gescheitertes Senden (offline, Tabelle fehlt, keine Sitzung) sperrt den nächsten Start nicht.
  * - Abschaltbar in Einstellungen → Datenschutz & Daten; die Wahl liegt lokal auf dem Gerät.
  * - Fehlt die Tabelle `usage_events` (Migration 025 nicht angewendet), wird für den Rest der Sitzung
  *   nichts mehr gesendet.
@@ -118,17 +119,29 @@ function readThrottle(): Record<string, number> {
   }
 }
 
-/** `true`, wenn das Ereignis jetzt gesendet werden darf (und merkt sich dann den Zeitpunkt). */
-export function passesThrottle(name: UsageEventName, nowMs: number): boolean {
-  if (name !== "app_open") return true;
-  const map = readThrottle();
-  const last = typeof map[name] === "number" ? map[name] : null;
-  if (last != null && nowMs >= last && nowMs - last < APP_OPEN_THROTTLE_MS) return false;
-  safeWriteLocalStorageItem(USAGE_EVENTS_THROTTLE_KEY, JSON.stringify({ ...map, [name]: nowMs }));
-  return true;
+/** Gedrosselte Ereignisse (höchstens eins je `APP_OPEN_THROTTLE_MS`). */
+const THROTTLED_EVENTS: ReadonlySet<UsageEventName> = new Set<UsageEventName>(["app_open"]);
+
+export function isThrottledEvent(name: UsageEventName): boolean {
+  return THROTTLED_EVENTS.has(name);
 }
 
-type UsageEventSink = (row: UsageEventRow) => Promise<void>;
+/** `true`, wenn das Ereignis jetzt gesendet werden darf. Liest nur — gemerkt wird mit `markThrottled`. */
+export function passesThrottle(name: UsageEventName, nowMs: number): boolean {
+  if (!isThrottledEvent(name)) return true;
+  const map = readThrottle();
+  const last = typeof map[name] === "number" ? map[name] : null;
+  return !(last != null && nowMs >= last && nowMs - last < APP_OPEN_THROTTLE_MS);
+}
+
+/** Zeitpunkt eines erfolgreich gesendeten gedrosselten Ereignisses merken. */
+export function markThrottled(name: UsageEventName, nowMs: number): void {
+  if (!isThrottledEvent(name)) return;
+  safeWriteLocalStorageItem(USAGE_EVENTS_THROTTLE_KEY, JSON.stringify({ ...readThrottle(), [name]: nowMs }));
+}
+
+/** Senke: `false` (oder Fehler) = nicht gespeichert; `true`/ohne Rückgabe = gespeichert. */
+type UsageEventSink = (row: UsageEventRow) => Promise<boolean | void>;
 
 function isMissingTableError(error: { code?: string | null } | null | undefined): boolean {
   const code = error?.code ?? "";
@@ -138,13 +151,17 @@ function isMissingTableError(error: { code?: string | null } | null | undefined)
 let tableMissing = false;
 
 const supabaseSink: UsageEventSink = async (row) => {
-  if (!isSupabaseConfigured || tableMissing) return;
+  if (!isSupabaseConfigured || tableMissing) return false;
   const { data } = await supabase.auth.getSession();
   const userId = data?.session?.user?.id;
-  if (!userId) return;
+  if (!userId) return false;
   const { error } = await supabase.from("usage_events").insert({ user_id: userId, name: row.name, props: row.props });
   if (isMissingTableError(error)) tableMissing = true;
+  return !error;
 };
+
+/** Gedrosselte Ereignisse, deren Insert noch läuft (Start und `visibilitychange` gleichzeitig → nur eins). */
+const inFlight = new Set<UsageEventName>();
 
 let sink: UsageEventSink = supabaseSink;
 
@@ -152,6 +169,7 @@ let sink: UsageEventSink = supabaseSink;
 export function __setUsageEventSinkForTests(next: UsageEventSink | null): void {
   sink = next ?? supabaseSink;
   tableMissing = false;
+  inFlight.clear();
   usageUserId = null;
 }
 
@@ -168,12 +186,25 @@ export function trackUsageEvent<N extends UsageEventName>(
     if (!isUsageEventsEnabled()) return;
     const props = sanitizeUsageEventProps(name, rest[0]);
     if (props == null) return;
-    if (!passesThrottle(name, getAppNowEpochMs())) return;
+    const nowMs = getAppNowEpochMs();
+    if (!passesThrottle(name, nowMs)) return;
+    const throttled = isThrottledEvent(name);
+    if (throttled) {
+      if (inFlight.has(name)) return;
+      inFlight.add(name);
+    }
     const row: UsageEventRow = { name, props };
     void Promise.resolve()
       .then(() => sink(row))
+      .then((stored) => {
+        // Drossel erst nach erfolgreichem Insert: sonst sperrt ein gescheitertes Senden den nächsten Start.
+        if (throttled && stored !== false) markThrottled(name, nowMs);
+      })
       .catch(() => {
         /* offline, RLS, Tabelle fehlt: Nutzungsdaten dürfen nie stören */
+      })
+      .finally(() => {
+        if (throttled) inFlight.delete(name);
       });
   } catch {
     /* nie werfen */

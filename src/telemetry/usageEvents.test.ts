@@ -78,12 +78,59 @@ describe("trackUsageEvent", () => {
 
   it("drosselt app_open auf einmal pro Stunde", async () => {
     trackUsageEvent("app_open");
+    await flush();
     freezeTimeForTests(new Date("2026-11-17T08:59:00"));
     trackUsageEvent("app_open");
+    await flush();
     freezeTimeForTests(new Date("2026-11-17T09:00:01"));
     trackUsageEvent("app_open");
     await flush();
     expect(sent.map((r) => r.name)).toEqual(["app_open", "app_open"]);
+  });
+
+  it("fehlgeschlagenes Insert setzt keine Drossel → der nächste Start sendet erneut (Repro vor Migration 025)", async () => {
+    const attempts: string[] = [];
+    let ok = false;
+    __setUsageEventSinkForTests(async (row) => {
+      attempts.push(row.name);
+      if (ok) sent.push(row);
+      return ok;
+    });
+    trackUsageEvent("app_open"); // Tabelle fehlt noch → false
+    await flush();
+    expect(localStorage.getItem("marathonUsageEventsThrottle")).toBeNull();
+    ok = true; // Migration angewendet
+    freezeTimeForTests(new Date("2026-11-17T08:05:00"));
+    trackUsageEvent("app_open");
+    await flush();
+    expect(attempts).toEqual(["app_open", "app_open"]);
+    expect(sent.map((r) => r.name)).toEqual(["app_open"]);
+    // Danach greift die Drossel wieder.
+    freezeTimeForTests(new Date("2026-11-17T08:10:00"));
+    trackUsageEvent("app_open");
+    await flush();
+    expect(attempts).toHaveLength(2);
+  });
+
+  it("geworfener Fehler beim Senden setzt ebenfalls keine Drossel", async () => {
+    let fail = true;
+    __setUsageEventSinkForTests(async (row) => {
+      if (fail) throw new Error("offline");
+      sent.push(row);
+    });
+    trackUsageEvent("app_open");
+    await flush();
+    fail = false;
+    trackUsageEvent("app_open");
+    await flush();
+    expect(sent.map((r) => r.name)).toEqual(["app_open"]);
+  });
+
+  it("Start und Rückkehr in den Vordergrund gleichzeitig → nur ein app_open", async () => {
+    trackUsageEvent("app_open");
+    trackUsageEvent("app_open");
+    await flush();
+    expect(sent.map((r) => r.name)).toEqual(["app_open"]);
   });
 
   it("ist abschaltbar und merkt sich die Wahl", async () => {
