@@ -277,6 +277,12 @@ Gemeint sind hier die Schritte des Umbauplans, nicht die nummerierten Schritte v
 - **Reihenfolge geändert (Anton, 2026-11-12):** Der Freundes-Test wird vorgezogen und läuft ohne Readiness. Voraussetzung TestFlight → Apple Developer Account (offen).
 - **Vor Schritt 3 in Production:** Zustimmungstext für Gesundheitsangaben und Datenschutzerklärung ergänzen. **Vor dem Spoho-Review:** tragende Quellen im Volltext gegenlesen (PubMed war für die Recherche gesperrt).
 
+## Schicht-Modus (`feat/shift-mode`, Arbeitsplan Freundes-Test W1) — Code fertig (2026-11-17), wartet auf Review/Merge-Freigabe
+- **Pivot:** „MyRace – der Laufplan, der deinen Dienstplan kennt.“ Vertrag: `docs/friend-test/plan.md` (Branch `docs/friend-test-plan`), Regeln in `docs/readiness-spec.md` §7.6, Review-Punkte §19 Nr. 21–24.
+- **Umgesetzt:** Migration `023_shift_mode.sql` (nicht angewendet), Kern `src/readinessCore/shiftDays.ts`, optionaler Dienstplan-Kontext in der Kapazitäts-Engine (ohne Kontext bit-gleich), Wochenvorschlag `src/shift/proposeShiftWeek.ts` über `validateWeekReassignmentBatch` mit harten Schutzregeln, Dienstplan-Seite, Wizard-Frage, Karte/Satz auf „Heute“, Kürzel und Knopf im Woche-Tab, Einstellungen → Training. Schalter `REACT_APP_SHIFT_MODE` (Standard an).
+- **Harte Regel gilt:** Schichten verschieben nur innerhalb der Plan-Regeln (keine zwei harten Tage in Folge, Long Run in seiner Woche, Rennen/Taper geschützt) und erhöhen nie Belastung; nur Vorschlag mit Bestätigung.
+- **Offen:** Migration 023 anwenden (SQL-Editor, Prüf-Abfragen in der Datei), Gerätetest iPhone 13, Datenschutzerklärung um „Dienstplan“ ergänzen.
+
 ## Out of Scope bis TestFlight
 UI/UX-Redesign, Triathlon-Erweiterung, Android, Apple-Watch-Companion — nicht anfassen, auch nicht "nebenbei".
 
