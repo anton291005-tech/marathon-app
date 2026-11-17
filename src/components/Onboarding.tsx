@@ -141,7 +141,7 @@ const labelStyle: CSSProperties = {
   display: "block",
   fontSize: 12,
   fontWeight: 600,
-  color: "#cbd5e1",
+  color: "var(--ink-2)",
   marginBottom: 6,
 };
 
@@ -156,7 +156,7 @@ const sectionTitleStyle: CSSProperties = {
 const fieldErrorStyle: CSSProperties = {
   margin: "6px 0 0",
   fontSize: 12,
-  color: "#f87171",
+  color: "var(--status-low)",
   lineHeight: 1.4,
 };
 
@@ -173,8 +173,8 @@ const prefillNoticeStyle: CSSProperties = {
   fontSize: 12,
   lineHeight: 1.4,
   borderRadius: 10,
-  border: "1px solid rgba(59, 130, 246, 0.35)",
-  background: "rgba(59, 130, 246, 0.08)",
+  border: "1px solid var(--line)",
+  background: "var(--surface-2)",
   color: "var(--text-secondary)",
 };
 
@@ -182,7 +182,7 @@ const summaryTermStyle: CSSProperties = {
   margin: 0,
   fontSize: 11,
   fontWeight: 700,
-  color: "#7c8aa5",
+  color: "var(--ink-3)",
   textTransform: "uppercase",
   letterSpacing: "0.06em",
 };
@@ -211,8 +211,8 @@ function chipButtonStyle(active: boolean): CSSProperties {
     fontSize: 13,
     fontWeight: 600,
     borderRadius: 12,
-    border: `1px solid ${active ? "#3b82f6" : "var(--border-input)"}`,
-    background: active ? "rgba(59, 130, 246, 0.18)" : "var(--bg-primary)",
+    border: `1px solid ${active ? "var(--accent)" : "var(--border-input)"}`,
+    background: active ? "var(--accent-tint)" : "var(--bg-primary)",
     color: active ? "var(--text-primary)" : "var(--text-secondary)",
     cursor: "pointer",
     textAlign: "center",
@@ -830,7 +830,7 @@ export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInp
                 flex: 1,
                 height: 4,
                 borderRadius: 2,
-                background: n <= step ? "#3b82f6" : "rgba(148, 163, 184, 0.2)",
+                background: n <= step ? "var(--accent)" : "var(--surface-3)",
               }}
             />
           ))}
@@ -1195,8 +1195,8 @@ export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInp
                         width: 36,
                         height: 36,
                         borderRadius: 10,
-                        border: "1px solid rgba(148, 163, 184, 0.2)",
-                        background: "#0b1220",
+                        border: "1px solid var(--line)",
+                        background: "var(--surface-2)",
                         color: "var(--text-secondary)",
                         fontSize: 18,
                         lineHeight: 1,
@@ -1221,7 +1221,7 @@ export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInp
                   fontSize: 13,
                   fontWeight: 600,
                   borderRadius: 12,
-                  border: "1px dashed rgba(148, 163, 184, 0.35)",
+                  border: "1px dashed var(--line-strong)",
                   background: "transparent",
                   color: "var(--text-secondary)",
                   cursor: "pointer",
@@ -1315,7 +1315,7 @@ export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInp
             ) : null}
 
             {calendarStepMode === "connected" ? (
-              <p style={{ margin: 0, fontSize: 14, color: "#34d399", fontWeight: 600 }}>
+              <p style={{ margin: 0, fontSize: 14, color: "var(--status-good)", fontWeight: 600 }}>
                 Kalender verbunden
               </p>
             ) : null}
@@ -1370,7 +1370,7 @@ export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInp
                   margin: "14px 0 0",
                   fontSize: 13,
                   lineHeight: 1.45,
-                  color: calendarFeedback.tone === "ok" ? "#34d399" : "#f87171",
+                  color: calendarFeedback.tone === "ok" ? "var(--status-good)" : "var(--status-low)",
                 }}
               >
                 {calendarFeedback.text}
@@ -1430,7 +1430,7 @@ export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInp
             style={{
               margin: "0 0 12px",
               fontSize: 13,
-              color: "#f87171",
+              color: "var(--status-low)",
               textAlign: "center",
               lineHeight: 1.4,
             }}
@@ -1451,8 +1451,8 @@ export function Onboarding({ onComplete, userId = null, onCancel, initialPlanInp
                 fontSize: 15,
                 fontWeight: 600,
                 borderRadius: 14,
-                border: "1px solid rgba(148, 163, 184, 0.2)",
-                background: "#0b1220",
+                border: "1px solid var(--line)",
+                background: "var(--surface-2)",
                 color: "var(--text-secondary)",
                 cursor: isGenerating ? "not-allowed" : "pointer",
                 opacity: isGenerating ? 0.6 : 1,
