@@ -145,7 +145,7 @@ import { FeedbackSheet } from "./features/feedback/FeedbackSheet";
 import { useFeedback } from "./features/feedback/useFeedback";
 import { submitFeedback } from "./lib/supabase/services/feedbackService";
 import { UsageEventsSetting } from "./features/settings/UsageEventsSetting";
-import { trackCompletedSessions, trackUsageEvent } from "./telemetry/usageEvents";
+import { trackCompletedSessions, trackSyncCompletions, trackUsageEvent } from "./telemetry/usageEvents";
 import { useAppOpenTracking } from "./telemetry/useAppOpenTracking";
 import { FreshAccountBootCover, shouldCoverForFreshAccount } from "./app/boot/FreshAccountBootCover";
 import { applyPlanGoalToPreferences, planGoalFromPreferences, withPlanGoalMeta } from "./planV2/planGoalMeta";
@@ -2599,7 +2599,8 @@ export default function AppMain(){
     });
     if (!result.changed) return;
     // Erst wenn die Logs aus Supabase da sind: sonst zählten nach dem Anmelden alte Einheiten als neu erledigt.
-    trackCompletedSessions(logsRef.current, result.logs, "apple_health", { logsRemoteReady });
+    // Quelle je Einheit aus result.completions (Apple Health oder Strava-Import).
+    trackSyncCompletions(result.completions, { logsRemoteReady });
     const syncKeys = marathonLogRecordsDiffSyncKeys(logsRef.current, result.logs);
     void save(result.logs, syncKeys);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Apple-Run-Merge nur bei neuen Health-Daten bzw. Strava-Status

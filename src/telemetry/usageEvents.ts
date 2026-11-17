@@ -209,3 +209,24 @@ export function trackCompletedSessions(
     /* nie werfen */
   }
 }
+
+/**
+ * `session_completed` je Eintrag aus `applyAppleHealthTrainingSync(...).completions` – dort ist die Quelle
+ * (Apple Health oder Strava-Import) je Einheit bekannt. Gleiche Grenzen wie `trackCompletedSessions`.
+ */
+export function trackSyncCompletions(
+  completions: ReadonlyArray<{ source: "apple_health" | "strava" }> | null | undefined,
+  opts?: { logsRemoteReady?: boolean },
+): void {
+  try {
+    if (opts && opts.logsRemoteReady === false) return;
+    if (!completions) return;
+    const n = Math.min(20, completions.length);
+    for (let i = 0; i < n; i += 1) {
+      const source: SessionCompletedSource = completions[i].source === "strava" ? "strava" : "apple_health";
+      trackUsageEvent("session_completed", { source });
+    }
+  } catch {
+    /* nie werfen */
+  }
+}

@@ -9,6 +9,7 @@ import {
   sanitizeUsageEventProps,
   setUsageEventsEnabled,
   trackCompletedSessions,
+  trackSyncCompletions,
   trackUsageEvent,
   USAGE_EVENT_NAMES,
   type UsageEventRow,
@@ -184,5 +185,48 @@ describe("session_completed aus Apple Health erst nach logsRemoteReady", () => {
     trackCompletedSessions({ a: { done: true } }, after, "apple_health", { logsRemoteReady: true });
     await flush();
     expect(sent).toEqual([{ name: "session_completed", props: { source: "apple_health" } }]);
+  });
+});
+
+describe("session_completed mit Quelle aus dem Health-/Strava-Abgleich (W6)", () => {
+  let sent: UsageEventRow[];
+  beforeEach(() => {
+    localStorage.clear();
+    sent = [];
+    __setUsageEventSinkForTests(async (row) => {
+      sent.push(row);
+    });
+  });
+  afterEach(() => __setUsageEventSinkForTests(null));
+
+  it("zählt je Einheit mit ihrer Quelle (apple_health / strava)", async () => {
+    trackSyncCompletions(
+      [
+        { source: "apple_health" },
+        { source: "strava" },
+      ],
+      { logsRemoteReady: true },
+    );
+    await flush();
+    expect(sent).toEqual([
+      { name: "session_completed", props: { source: "apple_health" } },
+      { name: "session_completed", props: { source: "strava" } },
+    ]);
+  });
+
+  it("zählt nichts vor logsRemoteReady und höchstens 20 auf einmal", async () => {
+    const many = Array.from({ length: 30 }, () => ({ source: "strava" as const }));
+    trackSyncCompletions(many, { logsRemoteReady: false });
+    await flush();
+    expect(sent).toEqual([]);
+    trackSyncCompletions(many, { logsRemoteReady: true });
+    await flush();
+    expect(sent).toHaveLength(20);
+    expect(sent.every((r) => r.props.source === "strava")).toBe(true);
+  });
+
+  it("wirft nie, auch ohne Liste", () => {
+    expect(() => trackSyncCompletions(undefined)).not.toThrow();
+    expect(() => trackSyncCompletions(null, { logsRemoteReady: true })).not.toThrow();
   });
 });
