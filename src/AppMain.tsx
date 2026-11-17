@@ -197,6 +197,7 @@ import {
 } from "./lib/supabase/services/stravaConnectionService";
 import { useStravaSync } from "./strava/useStravaSync";
 import { replaceStravaRuns } from "./strava/crossSourceRunDedup";
+import { isStravaRunId } from "./strava/stravaRunSource";
 import { StravaConnectionPanel } from "./features/strava/StravaConnectionPanel";
 import { GarminAppleHealthHelp } from "./features/settings/GarminAppleHealthHelp";
 import { assignSessionToChosenDay } from "./ai/mutations/assignSessionToBestCapacityDay";
@@ -3952,7 +3953,7 @@ export default function AppMain(){
       hrBpm: positive(hrBpm),
       verdict: linked && evaluation?.label && evaluation.status !== "no_match" ? evaluation.label : null,
       verdictGood: evaluation?.status === "ideal" || evaluation?.status === "ideal_distance_only",
-      source: linked ? "Apple Health" : null,
+      source: linked ? (isStravaRunId(modalLog?.assignedRun?.runId) ? "Strava" : "Apple Health") : null,
       feeling: modalLog?.feeling ?? null,
       notes: typeof modalLog?.notes === "string" && modalLog.notes.trim() ? modalLog.notes.trim() : null,
     };

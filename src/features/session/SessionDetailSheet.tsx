@@ -3,6 +3,7 @@ import { CalendarDays, Check, ChevronRight, List, MessageCircle, PencilLine, X }
 import { ICON_STROKE } from "../../ui/icons";
 import { formatKmDe } from "../../ui/formatDe";
 import { feelingLabel, formatClock, normalizeFeeling, type SessionFlow } from "./sessionDetailModel";
+import poweredByStravaLogo from "../../strava/assets/api_logo_pwrdBy_strava_horiz_white.svg";
 
 export type SessionDetailPlan = {
   /** Geplante Distanz; `null` bei Einheiten ohne Distanz (Kraft, Rad nach Zeit). */
@@ -26,7 +27,7 @@ export type SessionDetailResult = {
   /** Kurzurteil aus dem Health-Abgleich („Im Zielkorridor"). */
   verdict: string | null;
   verdictGood: boolean;
-  /** „Apple Health", wenn ein Health-Lauf verknüpft ist. */
+  /** „Apple Health" bzw. „Strava", wenn ein Lauf verknüpft ist (Strava → „Powered by Strava"-Logo). */
   source: string | null;
   feeling: number | null;
   notes: string | null;
@@ -145,7 +146,11 @@ function ResultCard({ result }: { result: SessionDetailResult }) {
         <div className="mr-result__foot">
           {result.verdict && result.verdictGood ? <Check aria-hidden size={16} strokeWidth={2} color="var(--status-good)" /> : null}
           <span style={{ flex: 1 }}>{result.verdict}</span>
-          {result.source ? <span className="mr-result__source">{result.source}</span> : null}
+          {result.source === "Strava" ? (
+            <img src={poweredByStravaLogo} alt="Powered by Strava" style={{ height: 12, width: "auto", flex: "none" }} />
+          ) : result.source ? (
+            <span className="mr-result__source">{result.source}</span>
+          ) : null}
         </div>
       ) : null}
     </section>
