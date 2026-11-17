@@ -5,6 +5,7 @@ import type { AiCoachConversationTurn, AiContext, AiPlanSession, AiPlanWeek } fr
 import type { TrainingPlanV2 } from "../../planV2/types";
 import { getAppNow } from "../../core/time/timeSystem";
 import { buildRecoverySummaryFromDomain } from "./recoverySummary";
+import { isStravaRunId, isStravaSourcedRun } from "../../strava/stravaRunSource";
 
 type BuildAiContextArgs = {
   plan: AiPlanWeek[];
@@ -70,6 +71,29 @@ export function toCoachHealthRun(run: StoredHealthRun): CoachHealthRun {
   };
 }
 
+/**
+ * Strava-Daten gehen an kein Sprachmodell (Strava API Policy §5.3, auch abgeleitete Daten).
+ * Aus einem Session-Log fallen deshalb die Werte des zugeordneten Strava-Laufs heraus (Distanz, Dauer,
+ * Puls, Auswertung). Erledigt/übersprungen, Anstrengung und Notiz bleiben: das sind Angaben zum Plan.
+ * ENTSCHEIDUNG (Anton absegnen): „erledigt“ bleibt im Coach-Kontext, obwohl der Haken aus dem Strava-Lauf
+ * kommt – sonst hielte der Coach die Einheit für verpasst. Strenge Lesart: auch den Haken entfernen.
+ */
+export function stripStravaDerivedLogFields(log: unknown): unknown {
+  if (!log || typeof log !== "object" || Array.isArray(log)) return log;
+  const entry = log as Record<string, unknown>;
+  const assigned = entry.assignedRun as { runId?: unknown } | undefined;
+  const fromStrava = isStravaRunId(assigned?.runId);
+  const suggestedFromStrava = isStravaRunId(entry.suggestedHealthRunId);
+  if (!fromStrava && !suggestedFromStrava) return log;
+  const { assignedRun, runEvaluation, suggestedHealthRunId, ...rest } = entry;
+  return {
+    ...rest,
+    ...(fromStrava ? {} : { assignedRun }),
+    ...(fromStrava || suggestedFromStrava ? {} : { runEvaluation }),
+    ...(suggestedFromStrava ? {} : suggestedHealthRunId !== undefined ? { suggestedHealthRunId } : {}),
+  };
+}
+
 export function toRemoteCoachPayload(context: AiContext) {
   const now = new Date(context.todayIso);
   const nowDate = Number.isFinite(now.getTime()) ? now : getAppNow();
@@ -82,8 +106,11 @@ export function toRemoteCoachPayload(context: AiContext) {
     availableScreens: context.availableScreens ?? [],
     conversationTurns: context.conversationTurns ?? [],
     trainingPlan: { source: "display", weeks: context.plan },
-    logsLast30Days: sliceLogsLast30Days(context.logs || {}, nowDate),
-    healthRunsLast30Days: (context.healthRuns || []).map(toCoachHealthRun),
+    logsLast30Days: sliceLogsLast30Days(context.logs || {}, nowDate).map((entry) => ({
+      ...entry,
+      log: stripStravaDerivedLogFields(entry.log),
+    })),
+    healthRunsLast30Days: (context.healthRuns || []).filter((run) => !isStravaSourcedRun(run)).map(toCoachHealthRun),
     recoveryDomain: context.recoveryDomain ?? { domainKind: "initial" as const },
     prepStatus: context.prepStatus ?? null,
   };

@@ -13,7 +13,11 @@
 
 const OpenAI = require("openai");
 const Anthropic = require("@anthropic-ai/sdk");
-const { pickCoachHealthRunFields } = require("./coachHealthRunFields");
+const {
+  pickCoachHealthRunFields,
+  isStravaSourcedCoachRun,
+  stripStravaDerivedLogFields,
+} = require("./coachHealthRunFields");
 const { extractJson } = require("./extractJson");
 const { sessionDate, dateIsoToYmd } = require("./sessionDate");
 const { NEW_PLAN_VIA_SETTINGS_MESSAGE, isNewPlanRequest } = require("./coachNewPlanRequest");
@@ -762,7 +766,7 @@ function normalizeIncomingLogs(context) {
 }
 
 function trimLogsLast10Days(context) {
-  return normalizeIncomingLogs(context).slice(-10);
+  return normalizeIncomingLogs(context).slice(-10).map(stripStravaDerivedLogFields);
 }
 
 function trimHealthRunsLast10Days(context) {
@@ -772,6 +776,7 @@ function trimHealthRunsLast10Days(context) {
       ? context.healthRunsLast10Days
       : [];
   return runs
+    .filter((run) => !isStravaSourcedCoachRun(run))
     .map(pickCoachHealthRunFields)
     .filter(Boolean)
     .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
