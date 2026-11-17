@@ -3,10 +3,24 @@ import { Capacitor } from "@capacitor/core";
 import packageJson from "../../../package.json";
 
 /**
- * PLATZHALTER — vor TestFlight durch die echte Support-Adresse ersetzen. Bewusst eine nicht
- * zustellbare Domain: Feedback- und Datenexport-Mails enthalten die Konto-E-Mail.
+ * Rückfall, solange `REACT_APP_SUPPORT_EMAIL` beim Build fehlt. Bewusst eine nicht zustellbare Domain:
+ * Feedback- und Datenexport-Mails enthalten die Konto-E-Mail und dürfen nirgends sonst landen.
  */
-export const SUPPORT_EMAIL = "support@example.invalid";
+export const SUPPORT_EMAIL_PLACEHOLDER = "support@example.invalid";
+
+/** Grobe Formprobe (eine Adresse, kein Leerzeichen, Domain mit Punkt) — kein vollständiger RFC-Check. */
+const EMAIL_SHAPE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+
+/** Support-Adresse aus der Build-Variable `REACT_APP_SUPPORT_EMAIL` (Vercel/iOS-Build), sonst der Platzhalter. */
+export function resolveSupportEmail(raw: string | undefined = process.env.REACT_APP_SUPPORT_EMAIL): string {
+  const value = typeof raw === "string" ? raw.trim() : "";
+  return EMAIL_SHAPE.test(value) ? value : SUPPORT_EMAIL_PLACEHOLDER;
+}
+
+export const SUPPORT_EMAIL = resolveSupportEmail();
+
+/** false = Build ohne echte Adresse; Mail-Wege führen dann ins Leere. */
+export const SUPPORT_EMAIL_CONFIGURED = SUPPORT_EMAIL !== SUPPORT_EMAIL_PLACEHOLDER;
 
 /** Version des Web-Bundles (package.json) — Anzeige im Web und Fallback in der nativen App. */
 export const APP_VERSION: string = packageJson.version;
