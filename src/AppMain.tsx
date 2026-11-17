@@ -5457,6 +5457,12 @@ export default function AppMain(){
               </div>
             </div>
             ) : null}
+            {/* Web-Fallback: lokale Erinnerungen gibt es nur in der App — im Browser kein Schalter, der nichts tut. */}
+            {!Capacitor.isNativePlatform() ? (
+              <div style={{ padding: "16px 0", color: "var(--ink-2)", fontSize: 13 }}>
+                Trainings-Erinnerungen gibt es in der iPhone-App.
+              </div>
+            ) : (
             <div style={{ padding: "16px 0", borderBottom: "1px solid var(--border-default)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: notificationSettings.enabled ? 14 : 0 }}>
                 <div>
@@ -5476,7 +5482,7 @@ export default function AppMain(){
                     height: 30,
                     borderRadius: 15,
                     border: "none",
-                    background: notificationSettings.enabled ? "#3b82f6" : "var(--bg-surface)",
+                    background: notificationSettings.enabled ? "var(--accent)" : "var(--bg-surface)",
                     position: "relative",
                     cursor: "pointer",
                     transition: "background 0.2s",
@@ -5532,6 +5538,7 @@ export default function AppMain(){
                 </div>
               )}
             </div>
+            )}
             {checkInEnabled ? <CheckInReminderSetting settings={checkInReminder} onChange={updateCheckInReminder} /> : null}
                   </SettingsGroup>
                 </>
