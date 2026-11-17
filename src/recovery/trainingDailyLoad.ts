@@ -9,6 +9,19 @@ import { getEffectiveKm } from "../marathonPrediction";
 import { sanitizeDistance } from "../sanitizeDistance";
 import { weekPlannedRunningKm } from "../weeklyAnalysis";
 import { sessionDayIso } from "./sessionCalendarDay";
+import { isStravaRunId } from "../strava/stravaRunSource";
+
+/**
+ * Strava-Daten gehen an kein Sprachmodell, auch nicht abgeleitet (Strava API Policy §5.3) – die Tageslast
+ * landet über `recoveryDomain` im Coach-Kontext. Bei einer Strava-Zuordnung zählt deshalb die geplante
+ * Distanz: `assignedRun` (Ist-km, Dauer, Puls), `actualKm`/`durationMin` (beim Übernehmen bzw. Speichern aus
+ * dem Strava-Lauf abgeleitet) und `runEvaluation` fallen weg. Die Einheit bleibt erledigt.
+ */
+export function logForTrainingLoad(log: SessionLog | undefined): SessionLog | undefined {
+  if (!log || !isStravaRunId(log.assignedRun?.runId)) return log;
+  const { assignedRun, actualKm, durationMin, runEvaluation, ...rest } = log;
+  return { ...rest, done: true };
+}
 
 function intensityFactor(type: PlanSession["type"]): number {
   if (type === "interval" || type === "tempo" || type === "race") return 1.38;
@@ -33,7 +46,8 @@ export function buildDailyTrainingLoadByDate(plan: PlanWeek[], logs: Record<stri
       if (!isSessionLogDone(logs[session.id])) continue;
       const key = sessionDayIso(session);
       if (!key) continue;
-      const raw = getEffectiveKm(session, logs[session.id]);
+      // Ist-km aus Apple Health bzw. vom Nutzer; bei Strava-Zuordnung die geplanten km (logForTrainingLoad).
+      const raw = getEffectiveKm(session, logForTrainingLoad(logs[session.id]));
       const km = sanitizeDistance(raw, { weeklyAvgKm, rollingRef: rolling });
       const load = km * intensityFactor(session.type);
       m.set(key, (m.get(key) ?? 0) + load);

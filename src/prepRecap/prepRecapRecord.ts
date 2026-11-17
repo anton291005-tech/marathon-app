@@ -8,6 +8,10 @@
  * - Älteres `schemaVersion`: Stats neu bauen und überschreiben — Zeitfelder bleiben unangetastet.
  * - Snapshot ohne Zeit, Health findet später eine: als unbestätigter Vorschlag nachtragen.
  *   Eine vorhandene Zeit (bestätigt oder nicht) wird nie überschrieben.
+ * - Ein Vorschlag aus dem Strava-Import (`origin: "strava"`) wird NIE gespeichert (Strava API Policy
+ *   §6.2 Cache höchstens 7 Tage, §5.3 kein Weg zum Coach über den Datensatz). Er wird nur angezeigt,
+ *   solange der Strava-Lauf da ist; erst wenn der Athlet ihn bestätigt oder ändert, wird die Zeit als
+ *   seine eigene Angabe gespeichert (`savePrepRecapFinishTime`).
  */
 
 import type { DetectedRaceFinish } from "./detectRaceFinishTime";
@@ -58,7 +62,8 @@ export function decidePrepRecapAction(args: {
   currentSchemaVersion?: number;
 }): PrepRecapAction {
   const version = args.currentSchemaVersion ?? PREP_RECAP_SCHEMA_VERSION;
-  const { existing, detectedFinish } = args;
+  const { existing } = args;
+  const detectedFinish = args.detectedFinish?.origin === "strava" ? null : args.detectedFinish;
 
   if (!existing) {
     return {

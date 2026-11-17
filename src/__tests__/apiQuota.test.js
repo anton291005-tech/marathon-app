@@ -77,7 +77,7 @@ beforeEach(() => {
 });
 
 describe("Limits", () => {
-  test("Startwerte: Coach 30/h und 150/Tag, Vollplan 5/Tag, Struktur 10/Tag", () => {
+  test("Startwerte: Coach 30/h und 150/Tag, Vollplan 5/Tag, Struktur 10/Tag, Strava-Import 30/h und 200/Tag", () => {
     expect(API_QUOTAS).toEqual({
       coach_chat: [
         { windowSeconds: 3600, limit: 30 },
@@ -85,6 +85,10 @@ describe("Limits", () => {
       ],
       plan_full: [{ windowSeconds: 86400, limit: 5 }],
       plan_structure: [{ windowSeconds: 86400, limit: 10 }],
+      strava_sync: [
+        { windowSeconds: 3600, limit: 30 },
+        { windowSeconds: 86400, limit: 200 },
+      ],
     });
   });
 

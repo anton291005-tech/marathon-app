@@ -1,4 +1,6 @@
 import type { StoredHealthRun } from "../../../healthRuns";
+import { dedupeAppleHealthAndStravaRuns, dropExpiredLocalStravaRuns } from "../../../strava/crossSourceRunDedup";
+import { isStravaRunId, STRAVA_SOURCE_NAME, STRAVA_SOURCE_PREFIX } from "../../../strava/stravaRunSource";
 import { supabase } from "../client";
 
 /** Row shape for `public.health_workouts` SELECT * (relevant columns). */
@@ -19,7 +21,7 @@ export type DbHealthWorkoutRow = {
   created_at: string;
 };
 
-function dbRowToStoredHealthRun(row: DbHealthWorkoutRow): StoredHealthRun | null {
+export function dbRowToStoredHealthRun(row: DbHealthWorkoutRow): StoredHealthRun | null {
   if (typeof row.source_id !== "string" || !row.source_id.trim()) return null;
   if (!row.start_time || String(row.start_time).trim() === "") return null;
   const distanceMeters =
@@ -45,6 +47,11 @@ function dbRowToStoredHealthRun(row: DbHealthWorkoutRow): StoredHealthRun | null
   if (row.avg_heart_rate != null && Number.isFinite(row.avg_heart_rate)) {
     run.avgHeartRateBpm = Math.round(Number(row.avg_heart_rate));
   }
+  if (row.calories != null && Number.isFinite(Number(row.calories)) && Number(row.calories) > 0) {
+    run.calories = Math.round(Number(row.calories));
+  }
+  // Die Tabelle hat keine Quellspalte: Strava-Zeilen erkennt man am source_id-Präfix.
+  if (isStravaRunId(run.runId)) run.sourceName = STRAVA_SOURCE_NAME;
 
   return run;
 }
@@ -65,7 +72,8 @@ function storedRunToUpsertPayload(userId: string, run: StoredHealthRun) {
     distance_meters: distanceMeters,
     avg_heart_rate:
       run.avgHeartRateBpm != null && Number.isFinite(run.avgHeartRateBpm) ? Math.round(run.avgHeartRateBpm) : null,
-    calories: null,
+    // Nur mitschicken, wenn bekannt: ein `null` würde beim Upsert einen vorhandenen Wert überschreiben.
+    ...(typeof run.calories === "number" && Number.isFinite(run.calories) ? { calories: Math.round(run.calories) } : {}),
     splits: run.splits != null ? run.splits : null,
     laps: run.laps != null ? run.laps : null,
     gps_stream: run.gpsStream != null ? run.gpsStream : null,
@@ -91,11 +99,34 @@ export async function loadHealthWorkouts(userId: string): Promise<StoredHealthRu
     const mapped = dbRowToStoredHealthRun(raw);
     if (mapped) out.push(mapped);
   }
+  return dedupeAppleHealthAndStravaRuns(dropExpiredLocalStravaRuns(out));
+}
+
+/** Nur die importierten Strava-Läufe (nach POST /api/strava/sync), ohne Deduplizierung. */
+export async function loadStravaHealthWorkouts(userId: string): Promise<StoredHealthRun[] | null> {
+  const { data, error } = await supabase
+    .from("health_workouts")
+    .select("*")
+    .eq("user_id", userId)
+    .like("source_id", `${STRAVA_SOURCE_PREFIX}%`);
+  if (error) {
+    console.warn("[healthWorkoutsService] loadStravaHealthWorkouts", error.message);
+    return null;
+  }
+  if (!data || !Array.isArray(data)) return [];
+  const out: StoredHealthRun[] = [];
+  for (const raw of data as DbHealthWorkoutRow[]) {
+    const mapped = dbRowToStoredHealthRun(raw);
+    if (mapped) out.push(mapped);
+  }
   return out;
 }
 
 export async function saveHealthWorkout(userId: string, run: StoredHealthRun): Promise<void> {
   if (!run?.runId || !String(run.runId).trim()) return;
+  // Strava-Zeilen schreibt nur der Server (`api/strava/sync.js`); der Client würde sonst nach dem
+  // 7-Tage-Aufräumen (Strava API Policy §6.2) gelöschte Zeilen wieder anlegen.
+  if (isStravaRunId(run.runId)) return;
 
   const row = storedRunToUpsertPayload(userId, run);
   const { error } = await supabase.from("health_workouts").upsert(row, { onConflict: "user_id,source_id" });
@@ -104,4 +135,24 @@ export async function saveHealthWorkout(userId: string, run: StoredHealthRun): P
     // Auch im Release sichtbar: ein fehlgeschlagener Upsert heißt, das Workout fehlt auf anderen Geräten.
     console.warn("[healthWorkoutsService] saveHealthWorkout", error.message);
   }
+}
+
+/**
+ * Löscht alle importierten Strava-Läufe des Nutzers (beim Trennen; Strava API Policy §7.4 verlangt das
+ * Löschen nach Widerruf). Geplante Einheiten, die schon als erledigt gelten, bleiben erledigt.
+ * Scheitert es, bricht `disconnectStrava` ab (Verbindung bleibt, „Konnte nicht vollständig trennen“).
+ * Übrig gebliebene Zeilen ohne Verbindung ordnet der Client nicht zu und verwirft sie lokal nach 7 Tagen
+ * (`selectRunsForAutoAssignment`, `dropExpiredLocalStravaRuns`).
+ */
+export async function deleteStravaHealthWorkouts(userId: string): Promise<{ ok: boolean }> {
+  const { error } = await supabase
+    .from("health_workouts")
+    .delete()
+    .eq("user_id", userId)
+    .like("source_id", `${STRAVA_SOURCE_PREFIX}%`);
+  if (error) {
+    console.warn("[healthWorkoutsService] deleteStravaHealthWorkouts", error.message);
+    return { ok: false };
+  }
+  return { ok: true };
 }

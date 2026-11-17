@@ -207,6 +207,13 @@ import {
   fetchStravaConnectionStatus,
   disconnectStrava,
 } from "./lib/supabase/services/stravaConnectionService";
+import { useStravaSync } from "./strava/useStravaSync";
+import { dropExpiredLocalStravaRuns, replaceStravaRuns } from "./strava/crossSourceRunDedup";
+import { isStravaRunId, isStravaSourcedRun, selectRunsForAutoAssignment } from "./strava/stravaRunSource";
+import { StravaConnectionPanel } from "./features/strava/StravaConnectionPanel";
+import { StravaRunAttribution } from "./features/strava/StravaRunAttribution";
+import { resolvePrepFinishDisplay } from "./prepRecap/resolvePrepFinishDisplay";
+import { GarminAppleHealthHelp } from "./features/settings/GarminAppleHealthHelp";
 import { assignSessionToChosenDay } from "./ai/mutations/assignSessionToBestCapacityDay";
 import { proposeSingleSessionCalendarReassignment } from "./ai/mutations/buildCalendarReassignmentAction";
 import { buildLockedSessionIds } from "./ai/mutations/lockedSessions";
@@ -1872,10 +1879,13 @@ export default function AppMain(){
 
   const checkStravaConnectionStatus = async () => {
     try {
+      // null bei Netzfehler: unbekannt, nicht „getrennt“ – lokale Strava-Läufe bleiben erhalten. Der Import
+      // pausiert, bis die nächste Prüfung (Rückkehr in den Vordergrund, useStravaSync.recheckConnection) „verbunden“ ergibt.
       const connected = await fetchStravaConnectionStatus();
-      setStravaConnected(connected);
+      setStravaConnected((prev) => (connected === null ? (prev === true ? true : null) : connected));
     } catch (err) {
       console.error("[Strava] connection status check failed", err);
+      setStravaConnected((prev) => (prev === true ? true : null));
     }
   };
 
@@ -1884,6 +1894,23 @@ export default function AppMain(){
     void checkStravaConnectionStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- check once on mount for iOS
   }, []);
+
+  /** Strava-Import: App-Start, Vordergrund (gedrosselt 15 min), „Jetzt synchronisieren“ → healthRuns → Zuordnung. */
+  const stravaSync = useStravaSync({
+    userId: user?.id,
+    connected: stravaConnected,
+    onStravaRunsLoaded: (runs) => setHealthRuns((prev) => replaceStravaRuns(prev, runs)),
+    onReconnectRequired: () => setHealthRuns((prev) => dropExpiredLocalStravaRuns(prev)),
+    // Nur iOS prüft den Strava-Status (wie beim Start); bei unbekanntem Status erneut beim Vordergrund.
+    recheckConnection: Capacitor.getPlatform() === "ios" ? () => void checkStravaConnectionStatus() : undefined,
+  });
+  const stravaSyncRef = useRef(stravaSync);
+  stravaSyncRef.current = stravaSync;
+  // Keine Strava-Verbindung (mehr): übrig gebliebene strava:-Läufe nicht anzeigen und nicht zuordnen.
+  useEffect(() => {
+    if (stravaConnected !== false) return;
+    setHealthRuns((prev) => (prev.some((r) => isStravaSourcedRun(r)) ? replaceStravaRuns(prev, []) : prev));
+  }, [stravaConnected, healthRuns]);
 
   const handleStravaDisconnect = async () => {
     setStravaFeedback(null);
@@ -1894,9 +1921,15 @@ export default function AppMain(){
       const userId = data.session?.user?.id;
       if (!userId) throw new Error("Nicht angemeldet");
       const result = await disconnectStrava(userId);
-      if (!result.ok) throw new Error("delete failed");
+      if (!result.ok) {
+        // Läufe nicht gelöscht → Verbindung bleibt; nie „gelöscht“ melden, wenn nichts gelöscht wurde.
+        setStravaFeedback({ tone: "err", text: "Konnte nicht vollständig trennen, bitte erneut versuchen." });
+        return;
+      }
       setStravaConnected(false);
-      setStravaFeedback({ tone: "ok", text: "Strava getrennt." });
+      setHealthRuns((prev) => replaceStravaRuns(prev, []));
+      stravaSync.clearReconnectRequired();
+      setStravaFeedback({ tone: "ok", text: "Strava getrennt. Importierte Strava-Läufe sind gelöscht." });
     } catch (err) {
       console.error("[Strava] disconnect failed", err);
       setStravaFeedback({ tone: "err", text: "Strava konnte nicht getrennt werden." });
@@ -1972,7 +2005,10 @@ export default function AppMain(){
       const status = event?.detail?.status;
       if (status === "connected") {
         setStravaFeedback({ tone: "ok", text: "Mit Strava verbunden." });
-        void checkStravaConnectionStatus();
+        stravaSyncRef.current.clearReconnectRequired();
+        // War die Verbindung schon aktiv (neu verbinden nach „reconnect_required“), gleich abgleichen; nach
+        // Trennen + Verbinden löst der Hook selbst aus, sobald stravaConnected wieder true ist.
+        void checkStravaConnectionStatus().then(() => stravaSyncRef.current.syncNow());
       } else {
         setStravaFeedback({ tone: "err", text: "Strava-Verbindung fehlgeschlagen. Bitte erneut versuchen." });
       }
@@ -2556,7 +2592,8 @@ export default function AppMain(){
     if (Capacitor.getPlatform() !== "ios") return;
     if (!healthRuns.length) return;
     const result = applyAppleHealthTrainingSync({
-      healthRuns,
+      // Strava-Läufe nur bei bestätigter Verbindung (stravaRunSource.selectRunsForAutoAssignment).
+      healthRuns: selectRunsForAutoAssignment(healthRuns, stravaConnected),
       planSessions: ACTIVE_SESSIONS,
       logs: logsRef.current,
     });
@@ -2565,8 +2602,8 @@ export default function AppMain(){
     trackCompletedSessions(logsRef.current, result.logs, "apple_health", { logsRemoteReady });
     const syncKeys = marathonLogRecordsDiffSyncKeys(logsRef.current, result.logs);
     void save(result.logs, syncKeys);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Apple-Run-Merge nur bei neuen Health-Daten
-  }, [healthRuns]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Apple-Run-Merge nur bei neuen Health-Daten bzw. Strava-Status
+  }, [healthRuns, stravaConnected]);
 
   useEffect(() => {
     const todayYmd = getAppTodayYmd();
@@ -3039,10 +3076,8 @@ export default function AppMain(){
   }, [prepRaceYmd, prepRecapUserId, activePlanId]);
   const prepFinishDisplay = useMemo(() => {
     if (!prepCompleted) return null;
-    if (prepRecapRecord?.raceDate === prepCompleted.raceYmd && prepRecapRecord.finishTimeSeconds != null) {
-      return { seconds: prepRecapRecord.finishTimeSeconds, confirmed: prepRecapRecord.finishTimeConfirmed };
-    }
-    return prepDetectedFinish ? { seconds: prepDetectedFinish.seconds, confirmed: false } : null;
+    // Strava-Vorschläge stehen nie im Datensatz; live „laut Strava“, nicht an den Coach (resolvePrepFinishDisplay).
+    return resolvePrepFinishDisplay({ record: prepRecapRecord, raceYmd: prepCompleted.raceYmd, detected: prepDetectedFinish });
   }, [prepCompleted, prepRecapRecord, prepDetectedFinish]);
   /** Coach-Kontext nach Plan-Ende: Abschluss + Rennergebnis des AKTIVEN Plans statt aktueller Woche. */
   const coachPrepStatus = useMemo(
@@ -3069,7 +3104,8 @@ export default function AppMain(){
       planId: activePlanId,
       raceName: completed.raceName,
       raceDate: completed.raceYmd,
-      detectedFinish: prepDetectedFinish,
+      // Strava-Vorschläge nie speichern (Policy §6.2/§5.3); decidePrepRecapAction prüft das zusätzlich.
+      detectedFinish: prepDetectedFinish?.origin === "strava" ? null : prepDetectedFinish,
       buildStats: () =>
         buildPrepRecapSnapshot({
           plan: displayPlan,
@@ -3979,7 +4015,7 @@ export default function AppMain(){
       hrBpm: positive(hrBpm),
       verdict: linked && evaluation?.label && evaluation.status !== "no_match" ? evaluation.label : null,
       verdictGood: evaluation?.status === "ideal" || evaluation?.status === "ideal_distance_only",
-      source: linked ? "Apple Health" : null,
+      source: linked ? (isStravaRunId(modalLog?.assignedRun?.runId) ? "Strava" : "Apple Health") : null,
       feeling: modalLog?.feeling ?? null,
       notes: typeof modalLog?.notes === "string" && modalLog.notes.trim() ? modalLog.notes.trim() : null,
     };
@@ -5019,6 +5055,7 @@ export default function AppMain(){
                   {appleHealthLoadFeedback.text}
                 </div>
               ) : null}
+              <GarminAppleHealthHelp />
                       </div>
                     </SettingsGroup>
                     <SettingsGroup>
@@ -5029,71 +5066,17 @@ export default function AppMain(){
                       />
                     </SettingsGroup>
                     <SettingsGroup title="Strava" padded>
-              <div style={{marginTop:12}}>
-                <div
-                  style={{
-                    fontSize:13,
-                    fontWeight:700,
-                    marginBottom:8,
-                    color:stravaConnected ? "#86efac" : "var(--text-secondary)",
-                    lineHeight:1.45,
-                  }}
-                >
-                  {stravaConnected ? "Mit Strava verbunden" : "Nicht verbunden"}
-                </div>
-                {!stravaConnected ? (
-                  <button
-                    type="button"
-                    onClick={() => handleStravaConnect()}
-                    disabled={stravaConnectBusy}
-                    style={{
-                      background:"rgba(252,76,2,0.16)",
-                      border:"1px solid rgba(252,76,2,0.4)",
-                      borderRadius:12,
-                      padding:"10px 14px",
-                      color:"#fdba8c",
-                      fontSize:13,
-                      fontWeight:700,
-                      cursor:stravaConnectBusy ? "default" : "pointer",
-                      opacity:stravaConnectBusy ? 0.55 : 1,
-                    }}
-                  >
-                    {stravaConnectBusy ? "Verbinde…" : "Mit Strava verbinden"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleStravaDisconnect()}
-                    disabled={stravaConnectBusy}
-                    style={{
-                      background:"rgba(15,23,42,0.85)",
-                      border:"1px solid var(--border-default)",
-                      borderRadius:12,
-                      padding:"10px 14px",
-                      color:"#cbd5e1",
-                      fontSize:13,
-                      fontWeight:700,
-                      cursor:stravaConnectBusy ? "default" : "pointer",
-                      opacity:stravaConnectBusy ? 0.55 : 1,
-                    }}
-                  >
-                    {stravaConnectBusy ? "Trenne…" : "Trennen"}
-                  </button>
-                )}
-                {stravaFeedback ? (
-                  <div
-                    style={{
-                      fontSize:12,
-                      lineHeight:1.45,
-                      marginTop:8,
-                      color:stravaFeedback.tone === "ok" ? "#86efac" : "#fca5a5",
-                      fontWeight:650,
-                    }}
-                  >
-                    {stravaFeedback.text}
-                  </div>
-                ) : null}
-              </div>
+                      <StravaConnectionPanel
+                        connected={stravaConnected}
+                        connectBusy={stravaConnectBusy}
+                        feedback={stravaFeedback}
+                        onConnect={() => handleStravaConnect()}
+                        onDisconnect={() => handleStravaDisconnect()}
+                        syncBusy={stravaSync.busy}
+                        lastResult={stravaSync.lastResult}
+                        reconnectRequired={stravaSync.reconnectRequired}
+                        onSyncNow={() => void stravaSync.syncNow()}
+                      />
                     </SettingsGroup>
                     {(() => {
             const display = computeCalendarConnectionDisplay(
@@ -5271,6 +5254,7 @@ export default function AppMain(){
                         }}
                       >
                         <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>{kindShort}</div>
+                        <StravaRunAttribution runId={workout.runId} />
                         <div style={{ fontSize: 13, color: "var(--text-primary)" }}>{dateLabel}</div>
                         <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                           {durMin != null ? `Dauer: ca. ${durMin} Min.` : "Dauer: —"}
@@ -5779,6 +5763,11 @@ export default function AppMain(){
           <PrepRecapExperience
             record={prepRecapRecord}
             entry={prepRecapOverlay}
+            stravaSuggestion={
+              prepFinishDisplay?.origin === "strava" && !prepFinishDisplay.confirmed
+                ? { seconds: prepFinishDisplay.seconds }
+                : null
+            }
             onSaveFinish={handlePrepRecapSaveFinish}
             onClose={() => setPrepRecapOverlay(null)}
             onStartNewPrep={

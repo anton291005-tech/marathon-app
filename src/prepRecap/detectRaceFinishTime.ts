@@ -4,7 +4,9 @@
  * immer als unbestätigt behandelt und im UI „laut Apple Health" gekennzeichnet, bis der Athlet es
  * bestätigt oder korrigiert (Rückblick-Schritt).
  *
- * Strava liefert keine Aktivitäten (nur OAuth-Tokens), ist hier also bewusst keine Quelle.
+ * Seit dem Strava-Import (W2) kann der Lauf auch aus Strava stammen (`runId` mit Präfix `strava:`):
+ * dann trägt das Ergebnis `origin: "strava"` – fürs UI („laut Strava“) und damit die Zeit nicht an den
+ * Coach geht (Strava API Policy §5.3, `buildCoachPrepStatus`).
  */
 
 import {
@@ -15,12 +17,19 @@ import {
 import { getAppCalendarYmd } from "../core/time/timeSystem";
 import { getSessionPlannedDistanceKm } from "../sessionDistance";
 import type { PlanSession, SessionLog } from "../marathonPrediction";
+import { isStravaRunId } from "../strava/stravaRunSource";
 
 export type DetectedRaceFinish = {
   seconds: number;
   distanceKm: number;
   source: "health";
+  /** Nur gesetzt, wenn der Lauf aus dem Strava-Import stammt (sonst Apple Health). */
+  origin?: "strava";
 };
+
+function withOrigin(finish: DetectedRaceFinish, runId: unknown): DetectedRaceFinish {
+  return isStravaRunId(runId) ? { ...finish, origin: "strava" } : finish;
+}
 
 const MARATHON_MIN_DISTANCE_KM = 40;
 const MIN_DISTANCE_SHARE_OF_RACE = 0.95;
@@ -65,19 +74,19 @@ export function detectRaceFinishTime(args: {
     const seconds = validSeconds(assigned.duration);
     const km = assigned.distanceKm;
     if (seconds != null && typeof km === "number" && Number.isFinite(km) && km >= minKm) {
-      return { seconds, distanceKm: km, source: "health" };
+      return withOrigin({ seconds, distanceKm: km, source: "health" }, assigned.runId);
     }
   }
 
   // 2) Längster Lauf am lokalen Renntag aus den gespeicherten Health-Workouts.
-  let best: DetectedRaceFinish | null = null;
+  let best: { finish: DetectedRaceFinish; runId: string } | null = null;
   for (const run of healthRuns ?? []) {
     if (!run || getStoredHealthRunCanonicalType(run) !== "run") continue;
     if (localYmdFromIso(run.startDate) !== raceYmd) continue;
     const km = storedHealthRunDistanceKmNumeric(run);
     const seconds = validSeconds(run.duration);
     if (km == null || km < minKm || seconds == null) continue;
-    if (best == null || km > best.distanceKm) best = { seconds, distanceKm: km, source: "health" };
+    if (best == null || km > best.finish.distanceKm) best = { finish: { seconds, distanceKm: km, source: "health" }, runId: run.runId };
   }
-  return best;
+  return best ? withOrigin(best.finish, best.runId) : null;
 }

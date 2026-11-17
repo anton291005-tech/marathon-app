@@ -15,8 +15,14 @@ const MARATHON_KM = 42.195;
 
 export type RaceFinishDisplay = {
   seconds: number;
-  /** false → Vorschlag aus Apple Health, noch nicht vom Athleten bestätigt. */
+  /** false → Vorschlag aus Apple Health (bzw. Strava), noch nicht vom Athleten bestätigt. */
   confirmed: boolean;
+  /**
+   * Herkunft eines unbestätigten Vorschlags: „strava“ (Strava-Import, nur live, nie gespeichert) oder
+   * „apple_health“ (HealthKit bzw. gespeicherter Vorschlag, der nie aus Strava stammt). Bestätigte Zeiten
+   * brauchen keine Herkunft – sie sind die Angabe des Athleten.
+   */
+  origin?: "strava" | "apple_health";
 };
 
 const MONTHS_DE = [
@@ -48,9 +54,10 @@ export function formatFinishTime(seconds: number): string {
   return formatDuration(seconds);
 }
 
-/** Zusatz hinter einer Zeit, solange sie nur aus Apple Health stammt. */
+/** Zusatz hinter einer Zeit, solange sie nur aus Apple Health (bzw. Strava) stammt. */
 export function finishTimeSourceNote(finish: RaceFinishDisplay): string | null {
-  return finish.confirmed ? null : "laut Apple Health";
+  if (finish.confirmed) return null;
+  return finish.origin === "strava" ? "laut Strava" : "laut Apple Health";
 }
 
 /**

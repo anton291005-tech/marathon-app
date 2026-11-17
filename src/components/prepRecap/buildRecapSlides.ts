@@ -54,6 +54,8 @@ export type RecapSlide = {
   body?: Array<{ label: string; first: string; last: string }>;
   /** Nur Outro: kompakte Zusammenfassung. */
   summary?: string[];
+  /** „strava“: die Zeit ist ein unbestätigter Vorschlag aus dem Strava-Import → „Powered by Strava“-Logo. */
+  attribution?: "strava";
 };
 
 export type RecapSlidesInput = {
@@ -61,6 +63,8 @@ export type RecapSlidesInput = {
   raceName: string | null;
   finishSeconds: number | null;
   finishConfirmed: boolean;
+  /** „strava“, wenn der unbestätigte Vorschlag aus dem Strava-Import stammt. */
+  finishOrigin?: "strava";
   /** Heute (YYYY-MM-DD) — entscheidet, ob das Outro noch von Erholung spricht. */
   todayYmd: string;
 };
@@ -250,7 +254,7 @@ function raceSlide(input: RecapSlidesInput): RecapSlide | null {
 
   const reached = isGoalReached(finishSeconds, race.goalSeconds);
   const pace = formatRacePace(finishSeconds, race.distanceKm);
-  const sourceNote = finishTimeSourceNote({ seconds: finishSeconds, confirmed: finishConfirmed });
+  const sourceNote = finishTimeSourceNote({ seconds: finishSeconds, confirmed: finishConfirmed, origin: input.finishOrigin });
   return {
     id: "race",
     eyebrow,
@@ -260,6 +264,7 @@ function raceSlide(input: RecapSlidesInput): RecapSlide | null {
     // Ziel nur als Abstand bei erreichtem Ziel (subline); verpasst → keine Zielzeile.
     detail: joinDetail([pace, sourceNote]),
     celebration: reached ? "goal" : "base",
+    ...(input.finishOrigin === "strava" && !finishConfirmed ? { attribution: "strava" as const } : {}),
   };
 }
 
@@ -269,12 +274,20 @@ function outroSlide(input: RecapSlidesInput): RecapSlide {
   if (stats.weeks) summary.push(`${stats.weeks.count} ${stats.weeks.count === 1 ? "Woche" : "Wochen"}`);
   if (stats.volume) summary.push(`${formatRecapHero(kmHero(stats.volume.actualKm))} km`);
   if (finishSeconds != null) {
-    const note = finishTimeSourceNote({ seconds: finishSeconds, confirmed: input.finishConfirmed });
+    const note = finishTimeSourceNote({ seconds: finishSeconds, confirmed: input.finishConfirmed, origin: input.finishOrigin });
     summary.push(note ? `${formatFinishTime(finishSeconds)} · ${note}` : formatFinishTime(finishSeconds));
   }
 
   const ran = recapRaceWasRun(stats, finishSeconds);
-  const base = { id: "outro" as const, eyebrow: "Das bleibt", hero: null, detail: null, celebration: null, summary };
+  const base = {
+    id: "outro" as const,
+    eyebrow: "Das bleibt",
+    hero: null,
+    detail: null,
+    celebration: null,
+    summary,
+    ...(finishSeconds != null && input.finishOrigin === "strava" && !input.finishConfirmed ? { attribution: "strava" as const } : {}),
+  };
   if (ran && isWithinRecoveryWindow(stats.race.ymd, input.todayYmd)) {
     return {
       ...base,

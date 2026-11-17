@@ -3,6 +3,7 @@ import { getAppNow } from "../core/time/timeSystem";
 import { isSessionLogDone } from "../appSmartFeatures";
 import type { StoredHealthRun } from "../healthRuns";
 import { getStoredHealthRunCanonicalType } from "../healthRuns";
+import { isStravaSourcedRun } from "../strava/stravaRunSource";
 import {
   getSessionPlannedDistanceKm,
   resolveStructuredWorkoutSpecForSession,
@@ -318,11 +319,16 @@ function workoutEndDate(stored: StoredHealthRun): Date | null {
   return Number.isFinite(d.getTime()) ? d : null;
 }
 
-function isAppleHealthOnlySource(stored: StoredHealthRun): boolean {
-  const s = typeof stored.sourceName === "string" ? stored.sourceName.trim().toLowerCase() : "";
-  // Strict: no inference if missing; unknown sources are discarded.
-  if (!s) return false;
-  return s.includes("apple");
+/**
+ * Volle Auswertung nur für Workouts, die aus HealthKit kommen – egal welche App sie dort hineingeschrieben
+ * hat. Früher galt nur ein Quellname mit „apple“: Garmin-Läufe (Quelle „Connect“ bzw. „Garmin Connect“)
+ * und Uhren mit eigenem Namen fielen so auf den Log-Pfad. Strava-Importe bleiben beim Log-Pfad
+ * (roadmap.md „Rückblick auf erledigte Sessions“). Ohne Quellname weiter keine Annahme.
+ */
+export function isHealthKitWorkoutSource(stored: StoredHealthRun): boolean {
+  if (isStravaSourcedRun(stored)) return false;
+  const s = typeof stored.sourceName === "string" ? stored.sourceName.trim() : "";
+  return s.length > 0;
 }
 
 /** Full recipe text for interval detection/scoring — desc holds reps/WU/CD, pace is target only. */
@@ -509,7 +515,7 @@ export function usePostWorkoutSummary(args: HookArgs): {
         if (!workoutId) continue;
         const health = healthById.get(workoutId) ?? null;
         if (!health) continue;
-        if (!isAppleHealthOnlySource(health)) continue;
+        if (!isHealthKitWorkoutSource(health)) continue;
 
         const rawType = typeof health.workoutType === "string" ? health.workoutType.trim().toLowerCase() : "";
         if (!rawType || !isEligibleWorkout(rawType)) continue;
@@ -589,7 +595,7 @@ export function usePostWorkoutSummary(args: HookArgs): {
     const candidates = (args.healthRuns || [])
       .map((w) => {
         if (!w?.runId) return null;
-        if (!isAppleHealthOnlySource(w)) return null;
+        if (!isHealthKitWorkoutSource(w)) return null;
         const type = typeof w.workoutType === "string" ? w.workoutType.trim().toLowerCase() : "";
         if (!type || !isEligibleWorkout(type)) return null;
         const end = workoutEndDate(w);
@@ -623,7 +629,7 @@ export function usePostWorkoutSummary(args: HookArgs): {
           const health = healthById.get(linkedRunId) ?? null;
 
           // STRICT: Apple Health only + running/cycling only + same local day as now.
-          if (!health || !isAppleHealthOnlySource(health)) return null;
+          if (!health || !isHealthKitWorkoutSource(health)) return null;
           const rawType = typeof health.workoutType === "string" ? health.workoutType.trim().toLowerCase() : "";
           if (!rawType || !isEligibleWorkout(rawType)) return null;
           const end = workoutEndDate(health);

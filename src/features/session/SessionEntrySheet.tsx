@@ -10,6 +10,7 @@ import {
   stepKmInput,
   type HealthRunSuggestion,
 } from "./sessionDetailModel";
+import poweredByStravaLogo from "../../strava/assets/api_logo_pwrdBy_strava_horiz_white.svg";
 
 export type SessionEntryValues = {
   /** Wert fürs Log (`"10.4"`); `undefined`, wenn die Einheit kein Distanzfeld hat. */
@@ -89,8 +90,13 @@ export function SessionEntrySheet({
             <div className="mr-entry-suggest" data-testid="entry-health-suggestion">
               <div className="mr-entry-suggest__icon"><Heart aria-hidden size={18} strokeWidth={ICON_STROKE} /></div>
               <div className="mr-entry-suggest__text">
-                <div className="mr-entry-suggest__title">Lauf aus Apple Health</div>
+                <div className="mr-entry-suggest__title">
+                  {suggestion.source === "strava" ? "Lauf aus Strava" : "Lauf aus Apple Health"}
+                </div>
                 {suggestion.line ? <div className="mr-entry-suggest__sub">{suggestion.line}</div> : null}
+                {suggestion.source === "strava" ? (
+                  <img src={poweredByStravaLogo} alt="Powered by Strava" style={{ height: 11, width: "auto", marginTop: 4 }} />
+                ) : null}
               </div>
               <button type="button" className="mr-entry-suggest__btn" disabled={adopted} onClick={adoptSuggestion}>
                 {adopted ? "Übernommen" : "Übernehmen"}

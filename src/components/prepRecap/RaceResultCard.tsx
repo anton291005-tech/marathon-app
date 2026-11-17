@@ -8,6 +8,7 @@ import {
   type RaceFinishDisplay,
 } from "../../prepRecap/raceResultPresentation";
 import { formatGoalLabel, type PrepCompletedBy } from "../../prepRecap/prepCompletionState";
+import { PoweredByStrava } from "../../features/strava/PoweredByStrava";
 
 type Props = {
   raceName: string | null;
@@ -69,6 +70,7 @@ export default function RaceResultCard({
             {formatFinishTime(finish.seconds)}
           </div>
           {sourceNote ? <p className="mr-caption" style={{ marginTop: 4 }}>{sourceNote}</p> : null}
+          {finish && !finish.confirmed && finish.origin === "strava" ? <PoweredByStrava style={{ marginTop: 4 }} /> : null}
           {reachedLine ? <p className="mr-card__text">{reachedLine}</p> : null}
           {pace || goalLabel ? (
             <div className="mr-cols mr-cols--2 mr-card__divided">

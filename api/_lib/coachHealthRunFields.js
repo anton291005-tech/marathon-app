@@ -19,4 +19,43 @@ function pickCoachHealthRunFields(run) {
   return picked;
 }
 
-module.exports = { pickCoachHealthRunFields };
+const STRAVA_SOURCE_PREFIX = "strava:";
+
+function isStravaRunId(runId) {
+  return typeof runId === "string" && runId.trim().toLowerCase().startsWith(STRAVA_SOURCE_PREFIX);
+}
+
+/**
+ * Strava-Daten dürfen an kein Sprachmodell (Strava API Policy §5.3). Der Client filtert schon
+ * (`src/lib/ai/getAiContext.ts`); hier noch einmal für ältere Clients, die `runId` mitschicken.
+ */
+function isStravaSourcedCoachRun(run) {
+  if (!run || typeof run !== "object") return false;
+  // Nur das ID-Präfix zählt (wie im Client): ein HealthKit-Workout mit Quelle „Strava“ ist ein Apple-Health-Lauf.
+  return isStravaRunId(run.runId);
+}
+
+/** Werte eines zugeordneten Strava-Laufs aus einem Session-Log entfernen (Spiegel des Clients). */
+function stripStravaDerivedLogFields(entry) {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry;
+  const scrubOne = (log) => {
+    if (!log || typeof log !== "object" || Array.isArray(log)) return log;
+    const fromStrava = isStravaRunId(log.assignedRun?.runId);
+    const suggestedFromStrava = isStravaRunId(log.suggestedHealthRunId);
+    if (!fromStrava && !suggestedFromStrava) return log;
+    const { assignedRun, runEvaluation, suggestedHealthRunId, actualKm, durationMin, ...rest } = log;
+    return {
+      ...rest,
+      ...(fromStrava ? {} : { assignedRun }),
+      ...(fromStrava || actualKm === undefined ? {} : { actualKm }),
+      ...(fromStrava || durationMin === undefined ? {} : { durationMin }),
+      ...(fromStrava || suggestedFromStrava ? {} : { runEvaluation }),
+      ...(suggestedFromStrava || suggestedHealthRunId === undefined ? {} : { suggestedHealthRunId }),
+    };
+  };
+  // Zwei Formen: `{ sessionId, log }` (aktueller Client) oder flach `{ sessionId, ...log }`.
+  if (entry.log && typeof entry.log === "object") return { ...entry, log: scrubOne(entry.log) };
+  return scrubOne(entry);
+}
+
+module.exports = { pickCoachHealthRunFields, isStravaSourcedCoachRun, stripStravaDerivedLogFields };

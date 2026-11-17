@@ -13,7 +13,11 @@
 
 const OpenAI = require("openai");
 const Anthropic = require("@anthropic-ai/sdk");
-const { pickCoachHealthRunFields } = require("./coachHealthRunFields");
+const {
+  pickCoachHealthRunFields,
+  isStravaSourcedCoachRun,
+  stripStravaDerivedLogFields,
+} = require("./coachHealthRunFields");
 const { extractJson } = require("./extractJson");
 const { sessionDate, dateIsoToYmd } = require("./sessionDate");
 const { NEW_PLAN_VIA_SETTINGS_MESSAGE, isNewPlanRequest } = require("./coachNewPlanRequest");
@@ -673,7 +677,10 @@ function pickPrepStatus(context) {
   const raceYmd = typeof raw.raceYmd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.raceYmd) ? raw.raceYmd : null;
   if (!raceYmd) return null;
   const result = raw.result && typeof raw.result === "object" ? raw.result : {};
-  const finishTimeSeconds = finiteOrNull(result.finishTimeSeconds);
+  // Strava API Policy §5.3: ein unbestätigter Zeit-Vorschlag aus dem Strava-Import geht nicht an Claude
+  // (der Client lässt ihn schon weg; das hier fängt ältere/fremde Clients ab, die die Herkunft mitschicken).
+  const stravaSuggestion = result.finishTimeOrigin === "strava" && result.finishTimeConfirmed !== true;
+  const finishTimeSeconds = stravaSuggestion ? null : finiteOrNull(result.finishTimeSeconds);
   const completedBy = ["race_done", "date_passed", "plan_ended"].includes(raw.completedBy) ? raw.completedBy : null;
   // „Gelaufen" wie im Rückblick: nie bei plan_ended, sonst nur mit Zeit oder abgehaktem Rennen.
   const raceRun =
@@ -801,7 +808,7 @@ function normalizeIncomingLogs(context) {
 }
 
 function trimLogsLast10Days(context) {
-  return normalizeIncomingLogs(context).slice(-10);
+  return normalizeIncomingLogs(context).slice(-10).map(stripStravaDerivedLogFields);
 }
 
 function trimHealthRunsLast10Days(context) {
@@ -811,6 +818,7 @@ function trimHealthRunsLast10Days(context) {
       ? context.healthRunsLast10Days
       : [];
   return runs
+    .filter((run) => !isStravaSourcedCoachRun(run))
     .map(pickCoachHealthRunFields)
     .filter(Boolean)
     .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())

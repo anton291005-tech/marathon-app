@@ -7,6 +7,7 @@ import {
   type RaceFinishDisplay,
 } from "../../prepRecap/raceResultPresentation";
 import { formatGoalLabel } from "../../prepRecap/prepCompletionState";
+import { PoweredByStrava } from "../../features/strava/PoweredByStrava";
 
 type Props = {
   raceName: string | null;
@@ -113,6 +114,7 @@ export default function PrepCompleteHeroCard({
               {[pace, sourceNote].filter(Boolean).join(" · ")}
             </div>
           ) : null}
+          {!finish.confirmed && finish.origin === "strava" ? <PoweredByStrava height={11} /> : null}
           {reachedLine ? (
             <div style={{ fontSize: 12, fontWeight: 750, color: "#86efac" }}>{reachedLine}</div>
           ) : null}
