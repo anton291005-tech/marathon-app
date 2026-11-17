@@ -51,9 +51,21 @@ export type PlanCoreMetaV2 = {
   rules: PlanRules;
 };
 
+/**
+ * Ziel des Plans (Freundes-Test W3): Zielzeit bzw. „Nur finishen" gehören zu EINEM Plan. Bisher lagen sie nur
+ * in den Preferences und nutzerweit im Profil (`target_time_seconds`) — auf einem frischen Gerät griff dann die
+ * Profil-Zielzeit, auch wenn sie von einem anderen Plan stammte. `targetTime: null` = bewusst keine Zielzeit.
+ */
+export type PlanGoalMetaV2 = {
+  raceGoal: "time" | "finish";
+  /** „3:45:00"; null = keine Zielzeit eingetragen. */
+  targetTime: string | null;
+};
+
 export type TrainingPlanMetaV2 = {
   volumeNote?: PlanVolumeNoteV2;
   core?: PlanCoreMetaV2;
+  goal?: PlanGoalMetaV2;
 };
 
 export type TrainingPlanV2 = {

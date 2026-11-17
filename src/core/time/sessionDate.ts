@@ -100,3 +100,28 @@ export function sessionDate(session: SessionDateLike | null | undefined, fallbac
   const [year, month, day] = ymd.split("-").map(Number);
   return new Date(year, month - 1, day, 12, 0, 0, 0);
 }
+
+function appTodayYmd(): string {
+  const now = getAppNow();
+  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+}
+
+/**
+ * Nächstes Vorkommen von Tag+Monat ab `todayYmd` (inklusive) als YYYY-MM-DD — für Datumsangaben ohne Jahr
+ * im Chat („am 3. Januar"). Am 17.11.2026 ist „3. Januar" der 03.01.2027, „17. November" heute, „16. November"
+ * der 16.11.2027. Ein 29. Februar springt zum nächsten Schaltjahr. `null` für unmögliche Angaben (31. April).
+ * Standard für `todayYmd` ist der Kalendertag der App-Uhr — nie ein festes Jahr.
+ */
+export function nextOccurrenceYmd(day: number, month0: number, todayYmd?: string | null): string | null {
+  if (!Number.isInteger(day) || !Number.isInteger(month0) || month0 < 0 || month0 > 11) return null;
+  // 2024 ist ein Schaltjahr: lässt den 29. Februar als Angabe gelten, verwirft 31. April & Co.
+  if (!isRealCalendarDay(2024, month0, day)) return null;
+  const today = dateIsoToYmd(todayYmd) ?? appTodayYmd();
+  const startYear = Number(today.slice(0, 4));
+  for (let year = startYear; year <= startYear + 8; year += 1) {
+    if (!isRealCalendarDay(year, month0, day)) continue;
+    const ymd = `${year}-${pad2(month0 + 1)}-${pad2(day)}`;
+    if (ymd >= today) return ymd;
+  }
+  return null;
+}

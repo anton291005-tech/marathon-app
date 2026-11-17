@@ -130,7 +130,7 @@ import { SessionDetailSheet } from "./features/session/SessionDetailSheet";
 import { AiConsentSheet } from "./features/aiConsent/AiConsentSheet";
 import { CheckInCard } from "./features/checkin/CheckInCard";
 import { CheckInReminderSetting } from "./features/checkin/CheckInReminderSetting";
-import { loadCheckInReminderSettings, saveCheckInReminderSettings, syncCheckInReminder } from "./services/notificationService";
+import { loadCheckInReminderSettings, saveCheckInReminderSettings, supportsLocalReminders, syncCheckInReminder } from "./services/notificationService";
 import { CheckInSheet } from "./features/checkin/CheckInSheet";
 import { canEditCheckIn, carryOverIllness, carryOverPain, shouldOfferCheckIn } from "./features/checkin/checkInState";
 import { useDailyCheckIn } from "./features/checkin/useDailyCheckIn";
@@ -139,6 +139,18 @@ import { CHECKIN_SKIPPED_DAY_KEY } from "./persistence/marathonLocalStorageKeys"
 import { RpePromptCard } from "./features/session/RpePromptCard";
 import { pickRpePromptSession, readRpePromptDismissed, writeRpePromptDismissed } from "./features/session/rpePrompt";
 import { useAiConsent } from "./features/aiConsent/useAiConsent";
+// Freundes-Test (W3): Feedback, Nutzungsdaten, Boot-Abdeckung — Logik in eigenen Modulen, hier nur verdrahtet.
+import { FeedbackEntryCard } from "./features/feedback/FeedbackEntryCard";
+import { FeedbackSheet } from "./features/feedback/FeedbackSheet";
+import { useFeedback } from "./features/feedback/useFeedback";
+import { submitFeedback } from "./lib/supabase/services/feedbackService";
+import { UsageEventsSetting } from "./features/settings/UsageEventsSetting";
+import { trackCompletedSessions, trackUsageEvent } from "./telemetry/usageEvents";
+import { useAppOpenTracking } from "./telemetry/useAppOpenTracking";
+import { FreshAccountBootCover, shouldCoverForFreshAccount } from "./app/boot/FreshAccountBootCover";
+import { applyPlanGoalToPreferences, planGoalFromPreferences, withPlanGoalMeta } from "./planV2/planGoalMeta";
+import { usePlanGoalSync } from "./planV2/usePlanGoalSync";
+import { useResetScrollOnViewChange } from "./layout/useResetScrollOnViewChange";
 import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
 import { buildHealthRunSuggestion, buildSessionFlow, estimateDurationMin, parseKmInput } from "./features/session/sessionDetailModel";
 import { getCoachFeedback } from "./coachFeedback";
@@ -2171,6 +2183,7 @@ export default function AppMain(){
 
   const quickCompleteSession=async(session)=>{
     const existing = logs[session.id] || {};
+    if (!existing.done) trackUsageEvent("session_completed", { source: "manual" });
     await save({
       ...logs,
       [session.id]: {
@@ -2301,6 +2314,7 @@ export default function AppMain(){
       skipped: false,
       at: getAppNow().toISOString(),
     };
+    trackCompletedSessions(logs, { [modal.id]: nextLogs[modal.id] }, "manual");
     await save(nextLogs, syncSessionIds);
     closeModal();
   };
@@ -2547,6 +2561,8 @@ export default function AppMain(){
       logs: logsRef.current,
     });
     if (!result.changed) return;
+    // Erst wenn die Logs aus Supabase da sind: sonst zählten nach dem Anmelden alte Einheiten als neu erledigt.
+    trackCompletedSessions(logsRef.current, result.logs, "apple_health", { logsRemoteReady });
     const syncKeys = marathonLogRecordsDiffSyncKeys(logsRef.current, result.logs);
     void save(result.logs, syncKeys);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Apple-Run-Merge nur bei neuen Health-Daten
@@ -2728,6 +2744,8 @@ export default function AppMain(){
 
   const handleAiPreferencesPatch = (update) => {
     if (!update) return;
+    // Zielzeit per Coach geändert = echte Eingabe → darf meta.goal des Plans überschreiben.
+    if (update.resetProfile || typeof update.targetTime === "string") planGoalSync.noteGoalInput();
     setPreferences((prev) => {
       const next = { ...prev };
       if (update.resetProfile) {
@@ -2873,6 +2891,25 @@ export default function AppMain(){
   const activeTargetTime = activeGoal.targetTime;
   const targetSeconds = activeGoal.targetSeconds;
   const targetTimeDisplay = activeGoal.targetTimeLabel;
+  // Zielzeit am Plan (meta.goal) statt nur im Profil — Logik in planV2/usePlanGoalSync.
+  // ENTSCHEIDUNG (Anton absegnen): meta.goal des aktiven Plans hat Vorrang vor profiles.target_time_seconds;
+  // das Profil bleibt Rückfall für Altpläne und wird weiter geschrieben.
+  const planGoalSync = usePlanGoalSync({
+    userId: user?.id ?? null,
+    activePlanId,
+    hydrationReady: planRemoteReady && prefsRemoteReady,
+    plan: trainingPlanV2,
+    setPlan: setTrainingPlanV2,
+    preferencesGoal: goalPreferencesApply
+      ? planGoalFromPreferences({ raceGoal: raceGoalFinish ? "finish" : "time", targetTime: activeTargetTime })
+      : null,
+    ownerPlanId: ownerPlanIdForGoal,
+    applyGoalToPreferences: (goal) => setPreferences((prev) => applyPlanGoalToPreferences(prev, goal)),
+    claimOwner: (planId) => {
+      planPreferencesStoreRef.current = { ...planPreferencesStoreRef.current, ownerPlanId: planId };
+      writePlanPreferencesStore(planPreferencesStoreRef.current);
+    },
+  });
   // Das Halbmarathon-Rennsignal projiziert auf einen Marathon — nur sinnvoll in einem Marathonplan.
   const { halfMarathonRacePaceScore, halfMarathonRaceDaysAgo } =
     raceDistanceKind(activeRaceDistanceKm) === "marathon"
@@ -3483,6 +3520,7 @@ export default function AppMain(){
     ? {}
     : { animation: `${viewMotionDir > 0 ? "viewSlideNext" : "viewSlidePrev"} .34s cubic-bezier(0.22, 1, 0.36, 1)` };
   const activeView = VIEW_ORDER.includes(view) ? view : DEFAULT_VIEW;
+  useResetScrollOnViewChange(mainContentAreaRef, activeView);
   const resetOnboardingFlag =
     typeof localStorage !== "undefined" && localStorage.getItem(RESET_ONBOARDING_STORAGE_KEY) === "1";
   useEffect(() => {
@@ -3513,6 +3551,8 @@ export default function AppMain(){
   // KI-Einwilligung (Migration 015): einmal nach dem Onboarding fragen (auch Bestandsnutzer), sonst auf Wunsch
   // aus Coach oder Einstellungen. Ohne Zustimmung geht kein Request an /api/ai.
   const aiConsent = useAiConsent(user?.id ?? null);
+  useAppOpenTracking(user?.id ?? null);
+  const feedback = useFeedback(user?.created_at ?? null);
   const [aiConsentSheetRequested, setAiConsentSheetRequested] = useState(false);
   const [aiConsentFeedback, setAiConsentFeedback] = useState<"revoked" | "revoke-failed" | null>(null);
   const aiConsentSheetVisible =
@@ -3707,6 +3747,8 @@ export default function AppMain(){
       // scheitert das Speichern, wirft der Handler: der Wizard zeigt den Fehler (erneut versuchen /
       // abbrechen), lokal und remote bleibt alles beim Alten.
       const newPrepPending = newPrepPendingRef.current != null;
+      // Zielzeit/Finish-Ziel gehören zum neuen Plan (meta.goal) — nicht nur ins nutzerweite Profil.
+      if (plan) plan = withPlanGoalMeta(normalizeTrainingPlan(plan), planGoalFromPreferences(patch));
       await runOnboardingCompletion({
         newPrepPending,
         userId: user?.id ?? null,
@@ -3766,6 +3808,7 @@ export default function AppMain(){
               if (validateTrainingPlanV2Integrity(normalizedPlan) && normalizedPlan.workouts.length > 0) {
                 setTrainingPlanV2(normalizedPlan);
                 setHasUserTrainingPlan(true);
+                trackUsageEvent("onboarding_done");
                 if (user?.id) {
                   const plansAfterSave = await loadAllTrainingPlans(user.id);
                   setAllTrainingPlans(plansAfterSave);
@@ -4364,6 +4407,9 @@ export default function AppMain(){
             quality={{ done: doneHardSessions, total: hardSessions }}
             streakDays={consistencyStats.sessionStreak}
           />
+          {feedback.entryVisible ? (
+            <FeedbackEntryCard onOpen={() => feedback.open("home")} onDismiss={feedback.dismissEntry} />
+          ) : null}
         </div>
         )
       ):activeView==="week"?(
@@ -4561,6 +4607,7 @@ export default function AppMain(){
                 targetTimeLabel={targetTimeDisplay}
                 confidenceLabel={marathonConfidenceLabel}
                 coachHints={coachHints}
+                targetSeconds={targetSeconds}
               />
               )}
             </div>
@@ -4798,6 +4845,7 @@ export default function AppMain(){
               value={activeTargetTime}
               onChange={(e)=>{
                 const value = e.target.value;
+                planGoalSync.noteGoalInput();
                 // Gehörten die Preferences bisher nicht zum aktiven Plan, übernimmt dieser sie mit der Eingabe.
                 if (!goalPreferencesApply && activePlanId) {
                   planPreferencesStoreRef.current = {
@@ -5415,6 +5463,12 @@ export default function AppMain(){
               </div>
             </div>
             ) : null}
+            {/* Web-Fallback: lokale Erinnerungen gibt es nur in der App — im Browser kein Schalter, der nichts tut. */}
+            {!supportsLocalReminders() ? (
+              <div style={{ padding: "16px 0", color: "var(--ink-2)", fontSize: 13 }}>
+                Trainings-Erinnerungen gibt es in der iPhone-App.
+              </div>
+            ) : (
             <div style={{ padding: "16px 0", borderBottom: "1px solid var(--border-default)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: notificationSettings.enabled ? 14 : 0 }}>
                 <div>
@@ -5434,7 +5488,7 @@ export default function AppMain(){
                     height: 30,
                     borderRadius: 15,
                     border: "none",
-                    background: notificationSettings.enabled ? "#3b82f6" : "var(--bg-surface)",
+                    background: notificationSettings.enabled ? "var(--accent)" : "var(--bg-surface)",
                     position: "relative",
                     cursor: "pointer",
                     transition: "background 0.2s",
@@ -5490,6 +5544,7 @@ export default function AppMain(){
                 </div>
               )}
             </div>
+            )}
             {checkInEnabled ? <CheckInReminderSetting settings={checkInReminder} onChange={updateCheckInReminder} /> : null}
                   </SettingsGroup>
                 </>
@@ -5522,6 +5577,7 @@ export default function AppMain(){
                     }}
                   />
                 </SettingsGroup>
+                <UsageEventsSetting userId={user?.id ?? null} />
                 <SettingsGroup>
                   <SettingsRow label={t("settings.privacy_policy")} href={PRIVACY_POLICY_URL} external />
                   <SettingsRow label="Welche Daten MyRace nutzt" onClick={() => openSettingsPage("dataUsage")} />
@@ -5553,8 +5609,9 @@ export default function AppMain(){
                     <SettingsRow label={t("settings.logout")} onClick={() => void handleSignOut()} chevron={false} />
                   </SettingsGroup>
                   <SettingsGroup title="Hilfe">
+                    <SettingsRow label="Feedback geben" onClick={() => feedback.open("settings")} />
                     <SettingsRow
-                      label="Hilfe & Feedback"
+                      label="Hilfe per Mail"
                       href={buildFeedbackMailto({ appVersion: appVersionLabel, userAgent: navigator.userAgent })}
                     />
                     <SettingsRow
@@ -5691,6 +5748,21 @@ export default function AppMain(){
       ) : null}
 
       {aiConsentSheetVisible ? <AiConsentSheet onGrant={handleAiConsentGrant} onDecline={handleAiConsentDecline} /> : null}
+
+      {feedback.sheetScreen ? (
+        <FeedbackSheet
+          screen={feedback.sheetScreen}
+          appVersion={appVersionLabel}
+          userAgent={typeof navigator !== "undefined" ? navigator.userAgent : null}
+          platform={Capacitor.getPlatform()}
+          submit={(record) => submitFeedback(user?.id ?? null, record)}
+          onClose={feedback.close}
+        />
+      ) : null}
+
+      <FreshAccountBootCover
+        visible={shouldCoverForFreshAccount({ signedIn: !!user, hasUserTrainingPlan, hydrationReady: onboardingHydrationReady })}
+      />
 
       {!showOnboarding && !aiConsentSheetVisible && aiConsent.status !== "loading" && showTour && user ? (
         <AppTour

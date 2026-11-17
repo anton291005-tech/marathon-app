@@ -3,7 +3,7 @@ import type { StoredHealthRun } from "../../healthRuns";
 import type { RecoveryDomainState } from "../../recovery/recoveryDomainState";
 import type { AiCoachConversationTurn, AiContext, AiPlanSession, AiPlanWeek } from "./types";
 import type { TrainingPlanV2 } from "../../planV2/types";
-import { getAppNow } from "../../core/time/timeSystem";
+import { getAppCalendarYmd, getAppNow } from "../../core/time/timeSystem";
 import { buildRecoverySummaryFromDomain } from "./recoverySummary";
 
 type BuildAiContextArgs = {
@@ -75,6 +75,8 @@ export function toRemoteCoachPayload(context: AiContext) {
   const nowDate = Number.isFinite(now.getTime()) ? now : getAppNow();
   return {
     todayIso: context.todayIso,
+    // Lokaler Kalendertag des Geräts: todayIso ist UTC und liegt nachts (0–2 Uhr in DE) noch auf gestern.
+    todayYmd: getAppCalendarYmd(nowDate),
     raceDateIso: context.raceDateIso,
     goals: context.goals,
     maxHeartRateBpm: context.maxHeartRateBpm ?? null,

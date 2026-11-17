@@ -62,6 +62,21 @@ export const CHECKIN_DATA_ITEMS: readonly string[] = [
   "„Fühle mich krank“: angegebene Symptome",
 ];
 
+/** Was „Feedback geben" speichert (`user_feedback`, Migration 025, `features/feedback/feedbackModel.ts`). */
+export const FEEDBACK_DATA_ITEMS: readonly string[] = [
+  "Deine Nachricht und, falls gewählt, die Art (Fehler, Idee oder Lob)",
+  "App-Version, Bildschirm, Betriebssystem und Datum",
+];
+
+/** Was „Nutzung zählen" speichert (`usage_events`, Migration 025, `telemetry/usageEvents.ts`). */
+export const USAGE_DATA_ITEMS: readonly string[] = [
+  "App geöffnet (höchstens einmal pro Stunde)",
+  "Trainingsplan erstellt",
+  "Einheit erledigt, mit Quelle (selbst eingetragen oder Apple Health)",
+  "Vorschlag gezeigt, angenommen oder abgelehnt",
+  "Feedback gesendet",
+];
+
 export const AI_DATA_USES: readonly AiDataUse[] = [
   {
     title: "Coach",

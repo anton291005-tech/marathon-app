@@ -5,6 +5,7 @@ import { rebuildPlanFromWorkouts } from "../core/deriveWeeksFromWorkouts";
 import { getAppNow } from "../core/time/timeSystem";
 import { mapSessionType } from "../lib/ai/mapSessionType";
 import { normalizeCoreKind, normalizePlanCoreMeta } from "./normalizePlanCoreMeta";
+import { normalizePlanGoalMeta } from "./planGoalMeta";
 import { resolveLegacyYearAnchor, resolveLegacyYears } from "./legacyYearAnchor";
 import type { Intensity, PlanVolumeNoteV2, TrainingPlanMetaV2, TrainingPlanV2, WeekV2, WorkoutSport, WorkoutV2 } from "./types";
 import { normalizeTrainingPhase, trainingPhaseLabelDe } from "./trainingPhase";
@@ -553,8 +554,9 @@ export function normalizePlanMeta(raw: unknown): TrainingPlanMetaV2 | undefined 
   if (!isRecord(raw) || !isRecord(raw.meta)) return undefined;
   const volumeNote = normalizeVolumeNote(raw.meta.volumeNote);
   const core = normalizePlanCoreMeta(raw.meta.core);
-  if (!volumeNote && !core) return undefined;
-  return { ...(volumeNote ? { volumeNote } : {}), ...(core ? { core } : {}) };
+  const goal = normalizePlanGoalMeta(raw.meta.goal);
+  if (!volumeNote && !core && !goal) return undefined;
+  return { ...(volumeNote ? { volumeNote } : {}), ...(core ? { core } : {}), ...(goal ? { goal } : {}) };
 }
 
 function normalizeVolumeNote(raw: unknown): PlanVolumeNoteV2 | undefined {

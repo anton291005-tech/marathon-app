@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { clearMarathonLocalStorage } from "../persistence/clearMarathonLocalStorage";
+import { authErrorMessageDe } from "../lib/supabase/authErrorMessages";
 
 type AuthMode = "signin" | "signup" | "reset";
 
@@ -100,7 +101,7 @@ export function AuthScreen() {
     try {
       const { error: resendError } = await resendSignupConfirmation(targetEmail);
       if (resendError) {
-        setResendStatus(resendError.message);
+        setResendStatus(authErrorMessageDe(resendError));
       } else {
         setResendStatus("Bestätigungs-Mail wurde erneut gesendet.");
         startResendCooldown();
@@ -156,7 +157,7 @@ export function AuthScreen() {
         try {
           const { error: authError } = await resetPassword(trimmedEmail);
           if (authError) {
-            setError(authError.message);
+            setError(authErrorMessageDe(authError));
           } else {
             setResetSent(true);
           }
@@ -185,13 +186,13 @@ export function AuthScreen() {
               setError("Bitte bestätige zuerst deine E-Mail-Adresse.");
               setLoginNeedsConfirmation(true);
             } else {
-              setError(authError.message);
+              setError(authErrorMessageDe(authError));
             }
           }
         } else {
           const { data, error: authError } = await signUp(trimmedEmail, password);
           if (authError) {
-            setError(authError.message);
+            setError(authErrorMessageDe(authError));
           } else if (data.user?.email_confirmed_at) {
             // Dev / auto-confirm: session handled by AuthContext
           } else {
@@ -306,7 +307,7 @@ export function AuthScreen() {
                 setPasswordError(null);
                 const { error: updateError } = await updatePassword(newPassword);
                 if (updateError) {
-                  setPasswordError(updateError.message);
+                  setPasswordError(authErrorMessageDe(updateError));
                 } else {
                   completePasswordRecovery();
                 }
@@ -395,6 +396,8 @@ export function AuthScreen() {
               Wir haben dir eine Bestätigungs-Mail geschickt.
               <br />
               Bitte öffne die Mail und klicke auf den Link.
+              <br />
+              Am besten auf diesem Gerät. Hast du den Link woanders geöffnet, melde dich danach hier an.
             </div>
             {confirmationEmail ? (
               <p

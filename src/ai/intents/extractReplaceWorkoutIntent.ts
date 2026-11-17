@@ -1,3 +1,5 @@
+import { nextOccurrenceYmd } from "../../core/time/sessionDate";
+import { getAppCalendarYmd } from "../../core/time/timeSystem";
 import type { SessionType } from "../../lib/ai/types";
 
 export type ReplaceConfidence = "high" | "medium" | "low";
@@ -19,12 +21,16 @@ const DE_MONTH_ALIAS: Record<string, number> = {
   jul: 6,
   juli: 6,
   aug: 7,
+  august: 7,
   sep: 8,
   sept: 8,
+  september: 8,
   okt: 9,
   oktober: 9,
   nov: 10,
+  november: 10,
   dez: 11,
+  dezember: 11,
 };
 
 /** Parsed before calendar resolution + session lookup (see resolveReplaceWorkoutProposal). */
@@ -138,19 +144,26 @@ function detectWeekdayToken(l: string): string | undefined {
   return m ? m[1] : undefined;
 }
 
-function germanDomMonthToIsoYmd(norm: string, refYear: number): string | null {
+/**
+ * „am 3. Januar" / „vom 20. Mai" → nächstes Vorkommen ab heute (am 17.11.2026 ist „3. Januar" der 03.01.2027).
+ * Früher: Jahr aus dem UTC-Zeitstempel bzw. fest 2026 und ohne Vorrollen — „3. Januar" lag dann in der
+ * Vergangenheit und fand keine Einheit.
+ */
+function germanDomMonthToIsoYmd(norm: string, todayYmd: string | null): string | null {
   const m = norm.match(/\b(?:vom|am)\s+(\d{1,2})\.?\s*([A-Za-zÄÖÜäöü]+)\b/i);
   if (!m) return null;
   const dom = Number(m[1]);
   const monTok = m[2].normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const mi = DE_MONTH_ALIAS[monTok];
-  if (!Number.isFinite(dom) || dom < 1 || dom > 31 || mi === undefined) return null;
-  const d = new Date(refYear, mi, dom, 12, 0, 0, 0);
-  if (!Number.isFinite(d.getTime()) || d.getMonth() !== mi) return null;
-  const y = d.getFullYear();
-  const mo = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${mo}-${day}`;
+  if (!Number.isFinite(dom) || mi === undefined) return null;
+  return nextOccurrenceYmd(dom, mi, todayYmd);
+}
+
+/** Lokaler Kalendertag des Coach-„heute" (`todayIso` ist ein Zeitstempel); `null` = App-Uhr. */
+function todayYmdFromIso(todayIso: string | undefined): string | null {
+  if (!todayIso) return null;
+  const d = new Date(todayIso);
+  return Number.isFinite(d.getTime()) ? getAppCalendarYmd(d) : null;
 }
 
 /** Text before «mit …», so target words (Easy Run …) never become source hints. */
@@ -194,14 +207,8 @@ export function extractReplaceWorkoutIntent(raw: string, opts?: ExtractReplaceWo
   let needsClarification = false;
   let clarifyingQuestion: string | undefined;
 
-  const refYear = (() => {
-    const ys = opts?.todayIso?.slice(0, 4);
-    const y = ys ? Number(ys) : Number.NaN;
-    return Number.isFinite(y) ? y : 2026;
-  })();
-
   let sourceAnchor: ReplaceWorkoutExtraction["sourceAnchor"] = "unspecified";
-  let sourceIsoHint = germanDomMonthToIsoYmd(l, refYear) ?? undefined;
+  let sourceIsoHint = germanDomMonthToIsoYmd(l, todayYmdFromIso(opts?.todayIso)) ?? undefined;
 
   if (!sourceIsoHint) {
     if (/\bheute\b/.test(l) || /\bheutigen\b/.test(l) || /\bheutiges\b/.test(l)) sourceAnchor = "today";

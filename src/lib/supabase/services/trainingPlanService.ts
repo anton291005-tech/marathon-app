@@ -1,7 +1,8 @@
 import { validateTrainingPlanV2Integrity } from "../../../ai/validation/validateTrainingPlanV2Integrity";
 import { getAppNow } from "../../../core/time/timeSystem";
 import { normalizeTrainingPlan } from "../../../planV2/normalizeTrainingPlan";
-import type { TrainingPlanV2 } from "../../../planV2/types";
+import { readPlanGoalMeta, withPlanGoalMeta } from "../../../planV2/planGoalMeta";
+import type { PlanGoalMetaV2, TrainingPlanV2 } from "../../../planV2/types";
 import { supabase } from "../client";
 
 /** Strip stray persistence fields before writing the jsonb `data` column. */
@@ -216,6 +217,54 @@ export async function saveTrainingPlan(
     return;
   }
   await updateActiveTrainingPlan(userId, plan);
+}
+
+/** `backfill` = Altplan ohne Ziel nachtragen (nur wenn remote noch keins da ist); `edit` = Eingabe in dieser Sitzung. */
+export type PlanGoalWriteMode = "backfill" | "edit";
+
+/**
+ * Nur `meta.goal` eines bestimmten Plans setzen (per Zeilen-ID, nicht „der aktive"): Zwischen Planwechsel in der DB
+ * und im UI darf ein verzögertes Speichern nie die Daten eines Plans in einen anderen schreiben.
+ *
+ * Wettrennen klein gehalten, ohne Migration/RPC: direkt vor dem Schreiben frisch lesen; `backfill` schreibt nur,
+ * wenn die Zeile dann immer noch kein Ziel hat. Das Update gilt nur, solange `updated_at` (Trigger aus Migration 001)
+ * noch dem gelesenen Stand entspricht — hat ein `saveTrainingPlan` dazwischen geschrieben, trifft das Update keine
+ * Zeile und es wird nichts überschrieben (`false`; der nächste Speichervorgang des lokalen Plans trägt das Ziel mit).
+ * Restrisiko: zwei Schreibvorgänge innerhalb derselben Mikrosekunde (gleiches `updated_at`) — praktisch ausgeschlossen.
+ * `false` = nicht gespeichert (offline, Zeile weg, Integritätsfehler, Konflikt).
+ */
+export async function updateTrainingPlanGoalMeta(
+  userId: string,
+  planId: string,
+  goal: PlanGoalMetaV2,
+  mode: PlanGoalWriteMode = "edit",
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from("training_plans")
+      .select("data, updated_at")
+      .eq("user_id", userId)
+      .eq("id", planId)
+      .maybeSingle();
+    if (error || !data || typeof data !== "object" || !("data" in data)) return false;
+    const row = data as { data: unknown; updated_at?: string | null };
+    const current = normalizeTrainingPlan(row.data);
+    if (!validateTrainingPlanV2Integrity(current) || current.workouts.length === 0) return false;
+    if (mode === "backfill" && readPlanGoalMeta(current) != null) return true;
+    const next = withPlanGoalMeta(current, goal);
+    if (next === current) return true;
+    let query = supabase
+      .from("training_plans")
+      .update({ data: sanitizeTrainingPlanRemoteData(next) })
+      .eq("user_id", userId)
+      .eq("id", planId);
+    if (typeof row.updated_at === "string" && row.updated_at) query = query.eq("updated_at", row.updated_at);
+    const { data: updated, error: updateError } = await query.select("id");
+    if (updateError) return false;
+    return Array.isArray(updated) && updated.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 export async function setActivePlan(userId: string, planId: string): Promise<void> {

@@ -2,8 +2,10 @@ import {
   berlinWallClockYmd,
   calendarDaysBetweenYmd,
   isSessionLogDone,
+  parseTargetTimeToSeconds,
 } from "../../appSmartFeatures";
 import { sessionYmd } from "../../core/time/sessionDate";
+import { raceDistanceKind } from "../../raceDistance";
 import type { StoredHealthRun } from "../../healthRuns";
 import { getStoredHealthRunCanonicalType, storedHealthRunDistanceKmNumeric } from "../../healthRuns";
 import type { PlanSession, PlanWeek, SessionLog } from "../../marathonPrediction";
@@ -373,12 +375,17 @@ function buildInterpretation(args: {
   longEquivSeconds: number | null;
   displayLongWindowCount: number;
   race: RaceAnchor | null;
+  /** Zielzeit des Users (Sekunden); `null` = keine Zielzeit → kein Zielbezug im Text (früher fest Sub-3). */
+  goalSeconds: number | null;
 }): string {
-  const { prediction, longAvgPaceSecPerKm, longRunCount, tempoCount, recovery, displayLongWindowCount, race } = args;
+  const { prediction, longAvgPaceSecPerKm, longRunCount, tempoCount, recovery, displayLongWindowCount, race, goalSeconds } = args;
   const nLong = displayLongWindowCount;
   const paceStr = longAvgPaceSecPerKm != null ? formatPaceGerman(longAvgPaceSecPerKm) : formatPaceGerman(prediction.predictedPaceSecPerKm);
   const timeStr = formatRaceClockGerman(prediction.predictedMarathonTimeSeconds);
-  const sub3Pace = formatPaceGerman(SUB3_SECONDS / MARATHON_KM);
+  // Bezug ist die eigene Zielzeit, nicht Antons Sub-3 (Freundes-Test: Ziele von 3:15 bis 4:30).
+  const goal = goalSeconds != null && Number.isFinite(goalSeconds) && goalSeconds > 0 ? goalSeconds : null;
+  const goalStr = goal != null ? formatRaceClockGerman(goal) : "";
+  const goalPace = goal != null ? formatPaceGerman(goal / MARATHON_KM) : "";
 
   let body = "";
   const lowPrefix =
@@ -396,34 +403,45 @@ function buildInterpretation(args: {
       ? ` Deine Erholungswerte zeigen aktuell erhöhte Belastung (Recovery-Score ${recovery.avgRecovery}/100, Confidence ${Math.round((recovery.avgConfidence ?? 0) * 100)}%) — das fließt konservativ in die Prognose ein.`
       : "";
 
-  if (prediction.isSubThreeHourTarget) {
-    const under = minutesRounded(SUB3_SECONDS - prediction.predictedMarathonTimeSeconds);
+  const gap = goal != null ? prediction.predictedMarathonTimeSeconds - goal : null;
+  if (gap != null && gap < 0) {
+    const under = minutesRounded(-gap);
     body =
       race != null
-        ? `${lowPrefix}${raceClause}prognostiziere ich eine Marathonzeit von ${timeStr} — das ist ${under} Minuten unter der 3-Stunden-Marke.${recoveryClause} Halte das aktuelle Niveau, du bist auf Kurs.`
-        : `${lowPrefix}Basierend auf deinen letzten ${nLong} langen Läufen (Ø ${paceStr}) prognostiziere ich eine Marathonzeit von ${timeStr} — das ist ${under} Minuten unter der 3-Stunden-Marke.${recoveryClause} Halte das aktuelle Niveau, du bist auf Kurs.`;
-  } else if (prediction.gapToSubThreeSeconds <= 300) {
-    const overMin = minutesRounded(prediction.gapToSubThreeSeconds);
+        ? `${lowPrefix}${raceClause}prognostiziere ich eine Marathonzeit von ${timeStr} — das ist ${under} Minuten unter deiner Zielzeit ${goalStr}.${recoveryClause} Halte das aktuelle Niveau, du bist auf Kurs.`
+        : `${lowPrefix}Basierend auf deinen letzten ${nLong} langen Läufen (Ø ${paceStr}) prognostiziere ich eine Marathonzeit von ${timeStr} — das ist ${under} Minuten unter deiner Zielzeit ${goalStr}.${recoveryClause} Halte das aktuelle Niveau, du bist auf Kurs.`;
+  } else if (gap != null && gap <= 300) {
+    const overMin = minutesRounded(gap);
     const focus =
       tempoCount < longRunCount
         ? "Priorisiere strukturierte Tempo- und Schwelleneinheiten, um die Geschwindigkeitsreserve zu erhöhen."
         : "Nutze die nächsten langen Läufe, um Marathonpace ökonomischer zu halten — gleichmäßige Pace statt Einbruch am Ende.";
     body =
       race != null
-        ? `${lowPrefix}${raceClause}deutet auf ${timeStr} hin — ${overMin} Minuten über Sub-3h. Das ist knapp. ${focus}${recoveryClause}`
-        : `${lowPrefix}Deine aktuelle Form deutet auf ${timeStr} hin — ${overMin} Minuten über Sub-3h. Das ist knapp. ${focus}${recoveryClause}`;
+        ? `${lowPrefix}${raceClause}deutet auf ${timeStr} hin — ${overMin} Minuten über deiner Zielzeit ${goalStr}. Das ist knapp. ${focus}${recoveryClause}`
+        : `${lowPrefix}Deine aktuelle Form deutet auf ${timeStr} hin — ${overMin} Minuten über deiner Zielzeit ${goalStr}. Das ist knapp. ${focus}${recoveryClause}`;
   } else {
     const lrEquiv =
       longAvgPaceSecPerKm != null && args.longEquivSeconds != null
         ? formatRaceClockGerman(args.longEquivSeconds)
         : timeStr;
+    const goalClause = goal != null ? ` Für deine Zielzeit ${goalStr} brauchst du ${goalPace} Marathonpace.` : "";
     body =
       race != null
-        ? `${lowPrefix}${raceClause}prognostiziere ich aktuell ${timeStr} für deinen Marathon. Um Sub-3h zu erreichen, brauchst du ${sub3Pace} Marathonpace.${recoveryClause} Verteile Tempo und Länge über mehr Wochen — ohne Sprünge bei der Intensität.`
-        : `${lowPrefix}Aktuell prognostiziere ich ${timeStr} für deinen Marathon. Um Sub-3h zu erreichen, brauchst du ${sub3Pace} Marathonpace. Deine aktuelle Long-Run-Pace von ${paceStr} entspricht einer rechnerischen Zielzeit von ${lrEquiv}.${recoveryClause} Verteile Tempo und Länge über mehr Wochen — ohne Sprünge bei der Intensität.`;
+        ? `${lowPrefix}${raceClause}prognostiziere ich aktuell ${timeStr} für deinen Marathon.${goalClause}${recoveryClause} Verteile Tempo und Länge über mehr Wochen — ohne Sprünge bei der Intensität.`
+        : `${lowPrefix}Aktuell prognostiziere ich ${timeStr} für deinen Marathon.${goalClause} Deine aktuelle Long-Run-Pace von ${paceStr} entspricht einer rechnerischen Zielzeit von ${lrEquiv}.${recoveryClause} Verteile Tempo und Länge über mehr Wochen — ohne Sprünge bei der Intensität.`;
   }
 
   return body.replace(/\s+/g, " ").trim();
+}
+
+/** Zielrennen = letzte Race-Session des Plans; nur bei Marathon-Distanz taugt die Zielzeit als Bezug. */
+function goalRaceIsMarathon(context: AiContext): boolean {
+  const races = (Array.isArray(context.plan) ? context.plan : [])
+    .flatMap((week) => (Array.isArray(week?.s) ? week.s : []))
+    .filter((session) => session?.type === "race");
+  const goalRace = races[races.length - 1];
+  return raceDistanceKind(typeof goalRace?.km === "number" ? goalRace.km : null) === "marathon";
 }
 
 export function computePaceBasedPrediction(context: AiContext): PaceBasedPrediction | null {
@@ -535,6 +553,13 @@ export function computePaceBasedPrediction(context: AiContext): PaceBasedPredict
     longEquivSeconds: longEquivSeconds != null && Number.isFinite(longEquivSeconds) ? longEquivSeconds : null,
     displayLongWindowCount: longRecent.length,
     race,
+    goalSeconds: (() => {
+      // Die Prognose ist eine Marathonzeit: Eine HM-/10-km-Zielzeit als Marathonziel ergäbe „2:29/km Marathonpace".
+      if (!goalRaceIsMarathon(context)) return null;
+      const raw = context.goals?.targetTime;
+      const sec = typeof raw === "string" && raw.trim() ? parseTargetTimeToSeconds(raw) : null;
+      return sec != null && Number.isFinite(sec) && sec > 0 ? sec : null;
+    })(),
   });
 
   return { ...basePred, interpretation };

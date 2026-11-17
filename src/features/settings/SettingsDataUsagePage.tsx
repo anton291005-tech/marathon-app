@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { SettingsGroup } from "./SettingsList";
-import { AI_DATA_USES, CHECKIN_DATA_ITEMS, listAppleHealthDataTypes } from "./dataUsage";
+import { AI_DATA_USES, CHECKIN_DATA_ITEMS, FEEDBACK_DATA_ITEMS, USAGE_DATA_ITEMS, listAppleHealthDataTypes } from "./dataUsage";
 
 const textStyle: CSSProperties = { fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.5, margin: 0 };
 
@@ -52,6 +52,28 @@ export function SettingsDataUsagePage({ showCheckIn = false }: { showCheckIn?: b
           </Block>
         </SettingsGroup>
       ) : null}
+
+      <SettingsGroup title="Feedback" padded>
+        <Block>
+          <p style={textStyle}>Wenn du unter Konto &amp; Hilfe Feedback gibst, speichert MyRace in deinem Konto:</p>
+          <BulletList items={FEEDBACK_DATA_ITEMS} />
+          <p style={{ ...textStyle, marginTop: 12 }}>
+            Keine Trainings- oder Gesundheitsdaten. Dein Feedback geht an keinen KI-Anbieter und wird mit deinem Konto
+            gelöscht.
+          </p>
+        </Block>
+      </SettingsGroup>
+
+      <SettingsGroup title="Nutzungsdaten" padded>
+        <Block>
+          <p style={textStyle}>Solange „Nutzung zählen“ an ist, merkt sich MyRace mit deiner Konto-ID nur diese Ereignisse:</p>
+          <BulletList items={USAGE_DATA_ITEMS} />
+          <p style={{ ...textStyle, marginTop: 12 }}>
+            Ohne Inhalte und ohne Gesundheitswerte, an keinen KI-Anbieter. Ausschalten kannst du das unter Datenschutz
+            &amp; Daten mit „Nutzung zählen“. Löschst du dein Konto, werden die Ereignisse mitgelöscht.
+          </p>
+        </Block>
+      </SettingsGroup>
 
       {AI_DATA_USES.map((use) => (
         <SettingsGroup key={use.title} title={use.title} padded>

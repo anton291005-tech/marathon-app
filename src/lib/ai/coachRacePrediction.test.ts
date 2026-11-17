@@ -451,3 +451,43 @@ describe("computePaceBasedPrediction", () => {
     expect(p!.predictedMarathonTimeSeconds).toBeLessThan(13000);
   });
 });
+
+describe("computePaceBasedPrediction — Zielbezug aus der eigenen Zielzeit (Freundes-Test)", () => {
+  const paceSecPerKm = 5 * 60 + 45;
+  const distKm = 18;
+  const mkLog = (id: string) => ({
+    done: true,
+    assignedRun: { runId: id, startDate: `${id}_start`, duration: paceSecPerKm * distKm, distanceKm: distKm },
+  });
+  const longRuns = [
+    { id: "lr1", date: "18. Mai", day: "So", type: "long", title: "L", km: 18 },
+    { id: "lr2", date: "25. Mai", day: "So", type: "long", title: "L", km: 18 },
+    { id: "lr3", date: "1. Jun", day: "So", type: "long", title: "L", km: 18 },
+    { id: "lr4", date: "8. Jun", day: "So", type: "long", title: "L", km: 18 },
+  ];
+  const plan = makePlan([...longRuns, { id: "race", date: "27. Sep", day: "So", type: "race", title: "Marathon", km: 42.2 }]);
+  const halfPlan = makePlan([...longRuns, { id: "race", date: "27. Sep", day: "So", type: "race", title: "Halbmarathon", km: 21.1 }]);
+  const logs = { lr1: mkLog("r1"), lr2: mkLog("r2"), lr3: mkLog("r3"), lr4: mkLog("r4") };
+  const today = new Date("2026-06-10T12:00:00").toISOString();
+
+  test("Halbmarathon-Ziel 1:45:00: kein Zielbezug (sonst „2:29/km Marathonpace“)", () => {
+    const p = computePaceBasedPrediction(ctxFor(halfPlan, today, { logs, goals: { targetTime: "1:45:00" } }));
+    expect(p).not.toBeNull();
+    expect(p!.interpretation).not.toMatch(/1:45:00|deiner Zielzeit|2:29/);
+    expect(p!.interpretation).toMatch(/\/km/);
+  });
+
+  test("Ziel 4:30:00: Text nennt die eigene Zielzeit, nie Sub-3", () => {
+    const p = computePaceBasedPrediction(ctxFor(plan, today, { logs, goals: { targetTime: "4:30:00" } }));
+    expect(p).not.toBeNull();
+    expect(p!.interpretation).toMatch(/Zielzeit 4:30:00/);
+    expect(p!.interpretation).not.toMatch(/Sub-3|3-Stunden/);
+  });
+
+  test("ohne Zielzeit: kein Zielbezug, kein Sub-3", () => {
+    const p = computePaceBasedPrediction(ctxFor(plan, today, { logs, goals: {} }));
+    expect(p).not.toBeNull();
+    expect(p!.interpretation).not.toMatch(/Sub-3|3-Stunden|deiner Zielzeit/);
+    expect(p!.interpretation).toMatch(/\/km/);
+  });
+});

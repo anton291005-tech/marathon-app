@@ -15,6 +15,9 @@ const USER_DATA_TABLES = [
   "recovery_daily",
   "coach_memory",
   "profiles",
+  // Migration 025 (Freundes-Test): auch per ON DELETE CASCADE, hier ausdrücklich, damit nichts liegen bleibt.
+  "user_feedback",
+  "usage_events",
   // TODO: add "marathon_logs" once table is created
 ];
 

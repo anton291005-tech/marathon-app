@@ -23,6 +23,7 @@ import {
   isPasswordRecoveryFromUrl,
 } from "../lib/supabase/passwordRecovery";
 import { clearMarathonLocalStorage } from "../persistence/clearMarathonLocalStorage";
+import { claimLocalStorageForUser } from "../persistence/storageOwner";
 
 function isEmailUnconfirmed(user: User): boolean {
   return user.email_confirmed_at == null;
@@ -87,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const freshUser = data?.user ?? null;
             if (freshUser && freshUser.email_confirmed_at) {
               setUnconfirmedEmail(null);
+              claimLocalStorageForUser(freshUser.id, clearMarathonLocalStorage);
               lastUserIdRef.current = freshUser.id;
               setUser(freshUser);
               return;
@@ -103,9 +105,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUnconfirmedEmail(null);
       const nextId = sessionUser.id ?? null;
       if (nextId !== lastUserIdRef.current) {
+        // Kontowechsel in dieser Sitzung: wie bisher löschen. Nach einer abgelaufenen Sitzung ist
+        // `lastUserIdRef` aber null — dann entscheidet der gespeicherte Besitzer der lokalen Daten.
+        // Beides passiert vor `setUser`, also bevor AppMain den localStorage liest.
         if (lastUserIdRef.current != null) {
           clearMarathonLocalStorage();
         }
+        if (nextId) claimLocalStorageForUser(nextId, clearMarathonLocalStorage);
         lastUserIdRef.current = nextId;
         setUser(sessionUser);
       }
