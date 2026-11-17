@@ -26,6 +26,7 @@ const STRAVA_RUN_SPORT_TYPES = new Set(["Run", "TrailRun", "VirtualRun"]);
  * automatischen Zuordnung (`applyAppleHealthTrainingSync` maxAgeDays) – ältere Läufe würden nie
  * zugeordnet und lokal ohnehin nach 7 Tagen verworfen (Datensparsamkeit).
  */
+// ENTSCHEIDUNG (Anton absegnen): Erstimport 10 statt 28 Tage (Plan W2), passend zum Zuordnungsfenster 10 Tage und zur 7-Tage-Cache-Regel.
 const FIRST_SYNC_DAYS = 10;
 /**
  * `after` filtert nach Startzeit, nicht nach Upload-Zeit: ein Lauf, der vor dem letzten Abgleich begann,

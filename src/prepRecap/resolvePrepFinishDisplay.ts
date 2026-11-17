@@ -4,7 +4,11 @@
  * 1. Datensatz (`prep_recaps`) mit Zeit → diese (bestätigt oder Apple-Health-Vorschlag). Ein Vorschlag aus
  *    dem Strava-Import steht dort nie (`decidePrepRecapAction`).
  * 2. Sonst die live erkannte Zeit (`detectRaceFinishTime`) – aus Strava mit `origin: "strava"`
- *    („laut Strava“, Powered by Strava, nicht an den Coach). Ist der Strava-Lauf weg, gibt es keine Zeit.
+ *    („laut Strava“, Powered by Strava, nicht an den Coach). Ist der Strava-Lauf weg und dem Rennen nicht
+ *    zugeordnet, gibt es keine Zeit.
+ *    Ist dem Rennen ein Strava-Lauf zugeordnet, steht er per `assignedRun` dauerhaft im Session-Log
+ *    (siehe ENTSCHEIDUNG in `applyAppleHealthSync.ts`): dann bleibt „laut Strava“ sichtbar, auch nach dem
+ *    Löschen des Laufs – aber nichts davon landet in `prep_recaps` oder beim Coach.
  */
 
 import type { DetectedRaceFinish } from "./detectRaceFinishTime";
