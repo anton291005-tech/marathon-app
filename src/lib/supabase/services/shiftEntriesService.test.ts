@@ -1,7 +1,3 @@
-jest.mock("../client", () => ({
-  supabase: { from: jest.fn() },
-}));
-
 import { supabase } from "../client";
 import { isMissingSchemaError } from "../schemaErrors";
 import {
@@ -13,6 +9,10 @@ import {
   upsertShiftEntries,
 } from "./shiftEntriesService";
 import { loadShiftProfile, sanitizeShiftDefaults, saveShiftProfile } from "./shiftProfileService";
+
+jest.mock("../client", () => ({
+  supabase: { from: jest.fn() },
+}));
 
 const USER = "user-1";
 const from = supabase.from as jest.Mock;

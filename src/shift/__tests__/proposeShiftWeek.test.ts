@@ -9,7 +9,7 @@ import { computeDayCapacityScore, computeSessionDayFitScore } from "../../schedu
 import { mondayOf } from "../../planCore/dates";
 import { buildShiftCapacityContext } from "../shiftAdapter";
 import { isShiftModeEnabled } from "../shiftModeFlag";
-import { isHardDayType, proposeShiftWeek } from "../proposeShiftWeek";
+import { isHardDayType, proposeShiftWeek, type ShiftWeekProposal } from "../proposeShiftWeek";
 import { scanAfterShiftSave } from "../shiftWeekScan";
 import { F, N, OFF, S, week } from "../__fixtures__/shiftFixtures";
 import type { StoredShiftEntry } from "../../lib/supabase/services/shiftEntriesService";
@@ -20,6 +20,11 @@ function ctx(entries: StoredShiftEntry[], todayYmd = TODAY) {
   const c = buildShiftCapacityContext({ enabled: true, worksShifts: true, entries, todayYmd });
   if (!c) throw new Error("Kontext erwartet");
   return c;
+}
+
+function expectProposal(result: ShiftWeekProposal): Extract<ShiftWeekProposal, { status: "proposal" }> {
+  if (result.status !== "proposal") throw new Error(`Vorschlag erwartet, bekommen: ${result.status}`);
+  return result;
 }
 
 function dayOf(plan: AiPlanWeek[], id: string): string | null {
@@ -51,9 +56,7 @@ describe("Schicht-Wochenvorschlag – Szenarien", () => {
     expect(c.byDate["2026-11-18"].hard).toBe("unsuitable");
     expect(c.byDate["2026-11-19"].long).toBe("unsuitable");
 
-    const result = proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY });
-    expect(result.status).toBe("proposal");
-    if (result.status !== "proposal") return;
+    const result = expectProposal(proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY }));
     const after = applyPlanPatches(plan, result.patches);
     const intervalDay = dayOf(after, "w1-2") as string;
     const longDay = dayOf(after, "w1-3") as string;
@@ -61,7 +64,8 @@ describe("Schicht-Wochenvorschlag – Szenarien", () => {
     expect(longDay).not.toBe("2026-11-19");
     [intervalDay, longDay].forEach((d) => {
       const day = c.byDate[d];
-      if (day) expect(day.hard === "free" || day.long === "free").toBe(true);
+      // Zieltag: Dienstplan „frei“ oder ohne Aussage.
+      expect(!day || day.hard === "free" || day.long === "free").toBe(true);
     });
     expect(hardPairs(after)).toEqual([]);
     expect(mondayOf(longDay)).toBe(TODAY);
@@ -73,9 +77,7 @@ describe("Schicht-Wochenvorschlag – Szenarien", () => {
   it("S1-Text: freier Zieltag → „da hast du frei“", () => {
     const plan = [week(1, TODAY, ["easy", "easy", "interval", "easy", "rest", "easy", "easy"])];
     const c = ctx([N("2026-11-16"), N("2026-11-17"), OFF("2026-11-18"), OFF("2026-11-19"), OFF("2026-11-20"), OFF("2026-11-21"), OFF("2026-11-22")]);
-    const result = proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY });
-    expect(result.status).toBe("proposal");
-    if (result.status !== "proposal") return;
+    const result = expectProposal(proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY }));
     expect(result.moves[0].sentence).toMatch(/Vorschlag: (Freitag|Samstag|Sonntag) – da hast du frei\.$/);
   });
 
@@ -83,9 +85,7 @@ describe("Schicht-Wochenvorschlag – Szenarien", () => {
     const plan = [week(1, TODAY, ["easy", "easy", "tempo", "easy", "rest", "easy", "long"])];
     const c = ctx([S("2026-11-17"), F("2026-11-18")]);
     expect(c.byDate["2026-11-18"]).toMatchObject({ hard: "limited", reasonCode: "quick_return" });
-    const result = proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY });
-    expect(result.status).toBe("proposal");
-    if (result.status !== "proposal") return;
+    const result = expectProposal(proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY }));
     expect(result.moves[0].sentence).toMatch(/nur bedingt ein guter Tag für einen Tempolauf/);
     const after = applyPlanPatches(plan, result.patches);
     expect(dayOf(after, "w1-2")).not.toBe("2026-11-18");
@@ -115,9 +115,7 @@ describe("Schicht-Wochenvorschlag – Szenarien", () => {
     const plan = [week(1, TODAY, ["easy", "easy", "interval", "easy", "rest", "easy", "long"])];
     const c = ctx([S("2026-11-17", "17:00", "00:30")]);
     expect(c.byDate["2026-11-18"]).toMatchObject({ hard: "limited", reasonCode: "late_shift" });
-    const result = proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY });
-    expect(result.status).toBe("proposal");
-    if (result.status !== "proposal") return;
+    const result = expectProposal(proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY }));
     expect(result.moves[0].sentence).toMatch(/^Nach dem Spätdienst \(17:00–0:30 Uhr\)/);
   });
 
@@ -128,58 +126,51 @@ describe("Schicht-Wochenvorschlag – Szenarien", () => {
   });
 
   it("S5 Rennwoche, Nachtdienst 2 Tage vor dem Rennen: Rennen unangetastet, nichts rückt später", () => {
+    // Fr 20 Nacht → Fr eingeschränkt (vor der Nacht), Sa nach der Nacht. Tempo am Fr zieht auf einen früheren Tag.
     const plan = [week(1, TODAY, ["rest", "easy", "easy", "easy", "tempo", "easy", "race"], "taper")];
     const c = ctx([N("2026-11-20")]);
-    const result = proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY });
-    if (result.status === "proposal") {
-      expect(result.patches.some((p) => p.sessionId === "w1-6")).toBe(false);
-      expect(result.softened).toEqual([]);
-      const after = applyPlanPatches(plan, result.patches);
-      expect(dayOf(after, "w1-6")).toBe("2026-11-22");
-      plan[0].s.forEach((s) => {
-        if (!isHardDayType(s.type)) return;
-        expect((dayOf(after, s.id) as string) <= (sessionDayIso(s) as string)).toBe(true);
-      });
-    }
+    const result = expectProposal(proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY }));
+    expect(result.patches.some((p) => p.sessionId === "w1-6")).toBe(false);
+    expect(result.softened).toEqual([]);
+    const after = applyPlanPatches(plan, result.patches);
+    expect(dayOf(after, "w1-6")).toBe("2026-11-22");
+    expect((dayOf(after, "w1-4") as string) < "2026-11-20").toBe(true);
+    expect(hardPairs(after)).toEqual([]);
   });
 
-  it("S5b Taper: harte Einheit auf einem ungeeigneten Tag zieht nie auf einen späteren Tag", () => {
+  it("S5b Taper: harte Einheit auf einem ungeeigneten Tag zieht nie später – stattdessen „locker statt hart“", () => {
     // Nacht So → Mo ungeeignet für die Intervalle; frühere Tage gibt es nicht (Mo ist der erste Tag).
     const plan = [week(1, TODAY, ["interval", "easy", "easy", "easy", "rest", "easy", "long"], "taper")];
     const c = ctx([N("2026-11-15")]);
-    const result = proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY });
-    if (result.status === "proposal") {
-      const after = applyPlanPatches(plan, result.patches);
-      expect(dayOf(after, "w1-0")).toBe("2026-11-16");
-    }
+    const result = expectProposal(proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY }));
+    expect(result.moves).toEqual([]);
+    expect(result.softened.map((x) => x.sessionId)).toEqual(["w1-0"]);
+    expect(dayOf(applyPlanPatches(plan, result.patches), "w1-0")).toBe("2026-11-16");
   });
 
-  it("Long Run bleibt in seiner Kalenderwoche und hält Abstand zum Long Run der Vorwoche", () => {
+  it("Long Run bleibt in seiner Kalenderwoche und hält Abstand zum Long Run der Vorwoche – sonst nur Hinweis", () => {
     const prev = week(0, "2026-11-09", ["easy", "easy", "interval", "easy", "rest", "easy", "long"], "build", "w0");
     const cur = week(1, TODAY, ["easy", "rest", "interval", "easy", "rest", "easy", "long"]);
     const plan = [prev, cur];
-    // So 22 ungeeignet (Nacht Sa → So). Mo 16 wäre frei, liegt aber nur 1 Tag nach dem Long Run der Vorwoche.
+    // So 22 ungeeignet (Nacht Sa → So). Mo–Fr lägen weniger als 6 Tage nach dem Long Run der Vorwoche (So 15),
+    // Sa 21 ist vor der Nacht ungeeignet: kein zulässiger Tag, und ein Long Run wird nie gestrichen.
     const c = ctx([N("2026-11-21")]);
     const result = proposeShiftWeek({ plan, weekIndex: 1, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY });
-    if (result.status === "proposal") {
-      const after = applyPlanPatches(plan, result.patches);
-      const longDay = dayOf(after, "w1-6") as string;
-      expect(mondayOf(longDay)).toBe(TODAY);
-      expect(longDay >= "2026-11-15").toBe(true);
-      expect(["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"]).not.toContain(longDay);
-    }
+    expect(result.status).toBe("hint-only");
+    expect(result.status === "hint-only" ? result.hints.join(" ") : "").toMatch(/den Long Run bleibt/);
   });
 
   it("gesperrte Einheiten sind nie Quelle oder Ziel", () => {
     const plan = [week(1, TODAY, ["easy", "easy", "interval", "easy", "rest", "easy", "long"])];
     const c = ctx([N("2026-11-17")]);
-    const locked = new Set(["w1-2", "w1-4"]);
-    const result = proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY, lockedSessionIds: locked });
-    if (result.status === "proposal") {
-      expect(result.patches.some((p) => locked.has(p.sessionId))).toBe(false);
-    } else {
-      expect(["no-conflicts", "hint-only"]).toContain(result.status);
-    }
+    const locked = new Set(["w1-4", "w1-5"]);
+    const result = expectProposal(proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY, lockedSessionIds: locked }));
+    expect(result.patches.some((p) => locked.has(p.sessionId))).toBe(false);
+    expect(dayOf(applyPlanPatches(plan, result.patches), "w1-2")).toBe("2026-11-16");
+    // Ist die Konflikt-Einheit selbst gesperrt, gibt es nichts vorzuschlagen.
+    expect(proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY, lockedSessionIds: new Set(["w1-2"]) }).status).toBe(
+      "no-conflicts",
+    );
   });
 
   it("kein sicherer Tag für Intervalle auf einem ungeeigneten Tag → „locker statt hart“ als Patch", () => {
@@ -187,9 +178,7 @@ describe("Schicht-Wochenvorschlag – Szenarien", () => {
     const plan = [week(1, TODAY, ["interval", "easy", "long", "easy", "rest", "easy", "easy"])];
     const nights = ["2026-11-15", "2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20", "2026-11-21", "2026-11-22"].map(N);
     const c = ctx(nights);
-    const result = proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY });
-    expect(result.status).toBe("proposal");
-    if (result.status !== "proposal") return;
+    const result = expectProposal(proposeShiftWeek({ plan, weekIndex: 0, scheduleBlocks: [], shiftContext: c, todayYmd: TODAY }));
     expect(result.softened.map((s) => s.sessionId)).toEqual(["w1-0"]);
     const patch = result.patches.find((p) => p.sessionId === "w1-0");
     expect(patch?.changes).toMatchObject({ type: "easy", kind: "E", title: "Lockerer Lauf" });
@@ -251,8 +240,7 @@ describe("Schicht-Modus aus → altes Verhalten", () => {
     expect(describeCalendarConflictCause(interval, computeDayCapacityScore("2026-11-18", [], c))).toBe("nach dem Nachtdienst (22–6 Uhr)");
     expect(describeCalendarConflictCause(interval, computeDayCapacityScore("2026-11-18", []))).toBe("wegen Kalendertermin");
     const single = proposeSingleSessionCalendarReassignment(plan, plan[0], "w1-2", [], new Set(), c);
-    expect(single.status).toBe("proposal");
-    if (single.status === "proposal") expect(single.conflictCause).toBe("nach dem Nachtdienst (22–6 Uhr)");
+    expect(single).toMatchObject({ status: "proposal", conflictCause: "nach dem Nachtdienst (22–6 Uhr)" });
     expect(proposeSingleSessionCalendarReassignment(plan, plan[0], "w1-2", [], new Set()).status).toBe("no-conflict");
   });
 });

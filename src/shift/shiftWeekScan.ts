@@ -9,6 +9,9 @@ import type { ShiftCapacityContext } from "../scheduling/capacityScore";
 import { sessionDayIso } from "../ai/mutations/sessionDayIso";
 import { proposeShiftWeek, type ShiftWeekProposal } from "./proposeShiftWeek";
 import { reportShiftUsage } from "./shiftUsage";
+import { buildShiftCapacityContext, sortedEntries } from "./shiftAdapter";
+import { isShiftModeEnabled } from "./shiftModeFlag";
+import { getShiftState } from "./shiftStore";
 
 /** Form des AppMain-State `weekCalendarBatchProposal` (plus `source`/`hints` für den Schicht-Pfad). */
 export type ShiftBatchState =
@@ -82,4 +85,27 @@ export function scanAfterShiftSave(args: Omit<ShiftScanArgs, "weekIndex">): { we
     if (batch.status === "proposal" || batch.status === "shift-hints") return { weekIndex: i, batch };
   }
   return null;
+}
+
+/**
+ * Nach dem Speichern des Dienstplans (Seite → AppMain): Kontext frisch aus dem Store, dann aktuelle und nächste Woche.
+ * Ergebnis: Woche + Vorschlag zum Anzeigen im Woche-Tab, oder ein Satz für die Seite.
+ */
+export function planAfterShiftSave(args: {
+  plan: AiPlanWeek[];
+  scheduleBlocks: WeeklyScheduleBlock[];
+  todayYmd: string;
+  lockedSessionIds: ReadonlySet<string>;
+  enabled?: boolean;
+}): { weekIndex: number; batch: ShiftBatchState } | { message: string | null } {
+  const state = getShiftState();
+  const shiftContext = buildShiftCapacityContext({
+    enabled: args.enabled ?? isShiftModeEnabled(),
+    worksShifts: state.worksShifts,
+    entries: sortedEntries(state.entriesByDate),
+    todayYmd: args.todayYmd,
+  });
+  if (!shiftContext || args.plan.length === 0) return { message: null };
+  const found = scanAfterShiftSave({ plan: args.plan, scheduleBlocks: args.scheduleBlocks, shiftContext, todayYmd: args.todayYmd, lockedSessionIds: args.lockedSessionIds });
+  return found ?? { message: "Diese und nächste Woche passen zu deinem Dienstplan." };
 }

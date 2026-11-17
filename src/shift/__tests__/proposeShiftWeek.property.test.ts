@@ -67,6 +67,7 @@ describe("Schicht-Wochenvorschlag – Property-Test über P1–P6", () => {
   it("kein angenommener Vorschlag bricht eine Schutzregel", () => {
     const rng = createRng(4711);
     let proposals = 0;
+    const violations: string[] = [];
     for (let round = 0; round < 240; round += 1) {
       const { plan, startYmd } = plans[round % plans.length];
       const allDays = plan.flatMap((w) => w.s.map((s) => sessionDayIso(s) as string)).sort();
@@ -83,9 +84,12 @@ describe("Schicht-Wochenvorschlag – Property-Test über P1–P6", () => {
         proposals += 1;
         const after = applyPlanPatches(plan, result.patches);
 
+        const tag = `${round}/${weekIndex}`;
         // 1. keine neuen harten Tage hintereinander (auch über die Wochengrenze)
         const before = adjacentPairs(plan);
-        adjacentPairs(after).forEach((pair) => expect(before).toContain(pair));
+        adjacentPairs(after)
+          .filter((pair) => before.indexOf(pair) < 0)
+          .forEach((pair) => violations.push(`${tag} neue harte Tage in Folge ${pair}`));
 
         const byIdBefore: Record<string, { type: string; ymd: string }> = {};
         plan.forEach((w) => w.s.forEach((s) => (byIdBefore[s.id] = { type: s.type, ymd: sessionDayIso(s) as string })));
@@ -94,19 +98,17 @@ describe("Schicht-Wochenvorschlag – Property-Test über P1–P6", () => {
             const was = byIdBefore[s.id];
             const now = sessionDayIso(s) as string;
             // 2. Long Run bleibt in seiner Kalenderwoche
-            if (was.type === "long") expect(mondayOf(now)).toBe(mondayOf(was.ymd));
+            if (was.type === "long" && mondayOf(now) !== mondayOf(was.ymd)) violations.push(`${tag} Long Run ${s.id} aus der Woche`);
             // 3. Rennen und gesperrte Einheiten bleiben unangetastet
-            if (was.type === "race" || locked.has(s.id)) {
-              expect(now).toBe(was.ymd);
-              expect(s.type).toBe(was.type);
-            }
+            if ((was.type === "race" || locked.has(s.id)) && (now !== was.ymd || s.type !== was.type)) violations.push(`${tag} gesperrt/Rennen ${s.id} verändert`);
             // 4. nichts wird härter
-            if (!isHardDayType(was.type)) expect(isHardDayType(s.type)).toBe(false);
+            if (!isHardDayType(was.type) && isHardDayType(s.type)) violations.push(`${tag} ${s.id} härter geworden`);
           }),
         );
-        expect(result.patches.some((p) => locked.has(p.sessionId))).toBe(false);
+        if (result.patches.some((p) => locked.has(p.sessionId))) violations.push(`${tag} Patch auf gesperrter Einheit`);
       }
     }
+    expect(violations).toEqual([]);
     // Der Test soll auch wirklich Vorschläge prüfen.
     expect(proposals).toBeGreaterThan(30);
   });
