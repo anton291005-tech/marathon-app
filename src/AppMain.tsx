@@ -2743,6 +2743,8 @@ export default function AppMain(){
 
   const handleAiPreferencesPatch = (update) => {
     if (!update) return;
+    // Zielzeit per Coach geändert = echte Eingabe → darf meta.goal des Plans überschreiben.
+    if (update.resetProfile || typeof update.targetTime === "string") planGoalSync.noteGoalInput();
     setPreferences((prev) => {
       const next = { ...prev };
       if (update.resetProfile) {
@@ -2891,7 +2893,7 @@ export default function AppMain(){
   // Zielzeit am Plan (meta.goal) statt nur im Profil — Logik in planV2/usePlanGoalSync.
   // ENTSCHEIDUNG (Anton absegnen): meta.goal des aktiven Plans hat Vorrang vor profiles.target_time_seconds;
   // das Profil bleibt Rückfall für Altpläne und wird weiter geschrieben.
-  usePlanGoalSync({
+  const planGoalSync = usePlanGoalSync({
     userId: user?.id ?? null,
     activePlanId,
     hydrationReady: planRemoteReady && prefsRemoteReady,
@@ -4842,6 +4844,7 @@ export default function AppMain(){
               value={activeTargetTime}
               onChange={(e)=>{
                 const value = e.target.value;
+                planGoalSync.noteGoalInput();
                 // Gehörten die Preferences bisher nicht zum aktiven Plan, übernimmt dieser sie mit der Eingabe.
                 if (!goalPreferencesApply && activePlanId) {
                   planPreferencesStoreRef.current = {

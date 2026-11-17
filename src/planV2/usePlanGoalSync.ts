@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { updateTrainingPlanGoalMeta } from "../lib/supabase/services/trainingPlanService";
+import { useCallback, useEffect, useRef } from "react";
+import { updateTrainingPlanGoalMeta, type PlanGoalWriteMode } from "../lib/supabase/services/trainingPlanService";
 import { readPlanGoalMeta, samePlanGoal, withPlanGoalMeta } from "./planGoalMeta";
 import type { PlanGoalMetaV2, TrainingPlanV2 } from "./types";
 
@@ -17,16 +17,18 @@ type Args = {
   ownerPlanId: string | null;
   applyGoalToPreferences: (goal: PlanGoalMetaV2) => void;
   claimOwner: (planId: string) => void;
-  saveGoal?: (userId: string, planId: string, goal: PlanGoalMetaV2) => Promise<boolean>;
+  saveGoal?: (userId: string, planId: string, goal: PlanGoalMetaV2, mode: PlanGoalWriteMode) => Promise<boolean>;
   debounceMs?: number;
 };
 
 /**
  * Zielzeit am Plan halten (`meta.goal`):
- * 1. Lesen: Kennt das Gerät den Besitzer der Preferences nicht (frisches Gerät, anderes Konto davor) und trägt der
+ * 1. Lesen: Ist der Besitzer der lokalen Preferences unbekannt (frisches Gerät, Konto davor gewechselt) und trägt der
  *    aktive Plan ein Ziel, gilt das Ziel des Plans — nicht die nutzerweite Profil-Zielzeit. Einmal je aktivem Plan.
- * 2. Schreiben: Gehören die Preferences zum aktiven Plan und weicht ihr Ziel vom Plan ab (Eingabe in den
- *    Einstellungen, Altplan ohne `meta.goal`), wird `meta.goal` verzögert lokal und per Zeilen-ID gespeichert.
+ *    Gehören die Preferences einem anderen Plan, wird nichts übernommen (Planwechsel läuft über `switchPlanPreferences`).
+ * 2. Schreiben nur in zwei Fällen: `meta.goal` fehlt (Nachtrag für Altpläne, sobald die Preferences zum Plan gehören)
+ *    oder die Zielzeit wurde in dieser Sitzung wirklich eingegeben (`noteGoalInput`). Eine veraltete lokale Zielzeit
+ *    überschreibt beim Öffnen nie ein vorhandenes `meta.goal`.
  */
 export function usePlanGoalSync({
   userId,
@@ -40,8 +42,10 @@ export function usePlanGoalSync({
   claimOwner,
   saveGoal = updateTrainingPlanGoalMeta,
   debounceMs = 1200,
-}: Args): void {
+}: Args): { noteGoalInput: () => void } {
   const appliedForRef = useRef<string | null>(null);
+  /** Plan, dessen Ziel in dieser Sitzung eingegeben wurde. */
+  const editedForRef = useRef<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeIdRef = useRef(activePlanId);
   activeIdRef.current = activePlanId;
@@ -52,32 +56,45 @@ export function usePlanGoalSync({
   const planGoal = readPlanGoalMeta(plan);
   const planGoalKey = planGoal ? `${planGoal.raceGoal}|${planGoal.targetTime ?? ""}` : "";
 
+  const cancel = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+  };
+
+  const noteGoalInput = useCallback(() => {
+    editedForRef.current = activeIdRef.current;
+  }, []);
+
   useEffect(() => {
     if (!hydrationReady || !activePlanId || !userId) return;
     const cur = latest.current;
+    const metaGoal = readPlanGoalMeta(cur.plan);
     if (appliedForRef.current !== activePlanId) {
       appliedForRef.current = activePlanId;
-      const metaGoal = readPlanGoalMeta(cur.plan);
-      if (metaGoal && cur.ownerPlanId !== activePlanId) {
-        cur.applyGoalToPreferences(metaGoal);
-        cur.claimOwner(activePlanId);
+      if (metaGoal) {
+        if (cur.ownerPlanId == null) {
+          cur.applyGoalToPreferences(metaGoal);
+          cur.claimOwner(activePlanId);
+        }
+        cancel();
         return;
       }
     }
     const goal = cur.preferencesGoal;
-    if (!goal || samePlanGoal(readPlanGoalMeta(cur.plan), goal)) {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = null;
+    const mode: PlanGoalWriteMode | null = !metaGoal ? "backfill" : editedForRef.current === activePlanId ? "edit" : null;
+    if (!goal || !mode || samePlanGoal(metaGoal, goal)) {
+      cancel();
       return;
     }
-    if (timerRef.current) clearTimeout(timerRef.current);
+    cancel();
     const planId = activePlanId;
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       if (activeIdRef.current !== planId) return;
       latest.current.setPlan((prev) => withPlanGoalMeta(prev, goal));
-      void latest.current.saveGoal(userId, planId, goal).catch(() => false);
+      void latest.current.saveGoal(userId, planId, goal, mode).catch(() => false);
     }, debounceMs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Werte über `latest`, Auslöser sind die Schlüssel
   }, [hydrationReady, activePlanId, userId, goalKey, planGoalKey, ownerPlanId, debounceMs]);
 
   useEffect(
@@ -86,4 +103,6 @@ export function usePlanGoalSync({
     },
     [],
   );
+
+  return { noteGoalInput };
 }

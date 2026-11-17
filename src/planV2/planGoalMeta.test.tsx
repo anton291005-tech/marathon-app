@@ -77,7 +77,7 @@ describe("usePlanGoalSync", () => {
   function setup(initial: Props) {
     const applied: PlanGoalMetaV2[] = [];
     const claimed: string[] = [];
-    const saved: Array<{ planId: string; goal: PlanGoalMetaV2 }> = [];
+    const saved: Array<{ planId: string; goal: PlanGoalMetaV2; mode: string }> = [];
     let plan = initial.plan;
     const view = renderHook((p: Props) =>
       usePlanGoalSync({
@@ -92,74 +92,94 @@ describe("usePlanGoalSync", () => {
         ownerPlanId: p.ownerPlanId,
         applyGoalToPreferences: (g) => applied.push(g),
         claimOwner: (id) => claimed.push(id),
-        saveGoal: async (_u, planId, goal) => {
-          saved.push({ planId, goal });
+        saveGoal: async (_u, planId, goal, mode) => {
+          saved.push({ planId, goal, mode });
           return true;
         },
         debounceMs: 100,
       }),
       { initialProps: initial },
     );
-    return { view, applied, claimed, saved, getPlan: () => plan };
+    const flush = () =>
+      act(() => {
+        jest.advanceTimersByTime(500);
+      });
+    return { view, applied, claimed, saved, getPlan: () => plan, flush };
   }
 
-  it("frisches Gerät: Ziel des Plans gilt, nicht die Profil-Zielzeit", () => {
+  it("frisches Gerät (Besitzer unbekannt): Ziel des Plans gilt, nicht die Profil-Zielzeit", () => {
     const plan = withPlanGoalMeta(basePlan(), { raceGoal: "time", targetTime: "1:45:00" });
-    const { applied, claimed, saved } = setup({
+    const { applied, claimed, saved, flush } = setup({
       plan,
       // Profil-Zielzeit eines anderen Plans, die Heuristik hält die Preferences für passend.
       preferencesGoal: { raceGoal: "time", targetTime: "2:50:00" },
       ownerPlanId: null,
       activePlanId: "plan-hm",
     });
-    act(() => {
-      jest.advanceTimersByTime(500);
-    });
+    flush();
     expect(applied).toEqual([{ raceGoal: "time", targetTime: "1:45:00" }]);
     expect(claimed).toEqual(["plan-hm"]);
     expect(saved).toEqual([]);
   });
 
+  it("Preferences gehören einem anderen Plan: weder Ziel noch Besitzer übernehmen", () => {
+    const plan = withPlanGoalMeta(basePlan(), { raceGoal: "time", targetTime: "1:45:00" });
+    const { applied, claimed, saved, flush } = setup({ plan, preferencesGoal: null, ownerPlanId: "plan-other", activePlanId: "plan-hm" });
+    flush();
+    expect(applied).toEqual([]);
+    expect(claimed).toEqual([]);
+    expect(saved).toEqual([]);
+  });
+
+  it("veraltete lokale Zielzeit beim Öffnen überschreibt meta.goal nicht", () => {
+    const plan = withPlanGoalMeta(basePlan(), { raceGoal: "time", targetTime: "3:10:00" });
+    const { view, saved, getPlan, flush } = setup({
+      plan,
+      preferencesGoal: { raceGoal: "time", targetTime: "3:30:00" },
+      ownerPlanId: "p",
+      activePlanId: "p",
+    });
+    flush();
+    // auch ein weiteres Rendern ohne Eingabe schreibt nichts
+    view.rerender({ plan, preferencesGoal: { raceGoal: "time", targetTime: "3:30:00" }, ownerPlanId: "p", activePlanId: "p" });
+    flush();
+    expect(saved).toEqual([]);
+    expect(readPlanGoalMeta(getPlan())).toEqual({ raceGoal: "time", targetTime: "3:10:00" });
+  });
+
   it("Altplan ohne meta.goal: gehören die Preferences dazu, wird das Ziel nachgetragen", () => {
-    const { saved, getPlan } = setup({
+    const { saved, getPlan, flush } = setup({
       plan: basePlan(),
       preferencesGoal: { raceGoal: "time", targetTime: "3:15:00" },
       ownerPlanId: "plan-m",
       activePlanId: "plan-m",
     });
-    act(() => {
-      jest.advanceTimersByTime(150);
-    });
-    expect(saved).toEqual([{ planId: "plan-m", goal: { raceGoal: "time", targetTime: "3:15:00" } }]);
+    flush();
+    expect(saved).toEqual([{ planId: "plan-m", goal: { raceGoal: "time", targetTime: "3:15:00" }, mode: "backfill" }]);
     expect(readPlanGoalMeta(getPlan())).toEqual({ raceGoal: "time", targetTime: "3:15:00" });
   });
 
-  it("Eingabe in den Einstellungen wird verzögert gespeichert, nur der letzte Stand", () => {
+  it("echte Eingabe in den Einstellungen: verzögert gespeichert, nur der letzte Stand", () => {
     const plan = withPlanGoalMeta(basePlan(), { raceGoal: "time", targetTime: "3:15:00" });
-    const { view, saved } = setup({ plan, preferencesGoal: { raceGoal: "time", targetTime: "3:15:00" }, ownerPlanId: "p", activePlanId: "p" });
+    const { view, saved, flush } = setup({ plan, preferencesGoal: { raceGoal: "time", targetTime: "3:15:00" }, ownerPlanId: "p", activePlanId: "p" });
+    act(() => view.result.current.noteGoalInput());
     view.rerender({ plan, preferencesGoal: { raceGoal: "time", targetTime: "3:1" }, ownerPlanId: "p", activePlanId: "p" });
     view.rerender({ plan, preferencesGoal: { raceGoal: "time", targetTime: "3:10:00" }, ownerPlanId: "p", activePlanId: "p" });
-    act(() => {
-      jest.advanceTimersByTime(150);
-    });
-    expect(saved).toEqual([{ planId: "p", goal: { raceGoal: "time", targetTime: "3:10:00" } }]);
+    flush();
+    expect(saved).toEqual([{ planId: "p", goal: { raceGoal: "time", targetTime: "3:10:00" }, mode: "edit" }]);
   });
 
   it("Preferences gehören nicht zum Plan: nichts schreiben", () => {
-    const { saved } = setup({ plan: basePlan(), preferencesGoal: null, ownerPlanId: "other", activePlanId: "p" });
-    act(() => {
-      jest.advanceTimersByTime(500);
-    });
+    const { saved, flush } = setup({ plan: basePlan(), preferencesGoal: null, ownerPlanId: "other", activePlanId: "p" });
+    flush();
     expect(saved).toEqual([]);
   });
 
   it("Planwechsel vor Ablauf der Verzögerung: nichts in den neuen Plan schreiben", () => {
     const plan = basePlan();
-    const { view, saved } = setup({ plan, preferencesGoal: { raceGoal: "time", targetTime: "3:15:00" }, ownerPlanId: "p1", activePlanId: "p1" });
+    const { view, saved, flush } = setup({ plan, preferencesGoal: { raceGoal: "time", targetTime: "3:15:00" }, ownerPlanId: "p1", activePlanId: "p1" });
     view.rerender({ plan, preferencesGoal: null, ownerPlanId: "p2", activePlanId: "p2" });
-    act(() => {
-      jest.advanceTimersByTime(500);
-    });
+    flush();
     expect(saved).toEqual([]);
   });
 });
