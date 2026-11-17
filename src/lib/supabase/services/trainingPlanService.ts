@@ -1,7 +1,8 @@
 import { validateTrainingPlanV2Integrity } from "../../../ai/validation/validateTrainingPlanV2Integrity";
 import { getAppNow } from "../../../core/time/timeSystem";
 import { normalizeTrainingPlan } from "../../../planV2/normalizeTrainingPlan";
-import type { TrainingPlanV2 } from "../../../planV2/types";
+import { withPlanGoalMeta } from "../../../planV2/planGoalMeta";
+import type { PlanGoalMetaV2, TrainingPlanV2 } from "../../../planV2/types";
 import { supabase } from "../client";
 
 /** Strip stray persistence fields before writing the jsonb `data` column. */
@@ -216,6 +217,35 @@ export async function saveTrainingPlan(
     return;
   }
   await updateActiveTrainingPlan(userId, plan);
+}
+
+/**
+ * Nur `meta.goal` eines bestimmten Plans setzen (per Zeilen-ID, nicht „der aktive"): Zwischen Planwechsel in der DB
+ * und im UI darf ein verzögertes Speichern nie die Daten eines Plans in einen anderen schreiben.
+ * `false` = nicht gespeichert (offline, Zeile weg, Integritätsfehler); der Aufrufer versucht es beim nächsten Mal.
+ */
+export async function updateTrainingPlanGoalMeta(userId: string, planId: string, goal: PlanGoalMetaV2): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from("training_plans")
+      .select("data")
+      .eq("user_id", userId)
+      .eq("id", planId)
+      .maybeSingle();
+    if (error || !data || typeof data !== "object" || !("data" in data)) return false;
+    const current = normalizeTrainingPlan((data as { data: unknown }).data);
+    if (!validateTrainingPlanV2Integrity(current) || current.workouts.length === 0) return false;
+    const next = withPlanGoalMeta(current, goal);
+    if (next === current) return true;
+    const { error: updateError } = await supabase
+      .from("training_plans")
+      .update({ data: sanitizeTrainingPlanRemoteData(next) })
+      .eq("user_id", userId)
+      .eq("id", planId);
+    return !updateError;
+  } catch {
+    return false;
+  }
 }
 
 export async function setActivePlan(userId: string, planId: string): Promise<void> {

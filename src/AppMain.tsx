@@ -148,6 +148,8 @@ import { UsageEventsSetting } from "./features/settings/UsageEventsSetting";
 import { trackCompletedSessions, trackUsageEvent } from "./telemetry/usageEvents";
 import { useAppOpenTracking } from "./telemetry/useAppOpenTracking";
 import { FreshAccountBootCover, shouldCoverForFreshAccount } from "./app/boot/FreshAccountBootCover";
+import { applyPlanGoalToPreferences, planGoalFromPreferences, withPlanGoalMeta } from "./planV2/planGoalMeta";
+import { usePlanGoalSync } from "./planV2/usePlanGoalSync";
 import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
 import { buildHealthRunSuggestion, buildSessionFlow, estimateDurationMin, parseKmInput } from "./features/session/sessionDetailModel";
 import { getCoachFeedback } from "./coachFeedback";
@@ -2885,6 +2887,25 @@ export default function AppMain(){
   const activeTargetTime = activeGoal.targetTime;
   const targetSeconds = activeGoal.targetSeconds;
   const targetTimeDisplay = activeGoal.targetTimeLabel;
+  // Zielzeit am Plan (meta.goal) statt nur im Profil — Logik in planV2/usePlanGoalSync.
+  // ENTSCHEIDUNG (Anton absegnen): meta.goal des aktiven Plans hat Vorrang vor profiles.target_time_seconds;
+  // das Profil bleibt Rückfall für Altpläne und wird weiter geschrieben.
+  usePlanGoalSync({
+    userId: user?.id ?? null,
+    activePlanId,
+    hydrationReady: planRemoteReady && prefsRemoteReady,
+    plan: trainingPlanV2,
+    setPlan: setTrainingPlanV2,
+    preferencesGoal: goalPreferencesApply
+      ? planGoalFromPreferences({ raceGoal: raceGoalFinish ? "finish" : "time", targetTime: activeTargetTime })
+      : null,
+    ownerPlanId: ownerPlanIdForGoal,
+    applyGoalToPreferences: (goal) => setPreferences((prev) => applyPlanGoalToPreferences(prev, goal)),
+    claimOwner: (planId) => {
+      planPreferencesStoreRef.current = { ...planPreferencesStoreRef.current, ownerPlanId: planId };
+      writePlanPreferencesStore(planPreferencesStoreRef.current);
+    },
+  });
   // Das Halbmarathon-Rennsignal projiziert auf einen Marathon — nur sinnvoll in einem Marathonplan.
   const { halfMarathonRacePaceScore, halfMarathonRaceDaysAgo } =
     raceDistanceKind(activeRaceDistanceKm) === "marathon"
@@ -3721,6 +3742,8 @@ export default function AppMain(){
       // scheitert das Speichern, wirft der Handler: der Wizard zeigt den Fehler (erneut versuchen /
       // abbrechen), lokal und remote bleibt alles beim Alten.
       const newPrepPending = newPrepPendingRef.current != null;
+      // Zielzeit/Finish-Ziel gehören zum neuen Plan (meta.goal) — nicht nur ins nutzerweite Profil.
+      if (plan) plan = withPlanGoalMeta(normalizeTrainingPlan(plan), planGoalFromPreferences(patch));
       await runOnboardingCompletion({
         newPrepPending,
         userId: user?.id ?? null,
