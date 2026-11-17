@@ -146,6 +146,7 @@ import { useFeedback } from "./features/feedback/useFeedback";
 import { submitFeedback } from "./lib/supabase/services/feedbackService";
 import { UsageEventsSetting } from "./features/settings/UsageEventsSetting";
 import { trackCompletedSessions, trackSyncCompletions, trackUsageEvent } from "./telemetry/usageEvents";
+import { connectShiftUsageToTelemetry } from "./telemetry/shiftUsageBridge";
 import { useAppOpenTracking } from "./telemetry/useAppOpenTracking";
 import { FreshAccountBootCover, shouldCoverForFreshAccount } from "./app/boot/FreshAccountBootCover";
 import { applyPlanGoalToPreferences, planGoalFromPreferences, withPlanGoalMeta } from "./planV2/planGoalMeta";
@@ -368,6 +369,8 @@ import {
 } from "./ui/productionGuards";
 /** Rückblick-Story (inkl. Konfetti) erst nach Plan-Ende gebraucht — eigener Chunk statt Main-Bundle. */
 const PrepRecapExperience = lazy(() => import("./components/prepRecap/PrepRecapExperience"));
+// W6: Nutzungsereignisse des Schicht-Modus (shift_entries_saved, shift_proposal_*) an usage_events.
+connectShiftUsageToTelemetry();
 const APPLE_HEALTH_CONNECTED_KEY = MARATHON_APPLE_HEALTH_CONNECTED_KEY;
 
 function readStoredJson(key, fallback) {
