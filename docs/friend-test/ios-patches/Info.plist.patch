@@ -1,0 +1,54 @@
+diff --git a/ios/App/App/Info.plist b/ios/App/App/Info.plist
+--- a/ios/App/App/Info.plist
++++ b/ios/App/App/Info.plist
+@@ -5,7 +5,7 @@
+ 	<key>CAPACITOR_DEBUG</key>
+ 	<string>$(CAPACITOR_DEBUG)</string>
+ 	<key>CFBundleDevelopmentRegion</key>
+-	<string>en</string>
++	<string>de</string>
+ 	<key>CFBundleDisplayName</key>
+ 	<string>MyRace</string>
+ 	<key>CFBundleExecutable</key>
+@@ -33,6 +33,8 @@
+ 	</array>
+ 	<key>CFBundleVersion</key>
+ 	<string>$(CURRENT_PROJECT_VERSION)</string>
++	<key>ITSAppUsesNonExemptEncryption</key>
++	<false/>
+ 	<key>LSRequiresIPhoneOS</key>
+ 	<true/>
+ 	<key>NSAppTransportSecurity</key>
+@@ -41,13 +43,13 @@
+ 		<false/>
+ 	</dict>
+ 	<key>NSCalendarsFullAccessUsageDescription</key>
+-	<string>MyRace liest deine Kalendertermine, um Trainingseinheiten an Tagen mit freier Zeit zu planen. Termine werden nicht verändert.</string>
++	<string>MyRace liest deine Kalendertermine, zum Beispiel Dienste und Schichten, um deine Laufeinheiten auf Tage und Uhrzeiten mit genug freier Zeit zu legen. MyRace ändert und löscht keine Termine.</string>
+ 	<key>NSCalendarsUsageDescription</key>
+-	<string>MyRace liest deine Kalendertermine, um Trainingseinheiten an Tagen mit freier Zeit zu planen. Termine werden nicht verändert.</string>
++	<string>MyRace liest deine Kalendertermine, zum Beispiel Dienste und Schichten, um deine Laufeinheiten auf Tage und Uhrzeiten mit genug freier Zeit zu legen. MyRace ändert und löscht keine Termine.</string>
+ 	<key>NSHealthShareUsageDescription</key>
+-	<string>Diese App liest deine Trainingsdaten, um dein Training zu analysieren.</string>
++	<string>MyRace liest deine Trainings, Distanzen, Herzfrequenz, Energieverbrauch, Schlaf und Ruhewerte (Ruhepuls, Herzfrequenzvariabilität, Atemfrequenz, Körpertemperatur) aus Apple Health. Damit hakt MyRace erledigte Einheiten in deinem Plan ab und schlägt dir passende Trainingstage vor.</string>
+ 	<key>NSHealthUpdateUsageDescription</key>
+-	<string>Diese App speichert Trainingsdaten, um deinen Fortschritt zu verbessern.</string>
++	<string>Diese Version von MyRace liest nur aus Apple Health und schreibt keine Daten hinein. Sollte eine spätere Version Trainings in Health speichern, fragt sie dich vorher um Erlaubnis.</string>
+ 	<key>UIApplicationSceneManifest</key>
+ 	<dict>
+ 		<key>UIApplicationSupportsMultipleScenes</key>
+@@ -73,13 +75,11 @@
+ 	<string>Main</string>
+ 	<key>UIRequiredDeviceCapabilities</key>
+ 	<array>
+-		<string>armv7</string>
++		<string>arm64</string>
+ 	</array>
+ 	<key>UISupportedInterfaceOrientations</key>
+ 	<array>
+ 		<string>UIInterfaceOrientationPortrait</string>
+-		<string>UIInterfaceOrientationLandscapeLeft</string>
+-		<string>UIInterfaceOrientationLandscapeRight</string>
+ 	</array>
+ 	<key>UISupportedInterfaceOrientations~ipad</key>
+ 	<array>
