@@ -40,14 +40,19 @@ export type CoachPrepStatus = {
 
 export function buildCoachPrepStatus(args: {
   completion: PrepCompletionState;
-  /** Zeit des aktiven Plans (Snapshot bzw. Health-Vorschlag) — nie die eines archivierten Plans. */
-  finish: { seconds: number; confirmed: boolean } | null;
+  /**
+   * Zeit des aktiven Plans (Snapshot bzw. Health-Vorschlag) — nie die eines archivierten Plans.
+   * Ein unbestätigter Vorschlag aus Strava (`origin: "strava"`) geht nicht an den Coach (Strava API
+   * Policy §5.3); erst eine vom Athleten bestätigte Zeit ist seine eigene Angabe.
+   */
+  finish: { seconds: number; confirmed: boolean; origin?: "strava" } | null;
   goalSeconds: number | null;
   raceDistanceKm: number | null;
   todayYmd: string;
 }): CoachPrepStatus | null {
-  const { completion, finish, goalSeconds, raceDistanceKm, todayYmd } = args;
+  const { completion, goalSeconds, raceDistanceKm, todayYmd } = args;
   if (completion.status !== "completed") return null;
+  const finish = args.finish && !args.finish.confirmed && args.finish.origin === "strava" ? null : args.finish;
   const raceRun = recapRaceWasRun(
     { race: { completedBy: completion.completedBy } } as PrepRecapStats,
     finish ? finish.seconds : null,

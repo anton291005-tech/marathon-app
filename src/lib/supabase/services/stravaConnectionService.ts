@@ -31,8 +31,12 @@ export async function fetchStravaConnectionStatus(): Promise<boolean> {
 /**
  * Löscht die Connection-Row und die importierten Strava-Läufe (`health_workouts`, `source_id 'strava:%'`) –
  * Strava API Policy §7.4: nach Widerruf Strava-Daten löschen. Erledigt-Haken an geplanten Einheiten
- * bleiben (Plan-Status). Scheitert nur das Löschen der Läufe, gilt die Trennung trotzdem; der Server
- * räumt Strava-Zeilen ohnehin nach 7 Tagen weg.
+ * bleiben (Plan-Status).
+ * Scheitert nur das Löschen der Läufe, gilt die Trennung trotzdem. Das Aufräumen auf dem Server
+ * (`purgeExpiredStravaWorkouts`) läuft dann NICHT mehr – es hängt am Abgleich, und der endet ohne
+ * Verbindung sofort mit `not_connected`. Der Client ordnet die übrigen Strava-Zeilen ohne aktive
+ * Verbindung deshalb nicht zu und verwirft sie lokal nach 7 Tagen; in der Tabelle bleiben sie bis zum
+ * nächsten erfolgreichen Trennen bzw. bis zur Konto-Löschung.
  */
 export async function disconnectStrava(userId: string): Promise<{ ok: boolean }> {
   const { error } = await supabase.from("strava_connections").delete().eq("user_id", userId);

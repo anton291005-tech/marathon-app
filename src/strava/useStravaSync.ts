@@ -55,6 +55,8 @@ export function useStravaSync(args: {
   userId: string | null | undefined;
   connected: boolean | null;
   onStravaRunsLoaded: (runs: StoredHealthRun[]) => void;
+  /** Strava lehnt den Zugriff ab: lokale Strava-Läufe älter als 7 Tage verwerfen (Policy §6.2). */
+  onReconnectRequired?: () => void;
   deps?: UseStravaSyncDeps;
 }): StravaSyncUiState {
   const { userId, connected } = args;
@@ -64,8 +66,20 @@ export function useStravaSync(args: {
   const [lastResult, setLastResult] = useState<StravaSyncResult | null>(null);
   const [reconnectRequired, setReconnectRequired] = useState(() => readState().lastStatus === "reconnect_required");
 
-  const latest = useRef({ userId, enabled, onStravaRunsLoaded: args.onStravaRunsLoaded, deps: args.deps });
-  latest.current = { userId, enabled, onStravaRunsLoaded: args.onStravaRunsLoaded, deps: args.deps };
+  const latest = useRef({
+    userId,
+    enabled,
+    onStravaRunsLoaded: args.onStravaRunsLoaded,
+    onReconnectRequired: args.onReconnectRequired,
+    deps: args.deps,
+  });
+  latest.current = {
+    userId,
+    enabled,
+    onStravaRunsLoaded: args.onStravaRunsLoaded,
+    onReconnectRequired: args.onReconnectRequired,
+    deps: args.deps,
+  };
 
   const controllerRef = useRef<StravaSyncController | null>(null);
   if (controllerRef.current == null) {
@@ -77,7 +91,10 @@ export function useStravaSync(args: {
       },
       onResult: async (result) => {
         setLastResult(result);
-        if (result.status === "reconnect_required") setReconnectRequired(true);
+        if (result.status === "reconnect_required") {
+          setReconnectRequired(true);
+          latest.current.onReconnectRequired?.();
+        }
         if (result.status === "ok") setReconnectRequired(false);
         if (result.status !== "ok") return;
         const uid = latest.current.userId;
@@ -113,13 +130,21 @@ export function useStravaSync(args: {
     [controller],
   );
 
-  // App-Start: einmal je Nutzer, sobald die Verbindung bestätigt ist.
-  const coldStartDoneFor = useRef<string | null>(null);
+  // App-Start: einmal je Nutzer, sobald die Verbindung bestätigt ist. Wird die Verbindung in derselben
+  // Sitzung getrennt und neu hergestellt, läuft der erste Import danach ohne Drossel („manual“) –
+  // sonst fiele er in die 15 min des Start-Abgleichs.
+  const activeFor = useRef<string | null>(null);
+  const activatedOnce = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!enabled || !userId) return;
-    if (coldStartDoneFor.current === userId) return;
-    coldStartDoneFor.current = userId;
-    void run("cold-start");
+    if (!enabled || !userId) {
+      activeFor.current = null;
+      return;
+    }
+    if (activeFor.current === userId) return;
+    activeFor.current = userId;
+    const reactivation = activatedOnce.current.has(userId);
+    activatedOnce.current.add(userId);
+    void run(reactivation ? "manual" : "cold-start");
   }, [enabled, userId, run]);
 
   // Rückkehr in den Vordergrund.

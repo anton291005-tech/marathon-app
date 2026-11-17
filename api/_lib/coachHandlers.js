@@ -633,7 +633,10 @@ function pickPrepStatus(context) {
   const raceYmd = typeof raw.raceYmd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.raceYmd) ? raw.raceYmd : null;
   if (!raceYmd) return null;
   const result = raw.result && typeof raw.result === "object" ? raw.result : {};
-  const finishTimeSeconds = finiteOrNull(result.finishTimeSeconds);
+  // Strava API Policy §5.3: ein unbestätigter Zeit-Vorschlag aus dem Strava-Import geht nicht an Claude
+  // (der Client lässt ihn schon weg; das hier fängt ältere/fremde Clients ab, die die Herkunft mitschicken).
+  const stravaSuggestion = result.finishTimeOrigin === "strava" && result.finishTimeConfirmed !== true;
+  const finishTimeSeconds = stravaSuggestion ? null : finiteOrNull(result.finishTimeSeconds);
   const completedBy = ["race_done", "date_passed", "plan_ended"].includes(raw.completedBy) ? raw.completedBy : null;
   // „Gelaufen" wie im Rückblick: nie bei plan_ended, sonst nur mit Zeit oder abgehaktem Rennen.
   const raceRun =

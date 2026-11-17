@@ -196,9 +196,10 @@ import {
   disconnectStrava,
 } from "./lib/supabase/services/stravaConnectionService";
 import { useStravaSync } from "./strava/useStravaSync";
-import { replaceStravaRuns } from "./strava/crossSourceRunDedup";
-import { isStravaRunId } from "./strava/stravaRunSource";
+import { dropExpiredLocalStravaRuns, replaceStravaRuns } from "./strava/crossSourceRunDedup";
+import { isStravaRunId, isStravaSourcedRun, selectRunsForAutoAssignment } from "./strava/stravaRunSource";
 import { StravaConnectionPanel } from "./features/strava/StravaConnectionPanel";
+import { StravaRunAttribution } from "./features/strava/StravaRunAttribution";
 import { GarminAppleHealthHelp } from "./features/settings/GarminAppleHealthHelp";
 import { assignSessionToChosenDay } from "./ai/mutations/assignSessionToBestCapacityDay";
 import { proposeSingleSessionCalendarReassignment } from "./ai/mutations/buildCalendarReassignmentAction";
@@ -1883,9 +1884,15 @@ export default function AppMain(){
     userId: user?.id,
     connected: stravaConnected,
     onStravaRunsLoaded: (runs) => setHealthRuns((prev) => replaceStravaRuns(prev, runs)),
+    onReconnectRequired: () => setHealthRuns((prev) => dropExpiredLocalStravaRuns(prev)),
   });
   const stravaSyncRef = useRef(stravaSync);
   stravaSyncRef.current = stravaSync;
+  // Keine Strava-Verbindung (mehr): übrig gebliebene strava:-Läufe nicht anzeigen und nicht zuordnen.
+  useEffect(() => {
+    if (stravaConnected !== false) return;
+    setHealthRuns((prev) => (prev.some((r) => isStravaSourcedRun(r)) ? replaceStravaRuns(prev, []) : prev));
+  }, [stravaConnected, healthRuns]);
 
   const handleStravaDisconnect = async () => {
     setStravaFeedback(null);
@@ -1977,6 +1984,8 @@ export default function AppMain(){
       if (status === "connected") {
         setStravaFeedback({ tone: "ok", text: "Mit Strava verbunden." });
         stravaSyncRef.current.clearReconnectRequired();
+        // War die Verbindung schon aktiv (neu verbinden nach „reconnect_required“), gleich abgleichen; nach
+        // Trennen + Verbinden löst der Hook selbst aus, sobald stravaConnected wieder true ist.
         void checkStravaConnectionStatus().then(() => stravaSyncRef.current.syncNow());
       } else {
         setStravaFeedback({ tone: "err", text: "Strava-Verbindung fehlgeschlagen. Bitte erneut versuchen." });
@@ -2559,15 +2568,16 @@ export default function AppMain(){
     if (Capacitor.getPlatform() !== "ios") return;
     if (!healthRuns.length) return;
     const result = applyAppleHealthTrainingSync({
-      healthRuns,
+      // Strava-Läufe nur bei bestätigter Verbindung (stravaRunSource.selectRunsForAutoAssignment).
+      healthRuns: selectRunsForAutoAssignment(healthRuns, stravaConnected),
       planSessions: ACTIVE_SESSIONS,
       logs: logsRef.current,
     });
     if (!result.changed) return;
     const syncKeys = marathonLogRecordsDiffSyncKeys(logsRef.current, result.logs);
     void save(result.logs, syncKeys);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Apple-Run-Merge nur bei neuen Health-Daten
-  }, [healthRuns]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Apple-Run-Merge nur bei neuen Health-Daten bzw. Strava-Status
+  }, [healthRuns, stravaConnected]);
 
   useEffect(() => {
     const todayYmd = getAppTodayYmd();
@@ -3019,10 +3029,16 @@ export default function AppMain(){
   }, [prepRaceYmd, prepRecapUserId, activePlanId]);
   const prepFinishDisplay = useMemo(() => {
     if (!prepCompleted) return null;
+    // Unbestätigter Vorschlag aus Strava → „laut Strava“ und nicht an den Coach (buildCoachPrepStatus).
+    const stravaOrigin = prepDetectedFinish?.origin === "strava" ? { origin: "strava" as const } : {};
     if (prepRecapRecord?.raceDate === prepCompleted.raceYmd && prepRecapRecord.finishTimeSeconds != null) {
-      return { seconds: prepRecapRecord.finishTimeSeconds, confirmed: prepRecapRecord.finishTimeConfirmed };
+      return {
+        seconds: prepRecapRecord.finishTimeSeconds,
+        confirmed: prepRecapRecord.finishTimeConfirmed,
+        ...(prepRecapRecord.finishTimeConfirmed ? {} : stravaOrigin),
+      };
     }
-    return prepDetectedFinish ? { seconds: prepDetectedFinish.seconds, confirmed: false } : null;
+    return prepDetectedFinish ? { seconds: prepDetectedFinish.seconds, confirmed: false, ...stravaOrigin } : null;
   }, [prepCompleted, prepRecapRecord, prepDetectedFinish]);
   /** Coach-Kontext nach Plan-Ende: Abschluss + Rennergebnis des AKTIVEN Plans statt aktueller Woche. */
   const coachPrepStatus = useMemo(
@@ -5187,6 +5203,7 @@ export default function AppMain(){
                         }}
                       >
                         <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>{kindShort}</div>
+                        <StravaRunAttribution runId={workout.runId} />
                         <div style={{ fontSize: 13, color: "var(--text-primary)" }}>{dateLabel}</div>
                         <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                           {durMin != null ? `Dauer: ca. ${durMin} Min.` : "Dauer: —"}
@@ -5671,6 +5688,7 @@ export default function AppMain(){
           <PrepRecapExperience
             record={prepRecapRecord}
             entry={prepRecapOverlay}
+            finishOrigin={prepFinishDisplay?.origin}
             onSaveFinish={handlePrepRecapSaveFinish}
             onClose={() => setPrepRecapOverlay(null)}
             onStartNewPrep={

@@ -9,7 +9,7 @@ import {
   isSyncedCanonicalType,
   type CanonicalWorkoutType,
 } from "./appleHealth/workoutTypeClassifier";
-import { dedupeAppleHealthAndStravaRuns } from "./strava/crossSourceRunDedup";
+import { dedupeAppleHealthAndStravaRuns, dropExpiredLocalStravaRuns } from "./strava/crossSourceRunDedup";
 import { isStravaSourcedRun } from "./strava/stravaRunSource";
 
 export const HEALTH_RUNS_STORAGE_KEY = "healthRuns";
@@ -401,9 +401,11 @@ export function loadHealthRunsFromStorage(
   const parsed = parseJson(raw || "null", []);
   if (!Array.isArray(parsed)) return [];
   return dedupeAppleHealthAndStravaRuns(
-    parsed
-      .filter((r) => r && typeof r.runId === "string")
-      .map((r) => migrateStoredHealthRunRow(r as StoredHealthRun))
-      .filter((r) => storedHealthRunIsSyncedActivity(r)),
+    dropExpiredLocalStravaRuns(
+      parsed
+        .filter((r) => r && typeof r.runId === "string")
+        .map((r) => migrateStoredHealthRunRow(r as StoredHealthRun))
+        .filter((r) => storedHealthRunIsSyncedActivity(r)),
+    ),
   );
 }

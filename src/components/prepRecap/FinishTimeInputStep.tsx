@@ -36,6 +36,8 @@ type Props = {
   startInEdit?: boolean;
   onSubmit: (patch: FinishTimePatch) => Promise<void> | void;
   onDismiss: () => void;
+  /** „strava“: der Vorschlag stammt aus dem Strava-Import → „Laut Strava“. */
+  suggestionOrigin?: "strava";
 };
 
 const EMPTY_PARTS: FinishTimeParts = { hours: "", minutes: "", seconds: "" };
@@ -82,6 +84,7 @@ export default function FinishTimeInputStep({
   startInEdit = false,
   onSubmit,
   onDismiss,
+  suggestionOrigin,
 }: Props) {
   const suggestion = current && !current.confirmed ? current : null;
   const [editing, setEditing] = useState(() => startInEdit || suggestion == null);
@@ -192,7 +195,7 @@ export default function FinishTimeInputStep({
               {suggestionText}
             </div>
             <p style={{ margin: "22px 0 0", fontSize: 22, fontWeight: 750, lineHeight: 1.25, letterSpacing: "-0.01em" }}>
-              Laut Apple Health: {suggestionText} — stimmt das?
+              {suggestionOrigin === "strava" ? "Laut Strava" : "Laut Apple Health"}: {suggestionText} — stimmt das?
             </p>
             <p style={{ margin: "10px 0 0", fontSize: 15, lineHeight: 1.45, color: "rgba(226,232,240,0.68)" }}>
               Die Uhr misst von Start bis Stopp. Deine offizielle Chipzeit kann davon leicht abweichen.

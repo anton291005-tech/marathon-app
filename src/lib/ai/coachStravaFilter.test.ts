@@ -37,6 +37,11 @@ function payload(logs: Record<string, unknown>, healthRuns: StoredHealthRun[]) {
 }
 
 describe("Strava-Daten im Coach-Kontext (Strava API Policy §5.3)", () => {
+  test("HealthKit-Workout aus der Strava-App (hk_-ID) ist Apple Health und bleibt", () => {
+    const p = payload({}, [{ ...appleRun, runId: "hk_FROM-STRAVA-APP", sourceName: "Strava" }]);
+    expect(p.healthRunsLast30Days).toHaveLength(1);
+  });
+
   test("Strava-Läufe fallen aus healthRunsLast30Days, Apple-Health-Läufe bleiben", () => {
     const p = payload({}, [appleRun, stravaRun]);
     expect(p.healthRunsLast30Days).toEqual([

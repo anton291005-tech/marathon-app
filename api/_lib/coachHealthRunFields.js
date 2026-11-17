@@ -27,12 +27,12 @@ function isStravaRunId(runId) {
 
 /**
  * Strava-Daten dürfen an kein Sprachmodell (Strava API Policy §5.3). Der Client filtert schon
- * (`src/lib/ai/getAiContext.ts`); hier noch einmal für ältere Clients, die `runId`/`sourceName` mitschicken.
+ * (`src/lib/ai/getAiContext.ts`); hier noch einmal für ältere Clients, die `runId` mitschicken.
  */
 function isStravaSourcedCoachRun(run) {
   if (!run || typeof run !== "object") return false;
-  if (isStravaRunId(run.runId) || isStravaRunId(run.platformId)) return true;
-  return typeof run.sourceName === "string" && run.sourceName.trim().toLowerCase() === "strava";
+  // Nur das ID-Präfix zählt (wie im Client): ein HealthKit-Workout mit Quelle „Strava“ ist ein Apple-Health-Lauf.
+  return isStravaRunId(run.runId);
 }
 
 /** Werte eines zugeordneten Strava-Laufs aus einem Session-Log entfernen (Spiegel des Clients). */

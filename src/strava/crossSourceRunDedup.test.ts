@@ -1,3 +1,4 @@
+import { freezeTimeForTests } from "../core/time/timeSystem";
 import { loadHealthRunsFromStorage, mergeHealthRuns, type StoredHealthRun } from "../healthRuns";
 import {
   dedupeAppleHealthAndStravaRuns,
@@ -94,6 +95,10 @@ describe("dedupeAppleHealthAndStravaRuns", () => {
 });
 
 describe("an den Stellen, wo Läufe zusammengeführt werden", () => {
+  // Strava-Läufe gelten lokal nur 7 Tage (dropExpiredLocalStravaRuns) – Uhr auf die Fixture-Daten.
+  beforeEach(() => freezeTimeForTests(new Date("2026-11-16T12:00:00.000Z")));
+  afterEach(() => freezeTimeForTests(null));
+
   test("mergeHealthRuns: Apple-Health-Lauf kommt zu einem vorhandenen Strava-Lauf → einmal, Apple Health", () => {
     const merged = mergeHealthRuns([strava()], [apple()]);
     expect(merged.map((r) => r.runId)).toEqual(["hk_UUID-1"]);
@@ -129,5 +134,36 @@ describe("an den Stellen, wo Läufe zusammengeführt werden", () => {
     const next = replaceStravaRuns([apple(), stale], [strava(), strava({ runId: "strava:9", startDate: "2026-11-15T08:00:00.000Z" })]);
     expect(next.map((r) => r.runId)).toEqual(["strava:9", "hk_UUID-1"]);
     expect(replaceStravaRuns([apple(), stale], []).map((r) => r.runId)).toEqual(["hk_UUID-1"]);
+  });
+});
+
+describe("HealthKit-Workout aus der Strava-App (hk_-ID, Quelle „Strava“) ist Apple Health", () => {
+  beforeEach(() => freezeTimeForTests(new Date("2026-11-16T12:00:00.000Z")));
+  afterEach(() => freezeTimeForTests(null));
+
+  const watch = apple({ runId: "hk_WATCH", platformId: "WATCH", sourceName: "Apple Watch von Anton" });
+  const fromStravaApp = apple({
+    runId: "hk_STRAVA-APP",
+    platformId: "STRAVA-APP",
+    sourceName: "Strava",
+    startDate: "2026-11-16T06:30:20.000Z",
+    duration: 3080,
+  });
+
+  test("replaceStravaRuns behält es (kein Ersetzen durch den Import, kein 7-Tage-Aufräumen)", () => {
+    expect(replaceStravaRuns([fromStravaApp], []).map((r) => r.runId)).toEqual(["hk_STRAVA-APP"]);
+  });
+
+  test("Watch + Strava-App-Kopie + Strava-Import zählen einmal (Dedup innerhalb HealthKit wie bisher)", () => {
+    const merged = mergeHealthRuns([], [watch, fromStravaApp, strava()]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].runId.startsWith("hk_")).toBe(true);
+    expect(merged.some((r) => r.runId.startsWith("strava:"))).toBe(false);
+  });
+
+  test("allein gegen den Import: Apple Health gewinnt", () => {
+    const out = dedupeAppleHealthAndStravaRuns([strava(), fromStravaApp]);
+    expect(out.map((r) => r.runId)).toEqual(["hk_STRAVA-APP"]);
+    expect(out[0].mergedRunIds).toEqual(["strava:12000000001"]);
   });
 });

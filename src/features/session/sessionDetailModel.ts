@@ -8,6 +8,7 @@ import {
   type SessionShapeForDistance,
 } from "../../sessionDistance";
 import { formatDayDateDe, formatKmDe } from "../../ui/formatDe";
+import { isStravaRunId } from "../../strava/stravaRunSource";
 
 /** Gefühl 1–5. Gleiche Zahlenwerte wie die früheren Sterne (1 = am schwersten, 5 = am leichtesten). */
 const FEELING_LABELS = ["", "sehr schwer", "schwer", "mittel", "leicht", "sehr leicht"] as const;
@@ -120,11 +121,13 @@ export type HealthRunSuggestion = {
   /** „Heute 07:12 · 10,4 km · 52:10" */
   line: string;
   km: number | null;
+  /** Nur gesetzt, wenn der Lauf aus dem Strava-Import stammt („Lauf aus Strava“ + Powered by Strava). */
+  source?: "strava";
 };
 
 /** Vorschlagszeile für einen erkannten, noch nicht zugeordneten Health-Lauf. */
 export function buildHealthRunSuggestion(
-  run: { startDate: string; duration: number; distanceMeters: number | null },
+  run: { startDate: string; duration: number; distanceMeters: number | null; runId?: string },
   today: Date,
 ): HealthRunSuggestion {
   const start = new Date(run.startDate);
@@ -138,7 +141,7 @@ export function buildHealthRunSuggestion(
   const km = run.distanceMeters != null && run.distanceMeters > 0 ? Math.round(run.distanceMeters / 100) / 10 : null;
   if (km != null) parts.push(`${formatKmDe(km)} km`);
   if (run.duration > 0) parts.push(formatClock(run.duration));
-  return { line: parts.join(" · "), km };
+  return { line: parts.join(" · "), km, ...(isStravaRunId(run.runId) ? { source: "strava" as const } : {}) };
 }
 
 /** Anker der CR-10-Skala (Foster 2001), deutsche Formulierung laut Readiness-Spec §6.2 (Review-Punkt 6). */

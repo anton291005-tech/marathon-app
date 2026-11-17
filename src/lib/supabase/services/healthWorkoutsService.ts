@@ -1,5 +1,5 @@
 import type { StoredHealthRun } from "../../../healthRuns";
-import { dedupeAppleHealthAndStravaRuns } from "../../../strava/crossSourceRunDedup";
+import { dedupeAppleHealthAndStravaRuns, dropExpiredLocalStravaRuns } from "../../../strava/crossSourceRunDedup";
 import { isStravaRunId, STRAVA_SOURCE_NAME, STRAVA_SOURCE_PREFIX } from "../../../strava/stravaRunSource";
 import { supabase } from "../client";
 
@@ -99,7 +99,7 @@ export async function loadHealthWorkouts(userId: string): Promise<StoredHealthRu
     const mapped = dbRowToStoredHealthRun(raw);
     if (mapped) out.push(mapped);
   }
-  return dedupeAppleHealthAndStravaRuns(out);
+  return dedupeAppleHealthAndStravaRuns(dropExpiredLocalStravaRuns(out));
 }
 
 /** Nur die importierten Strava-Läufe (nach POST /api/strava/sync), ohne Deduplizierung. */
@@ -140,6 +140,8 @@ export async function saveHealthWorkout(userId: string, run: StoredHealthRun): P
 /**
  * Löscht alle importierten Strava-Läufe des Nutzers (beim Trennen; Strava API Policy §7.4 verlangt das
  * Löschen nach Widerruf). Geplante Einheiten, die schon als erledigt gelten, bleiben erledigt.
+ * Scheitert es, bleiben die Zeilen in der Tabelle; der Client ordnet sie ohne aktive Verbindung nicht zu
+ * und verwirft sie lokal nach 7 Tagen (`selectRunsForAutoAssignment`, `dropExpiredLocalStravaRuns`).
  */
 export async function deleteStravaHealthWorkouts(userId: string): Promise<{ ok: boolean }> {
   const { error } = await supabase

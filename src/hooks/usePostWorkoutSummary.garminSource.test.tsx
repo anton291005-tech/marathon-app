@@ -54,6 +54,8 @@ describe("Auswertung nach dem Lauf: Quelle", () => {
     expect(isHealthKitWorkoutSource(run("hk_1", "Garmin Connect"))).toBe(true);
     expect(isHealthKitWorkoutSource(run("hk_1", "Antons Uhr"))).toBe(true);
     expect(isHealthKitWorkoutSource(run("strava:1", "Strava"))).toBe(false);
+    // Von der Strava-App nach Apple Health geschrieben: ein HealthKit-Workout.
+    expect(isHealthKitWorkoutSource(run("hk_1", "Strava"))).toBe(true);
     expect(isHealthKitWorkoutSource(run("strava:1", undefined))).toBe(false);
     expect(isHealthKitWorkoutSource(run("hk_1", undefined))).toBe(false);
     expect(isHealthKitWorkoutSource(run("hk_1", "  "))).toBe(false);

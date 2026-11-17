@@ -16,6 +16,8 @@ type Props = {
   onClose: () => void;
   /** Nur vom Home-Rückblick. Aus dem Archiv (Einstellungen) weglassen: dort nur „Fertig" + Zeit. */
   onStartNewPrep?: () => void;
+  /** „strava“, wenn der unbestätigte Zeit-Vorschlag aus dem Strava-Import stammt („laut Strava“). */
+  finishOrigin?: "strava";
 };
 
 type Step =
@@ -41,7 +43,7 @@ function initialStep(record: PrepRecapRecord, entry: PrepRecapEntry): Step {
  * Ablauf „Rückblick ansehen": solange die Zielzeit unbestätigt ist, zuerst die Bestätigung
  * (überspringbar, Überspringen bestätigt nicht), dann die Story aus dem Snapshot.
  */
-export default function PrepRecapExperience({ record, entry, onSaveFinish, onClose, onStartNewPrep }: Props) {
+export default function PrepRecapExperience({ record, entry, onSaveFinish, onClose, onStartNewPrep, finishOrigin }: Props) {
   const [step, setStep] = useState<Step>(() => initialStep(record, entry));
 
   const slides = useMemo(
@@ -51,9 +53,10 @@ export default function PrepRecapExperience({ record, entry, onSaveFinish, onClo
         raceName: record.raceName ?? record.stats.race.name,
         finishSeconds: record.finishTimeSeconds,
         finishConfirmed: record.finishTimeConfirmed,
+        ...(finishOrigin ? { finishOrigin } : {}),
         todayYmd: getAppTodayYmd(),
       }),
-    [record],
+    [record, finishOrigin],
   );
 
   if (step.kind === "input") {
@@ -75,6 +78,7 @@ export default function PrepRecapExperience({ record, entry, onSaveFinish, onClo
             : null
         }
         dismissLabel={step.dismissLabel}
+        suggestionOrigin={finishOrigin}
         startInEdit={step.startInEdit}
         onSubmit={async (patch) => {
           await onSaveFinish(patch);

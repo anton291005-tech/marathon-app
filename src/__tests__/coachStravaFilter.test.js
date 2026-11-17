@@ -31,9 +31,11 @@ const appleRun = {
 };
 
 describe("isStravaSourcedCoachRun / stripStravaDerivedLogFields", () => {
-  test("erkennt Strava an ID oder Quellname", () => {
+  test("erkennt Strava nur am ID-Präfix strava:", () => {
     expect(isStravaSourcedCoachRun(stravaRun)).toBe(true);
-    expect(isStravaSourcedCoachRun({ ...stravaRun, runId: undefined })).toBe(true);
+    // Nur das ID-Präfix zählt: ein HealthKit-Workout, das die Strava-App nach Apple Health schreibt, ist Apple Health.
+    expect(isStravaSourcedCoachRun({ ...stravaRun, runId: "hk_FROM-STRAVA-APP" })).toBe(false);
+    expect(isStravaSourcedCoachRun({ ...stravaRun, runId: undefined })).toBe(false);
     expect(isStravaSourcedCoachRun(appleRun)).toBe(false);
     expect(isStravaSourcedCoachRun(null)).toBe(false);
   });

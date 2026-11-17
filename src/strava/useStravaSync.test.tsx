@@ -51,17 +51,19 @@ function setup(opts: { native?: boolean; connected?: boolean | null; result?: an
   const runSync = jest.fn(async () => opts.result ?? { status: "ok", imported: 1, fetched: 1 });
   const loadStravaRuns = jest.fn(async () => [stravaRow]);
   const onStravaRunsLoaded = jest.fn();
-  const hook = renderHook(
+  const onReconnectRequired = jest.fn();
+  const view = renderHook(
     ({ connected }) =>
       useStravaSync({
         userId: "user-1",
         connected,
         onStravaRunsLoaded,
+        onReconnectRequired,
         deps: { runSync, loadStravaRuns, isNativePlatform: () => opts.native ?? false },
       }),
     { initialProps: { connected: opts.connected === undefined ? true : opts.connected } },
   );
-  return { ...hook, runSync, loadStravaRuns, onStravaRunsLoaded };
+  return { ...view, runSync, loadStravaRuns, onStravaRunsLoaded, onReconnectRequired };
 }
 
 describe("useStravaSync", () => {
@@ -130,10 +132,23 @@ describe("useStravaSync", () => {
     expect(runSync).toHaveBeenCalledTimes(2);
   });
 
+  test("Trennen + neu verbinden in derselben Sitzung: erster Import läuft sofort, trotz Drossel", async () => {
+    const { runSync, rerender } = setup();
+    await flush();
+    expect(runSync).toHaveBeenCalledTimes(1);
+    rerender({ connected: false });
+    await flush();
+    freezeTimeForTests(new Date(T0.getTime() + 2 * 60000));
+    rerender({ connected: true });
+    await flush();
+    expect(runSync).toHaveBeenCalledTimes(2);
+  });
+
   test("reconnect_required wird angezeigt und über Neustarts gemerkt, nichts geladen", async () => {
-    const { result, loadStravaRuns, unmount } = setup({ result: { status: "reconnect_required" } });
+    const { result, loadStravaRuns, unmount, onReconnectRequired } = setup({ result: { status: "reconnect_required" } });
     await flush();
     expect(result.current.reconnectRequired).toBe(true);
+    expect(onReconnectRequired).toHaveBeenCalledTimes(1);
     expect(loadStravaRuns).not.toHaveBeenCalled();
     expect(JSON.parse(localStorage.getItem(STRAVA_SYNC_STATE_KEY) || "{}").lastStatus).toBe("reconnect_required");
     unmount();

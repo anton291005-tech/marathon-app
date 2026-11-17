@@ -10,6 +10,7 @@
 
 import type { StoredHealthRun } from "../healthRuns";
 import { classifyWorkoutType } from "../appleHealth/workoutTypeClassifier";
+import { getAppNowEpochMs } from "../core/time/timeSystem";
 import { isStravaSourcedRun } from "./stravaRunSource";
 
 export const CROSS_SOURCE_START_TOLERANCE_MS = 5 * 60 * 1000;
@@ -97,13 +98,42 @@ export function dedupeAppleHealthAndStravaRuns(runs: StoredHealthRun[]): StoredH
   return out;
 }
 
+/** Strava API Policy §6.2: Strava-Läufe höchstens 7 Tage lokal halten (gemessen am Start des Laufs). */
+export const STRAVA_LOCAL_MAX_AGE_DAYS = 7;
+
+/**
+ * Verwirft lokale Strava-Läufe, deren Start länger als 7 Tage zurückliegt (Laden, `reconnect_required`,
+ * nach jedem Import). Apple-Health-Läufe bleiben. Ohne Treffer dieselbe Liste (Referenz).
+ * ENTSCHEIDUNG (Anton absegnen): lokal zählt der Start des Laufs, nicht der Zeitpunkt des Imports –
+ * strenger als der Server (der nach `created_at` aufräumt); die automatische Zuordnung schaut ohnehin
+ * nur 10 Tage zurück.
+ */
+export function dropExpiredLocalStravaRuns(runs: StoredHealthRun[], nowMs: number = getAppNowEpochMs()): StoredHealthRun[] {
+  if (!Array.isArray(runs)) return runs;
+  const cutoff = nowMs - STRAVA_LOCAL_MAX_AGE_DAYS * 86400000;
+  const kept = runs.filter((run) => {
+    if (!isStravaSourcedRun(run)) return true;
+    const t = Date.parse(run.startDate);
+    return Number.isFinite(t) && t >= cutoff;
+  });
+  return kept.length === runs.length ? runs : kept;
+}
+
 /**
  * Nach einem Strava-Import: die Strava-Läufe im lokalen Bestand durch den frisch geladenen Stand
- * ersetzen (inkl. der vom Server nach 7 Tagen gelöschten) und erneut gegen Apple Health deduplizieren.
+ * ersetzen (inkl. der vom Server nach 7 Tagen gelöschten), ältere als 7 Tage verwerfen und erneut gegen
+ * Apple Health deduplizieren.
  */
-export function replaceStravaRuns(current: StoredHealthRun[], stravaRuns: StoredHealthRun[]): StoredHealthRun[] {
+export function replaceStravaRuns(
+  current: StoredHealthRun[],
+  stravaRuns: StoredHealthRun[],
+  nowMs: number = getAppNowEpochMs(),
+): StoredHealthRun[] {
   const keep = current.filter((run) => !isStravaSourcedRun(run));
-  const incoming = stravaRuns.filter((run) => isStravaSourcedRun(run));
+  const incoming = dropExpiredLocalStravaRuns(
+    stravaRuns.filter((run) => isStravaSourcedRun(run)),
+    nowMs,
+  );
   const combined = [...keep, ...incoming].sort(
     (a, b) => Date.parse(a.startDate) - Date.parse(b.startDate),
   );

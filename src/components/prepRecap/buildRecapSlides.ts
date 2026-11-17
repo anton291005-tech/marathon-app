@@ -61,6 +61,8 @@ export type RecapSlidesInput = {
   raceName: string | null;
   finishSeconds: number | null;
   finishConfirmed: boolean;
+  /** „strava“, wenn der unbestätigte Vorschlag aus dem Strava-Import stammt. */
+  finishOrigin?: "strava";
   /** Heute (YYYY-MM-DD) — entscheidet, ob das Outro noch von Erholung spricht. */
   todayYmd: string;
 };
@@ -250,7 +252,7 @@ function raceSlide(input: RecapSlidesInput): RecapSlide | null {
 
   const reached = isGoalReached(finishSeconds, race.goalSeconds);
   const pace = formatRacePace(finishSeconds, race.distanceKm);
-  const sourceNote = finishTimeSourceNote({ seconds: finishSeconds, confirmed: finishConfirmed });
+  const sourceNote = finishTimeSourceNote({ seconds: finishSeconds, confirmed: finishConfirmed, origin: input.finishOrigin });
   return {
     id: "race",
     eyebrow,
@@ -269,7 +271,7 @@ function outroSlide(input: RecapSlidesInput): RecapSlide {
   if (stats.weeks) summary.push(`${stats.weeks.count} ${stats.weeks.count === 1 ? "Woche" : "Wochen"}`);
   if (stats.volume) summary.push(`${formatRecapHero(kmHero(stats.volume.actualKm))} km`);
   if (finishSeconds != null) {
-    const note = finishTimeSourceNote({ seconds: finishSeconds, confirmed: input.finishConfirmed });
+    const note = finishTimeSourceNote({ seconds: finishSeconds, confirmed: input.finishConfirmed, origin: input.finishOrigin });
     summary.push(note ? `${formatFinishTime(finishSeconds)} · ${note}` : formatFinishTime(finishSeconds));
   }
 
