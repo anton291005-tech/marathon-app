@@ -43,4 +43,17 @@ describe("„Woche kopieren“ mit vergangenen Tagen in der Quellwoche", () => {
     expect(result.deletes).toEqual(["2026-11-27"]);
     expect(result.upserts.map((e) => e.dateYmd)).toEqual(["2026-11-26"]);
   });
+
+  it("vergangene Quelltage MIT Eintrag (früher gespeichert) werden weiter kopiert", () => {
+    const source = byDate([
+      entryOfKind("2026-11-16", "night"),
+      entryOfKind("2026-11-17", "night"),
+      entryOfKind("2026-11-19", "early"),
+      entryOfKind("2026-11-25", "late"),
+    ]);
+    const result = copyWeek({ entriesByDate: source, sourceStartYmd: "2026-11-16", times: 1, untilYmd: "2026-12-16", editableFromYmd: today });
+    expect(result.upserts.map((e) => `${e.dateYmd}:${e.kind}`)).toEqual(["2026-11-23:night", "2026-11-24:night", "2026-11-26:early"]);
+    // Mi 18.11. ist leer und vergangen → Mi 25.11. bleibt stehen.
+    expect(result.deletes).toEqual([]);
+  });
 });

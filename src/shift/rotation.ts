@@ -90,8 +90,8 @@ export function applyRotation(args: {
  * „Woche kopieren“: die 7 Tage ab `sourceStartYmd` auf die folgenden `times` Wochen übertragen. Tage ohne Eintrag in
  * der Quellwoche werden in der Zielwoche gelöscht (`deletes`), damit die Kopie wirklich gleich aussieht.
  *
- * `editableFromYmd` (heute): Quelltage davor sind auf der Dienstplan-Seite nicht eintragbar und deshalb immer leer.
- * Sie sagen nichts aus und überschreiben oder löschen in den Zielwochen nichts.
+ * `editableFromYmd` (heute): Quelltage davor sind auf der Dienstplan-Seite nicht eintragbar. Haben sie einen
+ * Eintrag (früher gespeichert), wird er kopiert; sind sie leer, sagt das nichts aus und löscht in den Zielwochen nichts.
  */
 export function copyWeek(args: {
   entriesByDate: Readonly<Record<string, StoredShiftEntry>>;
@@ -106,11 +106,12 @@ export function copyWeek(args: {
   for (let w = 1; w <= Math.max(1, Math.min(ROTATION_MAX_WEEKS, args.times)); w += 1) {
     for (let d = 0; d < 7; d += 1) {
       const sourceYmd = addDays(args.sourceStartYmd, d);
-      if (args.editableFromYmd && sourceYmd < args.editableFromYmd) continue;
       const source = args.entriesByDate[sourceYmd];
       const target = addDays(args.sourceStartYmd, w * 7 + d);
       if (args.untilYmd && target > args.untilYmd) continue;
       if (source) upserts.push({ ...source, dateYmd: target });
+      // Ein leerer Quelltag vor heute sagt nichts aus (dort war nie etwas eintragbar) → nicht löschen.
+      else if (args.editableFromYmd && sourceYmd < args.editableFromYmd) continue;
       else if (args.entriesByDate[target]) deletes.push(target);
     }
   }
