@@ -152,6 +152,7 @@ import { FreshAccountBootCover, shouldCoverForFreshAccount } from "./app/boot/Fr
 import { applyPlanGoalToPreferences, planGoalFromPreferences, readPlanGoalMeta, withPlanGoalMeta } from "./planV2/planGoalMeta";
 import { usePlanGoalSync } from "./planV2/usePlanGoalSync";
 import { detachAssignedRun } from "./sessionLogs/detachAssignedRun";
+import { prognosisGoalTag } from "./features/today/prognosisGoalTag";
 import { goalEditKey, goalEditedThisSession, knownPlanCount, rebindGoalEditKey } from "./planV2/planGoalBackfill";
 import { useResetScrollOnViewChange } from "./layout/useResetScrollOnViewChange";
 import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
@@ -3368,18 +3369,8 @@ export default function AppMain(){
     } else if (marathonPrediction.ready && marathonPrediction.predictedTime && marathonPrediction.predictedSeconds != null) {
       const timeStr = marathonPrediction.predictedTime;
       const predSec = marathonPrediction.predictedSeconds;
-      let subTag;
-      if (raceDistanceKind(activeRaceDistanceKm) !== "marathon") {
-        subTag = null;
-      } else if (predSec < SUB3H_TARGET_SECONDS_UI) {
-        const mins = Math.max(1, Math.round((SUB3H_TARGET_SECONDS_UI - predSec) / 60));
-        subTag = `${mins} min unter Sub-3h`;
-      } else if (predSec <= SUB3H_TARGET_SECONDS_UI + 300) {
-        subTag = "knapp bei Sub-3h";
-      } else {
-        const mins = Math.max(1, Math.round((predSec - SUB3H_TARGET_SECONDS_UI) / 60));
-        subTag = `${mins} min über Sub-3h`;
-      }
+      // Abstand zur eigenen Zielzeit des aktiven Plans — kein fester Sub-3h-Bezug (features/today/prognosisGoalTag.ts).
+      const subTag = prognosisGoalTag(predSec, targetSeconds);
       lines.push(subTag ? `Aktuelle Prognose: ${timeStr} — ${subTag}` : `Aktuelle Prognose: ${timeStr}`);
     } else {
       lines.push("Mehr abgeschlossene Einheiten für Zeitprognose nötig");
@@ -3407,6 +3398,7 @@ export default function AppMain(){
     prepCompleted,
     uiRecoveryScore0_100,
     homeRecoveryRhr7dDisplay,
+    targetSeconds,
   ]);
   const consistencyStats = getConsistencyStats(displayPlan, logs, appNow);
   const coachHints = getCoachFeedback({
