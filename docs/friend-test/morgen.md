@@ -1,150 +1,116 @@
-# Morgen – Abhakliste für Anton
+# iPhone-13-Checkliste für den Freundes-Test
 
-Reihenfolge einhalten. Ausführliche Erklärungen stehen in `docs/friend-test/testflight.md`, die Abschnittsnummern stehen in Klammern. Den Bericht findest du in `docs/friend-test/REPORT.md`.
+Stand: 2026-11-18 abends, Branch `test/friends-build`. Reihenfolge einhalten: Die frühen Schritte entscheiden, ob die späteren sinnvoll sind. Je Schritt steht, was du tust und was du sehen musst. Hintergrund und Befundnummern (H1, M1 …) stehen in `docs/friend-test/REPORT.md`, Abschnitt „18.11. Abendlauf“.
 
-## 0. Entscheiden (10 min)
+Was im Browser schon geprüft ist: Registrieren, Wizard, Dienstplan, Wochen-Scan, Nutzungsdaten, Feedback, Abmelden/Anmelden und Konto löschen laufen im Rauchtest (`npm run test:e2e`) durch. Offen ist alles, was nur das Gerät kann.
 
-- [ ] Die **Entscheidungen zum Absegnen** in `REPORT.md` durchgehen. Wenn du etwas anders willst, gib es vor dem Merge an mich zurück.
-- [ ] Wie soll die Rennwoche im Schicht-Modus laufen?
-  - Variante a: nur Verschiebungen auf frühere Tage, so ist es jetzt.
-  - Variante b: gar keine Vorschläge, so steht es in Spec §8.7.
+## 0. Vorbereitung am Mac (15 min)
 
-## 1. Migrationen 023–025 (Supabase → SQL Editor)
+- [ ] `git fetch && git checkout test/friends-build && git pull`, dann `npm ci`.
+- [ ] In deiner lokalen `.env` steht `REACT_APP_SUPPORT_EMAIL` mit deiner echten Adresse. Die App liest ihre `REACT_APP_*`-Werte beim Bauen.
+- [ ] Info.plist-Patch und Privacy Manifest einspielen (`docs/friend-test/ios-patches/README.md`).
+- [ ] `npm run build:ios-safe`, dann `npm run cap:ios`. Nicht `deploy:ios`, das öffnet einen Workspace, den es nicht gibt.
+- [ ] Xcode: Team auf das bezahlte Team stellen, iPhone 13 wählen, Run.
+- [ ] Supabase: Authentication → Sign In / Providers → Email → **Confirm email** ist aus. So war es heute beim Test; sonst kommen die Freunde ohne eigenen SMTP nicht ins Konto.
 
-Jede Datei mit ihrem ganzen Inhalt einfügen und auf **Run** klicken, genau in dieser Reihenfolge. Alle drei sind idempotent, ein zweiter Lauf schadet also nicht.
+Schon erledigt, nur zur Kontrolle: Die Migrationen 023–025 sind in Production (heute per Lesezugriff bestätigt: `shift_entries`, `user_feedback`, `usage_events`, `profiles.works_shifts`, `strava_connections.last_synced_at` sind lesbar).
 
-- [ ] `supabase/migrations/023_shift_mode.sql`
-- [ ] `supabase/migrations/024_strava_sync_state.sql`
-- [ ] `supabase/migrations/025_feedback_usage.sql`
-- [ ] Prüfabfrage (jede Zeile muss `ok = true` zeigen):
+## 1. Konto löschen – zuerst, weil es voraussichtlich scheitert (H1)
 
-```sql
-select 'shift_entries' as t, to_regclass('public.shift_entries') is not null as ok
-union all select 'user_feedback', to_regclass('public.user_feedback') is not null
-union all select 'usage_events', to_regclass('public.usage_events') is not null
-union all select 'profiles.works_shifts', exists (select 1 from information_schema.columns where table_schema='public' and table_name='profiles' and column_name='works_shifts')
-union all select 'profiles.shift_defaults', exists (select 1 from information_schema.columns where table_schema='public' and table_name='profiles' and column_name='shift_defaults')
-union all select 'strava_connections.last_synced_at', exists (select 1 from information_schema.columns where table_schema='public' and table_name='strava_connections' and column_name='last_synced_at')
-union all select 'strava_connections.last_sync_status', exists (select 1 from information_schema.columns where table_schema='public' and table_name='strava_connections' and column_name='last_sync_status')
-union all select 'strava_connections.disconnected_at', exists (select 1 from information_schema.columns where table_schema='public' and table_name='strava_connections' and column_name='disconnected_at')
-union all select 'RLS an (3 Tabellen)', (select bool_and(relrowsecurity) from pg_class where oid in ('public.shift_entries'::regclass,'public.user_feedback'::regclass,'public.usage_events'::regclass));
-```
+- [ ] In der App ein Wegwerf-Konto registrieren (z. B. `myrace-ios-test@example.com`), den Wizard bis zum Plan durchklicken.
+- [ ] Einstellungen → Konto & Hilfe → Konto löschen → `LÖSCHEN` eintippen → bestätigen.
+- **Erwartet mit dem heutigen Production-Stand:** Fehlermeldung im Dialog, das Konto bleibt. Ursache ist CORS: Die Production-API erlaubt `DELETE` im Preflight nicht.
+- [ ] Wenn es so scheitert: Commit `18d62cb` nach `main` nehmen (nur `api/_lib/cors.js`, `vercel.json` und ein Test), Production-Deployment abwarten, Schritt wiederholen.
+- **Erwartet nach dem Deploy:** Die App springt auf den Anmelde-Bildschirm, ein erneuter Login mit dem Konto scheitert.
+- [ ] Gegenprobe am Mac: `npm run test:e2e -- -g "12 iPhone"`. Vor dem Deploy ist der Test als erwarteter Fehler markiert, danach muss er regulär bestehen.
+- [ ] Falls das Löschen auf dem iPhone schon vor dem Deploy klappt: bitte notieren. Dann stimmt meine Herleitung für die WebView nicht, und H1 ist erledigt.
 
-- [ ] Policies prüfen:
-  `select tablename, policyname, cmd from pg_policies where tablename in ('shift_entries','user_feedback','usage_events') order by 1,2;`
-  Erwartet wird:
-  - `shift_entries`: `user_own_data`
-  - `user_feedback`: je eine Policy für INSERT und SELECT, nichts weiter
-  - `usage_events`: je eine Policy für INSERT und SELECT, nichts weiter
+## 2. Frisches Konto: Anmeldung, Wizard, Apple-Health-Abfrage (M1)
 
-## 2. Supabase Auth (testflight.md 3.2)
+- [ ] App löschen und neu installieren (frisches Gerät), ein neues Konto registrieren.
+- **Erwartet:** Du landest ohne Bestätigungsmail im Wizard „Distanz & Ziel“. Kein „Warschau Marathon“, auch nicht kurz.
+- [ ] Achte darauf, **wann die Apple-Health-Abfrage von iOS erscheint**.
+  - Am Code erwartet: sofort nach dem Login, über dem Wizard, ohne Erklärung.
+  - [ ] Einmal „Nicht erlauben“ wählen und danach in Einstellungen → Verbindungen nachsehen. Am Code erwartet: Die App zeigt trotzdem „verbunden“. Das ist Entscheidung 4 im Bericht.
+- [ ] Wizard: 10 km, „Unter einer Zielzeit“, Renndatum in etwa 10 Wochen, Schicht-Frage „Ja“ → „Später“, 4 Tage, 25 km pro Woche, „Schätzung“, bis „Plan erstellen“.
+- **Erwartet:** Plan in wenigen Sekunden, danach der Screen „KI-Coach aktivieren?“.
+- [ ] „Ohne Coach fortfahren“. **Erwartet:** Tour-Angebot, danach „Heute“ mit „Woche 1 von …“.
+- [ ] VoiceOver kurz einschalten, solange ein Wizard offen ist (Einstellungen → Training → Neuer Trainingsplan). **Erwartet:** Nur der Wizard wird vorgelesen, nichts von der App dahinter.
 
-- [ ] **Mailversand.** Ohne diesen Schritt kommen die Freunde nicht ins Konto. Zwei Wege:
-  - Weg A: Authentication → Emails → SMTP Settings → eigenen Anbieter eintragen.
-  - Weg B: Authentication → Sign In / Providers → Email → **Confirm email** ausschalten. Gilt nur für den Test, danach wieder einschalten.
-- [ ] Authentication → URL Configuration:
-  - **Redirect URLs** enthält `myrace://auth/confirm` und `https://marathon-app-alpha.vercel.app/`.
-  - **Site URL** ist `https://marathon-app-alpha.vercel.app`.
-- [ ] Testkonto für Apples Beta-Prüfung anlegen: Users → Add user, dabei Auto Confirm einschalten.
+## 3. Safe Areas und Tab-Leiste
 
-## 3. Vercel-Variablen (Projekt → Settings → Environment Variables, Production + Preview)
+- [ ] Alle sechs Tabs öffnen. **Erwartet:** Nichts liegt unter der Notch oder unter der Tab-Leiste, die letzte Karte endet über der Leiste.
+- [ ] Woche-Tab: eine Einheit antippen, das Sheet bis ganz unten scrollen. **Erwartet:** „Eintragen“ und „Auslassen“ liegen über dem Home-Indikator.
+- [ ] Dienstplan-Seite öffnen (Woche → „Dienste eintragen“). **Erwartet:** Der Titel liegt unter der Notch, „Speichern“ und „Schließen“ über dem Home-Indikator.
 
-- [ ] `REACT_APP_SUPPORT_EMAIL` = deine echte Support-Adresse. Diese Variable ist neu. Ohne sie bleibt der Platzhalter `support@example.invalid`.
-- [ ] Prüfen, ob die vorhandenen Variablen gesetzt sind:
-  - `ANTHROPIC_API_KEY`
-  - `SUPABASE_SERVICE_ROLE_KEY`
-  - `REACT_APP_SUPABASE_URL`
-  - `REACT_APP_SUPABASE_ANON_KEY`
-  - `STRAVA_CLIENT_ID`
-  - `STRAVA_CLIENT_SECRET`
-  - `PLAN_CORE_MODE=on`
-- [ ] `STRAVA_REDIRECT_URI` muss exakt `https://marathon-app-alpha.vercel.app/api/strava/callback` lauten, mit **callback** in der Einzahl. In `.env.local` steht fälschlich `/callbacks`, das bitte auch korrigieren.
-- [ ] `REACT_APP_SHIFT_MODE` **nicht** setzen, dann ist der Schicht-Modus an.
-- [ ] Für den iOS-Build in deiner lokalen `.env` ebenfalls `REACT_APP_SUPPORT_EMAIL` setzen. Die App liest ihre `REACT_APP_*`-Werte beim Bauen auf dem Mac.
-- [ ] Nach jeder Änderung: Deployments → letztes Production-Deployment → **Redeploy**.
+## 4. Dienstplan: Tastatur und Eingabe
 
-## 4. Strava-Kapazität (strava.com/settings/api, testflight.md 3.3)
+- [ ] „Rotation oder Woche übernehmen“ aufklappen, ins Musterfeld tippen (`N N – – – F F`).
+- **Erwartet:** Die Tastatur verdeckt das Feld nicht, die Seite zoomt nicht (Schrift 16 pt), die Tasten F/S/N/– unter dem Feld bleiben erreichbar.
+- [ ] „Ab“ und „Für“ wählen (iOS-Auswahlrad), „Muster eintragen“, „Speichern“.
+- **Erwartet:** „Gespeichert.“ Vier Wochen Dienste in unter einer Minute.
+- [ ] Bei einem Tag „Eigene Zeit“ wählen und Beginn und Ende ändern.
+- **Erwartet:** Das Zeit-Rad erscheint, das Feld bleibt sichtbar, nach „Fertig“ steht die Zeit in der Zeile.
+- [ ] „Standardzeiten → Ändern“, eine Zeit ändern. **Erwartet:** wie oben, kein Springen der Seite.
 
-- [ ] Prüfen, ob das Strava-Abo deines Entwickler-Kontos aktiv ist.
-- [ ] `https://www.strava.com/settings/api` öffnen und zu „My API Application“ gehen.
-- [ ] **Authorization Callback Domain** auf `marathon-app-alpha.vercel.app` setzen, ohne `https://` → **Update**.
-- [ ] App-Angaben vollständig ausfüllen: Name, Kategorie, Website, Beschreibung, **App-Icon hochladen**. Erst danach lässt Strava das Hochstufen zu.
-- [ ] Bei **Athlete Capacity** den Knopf zum Hochstufen aus dem Single Player Mode klicken. Danach muss dort **10** stehen.
-- [ ] Falls kein Knopf erscheint: Mail an `developers@strava.com` mit der Client ID. Bis dahin nutzen die Freunde den Weg Garmin → Apple Health, die Hilfe dazu steht in den Einstellungen.
+## 5. Schicht-Modus: Vorschlag S1
 
-## 5. Chrome-Prüfliste (Vercel-Preview von `test/friends-build`, eingeloggt, nach Schritt 1)
+- [ ] Die Nächte so legen, dass die zweite am Morgen einer harten Einheit endet (Intervalle oder Tempo; ab etwa Planwoche 4).
+- [ ] Woche-Tab → zu dieser Woche blättern → „Mit meinem Dienstplan abgleichen“.
+- **Erwartet:** Karte „Woche an deinen Dienstplan anpassen“ mit dem Satz „Nach dem Nachtdienst (22–6 Uhr) ist … kein guter Tag für … Vorschlag: …“ und den Knöpfen Übernehmen und Verwerfen.
+- [ ] „Verwerfen“. **Erwartet:** Die Woche ist unverändert.
+- [ ] Noch einmal abgleichen, „Übernehmen“, App ganz schließen und neu öffnen, wieder abgleichen.
+- **Erwartet:** „Diese Woche passt zu deinem Dienstplan.“
+- [ ] Den Dienst am Vortag des neuen Tages ändern und speichern, wieder abgleichen.
+- **Erwartet:** Die verschobene Einheit wird wieder gemeldet.
+- [ ] Die verschobene Einheit antippen → „An Kalender anpassen“ → „Trotzdem Tag wählen“.
+- **Erwartet:** Liste mit Tagen, eingeschränkte Tage grau als „Eingeschränkt: …“, regelwidrige als „Ungünstig“.
 
-Die Preview-URL steht in Vercel → Deployments beim Branch `test/friends-build`. Wenn die Deployment Protection greift, Vercel einloggen oder `vercel curl` nutzen. Fenster auf 390 px stellen (DevTools → iPhone 12 Pro).
+## 6. Hintergrund und Rückkehr (M11)
 
-Schicht-Modus (Einstellungen → Training → „Ich arbeite in Schichten“ an → Dienstplan):
+- [ ] App abends in den Hintergrund legen (nicht beenden), am nächsten Morgen öffnen.
+- **Erwartet:** „Heute“ zeigt das neue Datum und die Einheit von heute. Vor dem Fix `a75645c` blieb ohne Apple Health der Vortag stehen.
+- [ ] Schneller Ersatz ohne zu warten: Datum in den iOS-Einstellungen einen Tag vorstellen, zur App zurückkehren. Erwartet dasselbe. Danach das Datum zurückstellen.
+- [ ] App 10 Minuten im Hintergrund lassen und zurückkehren. **Erwartet:** kein weißer Bildschirm, kein erneuter Login.
 
-- [ ] **S1 Pflege:** Nacht, Nacht, Frei, Frei. Ein Intervall liegt am Tag nach der 2. Nacht, der Long Run am 1. freien Tag.
-  - Erwartet: Beide Einheiten sind markiert. Der Vorschlag nennt den Dienst, zum Beispiel „Nach dem Nachtdienst (22–6 Uhr) …“, und schlägt einen freien Tag vor, ohne zwei harte Tage in Folge.
-  - Zusätzlich die Zeit messen: 4 Wochen Dienste eintragen (Rotationsmuster oder „Woche kopieren“) soll unter 1 Minute dauern.
-- [ ] **S2 Quick Return:** Spät, danach Früh, mit Tempo am Frühdienst-Tag.
-  - Erwartet: Der Tag ist eingeschränkt. Einen Vorschlag gibt es nur, wenn ein freier Tag existiert.
-- [ ] **S3 Gastro:** Eigene Zeit 17:00–00:30 am Abend vor einem Intervalltag.
-  - Erwartet: Der Intervalltag ist eingeschränkt.
-- [ ] **S4:** nur Frühdienste 6–14.
-  - Erwartet: kein Konflikt, kein Vorschlag.
-- [ ] Bei jedem Vorschlag prüfen: Ohne „Übernehmen“ ändert sich nichts. „Verwerfen“ lässt den Plan unverändert.
-- [ ] Datenschutz & Daten → „Welche Daten MyRace nutzt“: Die Abschnitte Dienstplan, Strava, Feedback und Nutzungsdaten sind vorhanden.
+## 7. Apple Health und Garmin als Quelle
 
-Feedback:
+- [ ] Einstellungen → Verbindungen → Apple Health verbinden, alle Kategorien erlauben.
+- **Erwartet:** Die Abfrage erscheint (vor dem W4-Fix scheiterte sie ganz), danach stehen Läufe der letzten 7 Tage unter den Aktivitäten.
+- [ ] Ein Lauf von der Garmin-Uhr (Garmin Connect → Apple Health) liegt an einem Tag mit geplanter Einheit.
+- **Erwartet:** Die Einheit ist erledigt, mit Ist-Distanz und der Frage nach der Anstrengung. Die volle Auswertung erscheint wie bei einem Apple-Watch-Lauf.
+- [ ] Zwei Läufe am selben Tag haben (z. B. Hauptlauf und kurzes Auslaufen getrennt aufgezeichnet).
+- **Am Code erwartet (M3):** Der spätere, kürzere Lauf wird zugeordnet. Bitte notieren, ob das so ist.
+- [ ] Leistung-Tab: **Erwartet:** Schlaf und HRV der letzten Nacht. Wenn die App seit gestern nur im Hintergrund lag, stehen dort am Code erwartet die Werte von gestern (M5); nach Beenden und Neustart die aktuellen.
+- [ ] Kontowechsel auf demselben iPhone: abmelden, mit einem zweiten Konto anmelden, **nicht** auf „Apple Health verbinden“ tippen, App in den Hintergrund und zurück.
+- **Am Code erwartet (M2):** Im zweiten Konto tauchen trotzdem Läufe und Erholungswerte des Geräts auf. Bitte notieren.
 
-- [ ] Einstellungen → Konto & Hilfe → „Feedback geben“ öffnen, Text eingeben, Kategorie „Idee“ wählen, senden.
-- [ ] Kontrolle in Supabase: `select category, message, app_version, screen, device, created_at from user_feedback order by created_at desc limit 5;`
-- [ ] Auf „Heute“ ist der dezente Feedback-Eintrag zu sehen. Er erscheint nur bei einem Konto, das jünger als 14 Tage ist.
-- [ ] Nutzungsdaten prüfen: `select name, props, created_at from usage_events order by created_at desc limit 20;`. Erwartet werden Einträge wie `app_open`, `feedback_sent`, `shift_entries_saved` mit `count` und `shift_proposal_*`.
-- [ ] „Nutzung zählen“ ausschalten, abmelden, wieder anmelden. Der Schalter muss weiter aus sein, und es dürfen keine neuen Zeilen entstehen.
+## 8. Deep Links
 
-Web-Fallback:
+- [ ] **Passwort zurücksetzen:** Einstellungen → Konto & Hilfe → Passwort zurücksetzen, die Mail auf dem iPhone öffnen, Link antippen.
+- **Erwartet:** Die App öffnet sich (`myrace://auth/confirm`) und zeigt „Neues Passwort“. Voraussetzung: `myrace://auth/confirm` steht in Supabase unter Redirect URLs.
+- [ ] Denselben Link ein zweites Mal antippen. **Am Code erwartet (N13):** Die App öffnet sich, zeigt aber nichts an.
+- [ ] **Strava:** nur wenn Strava-Abo und Athleten-Kapazität stehen und der Server-Code in Production ist. Einstellungen → Strava verbinden → in Safari anmelden → zurück in die App.
+- **Erwartet:** Safari schließt sich, die App zeigt „verbunden“. In Vercel muss `STRAVA_REDIRECT_URI` auf `/api/strava/callback` enden (in `.env.local` steht fälschlich `/callbacks`).
 
-- [ ] In einem neuen privaten Fenster ein frisches Konto registrieren. Der Bestätigungslink führt auf die Web-Adresse.
-- [ ] Danach durch den Wizard bis zum Plan gehen, dann Heute und Woche öffnen und eine Einheit manuell als erledigt markieren.
-  - Erwartet: kein Absturz, kein Demo-Plan, kein toter Erinnerungs-Schalter (stattdessen ein Hinweis auf die iPhone-App).
-- [ ] Abmelden und mit einem zweiten Konto anmelden: Es dürfen keine Daten des ersten Kontos auftauchen.
-- [ ] Coach mit KI-Einwilligung fragen: „Was steht morgen an?“
-  - Erwartet: Die Antwort hat den richtigen Tagesbezug.
-  - Hinweis: Neues Server-Verhalten gibt es nur auf der Preview, nicht in Production.
+## 9. KI-Einwilligung, Coach, Erinnerung (offene Punkte aus CLAUDE.md)
 
-## 6. iPhone-13-Test (Gerät, nicht Simulator)
+- [ ] Coach-Tab ohne Einwilligung. **Erwartet:** Hinweis mit „Coach aktivieren“, kein Eingabefeld.
+- [ ] „Coach aktivieren“ → zustimmen → „Was steht morgen an?“. **Erwartet:** Antwort mit dem richtigen Tag. Der Tagesbezug kommt vom Server; in Production gilt bis zum Merge der alte Stand.
+- [ ] Einstellungen → Datenschutz & Daten → KI-Coach ausschalten. **Erwartet:** Der Coach ist sofort wieder gesperrt.
+- [ ] Trainings-Erinnerung einschalten. **Erwartet:** Mitteilung nur an Tagen mit offener Einheit, keine nach Plan-Ende.
 
-- [ ] Build vorbereiten:
-  - `git checkout test/friends-build`
-  - `npm ci`
-  - Info.plist-Patch und Privacy Manifest einspielen (`docs/friend-test/ios-patches/README.md`)
-  - `npm run build:ios-safe`
-  - Xcode: Team auf das bezahlte Team stellen, Gerät wählen, Run
-  - Nicht `deploy:ios` verwenden, das öffnet einen Workspace, den es nicht gibt. Stattdessen `npm run cap:ios`.
-- [ ] **Apple Health (W4):** Die Anfrage erscheint, und nach dem Erlauben kommen Läufe und Kalorien an. Vorher scheiterte die ganze Anfrage.
-- [ ] **Garmin über Apple Health (W2 Weg A):** Ein Lauf von der Garmin-Uhr erscheint und erledigt die geplante Einheit automatisch, mit Ist-Distanz und Anstrengungsfrage.
-- [ ] **Strava (W2 Weg B):** Erst nach Schritt 4 und erst wenn der Server-Code in Production ist, siehe Schritt 7.
-  - Einstellungen → Strava verbinden → zurück in die App.
-  - Erwartet: Ein Lauf der letzten 10 Tage erledigt die Einheit, und das Logo „Powered by Strava“ ist zu sehen.
-  - Den gleichen Lauf zusätzlich in Apple Health haben. Er darf nur einmal zählen.
-  - Strava trennen. Die Meldung lautet „gelöscht“, und die Strava-Läufe verschwinden.
-- [ ] **Schicht-Modus:**
-  - Dienstplan für 4 Wochen eintragen. Der Vorschlag S1 erscheint wie in Schritt 5.
-  - Dienste am Kalender-Import vorbeigehen lassen, es dürfen keine Doppelungen entstehen.
-- [ ] **Kontowechsel:**
-  - Mit Konto A anmelden, Plan anlegen, abmelden, mit Konto B anmelden. Es darf nichts von A zu sehen sein, auch kein Dienstplan.
-  - Den Bestätigungslink auf dem iPhone öffnen. Die App öffnet sich (`myrace://auth/confirm`).
-- [ ] **Offene Punkte aus CLAUDE.md:**
-  - KI-Einwilligung: Screen, Coach-Sperre, Widerruf.
-  - Trainings-Erinnerung: nur an Trainingstagen, nichts nach Plan-Ende.
-- [ ] **Feedback** vom iPhone senden. In Supabase muss das Gerät bzw. OS korrekt eingetragen sein.
+## 10. Feedback und Nutzungsdaten vom Gerät
 
-## 7. Was danach in welcher Reihenfolge nach `main` darf (nur mit deiner Freigabe)
+- [ ] Einstellungen → Konto & Hilfe → Feedback geben → „Idee“ → senden.
+- [ ] In Supabase prüfen: `select category, message, app_version, screen, device, created_at from user_feedback order by created_at desc limit 5;`
+- **Erwartet:** Deine Zeile, in `device` steht iOS mit Version.
+- [ ] `select name, props, created_at from usage_events order by created_at desc limit 20;`
+- **Erwartet:** `app_open` höchstens einmal je Stunde, dazu `onboarding_done`, `shift_entries_saved` mit `count`, `shift_proposal_*`.
 
-Erst wenn die Schritte 1–3 erledigt sind und der Chrome-Test aus Schritt 5 grün ist. Jeweils einzeln mergen, nach jedem Merge prüfen, ob das Vercel-Production-Deployment grün ist, und kurz klicken.
+## 11. Danach: was nach `main` darf (nur mit deiner Freigabe)
 
-1. [ ] `fix/apple-health-read-types`: Hotfix, unabhängig, sofort.
-2. [ ] `docs/friend-test-plan` und `docs/testflight-readiness`: nur Doku.
-3. [ ] `fix/friend-test-hardening` (W3): Braucht Migration 025. Ohne sie fällt das Feedback auf Mail zurück, und Nutzungsdaten werden still verworfen.
-4. [ ] `feat/strava-activity-import` (W2): Braucht Migration 024. Damit kommt die 7. Vercel-Funktion `api/strava/sync.js` live.
-5. [ ] `feat/shift-mode` (W1): Braucht Migration 023. Mit W1 kommt der Konflikt in `src/persistence/*` mit, so wie er in `test/friends-build` gelöst ist.
-
-Einfacher Weg: `test/friends-build` als Ganzes nach `main` mergen. Das ist geprüft, aber nur nach deiner Freigabe.
-
-Danach den iOS-Build mit Version `1.0 (1)` hochladen (testflight.md Abschnitt 5) und die Freunde einladen.
+1. [ ] `18d62cb` (CORS) – sofort, wenn Schritt 1 den Fehler bestätigt.
+2. [ ] Die Entscheidungen im Bericht durchgehen, vor allem 4 (Apple-Health-Abfrage) und 5 (Strava 7 Tage).
+3. [ ] `test/friends-build` als Ganzes nach `main`, wenn die Schritte 2–10 ohne Blocker durch sind. Erst dann sind Strava-Sync, Coach-Tagesbezug und der Lösch-Code für die neuen Tabellen in Production.
+4. [ ] iOS-Build mit Version `1.0 (1)` hochladen (`docs/friend-test/testflight.md` Abschnitt 5) und die Freunde einladen.

@@ -338,3 +338,244 @@ Auf dem Stand vor den beiden Doku-Dateien (57dbdad), alles im Worktree des Integ
 - `npx tsc --noEmit -p .`: **grün**, Exit 0.
 - `CI=true npm test -- --watchAll=false`: **287 von 287 Suiten, 63 059 von 63 059 Tests, 7 von 7 Snapshots grün**, ohne Wiederholung.
 - Kein `ios/` im Diff gegen `origin/main`. Keine Migration angewendet, keine Production-Variable geändert, nichts nach `main` gemergt.
+
+---
+
+## 18.11. Abendlauf
+
+Stand: 2026-11-18 abends, Branch `test/friends-build`. Für: Anton. Abhakliste fürs iPhone: `docs/friend-test/morgen.md` (neu geschrieben).
+
+**Was weiterhin gilt:** Nichts ist in `main`. Keine Migration wurde angewendet (023–025 waren schon in Production, nur gelesen). Keine Variable in Vercel oder Supabase geändert. `ios/` ist in keinem Commit. In Production wurden nur die eigenen E2E-Testkonten angelegt und wieder gelöscht.
+
+**Das Wichtigste zuerst:** „Konto löschen“ scheitert in der iOS-App, solange die Production-API den Fix `18d62cb` nicht hat (CORS erlaubt kein `DELETE`). Im Browser nachgestellt, nicht am Gerät. Das ist morgen der erste Test auf dem iPhone und braucht danach deine Freigabe für einen Production-Deploy.
+
+### Commits je Teil
+
+| Teil | Commit | Inhalt |
+|---|---|---|
+| 1 | `dc8b7bc` | Zielzeit-Nachtrag nur, wenn das Ziel zum Plan gehört (`planGoalBackfill.ts`), Eingabefeld, Abfrage 7 |
+| 2 | `18d62cb` | CORS erlaubt `DELETE` (`api/_lib/cors.js`, `vercel.json`) – wirkt erst nach Production-Deploy |
+| 2 | `217bf87` | lokale Route `DELETE /api/account` im Express-Server |
+| 2 | `1e3c8a0`, `67760d8` | Playwright-Suite `e2e/`, Skript `npm run test:e2e` |
+| 3 | `a67b114`, `7cd6df9` | Strava: gelöste oder ersetzte Zuordnung nimmt die Auswertung des Laufs mit (ging sonst an den Coach) |
+| 3 | `40cba33` | Schicht: kein „locker statt hart“, wenn auch locker zeitlich nicht passt |
+| 3 | `0ea23b1`, `c3f77a7` | Kontowechsel: Erinnerungs-Einstellung und Auswertungs-Merker werden gelöscht, auch im laufenden Speicher |
+| 3 | `4fcb4b8` | „Heute“: Prognose-Zeile nennt den Abstand zur eigenen Zielzeit statt „Sub-3h“ |
+| 3 | `f04282f`, `a34f6c8` | Schicht: „Woche kopieren“ löscht keine Einträge wegen leerer vergangener Quelltage |
+| 3 | `ae217f1` | Wizard: App dahinter ist `inert` (Demo-Plan war vorlesbar und bedienbar) |
+| 4 | `a75645c` | neuer Kalendertag rendert die App neu (Rückkehr am nächsten Morgen) |
+
+Prüfung: Teil 1 bekam nach drei Runden PASS vom `plan-reviewer`, Teil 2 nach zwei Runden. Die Fixes aus Teil 3 und 4 fielen in der ersten Runde an drei Stellen durch; die Nachbesserungen sind die jeweils zweiten Commits in der Tabelle. Das Ergebnis der zweiten Runde steht unten unter „Prüfläufe“.
+
+### Teil 1 – Zielzeit-Nachtrag
+
+**Diagnose**
+- Die Profil-Zielzeit liegt in `profiles.target_time_seconds`. Eine Distanz speichert das Profil nicht. Die einzige Distanz zum Ziel steht lokal in `preferences.raceDistanceKm`; auf einem frischen Gerät fehlt sie.
+- Der Nachtrag schrieb an zwei Stellen: lokal in `TrainingPlanV2.meta.goal` (State und localStorage) und in Supabase `training_plans.data` (`updateTrainingPlanGoalMeta`, Modus `backfill`).
+- Er griff für den jeweils aktiven Plan ohne `meta.goal`, sobald die lokalen Preferences als „gehören zum Plan“ galten. Ohne gespeicherte Distanz und ohne Renndatum galt das für jeden Plan.
+
+**Neue Regel** (`profileGoalFitsPlan`)
+- Distanz gespeichert: nur wenn sie zur Plan-Distanz passt (spätestes Rennen) und die Zeit plausibel ist.
+- Keine gespeichert: nur wenn du genau einen Plan hast und die Zeit plausibel ist.
+- Sonst wird nichts geschrieben. Eine echte Eingabe im Feld schreibt weiterhin.
+- Dieselbe Prüfung gilt für Prognosekarte, Rennrechner, Profilkarte, Coach-Kontext und das Feld „Zielzeit“. Ein fremder oder unplausibler Wert wird nicht vorausgefüllt; beim Tippen bleibt der Rohwert stehen.
+
+**Grenze der Abfrage 7:** `meta.goal` trägt keine Distanz. Die Abfrage findet deshalb unplausible Zeiten und dieselbe Zeit an zwei Plänen mit verschiedener Distanz. Ein einzelner HM-Plan mit einer plausiblen fremden 2:50:00 fällt nicht auf. Die Abfrage ist nicht ausgeführt (kein SQL-Zugang von hier), nur gegen das Schema gelesen.
+
+### Teil 2 – E2E-Ergebnis je Ablauf
+
+Letzter vollständiger Lauf auf einem frischen Konto (Stand `67760d8`): 12 Abläufe bestanden, Test 12 wie erwartet rot markiert (offener Befund), 0 Konsolenfehler, 0 fehlgeschlagene Netzwerkaufrufe. Die drei Nachbesserungen danach (`a34f6c8`, `c3f77a7`, `7cd6df9`) sind nur über Unit-Tests, Build und tsc geprüft: Das Kontingent von 5 Testkonten war aufgebraucht.
+
+| Nr. | Ablauf | Ergebnis |
+|---|---|---|
+| 1 | Registrieren → Wizard mit Schicht-Frage „Ja“ → KI-Einwilligung ablehnen → Plan → Heute und Woche, 390 px | bestanden. Nachträglich gefixt: App hinter dem Wizard ist `inert` (`ae217f1`) |
+| 2 | Dienstplan 4 Wochen per Rotationsmuster (6,7 s statt < 1 min), Wochen-Scan S1 mit Begründung, „Verwerfen“ ändert nichts | bestanden |
+| 3 | Vorschlag übernehmen, neu laden, kein weicher Konflikt; Dienst am Vortag ändern → Konflikt kommt wieder; Einstieg „Trotzdem Tag wählen“ | bestanden |
+| 4 | Tagesliste: empfohlener Tag ist „Eingeschränkt: erster freier Tag nach den Nachtdiensten“, nie „Ungünstig“ | bestanden. In S1 gibt es keine Zeile ohne Zusatz („frei“), weil kein freier Tag die harten Regeln erfüllt; geprüft sind also zwei der drei Stufen |
+| 5 | Prognosekarte, Rennrechner, Zielzeitfeld zeigen nur die eigene Zielzeit (0:45:00) | bestanden. Eine fremde Zielzeit lässt sich mit einem frischen Konto nicht nachstellen; das decken die Unit-Tests aus Teil 1 ab |
+| 6 | `app_open` genau einmal, Neuladen in der Drossel erzeugt kein zweites | bestanden |
+| 7 | Einheit manuell erledigen → Anstrengungsfrage → `session_completed` mit Quelle `manual` | bestanden |
+| 8 | Feedback senden → Zeile in `user_feedback` mit Version und Bildschirm | bestanden |
+| 9 | „Nutzung zählen“ aus → keine neuen `usage_events` | bestanden |
+| – | KI-Coach (einziger Test mit Einwilligung, eine Frage, danach Widerruf) | bestanden |
+| 10 | Abmelden und wieder anmelden: Bestätigungen und Dienstplan-Cache lokal gelöscht, Plan, erledigte Einheit, Dienstplan und Zielzeit wieder da | bestanden |
+| 11 | Konto über die App löschen → alle Zeilen weg, Login scheitert | gefixt. Vorher endete das lokal mit 404 (Route fehlte, `217bf87`) |
+| 12 | iPhone-Pfad: `DELETE /api/account` von fremdem Origin | **offen**, siehe Befund H1 |
+
+Hinweise zur Suite:
+- Im Browser gehen Coach und Konto-Löschen über den lokalen Server, also durch den Code dieses Branches. Die Plan-Erstellung in Ablauf 1 geht an Production.
+- Die Suite sammelt Konsolen- und Netzwerkfehler, lässt einen Test daran aber nicht scheitern.
+- Verbraucht sind 5 von 5 Testkonten. Für einen weiteren Lauf `e2e/.state/created-accounts.json` löschen.
+
+### Befunde nach Schwere
+
+Jeder Befund ist am Code nachgelesen. „Gefixt“ heißt: eigener Commit mit Unit-Test, im Browser-Test grün, auf dem iPhone noch nicht geprüft.
+
+**Hoch**
+
+| Nr. | Befund | Stand |
+|---|---|---|
+| H1 | „Konto löschen“ in der iOS-App: Der Preflight der Production-API nennt nur GET, POST, OPTIONS. Im Browser von einem fremden Origin: POST kommt durch, DELETE endet mit „Failed to fetch“. `CapacitorHttp` ist nicht aktiv, die WebView erzwingt CORS also | Fix im Code (`18d62cb`), **offen bis zum Production-Deploy** |
+| H2 | Strava-Zeilen leben bis etwa 14 Tage statt 7: gelöscht wird nach `created_at`, das Abruffenster reicht 10 Tage zurück, nach einer Pause wird die Zeile neu angelegt. Wer die App nicht mehr öffnet, behält sie unbegrenzt (`api/_lib/stravaActivitySync.js:186-206`) | offen, braucht deine Entscheidung (Erstimport 7 statt 10 Tage) und ändert bestehende Tests |
+| H3 | Strava-Auswertung ging nach „Zuordnung lösen“ oder nach dem Ersetzen durch einen anderen Lauf an den Coach | gefixt (`a67b114`, `7cd6df9`) |
+
+**Mittel**
+
+| Nr. | Befund | Stand |
+|---|---|---|
+| M1 | Apple Health: Auf einem frischen Gerät erscheint die Health-Abfrage sofort nach dem Login über dem Wizard, und der Verbunden-Merker wird auch bei Ablehnung gesetzt (`useIosHealthKitBootstrap.ts:128-156`). Folge des W4-Fixes: vorher scheiterte der Aufruf vor dem Dialog | offen, Entscheidung 4 |
+| M2 | Apple Health: Der Abgleich bei Rückkehr und der Erholungs-Abruf prüfen den Verbunden-Merker nicht. Konto B auf demselben iPhone bekommt Schlaf, HRV und Läufe des Geräts, ohne „verbinden“ getippt zu haben | offen, Entscheidung 4 |
+| M3 | Apple Health: Mehrere Läufe am selben Tag – der jüngste gewinnt und sperrt den passenden aus (12 km morgens, 2 km abends → Einheit mit 2 km erledigt, `applyAppleHealthSync.ts:82-94`) | offen |
+| M4 | Apple Health: Aktivenergie wird mit `limit: 28000, ascending: true` gelesen; bei vielen Samples fehlen die neuesten Tage. Die Sample-Dichte ist geschätzt, nicht gemessen | offen, am Gerät prüfen |
+| M5 | Apple Health: Schlaf, HRV und Ruhepuls werden nur beim Kaltstart geladen, nicht bei Rückkehr in den Vordergrund | offen |
+| M6 | Demo-Plan als eigener Plan: Scheitert nur das Laden des Plans, das Profil aber nicht, zeigt die App „Warschau Marathon“, und die nächste Plan-Änderung überschreibt den echten Plan (`loadTrainingPlan` liefert bei Fehler `null`). Bestand schon auf `main` | offen, größerer Umbau |
+| M7 | Coach: „Letzte erledigte Workouts“ sind nach Session-ID sortiert; ab Planwoche 10 fallen die neuesten heraus. Eine vorgezogene Einheit steht als „morgen“ unter „Vergangenheit“ (`coachHandlers.js:811, 1039-1065`) | offen, Server-Code |
+| M8 | Schicht: Tage ohne Eintrag werden nach einem Nachtblock als „frei“ bezeichnet („Freitag – da hast du frei“) | offen, Textlogik |
+| M9 | „Heute“ zeigte „… über Sub-3h“ für jeden Marathonplan | gefixt (`4fcb4b8`) |
+| M10 | „Woche kopieren“ löschte Dienste der Folgewochen | gefixt (`f04282f`, `a34f6c8`) |
+| M11 | App über Nacht im Hintergrund: „Heute“ blieb der Vortag | gefixt (`a75645c`), am Gerät prüfen |
+| M12 | App hinter dem Wizard vorlesbar und bedienbar | gefixt (`ae217f1`) |
+
+**Niedrig**
+
+| Nr. | Befund | Stand |
+|---|---|---|
+| N1 | Zwei localStorage-Schlüssel fehlten in der Löschliste; die Erinnerungs-Einstellung blieb zusätzlich im Speicher | gefixt (`0ea23b1`, `c3f77a7`) |
+| N2 | „Locker statt hart“ an Tagen ohne Zeitfenster | gefixt (`40cba33`) |
+| N3 | Strava meldet bei jedem Abgleich „1 Lauf übernommen“ (zählt das Überlappungsfenster) | offen |
+| N4 | Strava: Erstimport holt 10 Tage, der Client verwirft alles über 7. Der Datenschutztext oben nennt 10 Tage | offen, gehört zu H2 |
+| N5 | Strava: Jeder 400/401 beim Token-Refresh markiert die Verbindung als getrennt, auch bei fehlenden Server-Variablen | offen |
+| N6 | Schicht: Grund-Text nennt bei zwei verschiedenen Ursachen den falschen Dienst | offen |
+| N7 | Schicht: Offline gespeicherte Tage werden nur beim nächsten Laden nachgereicht; Abmelden davor löscht sie | offen |
+| N8 | Schicht: Satz auf „Heute“ bleibt stehen, wenn die Einheit schon erledigt ist | offen |
+| N9 | Nutzungsdaten: ✓ → rückgängig → ✓ zählt zweimal; `shift_proposal_accepted` wird vor der Sperrprüfung gemeldet | offen |
+| N10 | Kontolöschung räumt Strava nicht auf: MyRace bleibt beim Nutzer in Strava autorisiert (kein `deauthorize`) | offen |
+| N11 | Im Schicht-Modus heißt der Knopf an der Einheit „An Kalender anpassen“ | offen, Text |
+| N12 | Apple Health: Fehler beim Workout-Abruf erscheinen als „Aktivitäten aktualisiert.“ | offen |
+| N13 | Der abgelaufene Bestätigungslink (`myrace://auth/confirm#error=…`) wird still verworfen | offen |
+| N14 | Strava: Ersetzt der Abgleich ein zusammengeführtes Duplikat (`replacesMergedDuplicate` in `applyAppleHealthSync.ts`), bleiben km und Dauer des Strava-Laufs im Log | offen |
+
+Geprüft und ohne Befund: RLS und Kontolöschung für alle Tabellen mit `user_id` (was in der Liste fehlt, hat `ON DELETE CASCADE`; der Browser-Test bestätigt: keine Zeile übrig), CHECK-Liste der Ereignisnamen, Drossel von `app_open`, Typliste der Health-Anfrage gegen das Plugin, Garmin als Quelle, Sommerzeit in den Schicht-Regeln.
+
+### Entscheidungen zum Absegnen
+
+Im Code mit `ENTSCHEIDUNG` markiert sind 1 und 2.
+
+1. **Zielzeit-Nachtrag:** „Genau ein Plan“ zählt aktive und archivierte Pläne (`planGoalBackfill.ts`).
+2. **Prognose-Zeile auf „Heute“:** Bezug ist die eigene Zielzeit; ohne Zielzeit kein Zusatz (`prognosisGoalTag.ts`).
+3. **Gelöste Strava-Zuordnung:** Mit der Zuordnung fallen auch die aus dem Lauf übernommenen km und die Dauer weg.
+4. **Apple Health (M1, M2), nicht umgesetzt:** Soll die Health-Abfrage nur noch über „Apple Health verbinden“ kommen und jeder Abruf am Verbunden-Merker hängen? Das ändert den Start auf dem Gerät und bestehende Tests, deshalb erst nach dem iPhone-Test.
+5. **Strava 7 Tage (H2), nicht umgesetzt:** Erstimport auf 7 Tage kürzen, nach Startzeit löschen, dazu ein zeitgesteuertes Löschen für inaktive Konten.
+6. **CORS-Fix nach Production:** Der kleinste Weg ist, nur `18d62cb` nach `main` zu nehmen.
+
+### Übrig gebliebene Testkonten
+
+Keine. Angelegt wurden 5 Konten `myrace-e2e-<zeitstempel>@example.com`, alle über die App gelöscht. Die Abfrage der Auth-Nutzer nach dem letzten Lauf zeigt 0 Treffer für das Muster. An den Coach gingen insgesamt 4 Nachrichten (eine je Lauf mit Coach-Test).
+
+### SQL-Abfrage aus Teil 1 (nur lesen)
+
+Steht auch als Nr. 7 in `docs/friend-test/queries.sql`.
+
+```sql
+-- 7) Zielzeit am Plan prüfen (nur lesen): Pläne, deren meta.goal nicht zur Plan-Distanz passt oder unplausibel ist.
+--    Plan-Distanz = km des spätesten Rennens (sessionType 'race') im Plan, wie src/planGoal.ts.
+--    grund = 'unplausibel': Pace der Zielzeit außerhalb 2:30–12:00 min/km (src/goalTimePlausibility.ts).
+--    grund = 'gleiche Zeit an anderer Distanz': dieselbe Zielzeit steht bei diesem Nutzer auch an einem Plan mit
+--            anderer Distanz – Verdacht auf den alten Nachtrag aus der Profil-Zielzeit (z. B. 2:50:00 am HM-Plan).
+--    grund = 'kein Rennen im Plan': Zielzeit ohne Rennen, keine Distanz zum Prüfen.
+--    Geprüft werden nur Zielzeiten der Form H:MM:SS. Ändert nichts.
+WITH workouts AS (
+  SELECT p.id AS plan_id, w.value AS workout
+  FROM public.training_plans p
+  CROSS JOIN LATERAL jsonb_array_elements(
+    CASE WHEN jsonb_typeof(p.data -> 'workouts') = 'array' THEN p.data -> 'workouts' ELSE '[]'::jsonb END
+  ) AS w(value)
+),
+race AS (
+  SELECT DISTINCT ON (plan_id)
+    plan_id,
+    left(workout ->> 'dateIso', 10) AS race_date,
+    CASE WHEN (workout ->> 'km') ~ '^[0-9]+(\.[0-9]+)?$' THEN (workout ->> 'km')::numeric END AS race_km
+  FROM workouts
+  WHERE workout ->> 'sessionType' = 'race'
+  ORDER BY plan_id, left(workout ->> 'dateIso', 10) DESC
+),
+goal AS (
+  SELECT
+    p.id AS plan_id,
+    p.user_id,
+    p.plan_name,
+    p.is_active,
+    p.archived_at,
+    p.updated_at,
+    p.data #>> '{meta,goal,raceGoal}' AS race_goal,
+    p.data #>> '{meta,goal,targetTime}' AS target_time,
+    CASE
+      WHEN (p.data #>> '{meta,goal,targetTime}') ~ '^[0-9]{1,2}:[0-9]{2}:[0-9]{2}$'
+      THEN split_part(p.data #>> '{meta,goal,targetTime}', ':', 1)::int * 3600
+         + split_part(p.data #>> '{meta,goal,targetTime}', ':', 2)::int * 60
+         + split_part(p.data #>> '{meta,goal,targetTime}', ':', 3)::int
+    END AS target_seconds
+  FROM public.training_plans p
+  WHERE p.data #>> '{meta,goal,targetTime}' IS NOT NULL
+),
+checked AS (
+  SELECT
+    g.*,
+    r.race_date,
+    r.race_km,
+    CASE WHEN r.race_km > 0 AND g.target_seconds > 0 THEN round(g.target_seconds / r.race_km) END AS pace_sec_per_km,
+    EXISTS (
+      SELECT 1
+      FROM goal g2
+      JOIN race r2 ON r2.plan_id = g2.plan_id
+      WHERE g2.user_id = g.user_id
+        AND g2.plan_id <> g.plan_id
+        AND g2.target_time = g.target_time
+        AND r.race_km > 0 AND r2.race_km > 0
+        AND abs(r2.race_km - r.race_km) >= 0.5
+    ) AS gleiche_zeit_andere_distanz
+  FROM goal g
+  LEFT JOIN race r ON r.plan_id = g.plan_id
+)
+SELECT
+  plan_id,
+  user_id,
+  plan_name,
+  is_active,
+  archived_at IS NOT NULL AS archiviert,
+  race_date,
+  race_km,
+  target_time,
+  pace_sec_per_km,
+  CASE
+    WHEN race_km IS NULL THEN 'kein Rennen im Plan'
+    WHEN pace_sec_per_km IS NOT NULL AND (pace_sec_per_km < 150 OR pace_sec_per_km > 720) THEN 'unplausibel'
+    ELSE 'gleiche Zeit an anderer Distanz'
+  END AS grund,
+  updated_at
+FROM checked
+WHERE race_km IS NULL
+   OR (pace_sec_per_km IS NOT NULL AND (pace_sec_per_km < 150 OR pace_sec_per_km > 720))
+   OR gleiche_zeit_andere_distanz
+ORDER BY user_id, race_date;
+```
+
+### Prüfläufe auf dem Endstand
+
+Alles im Worktree des Branches, Code-Stand `7cd6df9`:
+
+- `CI=false npm run build`: grün, Exit 0.
+- `npx tsc --noEmit -p .`: grün, Exit 0.
+- `CI=true npm test -- --watchAll=false`: 298 von 298 Suiten, 63 150 von 63 150 Tests, 7 von 7 Snapshots grün, ohne Wiederholung.
+- `npm run test:e2e` (Stand `67760d8`, frisches Konto): 12 Abläufe bestanden, Test 12 erwartet offen, 0 Konsolen- und Netzwerkbefunde.
+- `plan-reviewer`: Teil 1 PASS (Runde 3), Teil 2 PASS (Runde 2), Fixes aus Teil 3 und 4 PASS (Runde 2).
+- Kein `ios/` im Diff gegen `origin/main`, `src/planCore` unverändert, nichts nach `main` gemergt.
+
+Hinweise des Prüfers, die offen bleiben:
+- Logs, deren Zuordnung vor `a67b114` gelöst wurde, können noch eine Auswertung ohne Zuordnung tragen. Eine einmalige Bereinigung wäre eine Folgeaufgabe.
+- Nach dem Ersetzen einer Zuordnung hat eine schon erledigte Einheit keine Auswertung mehr; der Abgleich rechnet keine neue.
+- `inert` hinter dem Wizard und der Tageswechsel nach einer Nacht im Hintergrund sind nur in jsdom und Chromium geprüft, nicht in der iOS-WebView.
+
+Nebenwirkung im Arbeitsverzeichnis: Im Worktree `/private/tmp/claude-501/w6int` ist `node_modules` jetzt ein eigener Ordner (vorher ein Verweis auf das Haupt-Repo). `npm install` hat den Verweis ersetzt, als Playwright dazukam. Das Haupt-Repo ist unverändert; dort fehlt Playwright bis zum nächsten `npm ci` auf diesem Branch.
+
