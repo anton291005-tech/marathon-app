@@ -148,7 +148,7 @@ export function ShiftPlanPage({ todayYmd, onClose, onSaved }: Props) {
       if (e) byDate[d] = e;
     });
     const times = Math.ceil((diffDays(lastYmd, copySource) + 1) / 7) - 1;
-    const { upserts, deletes } = copyWeek({ entriesByDate: byDate, sourceStartYmd: copySource, times: Math.max(1, Math.min(ROTATION_MAX_WEEKS, times)), untilYmd: lastYmd });
+    const { upserts, deletes } = copyWeek({ entriesByDate: byDate, sourceStartYmd: copySource, times: Math.max(1, Math.min(ROTATION_MAX_WEEKS, times)), untilYmd: lastYmd, editableFromYmd: todayYmd });
     setDraft((prev) => {
       const next = { ...prev };
       upserts.forEach((e) => (next[e.dateYmd] = e));

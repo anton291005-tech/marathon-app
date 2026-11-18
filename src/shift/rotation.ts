@@ -89,19 +89,25 @@ export function applyRotation(args: {
 /**
  * „Woche kopieren“: die 7 Tage ab `sourceStartYmd` auf die folgenden `times` Wochen übertragen. Tage ohne Eintrag in
  * der Quellwoche werden in der Zielwoche gelöscht (`deletes`), damit die Kopie wirklich gleich aussieht.
+ *
+ * `editableFromYmd` (heute): Quelltage davor sind auf der Dienstplan-Seite nicht eintragbar und deshalb immer leer.
+ * Sie sagen nichts aus und überschreiben oder löschen in den Zielwochen nichts.
  */
 export function copyWeek(args: {
   entriesByDate: Readonly<Record<string, StoredShiftEntry>>;
   sourceStartYmd: string;
   times: number;
   untilYmd?: string;
+  editableFromYmd?: string;
 }): { upserts: StoredShiftEntry[]; deletes: string[] } {
   const upserts: StoredShiftEntry[] = [];
   const deletes: string[] = [];
   if (!isYmd(args.sourceStartYmd)) return { upserts, deletes };
   for (let w = 1; w <= Math.max(1, Math.min(ROTATION_MAX_WEEKS, args.times)); w += 1) {
     for (let d = 0; d < 7; d += 1) {
-      const source = args.entriesByDate[addDays(args.sourceStartYmd, d)];
+      const sourceYmd = addDays(args.sourceStartYmd, d);
+      if (args.editableFromYmd && sourceYmd < args.editableFromYmd) continue;
+      const source = args.entriesByDate[sourceYmd];
       const target = addDays(args.sourceStartYmd, w * 7 + d);
       if (args.untilYmd && target > args.untilYmd) continue;
       if (source) upserts.push({ ...source, dateYmd: target });
