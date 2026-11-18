@@ -52,9 +52,12 @@ export function watchPage(page: Page, test: string): { flush: () => Finding[]; a
   };
 }
 
+/** Tab-Leiste der angemeldeten App (per CSS, weil sie hinter dem Wizard `inert`/`aria-hidden` ist). */
+export const appShell = (page: Page) => page.locator("[data-layout-bottom-nav]");
+
 export async function openApp(page: Page): Promise<void> {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("button", { name: "Anmelden", exact: true }).or(page.getByRole("button", { name: "Einstellungen", exact: true })).first()).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("button", { name: "Anmelden", exact: true }).or(appShell(page)).first()).toBeVisible({ timeout: 60_000 });
 }
 
 export const isSignedOut = async (page: Page): Promise<boolean> => (await page.locator("input[type=email]").count()) > 0;

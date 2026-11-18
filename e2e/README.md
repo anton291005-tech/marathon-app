@@ -15,6 +15,8 @@ npm run test:e2e                  # nutzt eine laufende App auf :3000 oder start
   löscht es im letzten Ablauf über die App. Nach einem Abbruch nutzt der nächste Lauf dasselbe Konto weiter
   (`e2e/.state/`, gitignoriert); `E2E_FRESH=1` erzwingt ein neues. Am Ende listet die Suite übrig gebliebene
   Testkonten mit ID auf.
+- `e2e/.state/created-accounts.json` protokolliert alle je angelegten Testkonten. Test 1 legt kein sechstes an
+  (Grenze aus dem Auftrag vom 18.11.); wer das Kontingent bewusst neu beginnt, löscht die Datei.
 - KI-Einwilligung wird überall abgelehnt, außer im Test „KI-Coach“ (genau eine Frage an den Coach).
 - Die Abläufe bauen aufeinander auf (ein Worker, Dateireihenfolge). Einzelne Abläufe: `npm run test:e2e -- -g "7 Einheit"`.
 - Konsolenfehler und fehlgeschlagene Netzwerkaufrufe landen in `e2e/.results/findings.json` und in der Ausgabe.

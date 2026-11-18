@@ -13,6 +13,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { activePlanWorkouts, authUserExists, countRows, listE2eAccounts, rows, usageEvents, USER_TABLES } from "./support/admin";
 import {
   addDays,
+  appShell,
   closeShiftPlan,
   diffDays,
   expectNoOverflow,
@@ -56,7 +57,9 @@ test.beforeAll(async () => {
   if (process.env.E2E_FRESH === "1") {
     // Ein noch vorhandenes Testkonto nie verwaisen lassen: seine Zugangsdaten liegen nur in e2e/.state.
     const previous = loadAccount();
-    if (previous?.userId && HAS_ADMIN_READ && (await authUserExists(previous.userId))) {
+    const stillThere =
+      previous != null && HAS_ADMIN_READ && (previous.userId ? await authUserExists(previous.userId) : (await listE2eAccounts()).some((u) => u.email === previous.email));
+    if (previous && stillThere) {
       throw new Error(`E2E_FRESH=1, aber das Testkonto ${previous.email} existiert noch. Erst ohne E2E_FRESH bis Test 11 laufen lassen (löscht es über die App).`);
     }
     clearAccount();
@@ -114,7 +117,7 @@ async function signIn(page: Page, a: Account): Promise<void> {
   await page.locator("input[type=email]").fill(a.email);
   await page.locator("input[type=password]").first().fill(a.password);
   await page.locator("button[type=submit]").click();
-  await expect(page.getByRole("button", { name: "Einstellungen", exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(appShell(page)).toBeVisible({ timeout: 60_000 });
 }
 
 /** App öffnen; ist die Sitzung weg (Abbruch eines früheren Laufs), wieder anmelden. */
@@ -214,7 +217,7 @@ test("1 Registrieren → Wizard (Schicht: Ja) → KI-Einwilligung ablehnen → P
   // Frisches Konto: der Wizard erscheint (kein Demo-Plan, kein Plan eines anderen Kontos).
   // (Die Tab-Leiste liegt schon vorher im DOM, deshalb ausdrücklich auf den Wizard warten.)
   const wizardTitle = page.getByRole("heading", { name: "Distanz & Ziel" });
-  await expect(page.getByRole("button", { name: "Einstellungen", exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(appShell(page)).toBeVisible({ timeout: 60_000 });
   a.userId = await readUserId(page);
   saveAccount(a);
   const hasPlan = HAS_ADMIN_READ ? ((await countRows("training_plans", a.userId)) ?? 0) > 0 : false;
@@ -223,6 +226,11 @@ test("1 Registrieren → Wizard (Schicht: Ja) → KI-Einwilligung ablehnen → P
 
   if (await wizardTitle.count()) {
     await expectNoOverflow(page, "Wizard Schritt 1");
+    // Hinter dem Wizard ist die App nicht bedienbar und für Screenreader verborgen (kein Demo-Plan vorlesbar).
+    await expect(page.locator("[data-layout-main-content]")).toHaveAttribute("inert", "");
+    await expect(appShell(page)).toHaveAttribute("inert", "");
+    await expect(page.getByRole("button", { name: "Einstellungen", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Rückblick ansehen|Neue Vorbereitung starten/ })).toHaveCount(0);
     const next = () => page.getByRole("button", { name: "Weiter", exact: true }).click();
     await page.getByRole("button", { name: "10 km", exact: true }).click();
     await page.getByRole("button", { name: "Unter einer Zielzeit" }).click();
@@ -261,6 +269,7 @@ test("1 Registrieren → Wizard (Schicht: Ja) → KI-Einwilligung ablehnen → P
     await page.getByRole("button", { name: "Ohne Coach fortfahren" }).click();
   }
   await dismissOverlays(page);
+  await expect(appShell(page), "nach dem Wizard ist die App wieder bedienbar").not.toHaveAttribute("inert", "");
 
   // Heute
   await tab(page, "Heute");
@@ -348,7 +357,7 @@ test("2 Dienstplan: 4 Wochen per Rotationsmuster, Wochen-Scan zeigt den Vorschla
   expect(await countRows("plan_patches", userId()), "ohne „Übernehmen“ keine Planänderung").toBe(0);
 });
 
-test("4 Fix 3: Tagesliste zeigt die drei Stufen, der empfohlene Tag ist „Eingeschränkt“ und nie „Ungünstig“", async ({ page }) => {
+test("4 Fix 3: Tagesliste mit Stufen – der empfohlene Tag ist „Eingeschränkt“ und nie „Ungünstig“", async ({ page }) => {
   test.skip(!HAS_ADMIN_READ, "braucht Lesezugriff auf den Plan");
   await openSignedIn(page);
   const hard = await findHardDay();
