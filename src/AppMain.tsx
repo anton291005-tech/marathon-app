@@ -154,6 +154,7 @@ import { usePlanGoalSync } from "./planV2/usePlanGoalSync";
 import { detachAssignedRun } from "./sessionLogs/detachAssignedRun";
 import { prognosisGoalTag } from "./features/today/prognosisGoalTag";
 import { modalBackgroundProps } from "./layout/modalBackground";
+import { useCalendarDayRefresh } from "./app/runtime/useCalendarDayRefresh";
 import { goalEditKey, goalEditedThisSession, knownPlanCount, rebindGoalEditKey } from "./planV2/planGoalBackfill";
 import { useResetScrollOnViewChange } from "./layout/useResetScrollOnViewChange";
 import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
@@ -1199,6 +1200,8 @@ export default function AppMain(){
   const [accountDeleteBusy, setAccountDeleteBusy] = useState(false);
   const [accountDeleteError, setAccountDeleteError] = useState<string | null>(null);
   beginAppFrame();
+  // Neuer Kalendertag (App über Nacht im Hintergrund oder offen) → neu rendern, sonst bliebe „Heute“ der Vortag.
+  useCalendarDayRefresh();
   // const appFrameMs = getAppNowEpochMs(); // unused (removed)
   const [wIdx,setWIdx]=useState(0);
   /** Alle gespeicherten Logs (auch früherer Pläne) — gelesen wird über `logs` (an den aktiven Plan gebunden). */
