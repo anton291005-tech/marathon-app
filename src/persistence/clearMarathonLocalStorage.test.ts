@@ -23,4 +23,15 @@ describe("clearMarathonLocalStorage", () => {
     clearMarathonLocalStorage();
     expect(localStorage.getItem(`${SHIFT_ENTRIES_CACHE_KEY}Backup`)).toBe("x");
   });
+
+  it("Trainings-Erinnerung und Auswertungs-Merker gehören zum Konto und werden mitgelöscht", () => {
+    localStorage.setItem("myrace-notification-settings", JSON.stringify({ enabled: true, hour: 18, minute: 30 }));
+    localStorage.setItem("postWorkoutSummary_state_v2", JSON.stringify({ shown: ["hk_1"] }));
+    localStorage.setItem("i18nextLng", "de");
+    clearMarathonLocalStorage();
+    expect(localStorage.getItem("myrace-notification-settings")).toBeNull();
+    expect(localStorage.getItem("postWorkoutSummary_state_v2")).toBeNull();
+    // Geräte-Einstellungen bleiben.
+    expect(localStorage.getItem("i18nextLng")).toBe("de");
+  });
 });
