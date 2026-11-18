@@ -24,3 +24,26 @@ export function detachAssignedRun<T extends LogLike>(log: T): T {
   }
   return copy as T;
 }
+
+/**
+ * Lauf `assignedRun` einer Einheit zuordnen. Hing dort vorher ein ANDERER Lauf oder ein anderer Vorschlag, fallen
+ * dessen Auswertung und (bei Strava) dessen km/Dauer weg — sonst stünde die Auswertung eines Strava-Laufs unter
+ * der ID eines Apple-Health-Laufs und ginge ungefiltert an den Coach. Wird genau der vorgeschlagene bzw. schon
+ * zugeordnete Lauf übernommen, bleibt seine Auswertung.
+ */
+export function attachAssignedRun<T extends LogLike, R extends { runId?: unknown }>(
+  log: T,
+  assignedRun: R,
+): Omit<T, "assignedRun"> & { assignedRun: R; suggestedHealthRunId: undefined } {
+  const newRunId = assignedRun.runId;
+  const previousRunId = log.assignedRun?.runId;
+  const suggestedRunId = (log as { suggestedHealthRunId?: unknown }).suggestedHealthRunId;
+  const replacesOtherRun = previousRunId != null && previousRunId !== newRunId;
+  const replacesOtherSuggestion = previousRunId == null && suggestedRunId != null && suggestedRunId !== newRunId;
+  let base: Record<string, unknown> = { ...log };
+  if (replacesOtherRun) base = detachAssignedRun(log);
+  else if (replacesOtherSuggestion) {
+    delete base.runEvaluation;
+  }
+  return { ...base, suggestedHealthRunId: undefined, assignedRun } as Omit<T, "assignedRun"> & { assignedRun: R; suggestedHealthRunId: undefined };
+}

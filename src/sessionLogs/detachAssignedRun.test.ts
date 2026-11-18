@@ -1,5 +1,5 @@
 import { stripStravaDerivedLogFields } from "../lib/ai/getAiContext";
-import { detachAssignedRun } from "./detachAssignedRun";
+import { attachAssignedRun, detachAssignedRun } from "./detachAssignedRun";
 
 const { stripStravaDerivedLogFields: stripOnServer } = require("../../api/_lib/coachHealthRunFields");
 
@@ -42,5 +42,38 @@ describe("detachAssignedRun", () => {
       expect(out).toEqual({ done: true, at: "t" });
       expect(JSON.stringify(out)).not.toMatch(/too_fast|über Plan|10\.4/);
     }
+  });
+});
+
+describe("attachAssignedRun (Zuordnung ersetzen)", () => {
+  const coachViews = (log: unknown) => [stripStravaDerivedLogFields(log), stripOnServer({ sessionId: "s", log }).log];
+
+  it("Strava-Zuordnung durch einen Apple-Health-Lauf ersetzt: keine Strava-Auswertung unter der neuen ID", () => {
+    const before = { done: true, at: "t", actualKm: 10.4, durationMin: 50, assignedRun: { runId: "strava:9" }, runEvaluation: evaluation };
+    const after = attachAssignedRun(before, { runId: "hk_1", distanceKm: 10.1 });
+    expect(after).toEqual({ done: true, at: "t", suggestedHealthRunId: undefined, assignedRun: { runId: "hk_1", distanceKm: 10.1 } });
+    for (const out of coachViews(after)) expect(JSON.stringify(out)).not.toMatch(/too_fast|über Plan|10\.4/);
+  });
+
+  it("Strava-Vorschlag verworfen, anderer Lauf zugeordnet: die Auswertung des Vorschlags fällt weg", () => {
+    const before = { suggestedHealthRunId: "strava:9", runEvaluation: evaluation };
+    const after = attachAssignedRun(before, { runId: "hk_1" });
+    expect(after).not.toHaveProperty("runEvaluation");
+    expect(after.suggestedHealthRunId).toBeUndefined();
+    for (const out of coachViews(after)) expect(JSON.stringify(out)).not.toMatch(/too_fast|über Plan/);
+  });
+
+  it("der vorgeschlagene Lauf selbst wird übernommen: seine Auswertung bleibt", () => {
+    const after = attachAssignedRun({ suggestedHealthRunId: "hk_1", runEvaluation: evaluation, notes: "x" }, { runId: "hk_1" });
+    expect(after).toMatchObject({ runEvaluation: evaluation, notes: "x", assignedRun: { runId: "hk_1" } });
+  });
+
+  it("derselbe Lauf erneut zugeordnet: nichts geht verloren", () => {
+    const before = { done: true, actualKm: 12, assignedRun: { runId: "hk_1" }, runEvaluation: evaluation };
+    expect(attachAssignedRun(before, { runId: "hk_1" })).toMatchObject({ done: true, actualKm: 12, runEvaluation: evaluation });
+  });
+
+  it("leeres Log: nur die Zuordnung", () => {
+    expect(attachAssignedRun({}, { runId: "hk_2" })).toEqual({ suggestedHealthRunId: undefined, assignedRun: { runId: "hk_2" } });
   });
 });

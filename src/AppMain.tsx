@@ -151,7 +151,7 @@ import { useAppOpenTracking } from "./telemetry/useAppOpenTracking";
 import { FreshAccountBootCover, shouldCoverForFreshAccount } from "./app/boot/FreshAccountBootCover";
 import { applyPlanGoalToPreferences, planGoalFromPreferences, readPlanGoalMeta, withPlanGoalMeta } from "./planV2/planGoalMeta";
 import { usePlanGoalSync } from "./planV2/usePlanGoalSync";
-import { detachAssignedRun } from "./sessionLogs/detachAssignedRun";
+import { attachAssignedRun, detachAssignedRun } from "./sessionLogs/detachAssignedRun";
 import { prognosisGoalTag } from "./features/today/prognosisGoalTag";
 import { modalBackgroundProps } from "./layout/modalBackground";
 import { useCalendarDayRefresh } from "./app/runtime/useCalendarDayRefresh";
@@ -2201,12 +2201,8 @@ export default function AppMain(){
         nextLogs[sid] = detachAssignedRun(lg);
       }
     }
-    const existing = nextLogs[session.id] || {};
-    nextLogs[session.id] = {
-      ...existing,
-      suggestedHealthRunId: undefined,
-      assignedRun: arPayload,
-    };
+    // Ersetzt der Lauf eine andere Zuordnung oder einen anderen Vorschlag, fällt deren Auswertung weg.
+    nextLogs[session.id] = attachAssignedRun(nextLogs[session.id] || {}, arPayload);
     syncSessionIds.push(session.id);
     return { nextLogs, syncSessionIds };
   };
