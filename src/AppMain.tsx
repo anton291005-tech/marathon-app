@@ -151,6 +151,7 @@ import { useAppOpenTracking } from "./telemetry/useAppOpenTracking";
 import { FreshAccountBootCover, shouldCoverForFreshAccount } from "./app/boot/FreshAccountBootCover";
 import { applyPlanGoalToPreferences, planGoalFromPreferences, readPlanGoalMeta, withPlanGoalMeta } from "./planV2/planGoalMeta";
 import { usePlanGoalSync } from "./planV2/usePlanGoalSync";
+import { detachAssignedRun } from "./sessionLogs/detachAssignedRun";
 import { goalEditKey, goalEditedThisSession, knownPlanCount, rebindGoalEditKey } from "./planV2/planGoalBackfill";
 import { useResetScrollOnViewChange } from "./layout/useResetScrollOnViewChange";
 import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
@@ -2191,9 +2192,8 @@ export default function AppMain(){
       const lg = nextLogs[sid];
       if (lg?.assignedRun?.runId === workout.runId) {
         syncSessionIds.push(sid);
-        const copy = { ...lg };
-        delete copy.assignedRun;
-        nextLogs[sid] = copy;
+        // Mit der Zuordnung fällt auch die daraus berechnete Auswertung weg (sessionLogs/detachAssignedRun.ts).
+        nextLogs[sid] = detachAssignedRun(lg);
       }
     }
     const existing = nextLogs[session.id] || {};
@@ -2219,9 +2219,7 @@ export default function AppMain(){
     const syncSessionIds = [];
     for (const sid of Object.keys(nextLogs)) {
       if (nextLogs[sid]?.assignedRun?.runId !== runId) continue;
-      const copy = { ...nextLogs[sid] };
-      delete copy.assignedRun;
-      nextLogs[sid] = copy;
+      nextLogs[sid] = detachAssignedRun(nextLogs[sid]);
       syncSessionIds.push(sid);
       touched = true;
     }
@@ -2231,8 +2229,7 @@ export default function AppMain(){
   const clearHealthRunAssignment = async (session) => {
     if (!session) return;
     const existing = logs[session.id] || {};
-    const next = { ...existing };
-    delete next.assignedRun;
+    const next = detachAssignedRun(existing);
     await save(
       {
         ...logs,
