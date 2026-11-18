@@ -67,6 +67,7 @@
     "deploy:ios": "npx cap sync ios && open ios/App/App.xcworkspace",
     "clean:ios": "rm -rf ios/App/DerivedData && rm -rf ios/App/build && rm -rf dist && rm -rf build && rm -rf node_modules/.cache",
     "test": "react-scripts test",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts",
     "test:long-run-cap": "node scripts/test-long-run-cap.js",
     "eject": "react-scripts eject"
   },
@@ -306,6 +307,7 @@
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.5.3",
+    "@playwright/test": "^1.65.1",
     "@types/canvas-confetti": "^1.9.0",
     "ts-node": "^10.9.2"
   }

@@ -26,3 +26,9 @@ yarn-debug.log*
 yarn-error.log*
 .vercel
 .env*.local
+
+# Playwright-Rauchtest (e2e/): Lauf-Zustand und Ergebnisse
+/e2e/.state
+/e2e/.results
+/test-results
+/playwright-report
