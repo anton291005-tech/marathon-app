@@ -1,4 +1,5 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import { LOCAL_DATA_CLEARED_EVENT } from "../persistence/clearMarathonLocalStorage";
 import {
   loadNotificationSettings,
   saveNotificationSettings,
@@ -18,6 +19,14 @@ const NotificationContext = createContext<NotificationContextType>({
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<NotificationSettings>(loadNotificationSettings);
+
+  // Abmelden, Konto löschen, Kontowechsel: Die lokalen Kontodaten sind gelöscht — die Einstellung im Speicher
+  // muss folgen, sonst plante die App für das nächste Konto Erinnerungen zur Uhrzeit des vorigen.
+  useEffect(() => {
+    const reload = () => setSettings(loadNotificationSettings());
+    window.addEventListener(LOCAL_DATA_CLEARED_EVENT, reload);
+    return () => window.removeEventListener(LOCAL_DATA_CLEARED_EVENT, reload);
+  }, []);
 
   const updateSettings = async (partial: Partial<NotificationSettings>) => {
     const next = { ...settings, ...partial };

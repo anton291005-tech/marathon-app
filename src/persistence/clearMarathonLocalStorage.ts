@@ -33,6 +33,9 @@ export const ACCOUNT_BOUND_EXTRA_KEYS = [
   STORAGE_OWNER_USER_ID_KEY,
 ] as const;
 
+/** Wird nach dem Löschen der lokalen Kontodaten auf `window` gemeldet. */
+export const LOCAL_DATA_CLEARED_EVENT = "myrace:localDataCleared";
+
 /** Removes all marathon app data from localStorage (post sign-out / account deletion / account switch). */
 export function clearMarathonLocalStorage(): void {
   if (typeof localStorage === "undefined") return;
@@ -52,5 +55,12 @@ export function clearMarathonLocalStorage(): void {
     accountBound.forEach((key) => localStorage.removeItem(key));
   } catch {
     // Gesperrter Speicher (Privatmodus): Abmelden darf daran nicht scheitern.
+  }
+  // Zustand, der außerhalb von AppMain im Speicher liegt (z. B. die Erinnerungs-Einstellung im
+  // NotificationProvider), muss denselben Stand bekommen — sonst gälte er für das nächste Konto weiter.
+  try {
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(LOCAL_DATA_CLEARED_EVENT));
+  } catch {
+    // ohne Event-API (alte Umgebung) bleibt es beim Löschen des Speichers
   }
 }
