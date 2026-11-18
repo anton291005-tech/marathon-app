@@ -13,6 +13,12 @@ type Args = {
   setPlan: (updater: (prev: TrainingPlanV2) => TrainingPlanV2) => void;
   /** Ziel aus den Preferences, wenn sie nachweislich zum aktiven Plan gehören; sonst null (dann nichts schreiben). */
   preferencesGoal: PlanGoalMetaV2 | null;
+  /**
+   * Darf `preferencesGoal` in einen Plan ohne `meta.goal` nachgetragen werden (`profileGoalFitsPlan`: gespeicherte
+   * Distanz passt zur Plan-Distanz bzw. genau ein Plan, und die Zeit ist plausibel)? Standard: ja (alte Aufrufer).
+   * Eine echte Eingabe (`noteGoalInput`) schreibt unabhängig davon.
+   */
+  backfillAllowed?: boolean;
   /** Besitzer der lokalen Preferences (`planOwnedPreferences`); null = unbekannt (frisches Gerät). */
   ownerPlanId: string | null;
   applyGoalToPreferences: (goal: PlanGoalMetaV2) => void;
@@ -26,7 +32,8 @@ type Args = {
  * 1. Lesen: Ist der Besitzer der lokalen Preferences unbekannt (frisches Gerät, Konto davor gewechselt) und trägt der
  *    aktive Plan ein Ziel, gilt das Ziel des Plans — nicht die nutzerweite Profil-Zielzeit. Einmal je aktivem Plan.
  *    Gehören die Preferences einem anderen Plan, wird nichts übernommen (Planwechsel läuft über `switchPlanPreferences`).
- * 2. Schreiben nur in zwei Fällen: `meta.goal` fehlt (Nachtrag für Altpläne, sobald die Preferences zum Plan gehören)
+ * 2. Schreiben nur in zwei Fällen: `meta.goal` fehlt (Nachtrag für Altpläne — nur wenn `backfillAllowed`, siehe
+ *    `planGoalBackfill.ts`: die Profil-Zielzeit eines anderen Plans wird nie nachgetragen)
  *    oder die Zielzeit wurde in dieser Sitzung wirklich eingegeben (`noteGoalInput`). Eine veraltete lokale Zielzeit
  *    überschreibt beim Öffnen nie ein vorhandenes `meta.goal`.
  */
@@ -37,6 +44,7 @@ export function usePlanGoalSync({
   plan,
   setPlan,
   preferencesGoal,
+  backfillAllowed = true,
   ownerPlanId,
   applyGoalToPreferences,
   claimOwner,
@@ -49,8 +57,8 @@ export function usePlanGoalSync({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeIdRef = useRef(activePlanId);
   activeIdRef.current = activePlanId;
-  const latest = useRef({ plan, preferencesGoal, ownerPlanId, applyGoalToPreferences, claimOwner, setPlan, saveGoal });
-  latest.current = { plan, preferencesGoal, ownerPlanId, applyGoalToPreferences, claimOwner, setPlan, saveGoal };
+  const latest = useRef({ plan, preferencesGoal, backfillAllowed, ownerPlanId, applyGoalToPreferences, claimOwner, setPlan, saveGoal });
+  latest.current = { plan, preferencesGoal, backfillAllowed, ownerPlanId, applyGoalToPreferences, claimOwner, setPlan, saveGoal };
 
   const goalKey = preferencesGoal ? `${preferencesGoal.raceGoal}|${preferencesGoal.targetTime ?? ""}` : "";
   const planGoal = readPlanGoalMeta(plan);
@@ -81,7 +89,9 @@ export function usePlanGoalSync({
       }
     }
     const goal = cur.preferencesGoal;
-    const mode: PlanGoalWriteMode | null = !metaGoal ? "backfill" : editedForRef.current === activePlanId ? "edit" : null;
+    const edited = editedForRef.current === activePlanId;
+    // Eingabe in dieser Sitzung schreibt immer; der stille Nachtrag nur, wenn das Ziel zum Plan passt.
+    const mode: PlanGoalWriteMode | null = edited ? (metaGoal ? "edit" : "backfill") : !metaGoal && cur.backfillAllowed ? "backfill" : null;
     if (!goal || !mode || samePlanGoal(metaGoal, goal)) {
       cancel();
       return;
@@ -91,11 +101,13 @@ export function usePlanGoalSync({
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       if (activeIdRef.current !== planId) return;
+      // Seit dem Start der Verzögerung kann sich die Lage geändert haben (z. B. Pläne nachgeladen).
+      if (!edited && !latest.current.backfillAllowed) return;
       latest.current.setPlan((prev) => withPlanGoalMeta(prev, goal));
       void latest.current.saveGoal(userId, planId, goal, mode).catch(() => false);
     }, debounceMs);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Werte über `latest`, Auslöser sind die Schlüssel
-  }, [hydrationReady, activePlanId, userId, goalKey, planGoalKey, ownerPlanId, debounceMs]);
+  }, [hydrationReady, activePlanId, userId, goalKey, planGoalKey, ownerPlanId, backfillAllowed, debounceMs]);
 
   useEffect(
     () => () => {

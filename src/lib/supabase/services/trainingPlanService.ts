@@ -120,6 +120,23 @@ export async function loadArchivedTrainingPlans(userId: string): Promise<Trainin
   return (data ?? []) as TrainingPlanListItem[];
 }
 
+/**
+ * Zahl aller Pläne des Nutzers (aktive und archivierte). `null` bei einem Fehler — anders als die Listen-Abfragen,
+ * die dann `[]` liefern und von „kein Plan“ nicht zu unterscheiden sind.
+ */
+export async function countTrainingPlans(userId: string): Promise<number | null> {
+  try {
+    const { count, error } = await supabase
+      .from("training_plans")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId);
+    if (error || typeof count !== "number") return null;
+    return count;
+  } catch {
+    return null;
+  }
+}
+
 async function deactivateAllPlans(userId: string): Promise<void> {
   const { error } = await supabase
     .from("training_plans")

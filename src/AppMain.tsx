@@ -149,8 +149,9 @@ import { trackCompletedSessions, trackSyncCompletions, trackUsageEvent } from ".
 import { connectShiftUsageToTelemetry } from "./telemetry/shiftUsageBridge";
 import { useAppOpenTracking } from "./telemetry/useAppOpenTracking";
 import { FreshAccountBootCover, shouldCoverForFreshAccount } from "./app/boot/FreshAccountBootCover";
-import { applyPlanGoalToPreferences, planGoalFromPreferences, withPlanGoalMeta } from "./planV2/planGoalMeta";
+import { applyPlanGoalToPreferences, planGoalFromPreferences, readPlanGoalMeta, withPlanGoalMeta } from "./planV2/planGoalMeta";
 import { usePlanGoalSync } from "./planV2/usePlanGoalSync";
+import { goalEditKey, goalEditedThisSession, knownPlanCount, rebindGoalEditKey } from "./planV2/planGoalBackfill";
 import { useResetScrollOnViewChange } from "./layout/useResetScrollOnViewChange";
 import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
 import { buildHealthRunSuggestion, buildSessionFlow, estimateDurationMin, parseKmInput } from "./features/session/sessionDetailModel";
@@ -229,6 +230,7 @@ import {
   deletePlan,
   loadAllTrainingPlans,
   loadArchivedTrainingPlans,
+  countTrainingPlans,
   loadTrainingPlan,
   MAX_ACTIVE_PLANS,
   restoreArchivedTrainingPlan,
@@ -1266,6 +1268,10 @@ export default function AppMain(){
   const [allTrainingPlans, setAllTrainingPlans] = useState<TrainingPlanListItem[]>([]);
   /** Abgeschlossene Vorbereitungen (archivierte Pläne) — auch Grenze für die Logs ihres Nachfolgers. */
   const [archivedTrainingPlans, setArchivedTrainingPlans] = useState<TrainingPlanListItem[]>([]);
+  /** Gezählte Pläne (aktiv + archiviert); null = unbekannt oder Fehler (Zielzeit-Nachtrag, planGoalBackfill.ts). */
+  const [countedPlanTotal, setCountedPlanTotal] = useState<number | null>(null);
+  /** Schlüssel des Plans, dessen Zielzeit in dieser Sitzung eingegeben wurde (Eingabefeld zeigt dann den Rohwert). */
+  const [goalEditedKey, setGoalEditedKey] = useState<string | null>(null);
   // Session-IDs wiederholen sich zwischen Plänen (`w5-mo`): Logs von vor dem Plan (Starttag bzw.
   // Archivierung des Vorgängers) gehören zu einer früheren Vorbereitung und dürfen Hero,
   // Fortschritt, km und Serie nicht speisen.
@@ -2765,6 +2771,8 @@ export default function AppMain(){
     return { ok: true, message: result.message, warningText: result.warningText };
   };
 
+  /** Ziel des aktiven Plans für Callbacks, die vor seiner Berechnung definiert sind (Coach-Kontext). */
+  const activeGoalRef = useRef<ReturnType<typeof resolveActivePlanGoal> | null>(null);
   const buildCurrentAiContext = useCallback(
     () =>
       getAiContext({
@@ -2773,7 +2781,8 @@ export default function AppMain(){
         weekPhaseMap,
         logs,
         now: getAppNow(),
-        targetTime: preferences.targetTime,
+        // Nur die Zielzeit, die zum aktiven Plan gehört — keine fremde Profil-Zielzeit an den Coach.
+        targetTime: activeGoalRef.current ? activeGoalRef.current.displayTargetTime || undefined : preferences.targetTime,
         maxHeartRateBpm: preferences.maxHeartRateBpm,
         healthRuns,
         availableScreens: AI_COACH_AVAILABLE_SCREENS,
@@ -2805,7 +2814,10 @@ export default function AppMain(){
   const handleAiPreferencesPatch = (update) => {
     if (!update) return;
     // Zielzeit per Coach geändert = echte Eingabe → darf meta.goal des Plans überschreiben.
-    if (update.resetProfile || typeof update.targetTime === "string") planGoalSync.noteGoalInput();
+    if (update.resetProfile || typeof update.targetTime === "string") {
+      planGoalSync.noteGoalInput();
+      setGoalEditedKey(goalEditKey(activePlanId));
+    }
     setPreferences((prev) => {
       const next = { ...prev };
       if (update.resetProfile) {
@@ -2978,6 +2990,25 @@ export default function AppMain(){
   });
   const activePlanName = allTrainingPlans.find((item) => item.is_active)?.plan_name ?? null;
   const activePlanId = allTrainingPlans.find((item) => item.is_active)?.id ?? null;
+  // Eingabe ohne bekannte Plan-ID gehört dem ersten Plan, dessen ID danach bekannt ist — nicht jedem späteren.
+  const reboundGoalEditKey = rebindGoalEditKey(goalEditedKey, activePlanId);
+  if (reboundGoalEditKey !== goalEditedKey) setGoalEditedKey(reboundGoalEditKey);
+  // Plan-Zahl eigens zählen (Fehler = unbekannt), neu bei jeder Änderung der Listen. AppMain ist je Nutzer gekeyt.
+  const planCountUserId = user?.id ?? null;
+  const planListSizeKey = `${allTrainingPlans.length}:${archivedTrainingPlans.length}`;
+  useEffect(() => {
+    if (!planCountUserId) {
+      setCountedPlanTotal(null);
+      return;
+    }
+    let cancelled = false;
+    void countTrainingPlans(planCountUserId).then((count) => {
+      if (!cancelled) setCountedPlanTotal(count);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [planCountUserId, planListSizeKey]);
   /** Plan-eigene Preferences (Rennen, Ziel, Umfang) je Plan-ID — siehe planOwnedPreferences. */
   const planPreferencesStoreRef = useRef(null);
   if (planPreferencesStoreRef.current == null) planPreferencesStoreRef.current = readPlanPreferencesStore();
@@ -2989,7 +3020,14 @@ export default function AppMain(){
     planId: activePlanId,
     preferences,
     ownerPlanId: ownerPlanIdForGoal,
+    // Zielzeit-Nachtrag und Anzeige: ein Ziel ohne meta.goal zählt nur, wenn es zum Plan passt (planGoalBackfill.ts).
+    goalSource: {
+      planHasGoal: readPlanGoalMeta(trainingPlanV2) != null,
+      planCount: knownPlanCount(countedPlanTotal, allTrainingPlans.length, archivedTrainingPlans.length),
+      editedThisSession: goalEditedThisSession(reboundGoalEditKey, activePlanId),
+    },
   });
+  activeGoalRef.current = activeGoal;
   const activeRaceDistanceKm = activeGoal.raceDistanceKm;
   const goalPreferencesApply = activeGoal.preferencesApply;
   const raceGoalFinish = activeGoal.finishOnly;
@@ -3008,6 +3046,7 @@ export default function AppMain(){
     preferencesGoal: goalPreferencesApply
       ? planGoalFromPreferences({ raceGoal: raceGoalFinish ? "finish" : "time", targetTime: activeTargetTime })
       : null,
+    backfillAllowed: activeGoal.backfillAllowed,
     ownerPlanId: ownerPlanIdForGoal,
     applyGoalToPreferences: (goal) => setPreferences((prev) => applyPlanGoalToPreferences(prev, goal)),
     claimOwner: (planId) => {
@@ -3606,7 +3645,8 @@ export default function AppMain(){
       raceYmd: race?.ymd ?? null,
       todayYmd: getAppCalendarYmd(appNow),
       planRaceDistanceKm: race ? resolveRaceDistanceKm(race.session, null) : null,
-      preferences,
+      // Ein Ziel, das nicht nachweislich zum aktiven Plan gehört, erscheint nicht in der Profilkarte.
+      preferences: activeGoal.goalTrusted ? preferences : { ...preferences, targetTime: "", raceGoal: null },
       preferencesOwned: ownerPlanId != null ? ownerPlanId === activePlanId : activePlanDescribesPreferences,
     });
   };
@@ -4966,10 +5006,11 @@ export default function AppMain(){
               type="text"
               lang="de-DE"
               inputMode="text"
-              value={activeTargetTime}
+              value={activeGoal.inputTargetTime}
               onChange={(e)=>{
                 const value = e.target.value;
                 planGoalSync.noteGoalInput();
+                setGoalEditedKey(goalEditKey(activePlanId));
                 // Gehörten die Preferences bisher nicht zum aktiven Plan, übernimmt dieser sie mit der Eingabe.
                 if (!goalPreferencesApply && activePlanId) {
                   planPreferencesStoreRef.current = {
@@ -4982,7 +5023,8 @@ export default function AppMain(){
                   ...prev,
                   targetTime: value,
                   ...(value.trim() !== "" && prev.raceGoal === "finish" ? { raceGoal: "time" } : {}),
-                  ...(!goalPreferencesApply && activeRaceDistanceKm ? { raceDistanceKm: activeRaceDistanceKm } : {}),
+                  // Die Distanz gehört zur Zielzeit: fehlt sie (Profil-Zielzeit ohne Distanz), kommt sie vom aktiven Plan.
+                  ...((!goalPreferencesApply || prev.raceDistanceKm == null) && activeRaceDistanceKm ? { raceDistanceKm: activeRaceDistanceKm } : {}),
                 }));
               }}
               placeholder={`z. B. ${targetTimeExample(activeRaceDistanceKm)}`}
