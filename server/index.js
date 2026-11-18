@@ -15,6 +15,7 @@ const { COACH_CONSENT_REQUIRED_BODY, COACH_CONSENT_UNAVAILABLE_BODY } = require(
 const { validateCoachBody } = require("../api/_lib/inputLimits");
 const { handleStravaAuthRequest, handleStravaCallbackRequest } = require("../api/_lib/stravaService");
 const { handleStravaSyncRequest } = require("../api/_lib/stravaActivitySync");
+const { handleDeleteAccount } = require("../api/_lib/deleteAccount");
 const {
   AI_RESPONSE_SCHEMA,
   ALLOWED_ACTIONS,
@@ -31,7 +32,7 @@ const host = "127.0.0.1";
 const defaultModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const corsOptions = {
   origin: "http://localhost:3000",
-  methods: ["GET", "POST", "OPTIONS"],
+  methods: ["GET", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
 
@@ -696,6 +697,18 @@ app.post("/api/strava/sync", async (req, res) => {
     // eslint-disable-next-line no-console
     console.error("[ai-server] /api/strava/sync unhandled error:", err?.message || err);
     return res.status(500).json({ status: "error" });
+  }
+});
+
+// Same handler as Vercel (api/account.js → deleteAccount.js). Ohne diese Route endet „Konto löschen“ lokal mit 404.
+app.delete("/api/account", async (req, res) => {
+  try {
+    const { status, body } = await handleDeleteAccount(req);
+    return res.status(status).json(body);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[ai-server] /api/account unhandled error:", err?.message || err);
+    return res.status(500).json({ error: "Account deletion failed" });
   }
 });
 
