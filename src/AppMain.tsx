@@ -153,6 +153,7 @@ import { applyPlanGoalToPreferences, planGoalFromPreferences, readPlanGoalMeta, 
 import { usePlanGoalSync } from "./planV2/usePlanGoalSync";
 import { detachAssignedRun } from "./sessionLogs/detachAssignedRun";
 import { prognosisGoalTag } from "./features/today/prognosisGoalTag";
+import { modalBackgroundProps } from "./layout/modalBackground";
 import { goalEditKey, goalEditedThisSession, knownPlanCount, rebindGoalEditKey } from "./planV2/planGoalBackfill";
 import { useResetScrollOnViewChange } from "./layout/useResetScrollOnViewChange";
 import { SessionEntrySheet } from "./features/session/SessionEntrySheet";
@@ -4339,6 +4340,7 @@ export default function AppMain(){
       <div
         ref={mainContentAreaRef}
         data-layout-main-content="1"
+        {...modalBackgroundProps(showOnboarding)}
         style={
           activeView === "performance" || activeView === "week"
             ? mainScrollAreaStyleNoVert
@@ -5768,7 +5770,7 @@ export default function AppMain(){
         />
       ) : null}
 
-      <nav ref={bottomNavRef} data-layout-bottom-nav="1" aria-label="Hauptnavigation" className="mr-tabbar" style={{position:"fixed",left:0,right:0,bottom:0,zIndex:90,height:`calc(${BOTTOM_NAV_HEIGHT_PX}px + ${getBottomNavBottomOffset()})`,paddingBottom:getBottomNavBottomOffset(),paddingLeft:"env(safe-area-inset-left, 0px)",paddingRight:"env(safe-area-inset-right, 0px)"}}>
+      <nav ref={bottomNavRef} data-layout-bottom-nav="1" {...modalBackgroundProps(showOnboarding)} aria-label="Hauptnavigation" className="mr-tabbar" style={{position:"fixed",left:0,right:0,bottom:0,zIndex:90,height:`calc(${BOTTOM_NAV_HEIGHT_PX}px + ${getBottomNavBottomOffset()})`,paddingBottom:getBottomNavBottomOffset(),paddingLeft:"env(safe-area-inset-left, 0px)",paddingRight:"env(safe-area-inset-right, 0px)"}}>
         {TAB_BAR_ITEMS.map((item)=>{
           const active = activeView === item.key;
           const TabIcon = item.Icon;
