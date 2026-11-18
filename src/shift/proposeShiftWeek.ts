@@ -450,7 +450,14 @@ function runGreedy(args: GreedyArgs, order: ShiftConflict[]): GreedyResult {
     const shiftFit = shiftDayFitScore(session, sourceCapacity);
     const shiftUnsuitable = shiftFit != null && shiftFit < MIN_FIT_SCORE_THRESHOLD;
     const softenPatch =
-      conflict.severity === "strong" && shiftUnsuitable && conflict.shiftDay && (session.type === "interval" || session.type === "tempo") && !raceWeek
+      conflict.severity === "strong" &&
+      shiftUnsuitable &&
+      conflict.shiftDay &&
+      // Passt an dem Tag zeitlich auch kein lockerer Lauf (z. B. 24-h-Dienst), wäre „heute locker laufen“ ein
+      // Vorschlag, den der nächste Scan sofort wieder als Konflikt meldet → dann nur der Hinweis.
+      conflict.shiftDay.easy !== "no_window" &&
+      (session.type === "interval" || session.type === "tempo") &&
+      !raceWeek
         ? buildSoftenPatch(session)
         : null;
     if (softenPatch && conflict.shiftDay) {

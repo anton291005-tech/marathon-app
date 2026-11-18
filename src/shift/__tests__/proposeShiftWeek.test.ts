@@ -189,6 +189,19 @@ describe("Schicht-Wochenvorschlag – Szenarien", () => {
     expect(result.softened[0].sentence).toMatch(/Vorschlag: heute locker laufen\.$/);
   });
 
+  it("kein „locker statt hart“, wenn an dem Tag auch für einen lockeren Lauf keine Zeit bleibt (24-h-Dienst)", () => {
+    // Di 24.11. Dienst 07:00–07:00: Intervalle ungeeignet, locker „passt zeitlich nicht“. Sonst kein sicherer Tag.
+    const prev = week(0, "2026-11-16", ["easy", "interval", "easy", "tempo", "rest", "easy", "long"], "build", "w0");
+    const cur = week(1, "2026-11-23", ["easy", "interval", "easy", "tempo", "rest", "easy", "long"]);
+    const c = ctx([S("2026-11-24", "07:00", "07:00")], "2026-11-24");
+    expect(c.byDate["2026-11-24"]).toMatchObject({ hard: "unsuitable", easy: "no_window" });
+    const result = proposeShiftWeek({ plan: [prev, cur], weekIndex: 1, scheduleBlocks: [], shiftContext: c, todayYmd: "2026-11-24" });
+    const softened = result.status === "proposal" ? result.softened.map((x) => x.sessionId) : [];
+    expect(softened).not.toContain("w1-1");
+    const patches = result.status === "proposal" ? result.patches : [];
+    expect(patches.some((p) => p.sessionId === "w1-1" && p.changes.type === "easy")).toBe(false);
+  });
+
   it("Repro A (23.–29.11.): kein freier Tag → Intervalle auf den eingeschränkten Freitag statt „locker statt hart“", () => {
     // Di+Mi Nacht 22–6, Fr+Sa frei. Do (Intervalle) nach der 2. Nacht ungeeignet; Sa wäre frei, liegt aber vor dem
     // Long Run am So, Mo nach dem Long Run der Vorwoche. Fr (erster freier Tag nach den Nächten) ist eingeschränkt.
